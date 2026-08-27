@@ -10,6 +10,7 @@ import { montarParcelasCota, inserirParcelas } from '@/lib/consorcioCronograma';
 import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
+import { derivarParcelasEmpresa, normalizarParcelasMcf } from '@/types/consorcioCartas';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
 import { camposCadastroFaltantes } from '@/lib/consorcioCadastroIncompleto';
@@ -967,6 +968,8 @@ export type UpdatePendingRegistrationPatch = Partial<{
   empresa_paga_parcelas: string | null;
   tipo_contrato: string | null;
   parcelas_pagas_empresa: number | null;
+  /** Lista exata das parcelas da MCF — entrada única; os dois campos acima derivam dela. */
+  parcelas_mcf_numeros: number[] | null;
   origem: string | null;
   origem_detalhe: string | null;
   vendedor_id: string | null;
@@ -1274,9 +1277,30 @@ export function useOpenCota() {
         produto_codigo: cotaData.produto_codigo || null,
         condicao_pagamento: cotaData.condicao_pagamento || null,
         inclui_seguro: cotaData.inclui_seguro ?? false,
-        empresa_paga_parcelas: cotaData.empresa_paga_parcelas,
-        tipo_contrato: cotaData.tipo_contrato || 'normal',
-        parcelas_pagas_empresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
+        // Parcelas: a lista marcada na abertura é a entrada; tipo e quantidade
+        // saem dela. Sem lista, conserva o desenho legado que veio do formulário.
+        ...(() => {
+          const lista = normalizarParcelasMcf(
+            cotaData.empresa_paga_parcelas === 'sim'
+              ? (cotaData.parcelas_mcf_numeros ?? (registration as any).parcelas_mcf_numeros ?? null)
+              : null,
+          );
+          if (lista.length > 0) {
+            const d = derivarParcelasEmpresa(lista);
+            return {
+              parcelas_mcf_numeros: lista,
+              empresa_paga_parcelas: d.empresa_paga_parcelas,
+              tipo_contrato: d.tipo_contrato,
+              parcelas_pagas_empresa: d.parcelas_pagas_empresa,
+            };
+          }
+          return {
+            empresa_paga_parcelas: cotaData.empresa_paga_parcelas,
+            tipo_contrato: cotaData.tipo_contrato || 'normal',
+            parcelas_pagas_empresa:
+              cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
+          };
+        })(),
         dia_vencimento: cotaData.dia_vencimento,
         inicio_segunda_parcela: cotaData.inicio_segunda_parcela || 'automatico',
         data_contratacao: isReserva ? null : cotaData.data_contratacao,

@@ -72,9 +72,27 @@ function montarPatchCadastro(
     grupo: data.grupo || null,
     cota: data.cota || null,
     inclui_seguro: !!data.inclui_seguro,
-    empresa_paga_parcelas: data.empresa_paga_parcelas || null,
-    tipo_contrato: data.tipo_contrato || null,
-    parcelas_pagas_empresa: data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0,
+    // A lista marcada é a ÚNICA entrada. `tipo_contrato` e a quantidade são saída
+    // derivada dela. Registro legado (sem lista) conserva o desenho gravado.
+    ...(() => {
+      const lista = normalizarParcelasMcf(data.parcelas_mcf_numeros);
+      if (lista.length > 0) {
+        const d = derivarParcelasEmpresa(lista);
+        return {
+          parcelas_mcf_numeros: lista,
+          empresa_paga_parcelas: d.empresa_paga_parcelas,
+          tipo_contrato: d.tipo_contrato,
+          parcelas_pagas_empresa: d.parcelas_pagas_empresa,
+        };
+      }
+      return {
+        parcelas_mcf_numeros: null,
+        empresa_paga_parcelas: data.empresa_paga_parcelas || null,
+        tipo_contrato: data.tipo_contrato || null,
+        parcelas_pagas_empresa:
+          data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0,
+      };
+    })(),
     dia_vencimento: data.dia_vencimento ? Number(data.dia_vencimento) : null,
     inicio_segunda_parcela: data.inicio_segunda_parcela || null,
     data_contratacao: data.data_contratacao || null,
@@ -159,6 +177,8 @@ import { CATEGORIA_OPTIONS, ORIGEM_OPTIONS } from '@/types/consorcio';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
+import { ParcelasMcfPicker } from '@/components/consorcio/ParcelasMcfPicker';
+import { derivarParcelasEmpresa, normalizarParcelasMcf, rotuloTipoContrato } from '@/types/consorcioCartas';
 import { DadosPlanoFields, useDadosPlano } from './DadosPlanoFields';
 
 interface OpenCotaModalProps {
@@ -298,6 +318,9 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       empresa_paga_parcelas: 'nao',
       tipo_contrato: 'normal',
       parcelas_pagas_empresa: 0,
+      // Lista exata das parcelas da MCF — única entrada; os dois campos acima
+      // passam a ser derivados dela no save.
+      parcelas_mcf_numeros: [] as number[],
       dia_vencimento: null as number | null,
       inicio_segunda_parcela: 'automatico',
       data_contratacao: new Date().toISOString().split('T')[0],
@@ -380,6 +403,12 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
       setCota('inclui_seguro', registration.inclui_seguro != null ? !!registration.inclui_seguro : null, false);
       setCota('empresa_paga_parcelas', registration.empresa_paga_parcelas, '');
       setCota('tipo_contrato', registration.tipo_contrato, '');
+      // Só hidrata a grade quando existe lista GRAVADA. Registro legado abre
+      // vazio (não se pré-marca a partir da derivação).
+      form.setValue(
+        'parcelas_mcf_numeros' as any,
+        normalizarParcelasMcf((registration as any).parcelas_mcf_numeros),
+      );
       setCota('parcelas_pagas_empresa', registration.parcelas_pagas_empresa != null ? Number(registration.parcelas_pagas_empresa) : null, 0);
       setCota('dia_vencimento', registration.dia_vencimento != null ? Number(registration.dia_vencimento) : null, null);
       setCota('inicio_segunda_parcela', registration.inicio_segunda_parcela, '');
@@ -419,6 +448,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   }, [prazoMeses]);
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
+  /** Lista marcada (entrada única) e os campos antigos derivados dela (saída). */
+  const listaMcfWatch = normalizarParcelasMcf(form.watch('parcelas_mcf_numeros' as any) as any);
+  const derivadoMcfWatch = derivarParcelasEmpresa(listaMcfWatch);
+  /** Desenho antigo do cadastro (sem lista gravada): serve só para avisar. */
+  const desenhoLegadoReg =
+    registration &&
+    normalizarParcelasMcf((registration as any).parcelas_mcf_numeros).length === 0 &&
+    Number((registration as any).parcelas_pagas_empresa) > 0
+      ? {
+          tipo_contrato: ((registration as any).tipo_contrato as string) || 'normal',
+          parcelas_pagas_empresa: Number((registration as any).parcelas_pagas_empresa),
+        }
+      : null;
 
   // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos).
   // Prazo e condição NÃO são duplicados aqui: o hook lê e escreve direto no formulário desta tela.
@@ -591,7 +633,25 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
       // O objetivo que vale é o que está na tela no momento do submit.
       objetivo: plano.valores.objetivo ?? null,
-      parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
+      // Parcelas: a lista marcada manda; tipo e quantidade saem dela.
+      ...(() => {
+        const lista = normalizarParcelasMcf(data.parcelas_mcf_numeros);
+        if (lista.length === 0) {
+          return {
+            parcelas_mcf_numeros: undefined,
+            parcelas_pagas_empresa_count:
+              data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
+          };
+        }
+        const d = derivarParcelasEmpresa(lista);
+        return {
+          parcelas_mcf_numeros: lista,
+          empresa_paga_parcelas: d.empresa_paga_parcelas,
+          tipo_contrato: d.tipo_contrato,
+          parcelas_pagas_empresa: d.parcelas_pagas_empresa,
+          parcelas_pagas_empresa_count: d.parcelas_pagas_empresa,
+        };
+      })(),
     };
     const cleanCotaData = Object.fromEntries(
       Object.entries(rawCotaData).map(([k, v]) => [k, v === '' ? null : v])
@@ -1225,27 +1285,52 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           </Select>
                         </FormItem>
                       )} />
-                      {empresaPaga === 'sim' && (
-                        <>
-                          <FormField control={form.control} name="tipo_contrato" render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tipo Contrato</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  <SelectItem value="normal">Normal</SelectItem>
-                                  <SelectItem value="intercalado">Intercalado (Par)</SelectItem>
-                                  <SelectItem value="intercalado_impar">Intercalado (Ímpar)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </FormItem>
-                          )} />
-                          <FormField control={form.control} name="parcelas_pagas_empresa" render={({ field }) => (
-                            <FormItem><FormLabel>Qtd Parcelas</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
-                          )} />
-                        </>
-                      )}
                     </div>
+
+                    {empresaPaga === 'sim' && (
+                      <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                        {/* Registro legado: avisa, mas não pré-marca a grade. */}
+                        {desenhoLegadoReg && (
+                          <p className="text-xs text-muted-foreground">
+                            Este registro foi criado antes do controle por parcela. O desenho atual
+                            é:{' '}
+                            <strong className="text-foreground">
+                              {rotuloTipoContrato(desenhoLegadoReg.tipo_contrato)} com{' '}
+                              {desenhoLegadoReg.parcelas_pagas_empresa} parcela(s)
+                            </strong>
+                            . Marcar parcelas aqui substitui esse desenho.
+                          </p>
+                        )}
+                        <FormField control={form.control} name={'parcelas_mcf_numeros' as any} render={({ field }) => (
+                          <FormItem>
+                            <ParcelasMcfPicker
+                              value={(field.value as number[]) || []}
+                              onChange={field.onChange}
+                              disabled={readOnly}
+                            />
+                          </FormItem>
+                        )} />
+                        <p className="text-xs text-muted-foreground">
+                          {listaMcfWatch.length > 0 ? (
+                            <>
+                              equivale a:{' '}
+                              <strong className="text-foreground">
+                                {derivadoMcfWatch.parcelas_pagas_empresa} parcela(s), padrão{' '}
+                                {rotuloTipoContrato(derivadoMcfWatch.tipo_contrato)}
+                              </strong>
+                            </>
+                          ) : desenhoLegadoReg ? (
+                            <>
+                              Nenhuma parcela marcada: o desenho gravado (
+                              {rotuloTipoContrato(desenhoLegadoReg.tipo_contrato)},{' '}
+                              {desenhoLegadoReg.parcelas_pagas_empresa} parcela(s)) é mantido.
+                            </>
+                          ) : (
+                            <>Nenhuma parcela marcada: a MCF não assume parcela nenhuma.</>
+                          )}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Vencimento + 2a parcela */}
                     <div className="grid grid-cols-3 gap-3">
