@@ -78,29 +78,29 @@ function DiaMesBlocoCard({
   const cor = alerta ? "#ef4444" : accent;
   return (
     <div
-      className="rounded-2xl border p-3 xl:p-5 flex flex-col min-h-0"
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
       style={{
         backgroundColor: alerta ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.04)",
         borderColor: alerta ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.10)",
       }}
     >
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">{titulo}</div>
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 xl:gap-5 mt-2">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-2 xl:gap-3 mt-1">
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
             key={label}
-            className={`flex flex-col min-w-0 ${i === 1 ? "pl-3 xl:pl-5 border-l" : ""}`}
+            className={`flex flex-col min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
             <div
-              className="mt-1 text-2xl xl:text-4xl font-black leading-none truncate"
+              className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
               style={{ color: cor }}
               title={bloco.valor}
             >
               {bloco.valor}
             </div>
-            <div className="mt-auto pt-2">{bloco.rodape}</div>
+            <div className="mt-auto pt-1">{bloco.rodape}</div>
           </div>
         ))}
       </div>
@@ -134,7 +134,7 @@ function RankingShell({
           <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">{extra}</span>
         ) : null}
       </div>
-      <div className="flex-1 min-h-0 mt-2 flex flex-col gap-1 xl:gap-1.5 overflow-hidden">
+      <div className="flex-1 min-h-0 mt-2 flex flex-col gap-2 xl:gap-2.5 overflow-hidden">
         {vazio ? <div className="text-white/35 font-semibold italic text-sm mt-2">sem dados no mês</div> : children}
       </div>
     </section>
@@ -145,7 +145,7 @@ function Posicao({ idx, accent }: { idx: number; accent: string }) {
   const primeiro = idx === 0;
   return (
     <span
-      className="h-6 w-6 xl:h-7 xl:w-7 shrink-0 rounded-lg flex items-center justify-center text-xs xl:text-sm font-black"
+      className="h-7 w-7 xl:h-9 xl:w-9 shrink-0 rounded-lg flex items-center justify-center text-sm xl:text-base font-black"
       style={
         primeiro
           ? { color: "#050505", backgroundColor: accent }
@@ -182,8 +182,8 @@ export default function TVConsorcioEquipe() {
 
   const porAcontecer = Number(aDia.agendadas || 0) - Number(aDia.realizadas || 0);
 
-  const closers = (data.ranking_closer ?? []).slice(0, 5);
-  const sdrs = (data.ranking_sdr ?? []).slice(0, 5);
+  const closers = (data.ranking_closer ?? []).slice(0, 6);
+  const sdrs = (data.ranking_sdr ?? []).slice(0, 6);
   const sdrDiaMap = new Map((data.ranking_sdr_dia ?? []).map((r) => [r.nome, r]));
 
   const warning = data.snapshot_atrasado ? (
@@ -201,7 +201,7 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-3"
+      mainRowsClassName="grid-rows-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,2fr)]"
     >
       {/* Linha 1 */}
       <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
@@ -302,7 +302,7 @@ export default function TVConsorcioEquipe() {
           {closers.map((c, idx) => (
             <div
               key={`${c.nome}-${idx}`}
-              className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1.5 xl:py-2"
+              className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
               style={{
                 backgroundColor: "rgba(255,255,255,0.04)",
                 borderColor: "rgba(255,255,255,0.10)",
@@ -311,14 +311,14 @@ export default function TVConsorcioEquipe() {
             >
               <Posicao idx={idx} accent={ACCENT} />
               <div className="min-w-0">
-                <div className="truncate text-sm xl:text-base font-bold text-white/90">
+                <div className="truncate text-base xl:text-xl font-bold text-white/90">
                   {primeiroESegundoNome(c.nome)}
                 </div>
                 <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
                   {num(c.clientes)} clientes · {num(c.cotas)} cotas
                 </div>
               </div>
-              <span className="text-lg xl:text-2xl font-black leading-none" style={{ color: ACCENT }}>
+              <span className="text-xl xl:text-3xl font-black leading-none" style={{ color: ACCENT }}>
                 {abreviarBRL(c.credito)}
               </span>
             </div>
@@ -331,7 +331,7 @@ export default function TVConsorcioEquipe() {
             return (
               <div
                 key={`${s.nome}-${idx}`}
-                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1.5 xl:py-2"
+                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.04)",
                   borderColor: "rgba(255,255,255,0.10)",
@@ -339,13 +339,13 @@ export default function TVConsorcioEquipe() {
                 }}
               >
                 <Posicao idx={idx} accent={ROXO} />
-                <span className="truncate text-sm xl:text-base font-bold text-white/90 capitalize">
+                <span className="truncate text-base xl:text-xl font-bold text-white/90 capitalize">
                   {primeiroESegundoNome(s.nome)}
                 </span>
-                <span className="text-right w-10 xl:w-12 text-sm xl:text-lg font-black leading-none" style={{ color: ROXO }}>
+                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ROXO }}>
                   {num(hoje)}
                 </span>
-                <span className="text-right w-12 xl:w-16 text-xl xl:text-3xl font-black leading-none text-white/90">
+                <span className="text-right w-12 xl:w-16 text-2xl xl:text-4xl font-black leading-none text-white/90">
                   {num(s.agendadas)}
                 </span>
               </div>
