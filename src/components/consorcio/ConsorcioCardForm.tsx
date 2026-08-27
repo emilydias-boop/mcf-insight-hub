@@ -566,6 +566,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   const estadoCivil = form.watch('estado_civil');
   const profissao = form.watch('profissao');
   const empresaPagaParcelas = form.watch('empresa_paga_parcelas');
+  const modoParcelasMcf = form.watch('modo_parcelas_mcf') || 'padrao';
+  const parcelasMcfNumeros = form.watch('parcelas_mcf_numeros') || [];
   const tipoContrato = form.watch('tipo_contrato');
   const valorCredito = form.watch('valor_credito') || 0;
   const prazoMeses = form.watch('prazo_meses') || 240;
