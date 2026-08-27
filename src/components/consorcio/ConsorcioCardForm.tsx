@@ -471,6 +471,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       tipo_registro: ((card as any).tipo_registro as 'reserva' | 'contratacao') || 'contratacao',
       tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
       empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
+      modo_parcelas_mcf: (normalizarParcelasMcf((card as any).parcelas_mcf_numeros).length > 0 ? 'lista' : 'padrao') as 'padrao' | 'lista',
+      parcelas_mcf_numeros: normalizarParcelasMcf((card as any).parcelas_mcf_numeros),
       tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
       parcelas_pagas_empresa: card.parcelas_pagas_empresa,
       dia_vencimento: card.dia_vencimento,
