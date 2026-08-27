@@ -1,63 +1,101 @@
-# Diagnóstico — Laercio linhares de Albuquerque (termo saiu 1,2,3,4)
+# Prova de ponta a ponta — cláusula 3 do termo do Laercio
 
-## Q1 — estado dos 6 cadastros (cru)
+Nada foi alterado nesta rodada.
 
-Todos os 6 idênticos, um por carta (ordem 1..6):
+## Q1 — o caminho multi NÃO reimplementa a lista
 
-```
-id                                   | status               | consortium_card_id | parcelas_mcf_numeros | tipo_contrato | parcelas_pagas_empresa | empresa_paga_parcelas | tipo_produto | parcela_1a_12a | parcela_demais | prazo | carta.parcelas_mcf | ordem
-40dc62dc-4dd8-416a-9874-31260cdc8878 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 1
-1e9596f8-5e28-4397-b85a-8d7da9b25c3a | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 2
-85faeefa-c7ac-4ae5-934a-455ef1e314b7 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 3
-b5be597c-fa23-4c7c-b523-34a829c547f1 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 4
-1a110945-7144-49e1-8d38-7ba3025aaf56 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 5
-5b8db771-ccf7-4b8c-be18-55408868e481 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 6
-```
-
-- `consortium_card_id`: **NULL nos 6** (nenhuma cota aberta).
-- `parcelas_mcf_numeros`: **NULL nos 6**. A carta tem `{2,3,5,7}` — a lista morre na carta e não chegou ao cadastro.
-- Por isso o termo derivou do par legado (`normal` + `4`) → parcelas 1,2,3,4.
-
-## Q2 — cronograma
-
-```
-(0 linhas)
-```
-
-Nenhuma cota, nenhuma parcela em `consortium_installments`.
-
-## Q3 — o termo novo
-
-```
-id                                   | created_at                     | status    | modelo_versao | tipo   | pending_registration_id              | proposal_id                          | card_id
-8ae0bb89-f45a-4067-833f-aa54a0f5001c | 2026-08-27 15:56:45.655815+00  | pendente  | 4             | adesao | 40dc62dc-4dd8-416a-9874-31260cdc8878 | 9d8165a9-32d6-4261-9fcb-650efd8b1097 | NULL
-c57bdd1d-8ba5-4d3c-99e7-550bf82778ca | 2026-08-27 15:32:15.846748+00  | cancelado | 4             | adesao | 40dc62dc-4dd8-416a-9874-31260cdc8878 | 9d8165a9-32d6-4261-9fcb-650efd8b1097 | NULL
-```
-
-O documento foi alimentado pelo **cadastro pendente** `40dc62dc…` (ordem 1), não pela carta:
-`src/lib/consorcioTermo.ts:109` → `parcelas_numeros: reg.parcelas_mcf_numeros ?? null`. Como esse campo está NULL, cai no fallback tipo+quantidade → 1,2,3,4 → R$ 28.650,00.
-
-## Q4 — a trava
-
-`src/hooks/useConsorcioPostMeeting.ts:1337-1340`
+`src/lib/consorcioTermo.ts:382` (dentro de `montarDadosTermoMulti`) e `:420`:
 
 ```ts
-if (reg && (reg as any).consortium_card_id && parcelasMudaram) {
-  parcelasBloqueadasPorCotaAberta.push(ordem);
-}
-if (reg && !(reg as any).consortium_card_id) {
+const mcf = montarTabelaParcelasMcfConsolidada(regs);
+...
+clausula_mcf: montarClausulaMcf(mcf.qtd, mcf.total, mcf.tabela),
+parcelas_mcf_qtd: String(mcf.qtd),
+parcelas_mcf_total: formatCurrency(mcf.total),
 ```
 
-A propagação só acontece quando `consortium_card_id` é NULL. Neste caso **é NULL nos 6**, logo a trava **não barra** — o `UPDATE` das linhas 1375-1390 grava `parcelas_mcf_numeros = {2,3,5,7}` e os derivados.
+`montarTabelaParcelasMcfConsolidada` (`:334-357`) é quem monta CARTA / PARCELA / VENCIMENTO / VALOR / RESPONSÁVEL e o total:
 
-Condição adicional para o loop rodar: `atuais.find(x => x.id === c.id)?.pending_registration_id` (linha 1324-1325) — os 6 cadastros estão vinculados às cartas, então cai dentro. E o `UPDATE` só dispara se houver diff — `parcelasMudaram` é true (`{}` vs `{2,3,5,7}`), então dispara.
+```ts
+const itens = regs.flatMap((reg, i) =>
+  parcelasMcfComValoresDigitados(reg).map(p => ({
+    carta: rotulo(reg, i),
+    numero: p.numero,
+    valor: p.valor,
+    venc: Number(reg.dia_vencimento) ? `dia ${Number(reg.dia_vencimento)}` : 'A definir',
+  })),
+);
+const total = itens.reduce((s, p) => s + p.valor, 0);
+```
 
-## Respostas
+Ou seja: chama `parcelasMcfComValoresDigitados(reg)` **por cadastro**, e essa função (`:105-112`) repassa `parcelas_numeros: reg.parcelas_mcf_numeros ?? null` para `getParcelasEmpresa`. **Não há reimplementação da lista no caminho multi.**
 
-(a) **Não** — nenhuma das 6 cotas está aberta (`consortium_card_id` NULL nos 6).
-(b) **Não** — zero linhas em `consortium_installments`; nenhum cronograma gerado.
-(c) **A edição de proposta resolve.** A trava exige `consortium_card_id` preenchido; aqui é NULL, então a correção publicada propaga `{2,3,5,7}` para os 6 cadastros. Passo prático: abrir o `EditProposalModal` da proposta `9d8165a9…`, salvar sem mudar nada (o diff de parcelas dispara sozinho), conferir que `parcelas_mcf_numeros` ficou `{2,3,5,7}`, cancelar o termo `8ae0bb89…` e gerar de novo.
-(d) Caso a edição de proposta falhe, as duas telas que hoje gravam a lista nesses registros são: **OpenCotaModal** (`src/components/consorcio/OpenCotaModal.tsx:78-89` e `638-648`, grava direto no cadastro pendente pela grade de parcelas) e, depois da cota aberta, o **ConsorcioCardForm** em Controle Consórcio (`src/components/consorcio/ConsorcioCardForm.tsx:1122`). Nenhuma delas foi usada aqui — por isso a lista nunca chegou.
+## Q2 — simulação com os dados atuais (resultado cru)
 
-## Nada foi alterado
-Somente leitura: 3 SELECTs e leitura de código. Sem UPDATE, migration ou backfill.
+```
+qtd_parcelas | total
+24           | 10650.00
+```
+
+Bate exatamente com o esperado: **24 parcelas, R$ 10.650,00**. O dado está pronto.
+
+Prova adicional rodando o **próprio código** (`montarDadosTermoMulti` com os 6 cadastros como estão hoje, execução só em memória):
+
+```
+qtd: 24 total: R$ 10.650,00
+| Carta | Parcela | Vencimento | Valor | Responsável |
+| Carta 1 · R$ 150.000,00 | 2ª | A definir | R$ 443,75 | MCF Capital |
+| Carta 1 · R$ 150.000,00 | 3ª | A definir | R$ 443,75 | MCF Capital |
+| Carta 1 · R$ 150.000,00 | 5ª | A definir | R$ 443,75 | MCF Capital |
+| Carta 1 · R$ 150.000,00 | 7ª | A definir | R$ 443,75 | MCF Capital |
+```
+
+## Q3 — não existe segundo caminho para o total da MCF
+
+Todas as ocorrências em `consorcioTermo.ts` que produzem cláusula 3 / total:
+
+```
+105: parcelasMcfComValoresDigitados  (única ponte para getParcelasEmpresa, :106)
+204: montarDadosTermo         → parcelas = parcelasMcfComValoresDigitados(reg)
+236: clausula_mcf             → montarClausulaMcf(parcelas.length, total, lista)
+344: montarTabelaParcelasMcfConsolidada → parcelasMcfComValoresDigitados(reg)
+382/420: montarDadosTermoMulti → mcf.qtd / mcf.total / mcf.tabela
+```
+
+`getParcelasEmpresa` é importado **uma única vez** (`:2`) e chamado **um único lugar** (`:106`), sempre com `parcelas_numeros`. Nenhum ponto soma `parcelas_pagas_empresa × valor`. Não há onde o 28.650 ser recalculado hoje.
+
+## Q4 — preview e conteúdo gravado são o MESMO objeto
+
+`GerarTermoModal.tsx`:
+
+```ts
+const dados   = useMemo(() => (regs.length ? montarDadosTermoMulti(regs as any[]) : null), [regs]);
+const preview = useMemo(() => (modelo && dados ? renderTermo(modelo.conteudo, dados) : ''), [modelo, dados]);
+...
+await createTermo.mutateAsync({ ..., dados, conteudoRenderizado: preview });
+```
+
+Uma só função (`montarDadosTermoMulti`) alimenta o preview e o `conteudo_renderizado`. Não são caminhos diferentes.
+
+## De onde vem, então, o 1,2,3,4 / R$ 28.650,00 que o dono viu
+
+Só sobram duas origens, e ambas são de tempo, não de lógica:
+
+1. **Snapshot antigo.** Os dois únicos termos do Laercio foram gerados às 15:32 e 15:56 (ambos `cancelado`), antes da propagação de 16:06. O texto 1,2,3,4 / 28.650 está congelado no `dados_snapshot`. Se o dono abriu o link público ou o card do termo, é isso que ele vê — e vai continuar vendo para sempre.
+2. **Build publicado desatualizado.** O suporte a `parcelas_numeros` e a propagação entraram no código às ~15:54-16:18. O dono acessa `mcfgestao.com` (publicado). Enquanto não houver publish, o preview dele roda a versão anterior, que deriva `normal` + `4` → 1,2,3,4 → R$ 28.650,00 — exatamente o número da foto, inclusive com o dado já corrigido no banco.
+
+Nenhuma dessas duas causas é corrigível por mudança de código: a primeira exige gerar um termo novo, a segunda exige publicar.
+
+## Próximo passo sugerido (sem código)
+
+1. Publicar a versão atual.
+2. No `Pós-Reunião` do Laercio, gerar um termo novo (o antigo está cancelado) e conferir: deve sair 24 parcelas, 2ª/3ª/5ª/7ª por carta, total R$ 10.650,00.
+3. Se, **depois de publicar**, o preview ainda mostrar 28.650, aí sim existe defeito vivo — e eu instrumento o caminho com evidência de tela.
+
+---
+
+### Respostas em 3 linhas
+
+(a) Sim — a simulação deu **24 parcelas / R$ 10.650,00**, tanto em SQL quanto rodando o próprio `montarDadosTermoMulti`.
+(b) O caminho multi **passa a lista** — `montarTabelaParcelasMcfConsolidada` chama `parcelasMcfComValoresDigitados(reg)` por cadastro, que repassa `parcelas_mcf_numeros`.
+(c) **Nenhuma linha precisa mudar.** O 28.650 vem de snapshot antigo (termos de 15:32/15:56, cancelados) e/ou do build publicado antes da correção — a ação é publicar e gerar o termo novamente.
