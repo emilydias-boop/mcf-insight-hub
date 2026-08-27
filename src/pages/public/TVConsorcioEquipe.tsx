@@ -160,6 +160,21 @@ function CreditoArcoCard({
               strokeDasharray={`${progresso} ${comprimento}`}
               style={{ transition: "stroke-dasharray 700ms ease-out" }}
             />
+            {/* Entalhes das semanas: três cortes em 25/50/75% do arco.
+                Mesma cor do fundo para "apagar" o traço, espessura maior
+                que o arco para cortar limpo, linecap butt (sem bolinha). */}
+            {[0.25, 0.5, 0.75].map((f) => (
+              <path
+                key={f}
+                d={arco}
+                fill="none"
+                stroke="#050505"
+                strokeWidth={20}
+                strokeLinecap="butt"
+                vectorEffect="non-scaling-stroke"
+                strokeDasharray={`0 ${comprimento * f} 5 ${comprimento}`}
+              />
+            ))}
           </svg>
         </div>
 
