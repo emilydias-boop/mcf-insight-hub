@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TVShell, TVMsg } from "@/components/public/TVTeamShared";
@@ -25,14 +25,15 @@ interface AgendaBloco {
 interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number }
 interface RankingSdr { nome: string; agendadas: number; realizadas: number }
 
-interface SemanaBloco {
-  inicio: string;   // ISO date, sábado
-  fim: string;      // ISO date, sexta
-  indice: number;   // 1 a 4/5, semana dentro do mês
-  meta: number | null;   // meta do mês / 4
-  cotas: number;
-  clientes: number;
+interface SemanaItem {
+  indice: number;      // 1 a 4
+  inicio: string;      // ISO date
+  fim: string;         // ISO date
+  atual: boolean;      // semana que contém hoje
+  futura: boolean;     // ainda não começou
   credito: number;
+  cotas: number;
+  meta: number | null; // meta do mês / 4
 }
 
 interface Payload {
@@ -46,7 +47,7 @@ interface Payload {
   ranking_closer?: RankingCloser[];
   ranking_sdr?: RankingSdr[];
   ranking_sdr_dia?: RankingSdr[];
-  semana?: SemanaBloco | null;
+  semanas?: SemanaItem[] | null;
   error?: string;
 }
 
@@ -95,124 +96,108 @@ function Fracao({ numerador, denominador, cor }: { numerador: number; denominado
   );
 }
 
+/** Extrai apenas o dia de um ISO date ("2026-08-22" → "22"). */
+function dd(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "").trim());
+  return m ? m[3] : "—";
+}
+
 /**
- * Cartão de largura total do crédito efetivado: arco largo e raso desenhado em
- * SVG, com todos os textos em HTML sobreposto (texto dentro do SVG escalava
- * junto com o desenho e transbordava).
+ * Cartão de largura total do crédito efetivado, com quatro colunas semanais e
+ * barras horizontais retas (o arco SVG era achatado por preserveAspectRatio e
+ * deixava entalhes e texto desalinhados).
  */
-function CreditoArcoCard({
+function CreditoSemanasCard({
   creditoMes,
-  creditoHoje,
   meta,
   pct,
-  semana,
+  semanas,
 }: {
   creditoMes: number;
-  creditoHoje: number;
   meta: number;
   pct: number;
-  semana?: SemanaBloco | null;
+  semanas: SemanaItem[];
 }) {
-  const pathRef = useRef<SVGPathElement>(null);
-  const [comprimento, setComprimento] = useState(1120);
-  useEffect(() => {
-    const total = pathRef.current?.getTotalLength();
-    if (total && Number.isFinite(total)) setComprimento(total);
-  }, []);
-
-  const arco = "M 40 140 Q 500 -30 960 140";
-  const progresso = (Math.min(Math.max(pct, 0), 100) / 100) * comprimento;
-
   return (
     <div
       className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0 overflow-hidden"
       style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
     >
+      {/* Cabeçalho — rótulo acima, valor grande + percentual alinhados pela base. */}
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
         Crédito efetivado
       </div>
+      <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
+        <span className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
+          {abreviarBRL(creditoMes)}
+        </span>
+        <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
+          {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
+        </span>
+      </div>
 
-      <div className="relative flex-1 min-h-0">
-        <div className="absolute inset-y-0 inset-x-[7%]">
-          <svg
-            viewBox="0 0 1000 150"
-            preserveAspectRatio="none"
-            className="w-full h-full"
-            role="img"
-            aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}
-          >
-            <path
-              d={arco}
-              fill="none"
-              stroke="rgba(255,255,255,0.10)"
-              strokeWidth={18}
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            <path
-              ref={pathRef}
-              d={arco}
-              fill="none"
-              stroke={ACCENT}
-              strokeWidth={18}
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-              strokeDasharray={`${progresso} ${comprimento}`}
-              style={{ transition: "stroke-dasharray 700ms ease-out" }}
-            />
-            {/* Entalhes das semanas: três cortes em 25/50/75% do arco.
-                Mesma cor do fundo para "apagar" o traço, espessura maior
-                que o arco para cortar limpo, linecap butt (sem bolinha). */}
-            {[0.25, 0.5, 0.75].map((f) => (
-              <path
-                key={f}
-                d={arco}
-                fill="none"
-                stroke="#050505"
-                strokeWidth={20}
-                strokeLinecap="butt"
-                vectorEffect="non-scaling-stroke"
-                strokeDasharray={`0 ${comprimento * f} 5 ${comprimento}`}
-              />
-            ))}
-          </svg>
-        </div>
+      {/* Corpo — 4 colunas, uma por semana. */}
+      <div className="flex-1 min-h-0 grid grid-cols-4 gap-2 xl:gap-4 mt-2 xl:mt-3">
+        {semanas.map((s) => {
+          const semanaMeta = s.meta ?? 0;
+          const semanaPct = semanaMeta > 0 ? Math.min((Number(s.credito || 0) / semanaMeta) * 100, 100) : 0;
+          const isAtual = s.atual === true;
+          const isFutura = s.futura === true;
+          const corTexto = isAtual ? ACCENT : "rgba(255,255,255,0.85)";
+          const corFill = isAtual ? ACCENT : "rgba(191,255,0,0.55)";
 
-        {/* Valor central em HTML: não escala com o desenho. */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pt-[8%] pointer-events-none">
-          <div className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
-            {abreviarBRL(creditoMes)}
-          </div>
-          <div className="mt-2 text-xs xl:text-lg font-bold text-white/70">
-            <span>{pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
-            <span className="ml-1.5">da meta</span>
-          </div>
-        </div>
-
-
-
-        <div className="absolute left-1 bottom-0 xl:left-3">
-          {semana && semana.meta != null ? (
-            <>
-              <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">
-                Semana {semana.indice} · {ddmm(semana.inicio)} a {ddmm(semana.fim)}
+          return (
+            <div
+              key={s.indice}
+              className={`flex flex-col min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
+              style={{
+                opacity: isFutura ? 0.4 : 1,
+                borderColor: isAtual ? "rgba(191,255,0,0.25)" : undefined,
+              }}
+            >
+              {/* 1 — rótulo à esquerda, percentual à direita. */}
+              <div className="flex items-baseline justify-between gap-1 min-w-0">
+                <span
+                  className="text-[10px] xl:text-xs font-black tracking-widest uppercase truncate"
+                  style={{ color: isAtual ? ACCENT : "rgba(255,255,255,0.45)" }}
+                >
+                  S{s.indice} · {dd(s.inicio)}–{dd(s.fim)}
+                </span>
+                <span
+                  className="text-[10px] xl:text-xs font-bold shrink-0"
+                  style={{ color: isAtual ? ACCENT : "rgba(255,255,255,0.45)" }}
+                >
+                  {semanaMeta > 0
+                    ? Math.round((Number(s.credito || 0) / semanaMeta) * 100) + "%"
+                    : "—"}
+                </span>
               </div>
-              <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">
-                {abreviarBRL(Number(semana.credito || 0))}
-                <span className="ml-1.5 text-white/45 text-xs xl:text-lg">/ {abreviarBRL(Number(semana.meta))}</span>
+
+              {/* 2 — crédito da semana em destaque médio. */}
+              <div className="flex-1 min-h-0 flex items-center mt-1">
+                <span
+                  className="text-base xl:text-2xl font-black leading-none truncate"
+                  style={{ color: isFutura ? "rgba(255,255,255,0.45)" : corTexto }}
+                >
+                  {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
+                </span>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Hoje</div>
-              <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(creditoHoje)}</div>
-            </>
-          )}
-        </div>
-        <div className="absolute right-1 bottom-0 text-right xl:right-3">
-          <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Meta</div>
-          <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(meta)}</div>
-        </div>
+
+              {/* 3 — barra horizontal. */}
+              <div
+                className="w-full rounded-full mt-1 h-1.5 xl:h-2.5 overflow-hidden"
+                style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
+              >
+                {!isFutura && semanaPct > 0 ? (
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${semanaPct}%`, backgroundColor: corFill }}
+                  />
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -413,15 +398,14 @@ export default function TVConsorcioEquipe() {
       warning={warning}
       mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,2fr)]"
     >
-      {/* Linha 1 — crédito efetivado em largura total */}
+      {/* Linha 1 — crédito efetivado em largura total (barras semanais). */}
       <div className="min-h-0 flex flex-col">
-        {meta && meta > 0 ? (
-          <CreditoArcoCard
+        {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
+          <CreditoSemanasCard
             creditoMes={Number(cMes.credito || 0)}
-            creditoHoje={Number(cDia.credito || 0)}
             meta={Number(meta)}
             pct={pctMeta}
-            semana={data.semana}
+            semanas={data.semanas}
           />
         ) : (
           <CreditoSemMetaCard
