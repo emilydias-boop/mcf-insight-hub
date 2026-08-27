@@ -375,7 +375,7 @@ export default function TVConsorcioEquipe() {
               <Posicao idx={idx} accent={ACCENT} />
               <div className="min-w-0">
                 <div className="truncate text-base xl:text-xl font-bold text-white/90">
-                  {primeiroESegundoNome(c.nome)}
+                  {primeiroEUltimoNome(c.nome)}
                 </div>
                 <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
                   {num(c.clientes)} clientes · {num(c.cotas)} cotas
@@ -403,7 +403,7 @@ export default function TVConsorcioEquipe() {
               >
                 <Posicao idx={idx} accent={ROXO} />
                 <span className="truncate text-base xl:text-xl font-bold text-white/90 capitalize">
-                  {primeiroESegundoNome(s.nome)}
+                  {primeiroEUltimoNome(s.nome)}
                 </span>
                 <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ROXO }}>
                   {num(hoje)}
