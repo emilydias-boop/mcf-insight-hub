@@ -3684,6 +3684,7 @@ export type Database = {
           created_by: string | null
           dias_uteis_override: Json | null
           id: string
+          meta_agendamento_dia: number | null
           meta_valor: number
           month_ref: string
           updated_at: string
@@ -3694,6 +3695,7 @@ export type Database = {
           created_by?: string | null
           dias_uteis_override?: Json | null
           id?: string
+          meta_agendamento_dia?: number | null
           meta_valor?: number
           month_ref: string
           updated_at?: string
@@ -3704,6 +3706,7 @@ export type Database = {
           created_by?: string | null
           dias_uteis_override?: Json | null
           id?: string
+          meta_agendamento_dia?: number | null
           meta_valor?: number
           month_ref?: string
           updated_at?: string
@@ -17068,6 +17071,8 @@ export type Database = {
         Args: { _ate: string; _de: string }
         Returns: Json
       }
+      tv_consorcio_dias_uteis: { Args: { _ini: string }; Returns: number }
+      tv_consorcio_e_dia_util: { Args: { _d: string }; Returns: boolean }
       tv_consorcio_payload: { Args: never; Returns: Json }
       tv_consorcio_semanas: {
         Args: { _hoje: string; _ini: string; _meta: number }
