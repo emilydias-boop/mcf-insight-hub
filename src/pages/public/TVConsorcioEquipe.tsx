@@ -302,7 +302,7 @@ export default function TVConsorcioEquipe() {
           {closers.map((c, idx) => (
             <div
               key={`${c.nome}-${idx}`}
-              className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1.5 xl:py-2"
+              className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
               style={{
                 backgroundColor: "rgba(255,255,255,0.04)",
                 borderColor: "rgba(255,255,255,0.10)",
@@ -311,14 +311,14 @@ export default function TVConsorcioEquipe() {
             >
               <Posicao idx={idx} accent={ACCENT} />
               <div className="min-w-0">
-                <div className="truncate text-sm xl:text-base font-bold text-white/90">
+                <div className="truncate text-base xl:text-xl font-bold text-white/90">
                   {primeiroESegundoNome(c.nome)}
                 </div>
                 <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
                   {num(c.clientes)} clientes · {num(c.cotas)} cotas
                 </div>
               </div>
-              <span className="text-lg xl:text-2xl font-black leading-none" style={{ color: ACCENT }}>
+              <span className="text-xl xl:text-3xl font-black leading-none" style={{ color: ACCENT }}>
                 {abreviarBRL(c.credito)}
               </span>
             </div>
