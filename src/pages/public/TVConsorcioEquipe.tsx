@@ -234,7 +234,7 @@ export default function TVConsorcioEquipe() {
   const meta = data.meta_credito_mes ?? null;
   const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
 
-  const porAcontecer = Number(aDia.agendadas || 0) - Number(aDia.realizadas || 0);
+
 
   const closers = (data.ranking_closer ?? []).slice(0, 6);
   const sdrs = (data.ranking_sdr ?? []).slice(0, 6);
