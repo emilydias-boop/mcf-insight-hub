@@ -24,6 +24,7 @@ interface AgendaBloco {
   por_sdr?: unknown[];
 }
 interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number }
+interface RankingSdr { nome: string; agendadas: number; agendamentos: number; realizadas: number }
 interface RankingSdr { nome: string; agendadas: number; realizadas: number }
 
 interface SemanaItem {
@@ -392,7 +393,9 @@ export default function TVConsorcioEquipe() {
 
 
   const closers = (data.ranking_closer ?? []).slice(0, 6);
-  const sdrs = (data.ranking_sdr ?? []).slice(0, 6);
+  const sdrs = [...(data.ranking_sdr ?? [])]
+    .sort((a, b) => Number(b.agendamentos || 0) - Number(a.agendamentos || 0))
+    .slice(0, 6);
   const sdrDiaMap = new Map((data.ranking_sdr_dia ?? []).map((r) => [r.nome, r]));
 
   const warning = data.snapshot_atrasado ? (
@@ -520,7 +523,7 @@ export default function TVConsorcioEquipe() {
 
         <RankingShell titulo="SDR · agendamentos" extra="Hoje / Mês" accent={ROXO} vazio={sdrs.length === 0}>
           {sdrs.map((s, idx) => {
-            const hoje = Number(sdrDiaMap.get(s.nome)?.agendadas ?? 0);
+            const hoje = Number(sdrDiaMap.get(s.nome)?.agendamentos ?? 0);
             return (
               <div
                 key={`${s.nome}-${idx}`}
@@ -528,7 +531,7 @@ export default function TVConsorcioEquipe() {
                 style={{
                   backgroundColor: "rgba(255,255,255,0.04)",
                   borderColor: "rgba(255,255,255,0.10)",
-                  opacity: Number(s.agendadas || 0) === 0 ? 0.45 : 1,
+                  opacity: Number(s.agendamentos || 0) === 0 ? 0.45 : 1,
                 }}
               >
                 <Posicao idx={idx} accent={ROXO} />
@@ -539,7 +542,7 @@ export default function TVConsorcioEquipe() {
                   {num(hoje)}
                 </span>
                 <span className="text-right w-12 xl:w-16 text-2xl xl:text-4xl font-black leading-none text-white/90">
-                  {num(s.agendadas)}
+                  {num(s.agendamentos)}
                 </span>
               </div>
             );
