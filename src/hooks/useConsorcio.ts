@@ -36,7 +36,7 @@ interface ConsorcioFilters {
 const CONSORCIO_CARD_LIST_SELECT = `
   id, created_at, updated_at, tipo_pessoa, status, categoria,
   grupo, cota, contrato_embracon, valor_credito, prazo_meses, tipo_produto, tipo_contrato,
-  parcelas_pagas_empresa, data_contratacao, dia_vencimento,
+  parcelas_pagas_empresa, parcelas_mcf_numeros, data_contratacao, dia_vencimento,
   data_reserva, tipo_registro,
   origem, origem_detalhe, vendedor_id, vendedor_name,
   numero_contemplacao, data_contemplacao, motivo_contemplacao, valor_lance, percentual_lance,
