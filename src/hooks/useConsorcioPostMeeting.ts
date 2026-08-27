@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
 import type { PropostaCarta, PropostaCartaInput } from '@/types/consorcioCartas';
+import { derivarParcelasEmpresa, normalizarParcelasMcf } from '@/types/consorcioCartas';
 
 import {
   PAGE_SIZE,
@@ -1296,6 +1297,8 @@ export function useEditarProposta() {
 
       // Propagação carta -> cadastro pendente (quando a carta ainda não virou cota).
       const propagacoes: Array<{ campo: string; de: unknown; para: unknown }> = [];
+      /** Ordens cujas parcelas não puderam mudar porque a cota já foi aberta. */
+      const parcelasBloqueadasPorCotaAberta: number[] = [];
 
       let ordem = 0;
       for (const c of cartas) {
