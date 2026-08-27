@@ -17,6 +17,12 @@ import {
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
 import { CATEGORIA_OPTIONS } from '@/types/consorcio';
+import {
+  estruturaParcela,
+  faixaParcelaCurta,
+  rotulosParcela,
+} from '@/lib/consorcioParcelaOficial';
+
 
 
 import {
@@ -249,8 +255,14 @@ export function CartasProposalEditor({
               && c.parcela1a12Str === numberToBRLInput(planoSel.parcela1a12)
               && c.parcelaDemaisStr === numberToBRLInput(planoSel.parcelaDemais);
             const perdido = planoPerdido[c.key];
+            // Estrutura da parcela POR CARTA: uma proposta pode misturar Select
+            // e Parcelinha. Com plano da tabela escolhido, o código do produto
+            // manda; sem ele, vale o tipo de produto da carta.
+            const estrutura = estruturaParcela(c.tipoProduto, planoSel?.produtoCodigo);
+            const rotulos = rotulosParcela(estrutura);
             const condicaoLabel = (v?: string) =>
               CONDICAO_PAGAMENTO_OPTIONS.find(o => o.value === v)?.label || v || '—';
+
             return (
 
               <div
@@ -435,10 +447,13 @@ export function CartasProposalEditor({
                       <div className="-mx-1 my-1 h-px bg-border" />
                       {planos.map(p => (
                         <SelectItem key={p.id} value={p.id}>
-                          {fmtBRL(p.valorCredito)} — 1ª à 12ª {fmtBRLc(p.parcela1a12)} · demais{' '}
-                          {fmtBRLc(p.parcelaDemais)} ({p.produtoCodigo})
+                          {fmtBRL(p.valorCredito)} —{' '}
+                          {faixaParcelaCurta(estruturaParcela(c.tipoProduto, p.produtoCodigo))}{' '}
+                          {fmtBRLc(p.parcela1a12)} · demais {fmtBRLc(p.parcelaDemais)} (
+                          {p.produtoCodigo})
                         </SelectItem>
                       ))}
+
                     </SelectContent>
                   </Select>
 
@@ -490,7 +505,7 @@ export function CartasProposalEditor({
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
+                      <Label className="text-xs">{rotulos.diferenciada}</Label>
                       {/* Segue opcional: sem `required` não aparece linha de vazio. */}
                       <CurrencyInput
                         value={c.parcela1a12Str}
@@ -501,7 +516,7 @@ export function CartasProposalEditor({
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Demais parcelas (R$)</Label>
+                      <Label className="text-xs">{rotulos.demais}</Label>
                       <CurrencyInput
                         value={c.parcelaDemaisStr}
                         onChange={masked => patch(c.key, { parcelaDemaisStr: masked })}
@@ -511,6 +526,13 @@ export function CartasProposalEditor({
                       />
                     </div>
                   </div>
+
+                  {estrutura === 'primeira_parcela' && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Neste produto só a 1ª parcela é diferente; da 2ª em diante todas são iguais.
+                    </p>
+                  )}
+
 
                   {!manual && (
                     <Button

@@ -1,8 +1,15 @@
 import { createElement } from 'react';
 import { getParcelasEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatCurrency } from '@/lib/consorcioCalculos';
+import {
+  estruturaParcela,
+  faixaParcelaCurta,
+  limiteParcelaDiferenciada,
+  rotulosParcelaTermo,
+} from '@/lib/consorcioParcelaOficial';
 import { abrirJanelaImpressao, escreverImpressao, escapeHtml } from '@/lib/documentoPapel';
 import { formatCpfCnpj } from '@/lib/cpfCnpjMask';
+
 
 /** Administradora do consórcio — usada no placeholder {{administradora}}. */
 export const ADMINISTRADORA_CONSORCIO = 'Embracon Administradora de Consórcio Ltda';
@@ -21,6 +28,11 @@ export const TERMO_PLACEHOLDERS = [
   { key: 'condicao_pagamento', label: 'Condição de pagamento' },
   { key: 'parcela_1a_12a', label: 'Parcela 1ª à 12ª' },
   { key: 'parcela_demais', label: 'Demais parcelas' },
+  // Rótulos que se adaptam ao produto (Select × Parcelinha). Ficam disponíveis
+  // no editor de modelo; nenhum modelo ativo usa ainda — de propósito.
+  { key: 'parcela_diferenciada_label', label: 'Rótulo da parcela inicial (por produto)' },
+  { key: 'parcela_demais_label', label: 'Rótulo das demais parcelas (por produto)' },
+
   { key: 'dia_vencimento', label: 'Dia de vencimento' },
   { key: 'dia_vencimento_texto', label: 'Dia de vencimento (texto)' },
   { key: 'qtd_cartas', label: 'Quantidade de cartas' },
@@ -94,14 +106,21 @@ export function parcelasMcfComValoresDigitados(reg: TermoSourceRegistration) {
     tipo_contrato: reg.tipo_contrato,
     valor_credito: reg.valor_credito,
     empresa_paga_parcelas: reg.empresa_paga_parcelas,
+    tipo_produto: reg.tipo_produto,
+    produto_codigo: reg.produto_codigo,
   });
   const p12 = Number(reg.parcela_1a_12a || 0);
   const pDemais = Number(reg.parcela_demais || 0);
+  // A faixa do valor diferenciado vem do produto: Select = só a 1ª parcela.
+  const limite = limiteParcelaDiferenciada(
+    estruturaParcela(reg.tipo_produto, reg.produto_codigo),
+  );
   return base.map((p) => ({
     numero: p.numero,
-    valor: p.numero <= 12 ? p12 : pDemais,
+    valor: p.numero <= limite ? p12 : pDemais,
   }));
 }
+
 
 export interface TermoFaltando {
   campo: string;
@@ -196,6 +215,13 @@ export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Dat
     condicao_pagamento: CONDICAO_LABELS[String(reg.condicao_pagamento)] || reg.condicao_pagamento || '—',
     parcela_1a_12a: formatCurrency(Number(reg.parcela_1a_12a || 0)),
     parcela_demais: formatCurrency(Number(reg.parcela_demais || 0)),
+    parcela_diferenciada_label: rotulosParcelaTermo(
+      estruturaParcela(reg.tipo_produto, reg.produto_codigo),
+    ).diferenciada,
+    parcela_demais_label: rotulosParcelaTermo(
+      estruturaParcela(reg.tipo_produto, reg.produto_codigo),
+    ).demais,
+
     // O dia é definido pela Embracon depois da abertura da cota.
     dia_vencimento: Number(reg.dia_vencimento) ? String(reg.dia_vencimento) : 'A definir',
     dia_vencimento_texto: textoDiaVencimento([reg.dia_vencimento]),
@@ -280,14 +306,20 @@ function produtoLabel(reg: TermoSourceRegistration): string {
 export function montarTabelaCartas(regs: TermoSourceRegistration[]): string {
   const totalCredito = regs.reduce((s, r) => s + Number(r.valor_credito || 0), 0);
   const linhas = [
-    '| Carta | Produto | Crédito | Prazo | Parcela 1ª–12ª | Demais |',
+    '| Carta | Produto | Crédito | Prazo | Parcela inicial | Demais |',
     '| --- | --- | --- | --- | --- | --- |',
     ...regs.map((r, i) => {
-      const p12 = Number(r.parcela_1a_12a) ? formatCurrency(Number(r.parcela_1a_12a)) : '—';
+      // A faixa vai marcada no próprio valor: numa venda que mistura Select e
+      // Parcelinha nenhuma linha mente.
+      const faixa = faixaParcelaCurta(estruturaParcela(r.tipo_produto, r.produto_codigo));
+      const p12 = Number(r.parcela_1a_12a)
+        ? `${formatCurrency(Number(r.parcela_1a_12a))} (${faixa})`
+        : '—';
       const pd = Number(r.parcela_demais) ? formatCurrency(Number(r.parcela_demais)) : '—';
       const prz = Number(r.prazo_meses) ? `${Number(r.prazo_meses)} meses` : '—';
       return `| ${i + 1} | ${produtoLabel(r)} | ${formatCurrency(Number(r.valor_credito || 0))} | ${prz} | ${p12} | ${pd} |`;
     }),
+
     `| **Total** | | **${formatCurrency(totalCredito)}** | | | |`,
   ];
   return linhas.join('\n');
@@ -362,6 +394,15 @@ export function montarDadosTermoMulti(
     parcela_demais: unicoOuVerTabela(
       regs.map(r => (Number(r.parcela_demais) ? formatCurrency(Number(r.parcela_demais)) : '—')),
     ),
+    parcela_diferenciada_label: unicoOuVerTabela(
+      regs.map(
+        r => rotulosParcelaTermo(estruturaParcela(r.tipo_produto, r.produto_codigo)).diferenciada,
+      ),
+    ),
+    parcela_demais_label: unicoOuVerTabela(
+      regs.map(r => rotulosParcelaTermo(estruturaParcela(r.tipo_produto, r.produto_codigo)).demais),
+    ),
+
     dia_vencimento: unicoOuVerTabela(
       regs.map(r => (Number(r.dia_vencimento) ? String(r.dia_vencimento) : 'A definir')),
     ),

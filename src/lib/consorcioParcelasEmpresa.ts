@@ -1,4 +1,5 @@
 import type { TipoContrato } from '@/types/consorcio';
+import { estruturaParcela, limiteParcelaDiferenciada } from '@/lib/consorcioParcelaOficial';
 
 export interface ParcelaEmpresa {
   numero: number;
@@ -11,20 +12,25 @@ export interface GetParcelasEmpresaInput {
   tipo_contrato: TipoContrato | string | null | undefined;
   valor_credito: number | null | undefined;
   empresa_paga_parcelas?: string | null;
-  /** Valor informado no lançamento para as parcelas 1 a 12 (fonte de verdade). */
+  /** Valor informado no lançamento para a faixa diferenciada (1ª, ou 1ª a 12ª). */
   parcela_1a_12a?: number | null;
-  /** Valor informado no lançamento para as parcelas 13 em diante. */
+  /** Valor informado no lançamento para as parcelas seguintes. */
   parcela_demais?: number | null;
+  /** Define a faixa: Select → só a 1ª · Parcelinha → 1ª a 12ª. */
+  tipo_produto?: string | null;
+  /** Código do produto da tabela oficial, quando conhecido (fonte mais precisa). */
+  produto_codigo?: string | null;
 }
 
 /**
  * Calcula quais parcelas a empresa pagará e o valor de cada uma.
  * Espelha exatamente a lógica usada em useOpenCota (intercalado par/ímpar/normal).
  *
- * VALOR: usa o plano informado no lançamento — `parcela_1a_12a` para as parcelas
- * 1 a 12 e `parcela_demais` a partir da 13ª, os mesmos campos que o Termo de
- * Adesão lê. Quando o campo aplicável está nulo/zero (cadastros antigos, antes
- * desses campos existirem) cai no comportamento histórico: crédito ÷ prazo.
+ * VALOR: usa o plano informado no lançamento — `parcela_1a_12a` na faixa
+ * diferenciada e `parcela_demais` depois dela. A FAIXA vem da estrutura do
+ * produto (`estruturaParcela`): Select paga o valor diferenciado só na 1ª
+ * parcela; Parcelinha, nas 12 primeiras. Quando o campo aplicável está
+ * nulo/zero (cadastros antigos) cai no comportamento histórico: crédito ÷ prazo.
  */
 export function getParcelasEmpresa(input: GetParcelasEmpresaInput): ParcelaEmpresa[] {
   const prazo = Number(input.prazo_meses || 0);
@@ -37,10 +43,14 @@ export function getParcelasEmpresa(input: GetParcelasEmpresaInput): ParcelaEmpre
   const valorFallback = valorCredito / prazo;
   const p12 = Number(input.parcela_1a_12a || 0);
   const pDemais = Number(input.parcela_demais || 0);
+  const limite = limiteParcelaDiferenciada(
+    estruturaParcela(input.tipo_produto, input.produto_codigo),
+  );
   const valorDaParcela = (numero: number) => {
-    const informado = numero <= 12 ? p12 : pDemais;
+    const informado = numero <= limite ? p12 : pDemais;
     return informado > 0 ? informado : valorFallback;
   };
+
   const out: ParcelaEmpresa[] = [];
 
 

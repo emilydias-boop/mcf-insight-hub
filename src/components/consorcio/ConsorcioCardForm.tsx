@@ -45,6 +45,8 @@ import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { toast } from 'sonner';
 import { useCreateConsorcioCard, useUpdateConsorcioCard, useConsorcioCardDetails } from '@/hooks/useConsorcio';
 import { diffContraSnapshot, nenhumaAlteracao } from '@/lib/formDiff';
+import { estruturaParcela, limiteParcelaDiferenciada } from '@/lib/consorcioParcelaOficial';
+
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';
@@ -729,18 +731,18 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     
     // If tabulated values exist, use them instead
     if (valoresTabelados.parcela1a12 && valoresTabelados.parcelaDemais) {
-      // Calcular total baseado no tipo de taxa do produto
-      let totalPagoTabelado: number;
-      
-      if (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12') {
-        // PARCELINHA: 12 primeiras iguais + demais
-        totalPagoTabelado = (valoresTabelados.parcela1a12 * 12) + 
-          (valoresTabelados.parcelaDemais * (prazoValido - 12));
-      } else {
-        // SELECT: 1ª parcela (já com taxa) + (prazo-1) parcelas demais
-        totalPagoTabelado = valoresTabelados.parcela1a12 + 
-          (valoresTabelados.parcelaDemais * (prazoValido - 1));
-      }
+      // Faixa do valor diferenciado derivada da estrutura do produto:
+      // Parcelinha (dividida_12) → 12 primeiras · Select (primeira_parcela) → só a 1ª.
+      const limite = limiteParcelaDiferenciada(
+        estruturaParcela(
+          produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select',
+          produtoSelecionado.codigo,
+        ),
+      );
+      const totalPagoTabelado =
+        (valoresTabelados.parcela1a12 * limite) +
+        (valoresTabelados.parcelaDemais * (prazoValido - limite));
+
       
       return {
         ...calculoBase,
