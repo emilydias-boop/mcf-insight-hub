@@ -127,7 +127,6 @@ function CreditoArcoCard({
               stroke="rgba(255,255,255,0.10)"
               strokeWidth={13}
               strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
             />
             <path
               ref={pathRef}
@@ -136,7 +135,6 @@ function CreditoArcoCard({
               stroke={ACCENT}
               strokeWidth={13}
               strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
               strokeDasharray={`${progresso} ${comprimento}`}
               style={{ transition: "stroke-dasharray 700ms ease-out" }}
             />
