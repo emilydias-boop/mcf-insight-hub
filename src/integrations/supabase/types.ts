@@ -13999,6 +13999,33 @@ export type Database = {
           },
         ]
       }
+      tv_consorcio_sdr_allowlist: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          email: string
+          nome: string | null
+          observacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          email: string
+          nome?: string | null
+          observacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          email?: string
+          nome?: string | null
+          observacao?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tv_public_snapshots: {
         Row: {
           computed_at: string
