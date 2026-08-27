@@ -105,22 +105,29 @@ function CreditoArcoCard({
 
   return (
     <div
-      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0 overflow-hidden"
       style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
     >
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
         Crédito efetivado
       </div>
 
-      <div className="relative flex-1 min-h-0 flex items-center justify-center">
+      <div className="relative flex-1 min-h-0">
         <svg
           viewBox="0 0 1000 150"
-          className="w-full max-h-full"
-          style={{ height: "auto" }}
+          preserveAspectRatio="none"
+          className="w-full h-full"
           role="img"
           aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}
         >
-          <path d={arco} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={13} strokeLinecap="round" />
+          <path
+            d={arco}
+            fill="none"
+            stroke="rgba(255,255,255,0.10)"
+            strokeWidth={13}
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
           <path
             ref={pathRef}
             d={arco}
@@ -128,6 +135,7 @@ function CreditoArcoCard({
             stroke={ACCENT}
             strokeWidth={13}
             strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
             strokeDasharray={comprimento}
             strokeDashoffset={comprimento - progresso}
             style={{ transition: "stroke-dashoffset 700ms ease-out" }}
@@ -135,7 +143,8 @@ function CreditoArcoCard({
         </svg>
 
         {/* Valor central em HTML: não escala com o desenho. */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pt-[14%] pointer-events-none">
+        <div className="absolute inset-0 flex flex-col items-center justify-center pt-[8%] pointer-events-none">
+
           <div className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
             {abreviarBRL(creditoMes)}
           </div>
