@@ -68,6 +68,13 @@ function pctTexto(parte: number, total: number) {
   return `${((parte / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
 }
 
+/** "2026-08-22" → "22/08". */
+function ddmm(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "").trim());
+  if (!m) return "—";
+  return `${m[3]}/${m[2]}`;
+}
+
 /** Primeiro + último nome ("Andre dos Santos Duarte" → "Andre Duarte"). */
 function primeiroEUltimoNome(nome: string) {
   const partes = String(nome || "").trim().split(/\s+/).filter(Boolean);
