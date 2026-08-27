@@ -21,20 +21,9 @@ function posStyle(idx: number) {
 
 function PeriodStats({ p, accent }: { p: TVLigacaoRankingPeriod; accent: string }) {
   return (
-    <div className="flex items-center gap-1.5 xl:gap-2">
-      <div className="flex flex-col items-center w-8 xl:w-10">
-        <span className="text-sm xl:text-lg font-black leading-none" style={{ color: accent }}>{p.total}</span>
-        <span className="text-[8px] xl:text-[9px] font-bold text-white/35 uppercase">Tot</span>
-      </div>
-      <div className="flex flex-col items-center w-8 xl:w-10">
-        <span className="text-sm xl:text-lg font-black leading-none text-white/55">{p.nao_atendidas}</span>
-        <span className="text-[8px] xl:text-[9px] font-bold text-white/35 uppercase">NAt</span>
-      </div>
-      <div className="flex flex-col items-center w-8 xl:w-10">
-        <span className="text-sm xl:text-lg font-black leading-none text-[#38bdf8]">{p.efetivas}</span>
-        <span className="text-[8px] xl:text-[9px] font-bold text-white/35 uppercase">Efet</span>
-      </div>
-    </div>
+    <span className="text-xl xl:text-3xl font-black leading-none" style={{ color: accent }}>
+      {p.total}
+    </span>
   );
 }
 
