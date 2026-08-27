@@ -182,8 +182,8 @@ export default function TVConsorcioEquipe() {
 
   const porAcontecer = Number(aDia.agendadas || 0) - Number(aDia.realizadas || 0);
 
-  const closers = (data.ranking_closer ?? []).slice(0, 5);
-  const sdrs = (data.ranking_sdr ?? []).slice(0, 5);
+  const closers = (data.ranking_closer ?? []).slice(0, 6);
+  const sdrs = (data.ranking_sdr ?? []).slice(0, 6);
   const sdrDiaMap = new Map((data.ranking_sdr_dia ?? []).map((r) => [r.nome, r]));
 
   const warning = data.snapshot_atrasado ? (
