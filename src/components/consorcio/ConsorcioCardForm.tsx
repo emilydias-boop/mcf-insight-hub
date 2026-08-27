@@ -451,6 +451,35 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     refetch: recarregarDetalhe,
     isFetching: buscandoDetalhe,
   } = useConsorcioCardDetails(card?.id ?? null);
+
+  /**
+   * Situação do cronograma da cota em edição — SOMENTE LEITURA.
+   * Salvar uma edição não regenera `consortium_installments` (o gerador corta
+   * quando já existe parcela), então mudar o desenho das parcelas aqui altera o
+   * que a cota declara sem tocar no cronograma. Esta consulta existe só para
+   * avisar quem está editando; nada é gravado, regenerado ou bloqueado.
+   */
+  const { data: situacaoCronograma } = useQuery({
+    queryKey: ['card-cronograma-situacao', card?.id ?? null],
+    enabled: !!card?.id && open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('consortium_installments')
+        .select('id, status, data_pagamento')
+        .eq('card_id', card!.id);
+      if (error) throw error;
+      const linhas = data || [];
+      return {
+        total: linhas.length,
+        pagas: linhas.filter(
+          (p: any) => p.status === 'pago' || !!p.data_pagamento,
+        ).length,
+      };
+    },
+  });
+  const cronogramaGerado = (situacaoCronograma?.total || 0) > 0;
+  const parcelasPagasNoCronograma = situacaoCronograma?.pagas || 0;
+
   const dialogContentRef = useRef<HTMLDivElement | null>(null);
   /** Chave do que já foi hidratado nesta abertura (`<id>:detalhe` | `novo`). */
   const hidratadoDe = useRef<string | null>(null);
