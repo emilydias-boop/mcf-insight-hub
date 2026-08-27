@@ -279,30 +279,52 @@ export default function TVConsorcioEquipe() {
             ),
           }}
         />
-        <DiaMesBlocoCard
-          titulo="Crédito efetivado"
-          accent={ACCENT}
-          hoje={{ valor: abreviarBRL(cDia.credito), titleAttr: abreviarBRL(cDia.credito) }}
-          mes={
-            meta && meta > 0
-              ? {
-                  valor: abreviarBRL(cMes.credito),
-                  conteudo: (
-                    <MedidorMeta valor={Number(cMes.credito || 0)} meta={Number(meta)} pct={pctMeta} />
-                  ),
-                }
-              : {
-                  valor: abreviarBRL(cMes.credito),
-                  titleAttr: abreviarBRL(cMes.credito),
-                  rodape: (
-                    <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">
-                      meta não configurada
-                    </div>
-                  ),
-                }
-          }
-
-        />
+        {meta && meta > 0 ? (
+          <div
+            className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.04)",
+              borderColor: "rgba(255,255,255,0.10)",
+            }}
+          >
+            <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+              Crédito efetivado
+            </div>
+            <div className="flex-1 min-h-0 flex items-center justify-center mt-1">
+              <MedidorMeta valor={Number(cMes.credito || 0)} meta={Number(meta)} pct={pctMeta} />
+            </div>
+            <div className="mt-1 flex items-baseline justify-center gap-2 xl:gap-3">
+              <span className="text-[9px] xl:text-[11px] tracking-widest text-white/40 font-black uppercase">
+                Hoje
+              </span>
+              <span className="text-[11px] xl:text-sm font-bold text-white/70">
+                {abreviarBRL(cDia.credito)}
+              </span>
+              <span className="text-white/20">·</span>
+              <span className="text-[9px] xl:text-[11px] tracking-widest text-white/40 font-black uppercase">
+                Mês
+              </span>
+              <span className="text-[11px] xl:text-sm font-bold text-white/70">
+                {abreviarBRL(cMes.credito)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <DiaMesBlocoCard
+            titulo="Crédito efetivado"
+            accent={ACCENT}
+            hoje={{ valor: abreviarBRL(cDia.credito), titleAttr: abreviarBRL(cDia.credito) }}
+            mes={{
+              valor: abreviarBRL(cMes.credito),
+              titleAttr: abreviarBRL(cMes.credito),
+              rodape: (
+                <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">
+                  meta não configurada
+                </div>
+              ),
+            }}
+          />
+        )}
       </div>
 
       {/* Linha 2 */}
