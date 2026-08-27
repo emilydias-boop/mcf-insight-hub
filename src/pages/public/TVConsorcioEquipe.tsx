@@ -134,7 +134,7 @@ function RankingShell({
           <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">{extra}</span>
         ) : null}
       </div>
-      <div className="flex-1 min-h-0 mt-2 flex flex-col gap-1 xl:gap-1.5 overflow-hidden">
+      <div className="flex-1 min-h-0 mt-2 flex flex-col gap-2 xl:gap-2.5 overflow-hidden">
         {vazio ? <div className="text-white/35 font-semibold italic text-sm mt-2">sem dados no mês</div> : children}
       </div>
     </section>
