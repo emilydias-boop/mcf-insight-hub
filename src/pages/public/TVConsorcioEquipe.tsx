@@ -421,6 +421,7 @@ export default function TVConsorcioEquipe() {
             creditoHoje={Number(cDia.credito || 0)}
             meta={Number(meta)}
             pct={pctMeta}
+            semana={data.semana}
           />
         ) : (
           <CreditoSemMetaCard
