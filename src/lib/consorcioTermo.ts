@@ -394,6 +394,15 @@ export function montarDadosTermoMulti(
     parcela_demais: unicoOuVerTabela(
       regs.map(r => (Number(r.parcela_demais) ? formatCurrency(Number(r.parcela_demais)) : '—')),
     ),
+    parcela_diferenciada_label: unicoOuVerTabela(
+      regs.map(
+        r => rotulosParcelaTermo(estruturaParcela(r.tipo_produto, r.produto_codigo)).diferenciada,
+      ),
+    ),
+    parcela_demais_label: unicoOuVerTabela(
+      regs.map(r => rotulosParcelaTermo(estruturaParcela(r.tipo_produto, r.produto_codigo)).demais),
+    ),
+
     dia_vencimento: unicoOuVerTabela(
       regs.map(r => (Number(r.dia_vencimento) ? String(r.dia_vencimento) : 'A definir')),
     ),
