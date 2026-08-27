@@ -77,36 +77,114 @@ function Fracao({ numerador, denominador, cor }: { numerador: number; denominado
   );
 }
 
-/** Medidor em meia-lua do crédito do mês contra a meta. */
-function MedidorMeta({ valor, meta, pct }: { valor: number; meta: number; pct: number }) {
-  const arco = "M 20 92 A 70 70 0 0 1 160 92";
+/**
+ * Cartão de largura total do crédito efetivado: arco largo e raso desenhado em
+ * SVG, com todos os textos em HTML sobreposto (texto dentro do SVG escalava
+ * junto com o desenho e transbordava).
+ */
+function CreditoArcoCard({
+  creditoMes,
+  creditoHoje,
+  meta,
+  pct,
+}: {
+  creditoMes: number;
+  creditoHoje: number;
+  meta: number;
+  pct: number;
+}) {
+  const pathRef = useRef<SVGPathElement>(null);
+  const [comprimento, setComprimento] = useState(1120);
+  useEffect(() => {
+    const total = pathRef.current?.getTotalLength();
+    if (total && Number.isFinite(total)) setComprimento(total);
+  }, []);
+
+  const arco = "M 40 140 Q 500 -30 960 140";
+  const progresso = (Math.min(Math.max(pct, 0), 100) / 100) * comprimento;
+
   return (
-    <svg viewBox="0 0 180 104" preserveAspectRatio="xMidYMid meet" className="h-full w-auto max-h-[150px] xl:max-h-[210px]" role="img" aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}>
-      <path d={arco} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={14} strokeLinecap="round" />
-      <path
-        d={arco}
-        fill="none"
-        stroke={ACCENT}
-        strokeWidth={14}
-        strokeLinecap="round"
-        strokeDasharray={`${(pct / 100) * 220} 220`}
-        style={{ transition: "stroke-dasharray 700ms ease-out" }}
-      />
-      <text x="90" y="76" textAnchor="middle" fill="#ffffff" style={{ fontSize: 27, fontWeight: 900 }}>
-        {abreviarBRL(valor)}
-      </text>
-      <text x="90" y="94" textAnchor="middle" fill={ACCENT} style={{ fontSize: 14, fontWeight: 800 }}>
-        {pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
-      </text>
-      <text x="20" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
-        0
-      </text>
-      <text x="160" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
-        {abreviarBRL(meta)}
-      </text>
-    </svg>
+    <div
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
+      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
+    >
+      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+        Crédito efetivado
+      </div>
+
+      <div className="relative flex-1 min-h-0 flex items-center justify-center">
+        <svg
+          viewBox="0 0 1000 150"
+          className="w-full max-h-full"
+          style={{ height: "auto" }}
+          role="img"
+          aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}
+        >
+          <path d={arco} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={13} strokeLinecap="round" />
+          <path
+            ref={pathRef}
+            d={arco}
+            fill="none"
+            stroke={ACCENT}
+            strokeWidth={13}
+            strokeLinecap="round"
+            strokeDasharray={comprimento}
+            strokeDashoffset={comprimento - progresso}
+            style={{ transition: "stroke-dashoffset 700ms ease-out" }}
+          />
+        </svg>
+
+        {/* Valor central em HTML: não escala com o desenho. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
+            {abreviarBRL(creditoMes)}
+          </div>
+          <div className="mt-1 text-xs xl:text-lg font-bold text-white/70">
+            {pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da meta
+          </div>
+        </div>
+
+        <div className="absolute left-1 bottom-0 xl:left-3">
+          <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Hoje</div>
+          <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(creditoHoje)}</div>
+        </div>
+        <div className="absolute right-1 bottom-0 text-right xl:right-3">
+          <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Meta</div>
+          <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(meta)}</div>
+        </div>
+      </div>
+    </div>
   );
 }
+
+/** Mesmo cartão de largura total, sem arco, quando não há meta configurada. */
+function CreditoSemMetaCard({ creditoMes, creditoHoje }: { creditoMes: number; creditoHoje: number }) {
+  return (
+    <div
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
+      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
+    >
+      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+        Crédito efetivado
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1">
+        <div className="flex items-baseline gap-3 xl:gap-5">
+          <span className="text-[10px] xl:text-sm tracking-widest text-white/40 font-black uppercase">Hoje</span>
+          <span className="text-2xl xl:text-4xl font-black" style={{ color: ACCENT }}>
+            {abreviarBRL(creditoHoje)}
+          </span>
+          <span className="text-white/20">·</span>
+          <span className="text-[10px] xl:text-sm tracking-widest text-white/40 font-black uppercase">Mês</span>
+          <span className="text-2xl xl:text-4xl font-black" style={{ color: ACCENT }}>
+            {abreviarBRL(creditoMes)}
+          </span>
+        </div>
+        <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
+      </div>
+    </div>
+  );
+}
+
 
 
 /** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
