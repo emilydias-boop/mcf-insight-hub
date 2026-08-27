@@ -215,6 +215,13 @@ export function montarDadosTermo(reg: TermoSourceRegistration, emissao = new Dat
     condicao_pagamento: CONDICAO_LABELS[String(reg.condicao_pagamento)] || reg.condicao_pagamento || '—',
     parcela_1a_12a: formatCurrency(Number(reg.parcela_1a_12a || 0)),
     parcela_demais: formatCurrency(Number(reg.parcela_demais || 0)),
+    parcela_diferenciada_label: rotulosParcelaTermo(
+      estruturaParcela(reg.tipo_produto, reg.produto_codigo),
+    ).diferenciada,
+    parcela_demais_label: rotulosParcelaTermo(
+      estruturaParcela(reg.tipo_produto, reg.produto_codigo),
+    ).demais,
+
     // O dia é definido pela Embracon depois da abertura da cota.
     dia_vencimento: Number(reg.dia_vencimento) ? String(reg.dia_vencimento) : 'A definir',
     dia_vencimento_texto: textoDiaVencimento([reg.dia_vencimento]),
