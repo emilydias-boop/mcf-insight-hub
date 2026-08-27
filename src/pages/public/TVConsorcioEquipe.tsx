@@ -136,9 +136,9 @@ function CreditoSemanasCard({
         </span>
       </div>
 
-      {/* Barra do mês — largura total, três marcas em 25/50/75%. */}
+      {/* Barra do mês — largura total, trilho e preenchimento. */}
       <div
-        className="relative w-full rounded-full mt-1 xl:mt-1.5 mb-1 xl:mb-1.5 h-2.5 xl:h-4 overflow-hidden"
+        className="w-full rounded-full mt-1 xl:mt-1.5 mb-1 xl:mb-1.5 h-2.5 xl:h-4 overflow-hidden"
         style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
       >
         {pct > 0 ? (
@@ -147,10 +147,6 @@ function CreditoSemanasCard({
             style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: ACCENT }}
           />
         ) : null}
-        {/* Marcas verticais — cortam o preenchimento em 25/50/75. */}
-        <div className="absolute top-0 bottom-0" style={{ left: "25%", width: 2, backgroundColor: "#050505" }} />
-        <div className="absolute top-0 bottom-0" style={{ left: "50%", width: 2, backgroundColor: "#050505" }} />
-        <div className="absolute top-0 bottom-0" style={{ left: "75%", width: 2, backgroundColor: "#050505" }} />
       </div>
 
       {/* Corpo — 4 colunas, uma por semana. */}
