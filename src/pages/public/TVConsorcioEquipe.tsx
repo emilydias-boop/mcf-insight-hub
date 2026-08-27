@@ -44,6 +44,11 @@ interface Payload {
   snapshot_em?: string;
   snapshot_atrasado?: boolean;
   meta_credito_mes?: number | null;
+  meta_agendamento?: {
+    dia: number | null;
+    mes: number | null;
+    dias_uteis: number;
+  } | null;
   contratos?: { dia?: ContratosBloco; mes?: ContratosBloco };
   agenda?: { dia?: AgendaBloco; mes?: AgendaBloco };
   ranking_closer?: RankingCloser[];
