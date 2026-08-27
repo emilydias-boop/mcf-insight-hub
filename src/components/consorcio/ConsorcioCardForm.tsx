@@ -537,6 +537,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       tipo_registro: 'contratacao',
       tipo_produto: 'select',
       empresa_paga_parcelas: 'nao',
+      modo_parcelas_mcf: 'padrao',
+      parcelas_mcf_numeros: [],
       tipo_contrato: undefined,
       parcelas_pagas_empresa: 0,
       dia_vencimento: 10,
