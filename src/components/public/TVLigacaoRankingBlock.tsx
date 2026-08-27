@@ -46,15 +46,15 @@ export function TVLigacaoRankingBlock({
           Ranking Ligações
         </h2>
         <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">
-          Total · Não atend. · Efetivas
+          Total de ligações
         </span>
       </div>
 
       <div className="mt-2 xl:mt-3 flex items-center gap-2 text-[10px] xl:text-xs font-black tracking-widest text-white/35 uppercase">
         <span className="w-8">#</span>
         <span className="flex-1">SDR</span>
-        <span className="w-[7.5rem] xl:w-[9.5rem] text-center">Mês</span>
-        <span className="w-[7.5rem] xl:w-[9.5rem] text-center">Hoje</span>
+        <span className="w-16 xl:w-24 text-center">Mês</span>
+        <span className="w-16 xl:w-24 text-center">Hoje</span>
       </div>
 
       <div className="flex-1 min-h-0 mt-2 flex flex-col gap-1 xl:gap-1.5 overflow-hidden">
