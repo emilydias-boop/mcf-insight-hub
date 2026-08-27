@@ -16,6 +16,8 @@ import {
   divergenciasIdentidade,
   rotuloFaltando,
 } from '@/lib/consorcioTermo';
+import { normalizarParcelasMcf, derivarParcelasEmpresa } from '@/types/consorcioCartas';
+
 
 interface GerarTermoModalProps {
   open: boolean;
@@ -55,6 +57,18 @@ export function GerarTermoModal({
     queryKey: ['consorcio-termo-fonte', proposalId ?? null, registrationId ?? null],
     enabled: open && (!!proposalId || !!registrationId),
     queryFn: async (): Promise<RegRow[]> => {
+      // Cinto de segurança: a lista marcada na CARTA é a fonte de verdade.
+      // Se o cadastro ainda não recebeu a lista (propagação antiga), o termo
+      // usa a da carta em vez de cair no par legado tipo+quantidade.
+      // Somente leitura — nada é gravado aqui.
+      const comFallbackDaCarta = (r: RegRow, parcelasCarta: number[] | null | undefined): RegRow => {
+        const doCadastro = normalizarParcelasMcf((r as any).parcelas_mcf_numeros);
+        if (doCadastro.length > 0) return r;
+        const daCarta = normalizarParcelasMcf(parcelasCarta);
+        if (daCarta.length === 0) return r;
+        return { ...r, parcelas_mcf_numeros: daCarta, ...derivarParcelasEmpresa(daCarta) } as RegRow;
+      };
+
       // Caminho por cadastro (etapa 4): o termo cobre só aquela carta.
       if (!proposalId && registrationId) {
         const { data, error } = await supabase
@@ -63,7 +77,14 @@ export function GerarTermoModal({
           .eq('id', registrationId)
           .single();
         if (error) throw error;
-        return [data as unknown as RegRow];
+        const { data: carta } = await supabase
+          .from('consorcio_proposal_cartas')
+          .select('parcelas_mcf')
+          .eq('pending_registration_id', registrationId)
+          .order('ordem', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return [comFallbackDaCarta(data as unknown as RegRow, (carta as any)?.parcelas_mcf ?? null)];
       }
 
       // Caminho por proposta (etapa 3): TODOS os cadastros vivos da venda,
@@ -78,13 +99,17 @@ export function GerarTermoModal({
 
       const { data: cartas } = await supabase
         .from('consorcio_proposal_cartas')
-        .select('id, ordem, pending_registration_id')
+        .select('id, ordem, pending_registration_id, parcelas_mcf')
         .eq('proposal_id', proposalId!)
         .order('ordem', { ascending: true });
 
       const ordemPorReg = new Map<string, number>();
-      for (const c of (cartas || []) as Array<{ id: string; ordem: number | null; pending_registration_id: string | null }>) {
-        if (c.pending_registration_id) ordemPorReg.set(c.pending_registration_id, Number(c.ordem ?? 0));
+      const parcelasPorReg = new Map<string, number[] | null>();
+      for (const c of (cartas || []) as Array<{ id: string; ordem: number | null; pending_registration_id: string | null; parcelas_mcf: number[] | null }>) {
+        if (c.pending_registration_id) {
+          ordemPorReg.set(c.pending_registration_id, Number(c.ordem ?? 0));
+          parcelasPorReg.set(c.pending_registration_id, c.parcelas_mcf ?? null);
+        }
       }
       const chave = (r: RegRow, i: number) => {
         const porReg = ordemPorReg.get(r.id);
@@ -94,8 +119,9 @@ export function GerarTermoModal({
       return vivos
         .map((r, i) => ({ r, k: chave(r, i) }))
         .sort((a, b) => a.k - b.k)
-        .map(x => x.r);
+        .map(x => comFallbackDaCarta(x.r, parcelasPorReg.get(x.r.id) ?? null));
     },
+
   });
 
   useEffect(() => {

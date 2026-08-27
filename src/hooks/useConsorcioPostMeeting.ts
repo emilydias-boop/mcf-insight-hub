@@ -1329,6 +1329,9 @@ export function useEditarProposta() {
               .eq('id', a.pending_registration_id)
               .maybeSingle();
             if (regErr) throw regErr;
+            // O critério é CADASTRO x CARTA (não "a carta mudou nesta edição").
+            // Assim, salvar sem mudar nada conserta cadastros que nunca
+            // receberam a lista marcada.
             const listaNova = normalizarParcelasMcf(c.parcelas_mcf);
             const listaAtual = normalizarParcelasMcf((reg as any)?.parcelas_mcf_numeros);
             const parcelasMudaram = listaNova.join(',') !== listaAtual.join(',');
