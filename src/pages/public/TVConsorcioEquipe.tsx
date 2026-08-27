@@ -119,8 +119,8 @@ function DiaMesBlocoCard({
   titulo: string;
   accent: string;
   alerta?: boolean;
-  hoje: { valor: string; rodape?: ReactNode };
-  mes: { valor: string; rodape?: ReactNode };
+  hoje: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
+  mes: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
 }) {
   const cor = alerta ? "#ef4444" : accent;
   return (
@@ -140,20 +140,27 @@ function DiaMesBlocoCard({
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
-            <div
-              className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
-              style={{ color: cor }}
-              title={bloco.valor}
-            >
-              {bloco.valor}
-            </div>
-            <div className="mt-auto pt-1">{bloco.rodape}</div>
+            {bloco.conteudo ? (
+              <div className="flex-1 min-h-0 mt-0.5">{bloco.conteudo}</div>
+            ) : (
+              <>
+                <div
+                  className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
+                  style={{ color: cor }}
+                  title={bloco.titleAttr}
+                >
+                  {bloco.valor}
+                </div>
+                <div className="mt-auto pt-1">{bloco.rodape}</div>
+              </>
+            )}
           </div>
         ))}
       </div>
     </div>
   );
 }
+
 
 function RankingShell({
   titulo,
