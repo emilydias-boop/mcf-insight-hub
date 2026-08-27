@@ -611,7 +611,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       parcelas_pagas_empresa: qtd,
     };
   }, [card]);
-  const tipoContrato = form.watch('tipo_contrato');
   const valorCredito = form.watch('valor_credito') || 0;
   const prazoMeses = form.watch('prazo_meses') || 240;
   const parcelasPagasEmpresa = form.watch('parcelas_pagas_empresa') || 0;
