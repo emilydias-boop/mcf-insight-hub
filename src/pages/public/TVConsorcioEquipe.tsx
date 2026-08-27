@@ -25,6 +25,16 @@ interface AgendaBloco {
 interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number }
 interface RankingSdr { nome: string; agendadas: number; realizadas: number }
 
+interface SemanaBloco {
+  inicio: string;   // ISO date, sábado
+  fim: string;      // ISO date, sexta
+  indice: number;   // 1 a 4/5, semana dentro do mês
+  meta: number | null;   // meta do mês / 4
+  cotas: number;
+  clientes: number;
+  credito: number;
+}
+
 interface Payload {
   today: string;
   updated_at: string;
@@ -36,6 +46,7 @@ interface Payload {
   ranking_closer?: RankingCloser[];
   ranking_sdr?: RankingSdr[];
   ranking_sdr_dia?: RankingSdr[];
+  semana?: SemanaBloco | null;
   error?: string;
 }
 
