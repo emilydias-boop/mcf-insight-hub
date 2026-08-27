@@ -10,6 +10,7 @@ import { montarParcelasCota, inserirParcelas } from '@/lib/consorcioCronograma';
 import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
 import { getParcelasEmpresa, type ParcelaEmpresa } from '@/lib/consorcioParcelasEmpresa';
 import { formatOrigemLabel } from '@/lib/consorcioOrigemLabel';
+import { derivarParcelasEmpresa, normalizarParcelasMcf } from '@/types/consorcioCartas';
 import { dispatchCartaCadastradaWebhook } from '@/lib/consorcioCartaWebhook';
 import { fetchPendingRegsWithDocs } from '@/lib/consorcioDocumentosPendentes';
 import { camposCadastroFaltantes } from '@/lib/consorcioCadastroIncompleto';
