@@ -21,20 +21,9 @@ function posStyle(idx: number) {
 
 function PeriodStats({ p, accent }: { p: TVLigacaoRankingPeriod; accent: string }) {
   return (
-    <div className="flex items-center gap-1.5 xl:gap-2">
-      <div className="flex flex-col items-center w-8 xl:w-10">
-        <span className="text-sm xl:text-lg font-black leading-none" style={{ color: accent }}>{p.total}</span>
-        <span className="text-[8px] xl:text-[9px] font-bold text-white/35 uppercase">Tot</span>
-      </div>
-      <div className="flex flex-col items-center w-8 xl:w-10">
-        <span className="text-sm xl:text-lg font-black leading-none text-white/55">{p.nao_atendidas}</span>
-        <span className="text-[8px] xl:text-[9px] font-bold text-white/35 uppercase">NAt</span>
-      </div>
-      <div className="flex flex-col items-center w-8 xl:w-10">
-        <span className="text-sm xl:text-lg font-black leading-none text-[#38bdf8]">{p.efetivas}</span>
-        <span className="text-[8px] xl:text-[9px] font-bold text-white/35 uppercase">Efet</span>
-      </div>
-    </div>
+    <span className="text-xl xl:text-3xl font-black leading-none" style={{ color: accent }}>
+      {p.total}
+    </span>
   );
 }
 
@@ -57,15 +46,15 @@ export function TVLigacaoRankingBlock({
           Ranking Ligações
         </h2>
         <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">
-          Total · Não atend. · Efetivas
+          Total de ligações
         </span>
       </div>
 
       <div className="mt-2 xl:mt-3 flex items-center gap-2 text-[10px] xl:text-xs font-black tracking-widest text-white/35 uppercase">
         <span className="w-8">#</span>
         <span className="flex-1">SDR</span>
-        <span className="w-[7.5rem] xl:w-[9.5rem] text-center">Mês</span>
-        <span className="w-[7.5rem] xl:w-[9.5rem] text-center">Hoje</span>
+        <span className="w-16 xl:w-24 text-center">Mês</span>
+        <span className="w-16 xl:w-24 text-center">Hoje</span>
       </div>
 
       <div className="flex-1 min-h-0 mt-2 flex flex-col gap-1 xl:gap-1.5 overflow-hidden">
@@ -85,10 +74,10 @@ export function TVLigacaoRankingBlock({
                 {idx + 1}
               </span>
               <span className="flex-1 truncate text-sm xl:text-base font-bold text-white/90">{r.sdr_name}</span>
-              <div className="w-[7.5rem] xl:w-[9.5rem] flex justify-center">
+              <div className="w-16 xl:w-24 flex justify-center">
                 <PeriodStats p={r.mes} accent={accent} />
               </div>
-              <div className="w-[7.5rem] xl:w-[9.5rem] flex justify-center">
+              <div className="w-16 xl:w-24 flex justify-center">
                 <PeriodStats p={r.dia} accent={accent} />
               </div>
             </div>
