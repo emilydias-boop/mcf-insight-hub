@@ -56,10 +56,57 @@ function pctTexto(parte: number, total: number) {
   return `${((parte / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
 }
 
-function primeiroESegundoNome(nome: string) {
-  const partes = String(nome || "").trim().split(/\s+/);
-  return partes.slice(0, 2).join(" ");
+/** Primeiro + último nome ("Andre dos Santos Duarte" → "Andre Duarte"). */
+function primeiroEUltimoNome(nome: string) {
+  const partes = String(nome || "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "";
+  if (partes.length === 1) return partes[0];
+  return `${partes[0]} ${partes[partes.length - 1]}`;
 }
+
+/** Fração "realizadas/agendadas" — numerador em destaque, resto discreto. */
+function Fracao({ numerador, denominador, cor }: { numerador: number; denominador: number; cor: string }) {
+  return (
+    <span className="inline-flex items-baseline">
+      <span style={{ color: cor }}>{num(numerador)}</span>
+      {denominador > 0 ? (
+        <span className="text-white/45 text-base xl:text-2xl">/{num(denominador)}</span>
+      ) : null}
+    </span>
+  );
+}
+
+/** Medidor em meia-lua do crédito do mês contra a meta. */
+function MedidorMeta({ valor, meta, pct }: { valor: number; meta: number; pct: number }) {
+  const arco = "M 20 92 A 70 70 0 0 1 160 92";
+  return (
+    <svg viewBox="0 0 180 104" className="w-full h-full" role="img" aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}>
+      <path d={arco} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={14} strokeLinecap="round" />
+      <path
+        d={arco}
+        fill="none"
+        stroke={ACCENT}
+        strokeWidth={14}
+        strokeLinecap="round"
+        strokeDasharray={`${(pct / 100) * 220} 220`}
+        style={{ transition: "stroke-dasharray 700ms ease-out" }}
+      />
+      <text x="90" y="76" textAnchor="middle" fill="#ffffff" style={{ fontSize: 27, fontWeight: 900 }}>
+        {abreviarBRL(valor)}
+      </text>
+      <text x="90" y="94" textAnchor="middle" fill={ACCENT} style={{ fontSize: 14, fontWeight: 800 }}>
+        {pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+      </text>
+      <text x="20" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
+        0
+      </text>
+      <text x="160" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
+        {abreviarBRL(meta)}
+      </text>
+    </svg>
+  );
+}
+
 
 /** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
 function DiaMesBlocoCard({
@@ -72,8 +119,8 @@ function DiaMesBlocoCard({
   titulo: string;
   accent: string;
   alerta?: boolean;
-  hoje: { valor: string; rodape?: ReactNode };
-  mes: { valor: string; rodape?: ReactNode };
+  hoje: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
+  mes: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
 }) {
   const cor = alerta ? "#ef4444" : accent;
   return (
@@ -93,20 +140,27 @@ function DiaMesBlocoCard({
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
-            <div
-              className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
-              style={{ color: cor }}
-              title={bloco.valor}
-            >
-              {bloco.valor}
-            </div>
-            <div className="mt-auto pt-1">{bloco.rodape}</div>
+            {bloco.conteudo ? (
+              <div className="flex-1 min-h-0 mt-0.5">{bloco.conteudo}</div>
+            ) : (
+              <>
+                <div
+                  className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
+                  style={{ color: cor }}
+                  title={bloco.titleAttr}
+                >
+                  {bloco.valor}
+                </div>
+                <div className="mt-auto pt-1">{bloco.rodape}</div>
+              </>
+            )}
           </div>
         ))}
       </div>
     </div>
   );
 }
+
 
 function RankingShell({
   titulo,
@@ -180,7 +234,7 @@ export default function TVConsorcioEquipe() {
   const meta = data.meta_credito_mes ?? null;
   const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
 
-  const porAcontecer = Number(aDia.agendadas || 0) - Number(aDia.realizadas || 0);
+
 
   const closers = (data.ranking_closer ?? []).slice(0, 6);
   const sdrs = (data.ranking_sdr ?? []).slice(0, 6);
@@ -228,26 +282,26 @@ export default function TVConsorcioEquipe() {
         <DiaMesBlocoCard
           titulo="Crédito efetivado"
           accent={ACCENT}
-          hoje={{ valor: abreviarBRL(cDia.credito) }}
-          mes={{
-            valor: abreviarBRL(cMes.credito),
-            rodape:
-              meta && meta > 0 ? (
-                <div>
-                  <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${pctMeta}%`, backgroundColor: ACCENT }}
-                    />
-                  </div>
-                  <div className="mt-1.5 text-[11px] xl:text-sm text-white/45 font-semibold">
-                    {pctMeta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de {abreviarBRL(meta)}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
-              ),
-          }}
+          hoje={{ valor: abreviarBRL(cDia.credito), titleAttr: abreviarBRL(cDia.credito) }}
+          mes={
+            meta && meta > 0
+              ? {
+                  valor: abreviarBRL(cMes.credito),
+                  conteudo: (
+                    <MedidorMeta valor={Number(cMes.credito || 0)} meta={Number(meta)} pct={pctMeta} />
+                  ),
+                }
+              : {
+                  valor: abreviarBRL(cMes.credito),
+                  titleAttr: abreviarBRL(cMes.credito),
+                  rodape: (
+                    <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">
+                      meta não configurada
+                    </div>
+                  ),
+                }
+          }
+
         />
       </div>
 
@@ -263,22 +317,31 @@ export default function TVConsorcioEquipe() {
           titulo="R1 realizadas"
           accent="#38bdf8"
           hoje={{
-            valor: num(aDia.realizadas),
-            rodape:
-              porAcontecer > 0 ? (
-                <div className="text-[11px] xl:text-sm text-white/50 font-semibold">
-                  {num(porAcontecer)} por acontecer
-                </div>
-              ) : null,
+            valor: (
+              <Fracao
+                numerador={Number(aDia.realizadas || 0)}
+                denominador={Number(aDia.agendadas || 0)}
+                cor="#38bdf8"
+              />
+            ),
+            titleAttr: `${num(aDia.realizadas)} de ${num(aDia.agendadas)} agendadas`,
           }}
           mes={{
-            valor: num(aMes.realizadas),
+            valor: (
+              <Fracao
+                numerador={Number(aMes.realizadas || 0)}
+                denominador={Number(aMes.agendadas || 0)}
+                cor="#38bdf8"
+              />
+            ),
+            titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
             rodape: (
               <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
                 {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
               </div>
             ),
           }}
+
         />
         <DiaMesBlocoCard
           titulo="No-show"
@@ -312,7 +375,7 @@ export default function TVConsorcioEquipe() {
               <Posicao idx={idx} accent={ACCENT} />
               <div className="min-w-0">
                 <div className="truncate text-base xl:text-xl font-bold text-white/90">
-                  {primeiroESegundoNome(c.nome)}
+                  {primeiroEUltimoNome(c.nome)}
                 </div>
                 <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
                   {num(c.clientes)} clientes · {num(c.cotas)} cotas
@@ -340,7 +403,7 @@ export default function TVConsorcioEquipe() {
               >
                 <Posicao idx={idx} accent={ROXO} />
                 <span className="truncate text-base xl:text-xl font-bold text-white/90 capitalize">
-                  {primeiroESegundoNome(s.nome)}
+                  {primeiroEUltimoNome(s.nome)}
                 </span>
                 <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ROXO }}>
                   {num(hoje)}
