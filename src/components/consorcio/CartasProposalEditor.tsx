@@ -447,10 +447,13 @@ export function CartasProposalEditor({
                       <div className="-mx-1 my-1 h-px bg-border" />
                       {planos.map(p => (
                         <SelectItem key={p.id} value={p.id}>
-                          {fmtBRL(p.valorCredito)} — 1ª à 12ª {fmtBRLc(p.parcela1a12)} · demais{' '}
-                          {fmtBRLc(p.parcelaDemais)} ({p.produtoCodigo})
+                          {fmtBRL(p.valorCredito)} —{' '}
+                          {faixaParcelaCurta(estruturaParcela(c.tipoProduto, p.produtoCodigo))}{' '}
+                          {fmtBRLc(p.parcela1a12)} · demais {fmtBRLc(p.parcelaDemais)} (
+                          {p.produtoCodigo})
                         </SelectItem>
                       ))}
+
                     </SelectContent>
                   </Select>
 
