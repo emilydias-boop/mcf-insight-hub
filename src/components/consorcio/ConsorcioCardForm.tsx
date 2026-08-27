@@ -1772,118 +1772,60 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                       </div>
                     )}
 
-                    {/* Modo de declaração: padrão (quantidade) ou lista exata. */}
+                    {/* Registro legado: nunca pré-marcar a grade a partir da derivação. */}
+                    {desenhoLegado && (
+                      <div className="rounded-md border border-muted-foreground/30 bg-background p-3 text-sm text-muted-foreground">
+                        Este registro foi criado antes do controle por parcela. O desenho atual é:{' '}
+                        <strong className="text-foreground">
+                          {rotuloTipoContrato(desenhoLegado.tipo_contrato)} com{' '}
+                          {desenhoLegado.parcelas_pagas_empresa} parcela(s)
+                        </strong>
+                        . Marcar parcelas aqui substitui esse desenho.
+                      </div>
+                    )}
+
                     <FormField
                       control={form.control}
-                      name="modo_parcelas_mcf"
+                      name="parcelas_mcf_numeros"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Como declarar as parcelas da MCF</FormLabel>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={field.value !== 'lista' ? 'default' : 'outline'}
-                              onClick={() => field.onChange('padrao')}
-                            >
-                              Por padrão
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={field.value === 'lista' ? 'default' : 'outline'}
-                              onClick={() => field.onChange('lista')}
-                            >
-                              Escolher as parcelas
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {field.value === 'lista'
-                              ? 'Marque exatamente quais das primeiras parcelas a MCF assume.'
-                              : 'Tipo de contrato + quantidade — atende plano longo (ex.: todas as pares de 240).'}
-                          </p>
+                          <ParcelasMcfPicker
+                            value={field.value || []}
+                            onChange={field.onChange}
+                          />
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
 
-                    {modoParcelasMcf === 'lista' ? (
-                      <FormField
-                        control={form.control}
-                        name="parcelas_mcf_numeros"
-                        render={({ field }) => (
-                          <FormItem>
-                            <ParcelasMcfPicker
-                              value={field.value || []}
-                              onChange={field.onChange}
-                            />
-                            <FormMessage />
-                          </FormItem>
+                    {/* Derivados: só leitura — ninguém digita mais tipo nem quantidade. */}
+                    <div className="p-3 bg-primary/10 rounded-md">
+                      <p className="text-sm text-muted-foreground">
+                        {listaMcfSelecionada.length > 0 ? (
+                          <>
+                            equivale a:{' '}
+                            <strong className="text-foreground">
+                              {derivadoMcf.parcelas_pagas_empresa} parcela(s), padrão{' '}
+                              {rotuloTipoContrato(derivadoMcf.tipo_contrato)}
+                            </strong>{' '}
+                            — parcelas {listaMcfSelecionada.join(', ')}
+                          </>
+                        ) : desenhoLegado ? (
+                          <>
+                            Nenhuma parcela marcada: o desenho gravado (
+                            {rotuloTipoContrato(desenhoLegado.tipo_contrato)},{' '}
+                            {desenhoLegado.parcelas_pagas_empresa} parcela(s)) é mantido como está.
+                          </>
+                        ) : (
+                          <>Nenhuma parcela marcada: a MCF não assume parcela nenhuma.</>
                         )}
-                      />
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="tipo_contrato"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Tipo de Contrato *</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value || ''}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Selecione" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="normal">Normal (primeiras parcelas)</SelectItem>
-                                    <SelectItem value="intercalado">Intercalado (parcelas pares)</SelectItem>
-                                    <SelectItem value="intercalado_impar">Intercalado (parcelas ímpares)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-
-                          {tipoContrato && (
-                            <FormField
-                              control={form.control}
-                              name="parcelas_pagas_empresa"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Quantas parcelas a empresa paga?</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      max={tipoContrato === 'intercalado' ? Math.floor(prazoMeses / 2) : prazoMeses}
-                                      {...field}
-                                      onChange={e => field.onChange(Number(e.target.value))}
-                                      value={field.value ?? 0}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          )}
-                        </div>
-
-                        {/* Valor total calculado */}
-                        {tipoContrato && (
-                          <div className="p-3 bg-primary/10 rounded-md">
-                            <p className="text-sm text-muted-foreground">
-                              {tipoContrato === 'intercalado'
-                                ? `Intercalado: empresa paga as parcelas 2, 4, 6...${parcelasPagasEmpresa * 2} (${parcelasPagasEmpresa} parcelas pares)`
-                                : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`}
-                            </p>
-                            <p className="text-lg font-semibold text-primary mt-1">
-                              Valor total: {formatMonetaryDisplay(valorTotalParcelasEmpresa)}
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
+                      </p>
+                      {listaMcfSelecionada.length > 0 && (
+                        <p className="text-lg font-semibold text-primary mt-1">
+                          Valor total: {formatMonetaryDisplay(valorTotalParcelasEmpresa)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
