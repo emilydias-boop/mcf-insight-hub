@@ -18,6 +18,7 @@ interface ContratosBloco {
 }
 interface AgendaBloco {
   agendadas: number;
+  agendamentos: number;
   realizadas: number;
   no_show: number;
   por_sdr?: unknown[];
@@ -382,8 +383,8 @@ export default function TVConsorcioEquipe() {
 
   const cDia = data.contratos?.dia ?? { cotas: 0, clientes: 0, credito: 0, ticket: 0 };
   const cMes = data.contratos?.mes ?? { cotas: 0, clientes: 0, credito: 0, ticket: 0 };
-  const aDia = data.agenda?.dia ?? { agendadas: 0, realizadas: 0, no_show: 0 };
-  const aMes = data.agenda?.mes ?? { agendadas: 0, realizadas: 0, no_show: 0 };
+  const aDia = data.agenda?.dia ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
+  const aMes = data.agenda?.mes ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
 
   const meta = data.meta_credito_mes ?? null;
   const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
@@ -431,10 +432,10 @@ export default function TVConsorcioEquipe() {
       {/* Linha 2 */}
       <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
         <DiaMesBlocoCard
-          titulo="R1 agendadas"
+          titulo="Agendamento"
           accent={ACCENT}
-          hoje={{ valor: num(aDia.agendadas) }}
-          mes={{ valor: num(aMes.agendadas) }}
+          hoje={{ valor: num(aDia.agendamentos) }}
+          mes={{ valor: num(aMes.agendamentos) }}
         />
         <DiaMesBlocoCard
           titulo="R1 realizadas"
