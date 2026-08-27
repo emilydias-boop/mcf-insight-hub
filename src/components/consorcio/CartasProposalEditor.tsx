@@ -255,8 +255,14 @@ export function CartasProposalEditor({
               && c.parcela1a12Str === numberToBRLInput(planoSel.parcela1a12)
               && c.parcelaDemaisStr === numberToBRLInput(planoSel.parcelaDemais);
             const perdido = planoPerdido[c.key];
+            // Estrutura da parcela POR CARTA: uma proposta pode misturar Select
+            // e Parcelinha. Com plano da tabela escolhido, o código do produto
+            // manda; sem ele, vale o tipo de produto da carta.
+            const estrutura = estruturaParcela(c.tipoProduto, planoSel?.produtoCodigo);
+            const rotulos = rotulosParcela(estrutura);
             const condicaoLabel = (v?: string) =>
               CONDICAO_PAGAMENTO_OPTIONS.find(o => o.value === v)?.label || v || '—';
+
             return (
 
               <div
