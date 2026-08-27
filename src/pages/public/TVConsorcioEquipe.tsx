@@ -145,7 +145,7 @@ function Posicao({ idx, accent }: { idx: number; accent: string }) {
   const primeiro = idx === 0;
   return (
     <span
-      className="h-6 w-6 xl:h-7 xl:w-7 shrink-0 rounded-lg flex items-center justify-center text-xs xl:text-sm font-black"
+      className="h-7 w-7 xl:h-9 xl:w-9 shrink-0 rounded-lg flex items-center justify-center text-sm xl:text-base font-black"
       style={
         primeiro
           ? { color: "#050505", backgroundColor: accent }
