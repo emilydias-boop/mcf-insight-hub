@@ -46,6 +46,8 @@ import { toast } from 'sonner';
 import { useCreateConsorcioCard, useUpdateConsorcioCard, useConsorcioCardDetails } from '@/hooks/useConsorcio';
 import { diffContraSnapshot, nenhumaAlteracao } from '@/lib/formDiff';
 import { estruturaParcela, limiteParcelaDiferenciada } from '@/lib/consorcioParcelaOficial';
+import { ParcelasMcfPicker } from '@/components/consorcio/ParcelasMcfPicker';
+import { derivarParcelasEmpresa, normalizarParcelasMcf } from '@/types/consorcioCartas';
 
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
