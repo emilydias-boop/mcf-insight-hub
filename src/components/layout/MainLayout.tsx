@@ -16,7 +16,7 @@ import { AutoDialerOutcomeBanner } from "@/components/sdr/AutoDialerOutcomeBanne
 import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { GamificationScheduler } from "@/components/gamification/GamificationScheduler";
+
 import { usePageAccessLog } from "@/hooks/usePageAccessLog";
 
 function GlobalQualificationModal() {
