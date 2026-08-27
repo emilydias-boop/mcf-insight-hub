@@ -299,14 +299,20 @@ function produtoLabel(reg: TermoSourceRegistration): string {
 export function montarTabelaCartas(regs: TermoSourceRegistration[]): string {
   const totalCredito = regs.reduce((s, r) => s + Number(r.valor_credito || 0), 0);
   const linhas = [
-    '| Carta | Produto | Crédito | Prazo | Parcela 1ª–12ª | Demais |',
+    '| Carta | Produto | Crédito | Prazo | Parcela inicial | Demais |',
     '| --- | --- | --- | --- | --- | --- |',
     ...regs.map((r, i) => {
-      const p12 = Number(r.parcela_1a_12a) ? formatCurrency(Number(r.parcela_1a_12a)) : '—';
+      // A faixa vai marcada no próprio valor: numa venda que mistura Select e
+      // Parcelinha nenhuma linha mente.
+      const faixa = faixaParcelaCurta(estruturaParcela(r.tipo_produto, r.produto_codigo));
+      const p12 = Number(r.parcela_1a_12a)
+        ? `${formatCurrency(Number(r.parcela_1a_12a))} (${faixa})`
+        : '—';
       const pd = Number(r.parcela_demais) ? formatCurrency(Number(r.parcela_demais)) : '—';
       const prz = Number(r.prazo_meses) ? `${Number(r.prazo_meses)} meses` : '—';
       return `| ${i + 1} | ${produtoLabel(r)} | ${formatCurrency(Number(r.valor_credito || 0))} | ${prz} | ${p12} | ${pd} |`;
     }),
+
     `| **Total** | | **${formatCurrency(totalCredito)}** | | | |`,
   ];
   return linhas.join('\n');
