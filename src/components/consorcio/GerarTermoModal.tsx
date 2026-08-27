@@ -16,6 +16,8 @@ import {
   divergenciasIdentidade,
   rotuloFaltando,
 } from '@/lib/consorcioTermo';
+import { normalizarParcelasMcf, derivarParcelasEmpresa } from '@/types/consorcioCartas';
+
 
 interface GerarTermoModalProps {
   open: boolean;
