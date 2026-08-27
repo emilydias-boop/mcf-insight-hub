@@ -331,7 +331,7 @@ export default function TVConsorcioEquipe() {
             return (
               <div
                 key={`${s.nome}-${idx}`}
-                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1.5 xl:py-2"
+                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.04)",
                   borderColor: "rgba(255,255,255,0.10)",
@@ -339,13 +339,13 @@ export default function TVConsorcioEquipe() {
                 }}
               >
                 <Posicao idx={idx} accent={ROXO} />
-                <span className="truncate text-sm xl:text-base font-bold text-white/90 capitalize">
+                <span className="truncate text-base xl:text-xl font-bold text-white/90 capitalize">
                   {primeiroESegundoNome(s.nome)}
                 </span>
-                <span className="text-right w-10 xl:w-12 text-sm xl:text-lg font-black leading-none" style={{ color: ROXO }}>
+                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ROXO }}>
                   {num(hoje)}
                 </span>
-                <span className="text-right w-12 xl:w-16 text-xl xl:text-3xl font-black leading-none text-white/90">
+                <span className="text-right w-12 xl:w-16 text-2xl xl:text-4xl font-black leading-none text-white/90">
                   {num(s.agendadas)}
                 </span>
               </div>
