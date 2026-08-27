@@ -74,10 +74,10 @@ export function TVLigacaoRankingBlock({
                 {idx + 1}
               </span>
               <span className="flex-1 truncate text-sm xl:text-base font-bold text-white/90">{r.sdr_name}</span>
-              <div className="w-[7.5rem] xl:w-[9.5rem] flex justify-center">
+              <div className="w-16 xl:w-24 flex justify-center">
                 <PeriodStats p={r.mes} accent={accent} />
               </div>
-              <div className="w-[7.5rem] xl:w-[9.5rem] flex justify-center">
+              <div className="w-16 xl:w-24 flex justify-center">
                 <PeriodStats p={r.dia} accent={accent} />
               </div>
             </div>
