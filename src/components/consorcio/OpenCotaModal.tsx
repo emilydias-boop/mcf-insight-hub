@@ -72,9 +72,27 @@ function montarPatchCadastro(
     grupo: data.grupo || null,
     cota: data.cota || null,
     inclui_seguro: !!data.inclui_seguro,
-    empresa_paga_parcelas: data.empresa_paga_parcelas || null,
-    tipo_contrato: data.tipo_contrato || null,
-    parcelas_pagas_empresa: data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0,
+    // A lista marcada é a ÚNICA entrada. `tipo_contrato` e a quantidade são saída
+    // derivada dela. Registro legado (sem lista) conserva o desenho gravado.
+    ...(() => {
+      const lista = normalizarParcelasMcf(data.parcelas_mcf_numeros);
+      if (lista.length > 0) {
+        const d = derivarParcelasEmpresa(lista);
+        return {
+          parcelas_mcf_numeros: lista,
+          empresa_paga_parcelas: d.empresa_paga_parcelas,
+          tipo_contrato: d.tipo_contrato,
+          parcelas_pagas_empresa: d.parcelas_pagas_empresa,
+        };
+      }
+      return {
+        parcelas_mcf_numeros: null,
+        empresa_paga_parcelas: data.empresa_paga_parcelas || null,
+        tipo_contrato: data.tipo_contrato || null,
+        parcelas_pagas_empresa:
+          data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0,
+      };
+    })(),
     dia_vencimento: data.dia_vencimento ? Number(data.dia_vencimento) : null,
     inicio_segunda_parcela: data.inicio_segunda_parcela || null,
     data_contratacao: data.data_contratacao || null,
