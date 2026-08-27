@@ -225,7 +225,7 @@ function DiaMesBlocoCard({
             ) : (
               <>
                 <div
-                  className="mt-1 text-xl xl:text-4xl font-black leading-none truncate"
+                  className="mt-1 text-2xl xl:text-5xl font-black leading-none truncate"
                   style={{ color: cor }}
                   title={bloco.titleAttr}
                 >
