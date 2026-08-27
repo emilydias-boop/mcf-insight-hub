@@ -80,7 +80,7 @@ function Fracao({ numerador, denominador, cor }: { numerador: number; denominado
 function MedidorMeta({ valor, meta, pct }: { valor: number; meta: number; pct: number }) {
   const arco = "M 20 92 A 70 70 0 0 1 160 92";
   return (
-    <svg viewBox="0 0 180 104" className="w-full h-full" role="img" aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}>
+    <svg viewBox="0 0 180 104" preserveAspectRatio="xMidYMid meet" className="h-full w-auto max-h-[150px] xl:max-h-[210px]" role="img" aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}>
       <path d={arco} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={14} strokeLinecap="round" />
       <path
         d={arco}
