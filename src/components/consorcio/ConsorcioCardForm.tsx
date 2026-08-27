@@ -255,6 +255,10 @@ function valoresDaCarta(c: any): Partial<FormData> {
     tipo_registro: ((c.tipo_registro as 'reserva' | 'contratacao') || 'contratacao'),
     tipo_produto: (c.tipo_produto as 'select' | 'parcelinha') || 'select',
     empresa_paga_parcelas: (Number(c.parcelas_pagas_empresa) > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
+    // Só abre no modo preciso a cota que REALMENTE tem a lista gravada. Cota sem
+    // lista não recebe grade derivada: seria dar cara de escolha ao que ninguém escolheu.
+    modo_parcelas_mcf: (normalizarParcelasMcf(c.parcelas_mcf_numeros).length > 0 ? 'lista' : 'padrao') as 'padrao' | 'lista',
+    parcelas_mcf_numeros: normalizarParcelasMcf(c.parcelas_mcf_numeros),
     tipo_contrato: (c.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar') || undefined,
     parcelas_pagas_empresa: Number(c.parcelas_pagas_empresa) || 0,
     dia_vencimento: c.dia_vencimento ?? undefined,
