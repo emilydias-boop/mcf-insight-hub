@@ -1733,69 +1733,151 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
                 {/* Campos condicionais quando empresa paga parcelas */}
                 {empresaPagaParcelas === 'sim' && (
                   <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Aviso de divergência: salvar edição NÃO regenera cronograma. */}
+                    {isEditing && cronogramaGerado && (
+                      <div
+                        className={cn(
+                          'rounded-md border p-3 text-sm',
+                          parcelasPagasNoCronograma > 0
+                            ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                            : 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                        )}
+                      >
+                        <div className="flex gap-2">
+                          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                          <div className="space-y-1">
+                            <p>
+                              O cronograma desta cota já foi gerado. Alterar as parcelas aqui muda o
+                              que a cota declara, mas <strong>não</strong> reescreve o cronograma nem
+                              os pagamentos já lançados.
+                            </p>
+                            {parcelasPagasNoCronograma > 0 && (
+                              <p>
+                                Esta cota tem <strong>{parcelasPagasNoCronograma}</strong> parcela(s)
+                                com pagamento lançado. Alterar o desenho das parcelas vai desalinhar a
+                                cota do que já foi pago.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Modo de declaração: padrão (quantidade) ou lista exata. */}
+                    <FormField
+                      control={form.control}
+                      name="modo_parcelas_mcf"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Como declarar as parcelas da MCF</FormLabel>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={field.value !== 'lista' ? 'default' : 'outline'}
+                              onClick={() => field.onChange('padrao')}
+                            >
+                              Por padrão
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={field.value === 'lista' ? 'default' : 'outline'}
+                              onClick={() => field.onChange('lista')}
+                            >
+                              Escolher as parcelas
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {field.value === 'lista'
+                              ? 'Marque exatamente quais das primeiras parcelas a MCF assume.'
+                              : 'Tipo de contrato + quantidade — atende plano longo (ex.: todas as pares de 240).'}
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+
+                    {modoParcelasMcf === 'lista' ? (
                       <FormField
                         control={form.control}
-                        name="tipo_contrato"
+                        name="parcelas_mcf_numeros"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Tipo de Contrato *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ''}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="normal">Normal (primeiras parcelas)</SelectItem>
-                                <SelectItem value="intercalado">Intercalado (parcelas pares)</SelectItem>
-                                <SelectItem value="intercalado_impar">Intercalado (parcelas ímpares)</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <ParcelasMcfPicker
+                              value={field.value || []}
+                              onChange={field.onChange}
+                            />
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
-                      
-                      {tipoContrato && (
-                        <FormField
-                          control={form.control}
-                          name="parcelas_pagas_empresa"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Quantas parcelas a empresa paga?</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  max={tipoContrato === 'intercalado' ? Math.floor(prazoMeses / 2) : prazoMeses}
-                                  {...field}
-                                  onChange={e => field.onChange(Number(e.target.value))}
-                                  value={field.value ?? 0}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="tipo_contrato"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Tipo de Contrato *</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ''}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="normal">Normal (primeiras parcelas)</SelectItem>
+                                    <SelectItem value="intercalado">Intercalado (parcelas pares)</SelectItem>
+                                    <SelectItem value="intercalado_impar">Intercalado (parcelas ímpares)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )}
+                          />
 
-                    {/* Valor total calculado */}
-                    {tipoContrato && (
-                      <div className="p-3 bg-primary/10 rounded-md">
-                        <p className="text-sm text-muted-foreground">
-                      {tipoContrato === 'intercalado' 
-                        ? `Intercalado: empresa paga as parcelas 2, 4, 6...${parcelasPagasEmpresa * 2} (${parcelasPagasEmpresa} parcelas pares)`
-                        : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`
-                      }
-                        </p>
-                        <p className="text-lg font-semibold text-primary mt-1">
-                          Valor total: {formatMonetaryDisplay(valorTotalParcelasEmpresa)}
-                        </p>
-                      </div>
+                          {tipoContrato && (
+                            <FormField
+                              control={form.control}
+                              name="parcelas_pagas_empresa"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Quantas parcelas a empresa paga?</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={tipoContrato === 'intercalado' ? Math.floor(prazoMeses / 2) : prazoMeses}
+                                      {...field}
+                                      onChange={e => field.onChange(Number(e.target.value))}
+                                      value={field.value ?? 0}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                        </div>
+
+                        {/* Valor total calculado */}
+                        {tipoContrato && (
+                          <div className="p-3 bg-primary/10 rounded-md">
+                            <p className="text-sm text-muted-foreground">
+                              {tipoContrato === 'intercalado'
+                                ? `Intercalado: empresa paga as parcelas 2, 4, 6...${parcelasPagasEmpresa * 2} (${parcelasPagasEmpresa} parcelas pares)`
+                                : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`}
+                            </p>
+                            <p className="text-lg font-semibold text-primary mt-1">
+                              Valor total: {formatMonetaryDisplay(valorTotalParcelasEmpresa)}
+                            </p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
+
 
                 <div className="grid grid-cols-1 gap-4">
                   <FormField
