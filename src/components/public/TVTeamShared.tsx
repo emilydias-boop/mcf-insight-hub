@@ -112,17 +112,19 @@ export function TVSection({ label, accent, children }: { label: string; accent: 
 }
 
 export function TVShell({
-  title, subtitle, accent, today, updatedAt, children, side, mainRowsClassName = "grid-rows-2",
+  title, subtitle, accent, today, updatedAt, children, side, mainRowsClassName = "grid-rows-2", warning,
 }: {
   title: string; subtitle: string; accent: string; today?: string; updatedAt?: string; children: ReactNode;
   /** Coluna lateral opcional (ex.: ranking de SDRs), ocupa altura cheia à direita. */
   side?: ReactNode;
   /** Override das rows do grid principal quando não há `side`. Default "grid-rows-2". */
   mainRowsClassName?: string;
+  /** Aviso destacado no cabeçalho (ex.: dados atrasados). */
+  warning?: ReactNode;
 }) {
   return (
     <div className="fixed inset-0 bg-[#050505] text-white overflow-hidden flex flex-col p-5 xl:p-9">
-      <header className="flex items-center justify-between shrink-0">
+      <header className="flex items-center justify-between shrink-0 gap-4">
         <div className="flex items-center gap-4">
           <span className="relative flex h-4 w-4">
             <span className="absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-70 animate-ping" />
@@ -135,6 +137,14 @@ export function TVShell({
             <div className="text-sm xl:text-xl font-black tracking-wide" style={{ color: accent }}>{subtitle}</div>
           </div>
         </div>
+        {warning ? (
+          <div
+            className="rounded-xl border px-3 py-2 text-xs xl:text-sm font-bold"
+            style={{ borderColor: "rgba(245,158,11,0.6)", backgroundColor: "rgba(245,158,11,0.12)", color: "#fbbf24" }}
+          >
+            {warning}
+          </div>
+        ) : null}
         <div className="text-right">
           <div className="text-base xl:text-2xl font-bold capitalize">{formatDataHoje(today)}</div>
           <div className="text-xs xl:text-sm text-white/40">
@@ -142,6 +152,7 @@ export function TVShell({
           </div>
         </div>
       </header>
+
 
       {side ? (
         <main className="flex-1 min-h-0 mt-5 xl:mt-8 grid grid-cols-3 gap-5 xl:gap-8">
