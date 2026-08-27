@@ -1,113 +1,63 @@
-# Auditoria: a lista marcada na proposta é a única verdade
+# Diagnóstico — Laercio linhares de Albuquerque (termo saiu 1,2,3,4)
 
-Resposta às três perguntas, com trechos reais e dados crus. Nada foi alterado.
+## Q1 — estado dos 6 cadastros (cru)
 
----
+Todos os 6 idênticos, um por carta (ordem 1..6):
 
-## 1) Caminho de EDIÇÃO da proposta — ele NÃO propaga as parcelas marcadas
+```
+id                                   | status               | consortium_card_id | parcelas_mcf_numeros | tipo_contrato | parcelas_pagas_empresa | empresa_paga_parcelas | tipo_produto | parcela_1a_12a | parcela_demais | prazo | carta.parcelas_mcf | ordem
+40dc62dc-4dd8-416a-9874-31260cdc8878 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 1
+1e9596f8-5e28-4397-b85a-8d7da9b25c3a | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 2
+85faeefa-c7ac-4ae5-934a-455ef1e314b7 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 3
+b5be597c-fa23-4c7c-b523-34a829c547f1 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 4
+1a110945-7144-49e1-8d38-7ba3025aaf56 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 5
+5b8db771-ccf7-4b8c-be18-55408868e481 | aguardando_abertura  | NULL               | NULL                 | normal        | 4                      | sim                   | select       | 3443.75        | 443.75         | 240   | {2,3,5,7}          | 6
+```
 
-`src/components/consorcio/EditProposalModal.tsx` não trata parcelas: só passa os drafts adiante (`handleSubmit`, linha ~140) para `useEditarProposta`. Cartas já vinculadas a cadastro/cota aparecem como `travada` (linha 76), mas isso trava remoção — não o desenho das parcelas.
+- `consortium_card_id`: **NULL nos 6** (nenhuma cota aberta).
+- `parcelas_mcf_numeros`: **NULL nos 6**. A carta tem `{2,3,5,7}` — a lista morre na carta e não chegou ao cadastro.
+- Por isso o termo derivou do par legado (`normal` + `4`) → parcelas 1,2,3,4.
 
-Quem grava é `useEditarProposta` em `src/hooks/useConsorcioPostMeeting.ts:1214`. Ele **atualiza os cadastros existentes** (não recria, não ignora), e grava `parcelas_mcf` na carta:
+## Q2 — cronograma
 
-`src/hooks/useConsorcioPostMeeting.ts:1304-1319` — carta:
+```
+(0 linhas)
+```
+
+Nenhuma cota, nenhuma parcela em `consortium_installments`.
+
+## Q3 — o termo novo
+
+```
+id                                   | created_at                     | status    | modelo_versao | tipo   | pending_registration_id              | proposal_id                          | card_id
+8ae0bb89-f45a-4067-833f-aa54a0f5001c | 2026-08-27 15:56:45.655815+00  | pendente  | 4             | adesao | 40dc62dc-4dd8-416a-9874-31260cdc8878 | 9d8165a9-32d6-4261-9fcb-650efd8b1097 | NULL
+c57bdd1d-8ba5-4d3c-99e7-550bf82778ca | 2026-08-27 15:32:15.846748+00  | cancelado | 4             | adesao | 40dc62dc-4dd8-416a-9874-31260cdc8878 | 9d8165a9-32d6-4261-9fcb-650efd8b1097 | NULL
+```
+
+O documento foi alimentado pelo **cadastro pendente** `40dc62dc…` (ordem 1), não pela carta:
+`src/lib/consorcioTermo.ts:109` → `parcelas_numeros: reg.parcelas_mcf_numeros ?? null`. Como esse campo está NULL, cai no fallback tipo+quantidade → 1,2,3,4 → R$ 28.650,00.
+
+## Q4 — a trava
+
+`src/hooks/useConsorcioPostMeeting.ts:1337-1340`
+
 ```ts
-.from('consorcio_proposal_cartas')
-.update({
-  ordem,
-  valor_credito: c.valor_credito,
-  prazo_meses: c.prazo_meses,
-  tipo_produto: c.tipo_produto,
-  parcelas_mcf: (c.parcelas_mcf && c.parcelas_mcf.length > 0) ? c.parcelas_mcf : null,
-  parcela_1a_12a: c.parcela_1a_12a ?? null,
-  ...
-})
-.eq('id', c.id);
+if (reg && (reg as any).consortium_card_id && parcelasMudaram) {
+  parcelasBloqueadasPorCotaAberta.push(ordem);
+}
+if (reg && !(reg as any).consortium_card_id) {
 ```
 
-`src/hooks/useConsorcioPostMeeting.ts:1356-1369` — propagação para o cadastro:
-```ts
-.from('consorcio_pending_registrations')
-.update({
-  valor_credito: c.valor_credito,
-  prazo_meses: c.prazo_meses,
-  tipo_produto: c.tipo_produto,
-  parcela_1a_12a: c.parcela_1a_12a ?? null,
-  parcela_demais: c.parcela_demais ?? null,
-  condicao_pagamento: c.condicao_pagamento ?? null,
-  objetivo: c.objetivo ?? null,
-  categoria: c.categoria ?? null,
-} as any)
-.eq('id', r.id);
-```
+A propagação só acontece quando `consortium_card_id` é NULL. Neste caso **é NULL nos 6**, logo a trava **não barra** — o `UPDATE` das linhas 1375-1390 grava `parcelas_mcf_numeros = {2,3,5,7}` e os derivados.
 
-Conclusão dura: **a lista marcada morre na carta.** Não há `parcelas_mcf_numeros`, nem `tipo_contrato`, nem `parcelas_pagas_empresa`, nem `empresa_paga_parcelas` nesse update. Pior: o gatilho da propagação é a lista de diferenças montada em `1331-1355`, que também não compara parcelas — então mudar SÓ as parcelas marcadas produz `difs.length === 0` e **nenhum** update no cadastro. O termo reemitido sai com as parcelas antigas. Este é exatamente o caminho que o dono está usando.
+Condição adicional para o loop rodar: `atuais.find(x => x.id === c.id)?.pending_registration_id` (linha 1324-1325) — os 6 cadastros estão vinculados às cartas, então cai dentro. E o `UPDATE` só dispara se houver diff — `parcelasMudaram` é true (`{}` vs `{2,3,5,7}`), então dispara.
 
----
+## Respostas
 
-## 2) Portas que editam parcelas do cadastro depois de criado
+(a) **Não** — nenhuma das 6 cotas está aberta (`consortium_card_id` NULL nos 6).
+(b) **Não** — zero linhas em `consortium_installments`; nenhum cronograma gerado.
+(c) **A edição de proposta resolve.** A trava exige `consortium_card_id` preenchido; aqui é NULL, então a correção publicada propaga `{2,3,5,7}` para os 6 cadastros. Passo prático: abrir o `EditProposalModal` da proposta `9d8165a9…`, salvar sem mudar nada (o diff de parcelas dispara sozinho), conferir que `parcelas_mcf_numeros` ficou `{2,3,5,7}`, cancelar o termo `8ae0bb89…` e gerar de novo.
+(d) Caso a edição de proposta falhe, as duas telas que hoje gravam a lista nesses registros são: **OpenCotaModal** (`src/components/consorcio/OpenCotaModal.tsx:78-89` e `638-648`, grava direto no cadastro pendente pela grade de parcelas) e, depois da cota aberta, o **ConsorcioCardForm** em Controle Consórcio (`src/components/consorcio/ConsorcioCardForm.tsx:1122`). Nenhuma delas foi usada aqui — por isso a lista nunca chegou.
 
-UPDATE em `consorcio_pending_registrations` tocando `parcelas_pagas_empresa` / `tipo_contrato` / `empresa_paga_parcelas`:
-
-| # | Arquivo:linha | O que faz |
-|---|---|---|
-| 1 | `src/hooks/useConsorcioPendingRegistrations.ts:1011-1017` (`useUpdatePendingRegistration`) | patch genérico; o tipo do patch aceita `empresa_paga_parcelas`, `tipo_contrato`, `parcelas_pagas_empresa` (linhas 967-969) e **não** aceita `parcelas_mcf_numeros` |
-| 2 | `src/hooks/useConsorcioPendingRegistrations.ts:1277-1299` (abertura de cota) | reescreve `empresa_paga_parcelas` / `tipo_contrato` / `parcelas_pagas_empresa` no cadastro a partir do formulário de abertura; a lista **não** é regravada aqui (só vai para o card, linhas 1141-1142) |
-| 3 | `src/components/consorcio/OpenCotaModal.tsx:75-77` + `:672-684` | monta o patch (`montarPatchCadastro`) com `tipo_contrato` + quantidade e chama a porta 1 |
-| 4 | `src/components/consorcio/OpenCotaModal.tsx:1216-1246` | UI que permite trocar "Tipo Contrato" e "Qtd Parcelas" à mão, já depois da proposta |
-| 5 | `src/hooks/useConsorcioPostMeeting.ts:1356-1369` | edição da proposta (item 1) — atualiza o cadastro, mas ignora parcelas |
-
-Ou seja: **duas portas gravam parcelas no cadastro por tipo+quantidade (2 e 3/4), uma porta ignora parcelas (5), e nenhuma delas grava `parcelas_mcf_numeros`.** Só a criação inicial (`AddCartaModal`, `AcceptProposalModal`, `ProposalModal`) leva a lista.
-
----
-
-## 3) Peso real do "intercalado" — dados crus
-
-Agrupamento:
-```
- t       | tipo_contrato     | qtd | min_q | max_q | acima_de_12
----------+-------------------+-----+-------+-------+------------
- cards   | intercalado       | 320 |     1 |   120 |     3
- cards   | intercalado_impar | 126 |     1 |    20 |     1
- cards   | normal            | 851 |     1 |     6 |     0
- pending | intercalado       |  23 |     2 |     5 |     0
- pending | intercalado_impar |  10 |     2 |     3 |     0
- pending | normal            | 340 |     1 |     5 |     0
-```
-
-Cronograma:
-```
-cotas_com_cronograma_empresa_acima_12 = 431 linhas de parcela
-cotas_distintas_empresa_acima_12      = 47 cotas
-cards_qtd_acima_12                    = 4
-cards_com_lista (parcelas_mcf_numeros not null)   = 0
-pending_com_lista (parcelas_mcf_numeros not null) = 0
-cartas_com_lista (parcelas_mcf not null)          = 46
-max_marcadas (maior lista marcada na proposta)    = 4
-```
-
-Os 4 casos acima de 12, nominalmente:
-```
-grupo 7272 / cota 4839 — intercalado, qtd 120, prazo 240, empresa até a parcela 240 (114 acima de 12)
-grupo 7269 / cota  913 — intercalado, qtd 120, prazo 240, empresa até a parcela 240 (114 acima de 12)
-grupo 7270 / cota 4290 — intercalado, qtd 119, prazo 239, empresa até a parcela 238 (113 acima de 12)
-grupo 7271 / cota  937 — intercalado, qtd  12, prazo 240, empresa até a parcela  24 (  6 acima de 12)
-```
-
-Leitura dos números:
-
-- **Nenhum vendedor nunca marcou mais de 4 parcelas** na proposta (`max_marcadas = 4`). A capacidade "quantidade alta" nunca foi usada pela boca de entrada real.
-- **Nenhuma proposta pendente passa de 5.** Todo `> 12` está apenas em cotas, e três desses quatro são exatamente o padrão "todas as pares de 240" (qtd 119/120) — que é a regra que o dono acabou de negar. É artefato, não uso.
-- Os **47 cards com parcela de empresa além da 12ª** vêm em quase todos os casos do deslocamento do intercalado (qtd 8 → parcelas 2,4,…,16), não de quantidade alta.
-- A coluna nova `parcelas_mcf_numeros` está **vazia nos dois lados** (0 e 0): hoje nada em produção depende dela — a janela para tratá-la como fonte única ainda está aberta.
-
-Veredito: `intercalado` + quantidade **não é capacidade em uso — é a porta por onde o erro entra.** A grade marcada nunca passou de 4 parcelas; o modelo derivado gerou cotas com a MCF pagando até a parcela 240.
-
----
-
-## Encaminhamento sugerido (para decidir, nada implementado)
-
-1. Fechar a porta 5: fazer a edição da proposta comparar e propagar `parcelas_mcf`/`parcelas_mcf_numeros` para o cadastro pendente ainda sem cota (e incluir parcelas no gatilho de `difs`).
-2. Fechar as portas 3/4: `OpenCotaModal` passa a exibir e gravar a lista marcada, com `tipo_contrato`/quantidade derivados dela — nunca digitados.
-3. Manter `tipo_contrato` + quantidade apenas como campos derivados/legados de leitura, não como entrada.
-4. Nada de backfill nesta etapa; os 4 casos nominais acima ficam para tratamento separado, caso a caso.
+## Nada foi alterado
+Somente leitura: 3 SELECTs e leitura de código. Sem UPDATE, migration ou backfill.
