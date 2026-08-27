@@ -173,7 +173,8 @@ function CreditoArcoCard({
 function CreditoSemMetaCard({ creditoMes, creditoHoje }: { creditoMes: number; creditoHoje: number }) {
   return (
     <div
-      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0"
+
       style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
     >
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
