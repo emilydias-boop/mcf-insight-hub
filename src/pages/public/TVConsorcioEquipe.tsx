@@ -98,11 +98,13 @@ function CreditoArcoCard({
   creditoHoje,
   meta,
   pct,
+  semana,
 }: {
   creditoMes: number;
   creditoHoje: number;
   meta: number;
   pct: number;
+  semana?: SemanaBloco | null;
 }) {
   const pathRef = useRef<SVGPathElement>(null);
   const [comprimento, setComprimento] = useState(1120);
