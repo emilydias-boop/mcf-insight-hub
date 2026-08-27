@@ -215,25 +215,26 @@ function DiaMesBlocoCard({
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
             key={label}
-            className={`flex flex-col min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
+            className={`flex flex-col justify-center min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
             {bloco.conteudo ? (
-              <div className="flex-1 min-h-0 mt-0.5">{bloco.conteudo}</div>
+              <div className="mt-0.5">{bloco.conteudo}</div>
             ) : (
               <>
                 <div
-                  className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
+                  className="mt-1 text-xl xl:text-4xl font-black leading-none truncate"
                   style={{ color: cor }}
                   title={bloco.titleAttr}
                 >
                   {bloco.valor}
                 </div>
-                <div className="mt-auto pt-1">{bloco.rodape}</div>
+                {bloco.rodape ? <div className="mt-1">{bloco.rodape}</div> : null}
               </>
             )}
           </div>
+
         ))}
       </div>
     </div>
