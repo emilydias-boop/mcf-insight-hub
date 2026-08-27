@@ -25,7 +25,7 @@ interface AgendaBloco {
 }
 interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number }
 interface RankingSdr { nome: string; agendadas: number; agendamentos: number; realizadas: number }
-interface RankingSdr { nome: string; agendadas: number; realizadas: number }
+
 
 interface SemanaItem {
   indice: number;      // 1 a 4
