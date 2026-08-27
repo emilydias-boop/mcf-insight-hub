@@ -1,36 +1,159 @@
+import { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { TVMetricCard, TVShell, TVMsg, TVSection, Metric } from "@/components/public/TVTeamShared";
+import { TVShell, TVMsg } from "@/components/public/TVTeamShared";
 
 const TOKEN = "24151d71-1f8e-44b9-9761-b01f1fca7bec";
 
-interface Block {
-  agendamento: Metric;
-  r1_realizada: Metric;
-  no_show: Metric;
-  valor_fechado: Metric;
-}
-interface Payload { today: string; updated_at: string; dia: Block; mes: Block; error?: string }
-
 const ACCENT = "#bfff00";
+const ROXO = "#7c5cff";
 
-function formatBRL(v: number) {
-  const n = v || 0;
+interface ContratosBloco {
+  cotas: number;
+  clientes: number;
+  credito: number;
+  ticket: number;
+  por_closer?: unknown[];
+}
+interface AgendaBloco {
+  agendadas: number;
+  realizadas: number;
+  no_show: number;
+  por_sdr?: unknown[];
+}
+interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number }
+interface RankingSdr { nome: string; agendadas: number; realizadas: number }
+
+interface Payload {
+  today: string;
+  updated_at: string;
+  snapshot_em?: string;
+  snapshot_atrasado?: boolean;
+  meta_credito_mes?: number | null;
+  contratos?: { dia?: ContratosBloco; mes?: ContratosBloco };
+  agenda?: { dia?: AgendaBloco; mes?: AgendaBloco };
+  ranking_closer?: RankingCloser[];
+  ranking_sdr?: RankingSdr[];
+  ranking_sdr_dia?: RankingSdr[];
+  error?: string;
+}
+
+function abreviarBRL(v: number) {
+  const n = Number(v || 0);
   if (Math.abs(n) >= 1_000_000)
-    return `R$ ${(n / 1_000_000).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M`;
+    return `R$ ${(n / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}mi`;
   if (Math.abs(n) >= 1_000)
     return `R$ ${(n / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} mil`;
   return `R$ ${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
 }
 
-function Grid({ b }: { b?: Block }) {
+function num(v: number) {
+  return Number(v || 0).toLocaleString("pt-BR");
+}
+
+function pctTexto(parte: number, total: number) {
+  if (!total) return "0%";
+  return `${((parte / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
+}
+
+function primeiroESegundoNome(nome: string) {
+  const partes = String(nome || "").trim().split(/\s+/);
+  return partes.slice(0, 2).join(" ");
+}
+
+/** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
+function DiaMesBlocoCard({
+  titulo,
+  accent,
+  alerta,
+  hoje,
+  mes,
+}: {
+  titulo: string;
+  accent: string;
+  alerta?: boolean;
+  hoje: { valor: string; rodape?: ReactNode };
+  mes: { valor: string; rodape?: ReactNode };
+}) {
+  const cor = alerta ? "#ef4444" : accent;
   return (
-    <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-4 xl:gap-6">
-      <TVMetricCard titulo="Agendamento" metric={b?.agendamento} accent={ACCENT} />
-      <TVMetricCard titulo="R1 Realizada" metric={b?.r1_realizada} accent="#38bdf8" />
-      <TVMetricCard titulo="No-show" metric={b?.no_show} accent="#ef4444" invertGoal />
-      <TVMetricCard titulo="Valor Fechado" metric={b?.valor_fechado} accent={ACCENT} format={formatBRL} />
+    <div
+      className="rounded-2xl border p-3 xl:p-5 flex flex-col min-h-0"
+      style={{
+        backgroundColor: alerta ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.04)",
+        borderColor: alerta ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.10)",
+      }}
+    >
+      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">{titulo}</div>
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 xl:gap-5 mt-2">
+        {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
+          <div
+            key={label}
+            className={`flex flex-col min-w-0 ${i === 1 ? "pl-3 xl:pl-5 border-l" : ""}`}
+            style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
+          >
+            <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
+            <div
+              className="mt-1 text-2xl xl:text-4xl font-black leading-none truncate"
+              style={{ color: cor }}
+              title={bloco.valor}
+            >
+              {bloco.valor}
+            </div>
+            <div className="mt-auto pt-2">{bloco.rodape}</div>
+          </div>
+        ))}
+      </div>
     </div>
+  );
+}
+
+function RankingShell({
+  titulo,
+  extra,
+  accent,
+  vazio,
+  children,
+}: {
+  titulo: string;
+  extra?: string;
+  accent: string;
+  vazio: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className="rounded-3xl border p-3 xl:p-5 flex flex-col min-h-0"
+      style={{ borderColor: `${accent}4d`, backgroundColor: `${accent}0a` }}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm xl:text-xl font-black tracking-widest uppercase" style={{ color: accent }}>
+          {titulo}
+        </h2>
+        {extra ? (
+          <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">{extra}</span>
+        ) : null}
+      </div>
+      <div className="flex-1 min-h-0 mt-2 flex flex-col gap-1 xl:gap-1.5 overflow-hidden">
+        {vazio ? <div className="text-white/35 font-semibold italic text-sm mt-2">sem dados no mês</div> : children}
+      </div>
+    </section>
+  );
+}
+
+function Posicao({ idx, accent }: { idx: number; accent: string }) {
+  const primeiro = idx === 0;
+  return (
+    <span
+      className="h-6 w-6 xl:h-7 xl:w-7 shrink-0 rounded-lg flex items-center justify-center text-xs xl:text-sm font-black"
+      style={
+        primeiro
+          ? { color: "#050505", backgroundColor: accent }
+          : { color: "rgba(255,255,255,0.7)", backgroundColor: "rgba(255,255,255,0.08)" }
+      }
+    >
+      {idx + 1}
+    </span>
   );
 }
 
@@ -46,23 +169,190 @@ export default function TVConsorcioEquipe() {
   });
 
   if (isLoading) return <TVMsg title="Carregando…" msg="Buscando dados ao vivo" accent={ACCENT} />;
-  if (error || !data || (data as any).error)
+  if (error || !data || data.error)
     return <TVMsg title="Acesso negado" msg="Chave inválida ou desativada." accent={ACCENT} />;
+
+  const cDia = data.contratos?.dia ?? { cotas: 0, clientes: 0, credito: 0, ticket: 0 };
+  const cMes = data.contratos?.mes ?? { cotas: 0, clientes: 0, credito: 0, ticket: 0 };
+  const aDia = data.agenda?.dia ?? { agendadas: 0, realizadas: 0, no_show: 0 };
+  const aMes = data.agenda?.mes ?? { agendadas: 0, realizadas: 0, no_show: 0 };
+
+  const meta = data.meta_credito_mes ?? null;
+  const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
+
+  const porAcontecer = Number(aDia.agendadas || 0) - Number(aDia.realizadas || 0);
+
+  const closers = (data.ranking_closer ?? []).slice(0, 5);
+  const sdrs = (data.ranking_sdr ?? []).slice(0, 5);
+  const sdrDiaMap = new Map((data.ranking_sdr_dia ?? []).map((r) => [r.nome, r]));
+
+  const warning = data.snapshot_atrasado ? (
+    <>
+      Dados podem estar atrasados — última atualização às{" "}
+      {data.snapshot_em ? new Date(data.snapshot_em).toLocaleTimeString("pt-BR") : "—"}
+    </>
+  ) : undefined;
 
   return (
     <TVShell
       title="MCF · Painel de Equipe"
-      subtitle="BU · Consórcio"
+      subtitle="Consórcio · Equipe"
       accent={ACCENT}
       today={data.today}
       updatedAt={data.updated_at}
+      warning={warning}
+      mainRowsClassName="grid-rows-3"
     >
-      <TVSection label="Hoje" accent={ACCENT}>
-        <Grid b={data.dia} />
-      </TVSection>
-      <TVSection label="Acumulado do mês" accent={ACCENT}>
-        <Grid b={data.mes} />
-      </TVSection>
+      {/* Linha 1 */}
+      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
+        <DiaMesBlocoCard
+          titulo="Contratos · cotas"
+          accent={ACCENT}
+          hoje={{
+            valor: num(cDia.cotas),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {num(cDia.clientes)} clientes
+              </div>
+            ),
+          }}
+          mes={{
+            valor: num(cMes.cotas),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {num(cMes.clientes)} clientes · ticket {abreviarBRL(cMes.ticket)}
+              </div>
+            ),
+          }}
+        />
+        <DiaMesBlocoCard
+          titulo="Crédito efetivado"
+          accent={ACCENT}
+          hoje={{ valor: abreviarBRL(cDia.credito) }}
+          mes={{
+            valor: abreviarBRL(cMes.credito),
+            rodape:
+              meta && meta > 0 ? (
+                <div>
+                  <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${pctMeta}%`, backgroundColor: ACCENT }}
+                    />
+                  </div>
+                  <div className="mt-1.5 text-[11px] xl:text-sm text-white/45 font-semibold">
+                    {pctMeta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de {abreviarBRL(meta)}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
+              ),
+          }}
+        />
+      </div>
+
+      {/* Linha 2 */}
+      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
+        <DiaMesBlocoCard
+          titulo="R1 agendadas"
+          accent={ACCENT}
+          hoje={{ valor: num(aDia.agendadas) }}
+          mes={{ valor: num(aMes.agendadas) }}
+        />
+        <DiaMesBlocoCard
+          titulo="R1 realizadas"
+          accent="#38bdf8"
+          hoje={{
+            valor: num(aDia.realizadas),
+            rodape:
+              porAcontecer > 0 ? (
+                <div className="text-[11px] xl:text-sm text-white/50 font-semibold">
+                  {num(porAcontecer)} por acontecer
+                </div>
+              ) : null,
+          }}
+          mes={{
+            valor: num(aMes.realizadas),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
+              </div>
+            ),
+          }}
+        />
+        <DiaMesBlocoCard
+          titulo="No-show"
+          accent="#ef4444"
+          alerta
+          hoje={{ valor: num(aDia.no_show) }}
+          mes={{
+            valor: num(aMes.no_show),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {pctTexto(Number(aMes.no_show || 0), Number(aMes.agendadas || 0))} das agendadas
+              </div>
+            ),
+          }}
+        />
+      </div>
+
+      {/* Linha 3 */}
+      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
+        <RankingShell titulo="Closers · crédito no mês" accent={ACCENT} vazio={closers.length === 0}>
+          {closers.map((c, idx) => (
+            <div
+              key={`${c.nome}-${idx}`}
+              className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1.5 xl:py-2"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.04)",
+                borderColor: "rgba(255,255,255,0.10)",
+                opacity: Number(c.credito || 0) === 0 && Number(c.cotas || 0) === 0 ? 0.45 : 1,
+              }}
+            >
+              <Posicao idx={idx} accent={ACCENT} />
+              <div className="min-w-0">
+                <div className="truncate text-sm xl:text-base font-bold text-white/90">
+                  {primeiroESegundoNome(c.nome)}
+                </div>
+                <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
+                  {num(c.clientes)} clientes · {num(c.cotas)} cotas
+                </div>
+              </div>
+              <span className="text-lg xl:text-2xl font-black leading-none" style={{ color: ACCENT }}>
+                {abreviarBRL(c.credito)}
+              </span>
+            </div>
+          ))}
+        </RankingShell>
+
+        <RankingShell titulo="SDR · agendamentos" extra="Hoje / Mês" accent={ROXO} vazio={sdrs.length === 0}>
+          {sdrs.map((s, idx) => {
+            const hoje = Number(sdrDiaMap.get(s.nome)?.agendadas ?? 0);
+            return (
+              <div
+                key={`${s.nome}-${idx}`}
+                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1.5 xl:py-2"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  borderColor: "rgba(255,255,255,0.10)",
+                  opacity: Number(s.agendadas || 0) === 0 ? 0.45 : 1,
+                }}
+              >
+                <Posicao idx={idx} accent={ROXO} />
+                <span className="truncate text-sm xl:text-base font-bold text-white/90 capitalize">
+                  {primeiroESegundoNome(s.nome)}
+                </span>
+                <span className="text-right w-10 xl:w-12 text-sm xl:text-lg font-black leading-none" style={{ color: ROXO }}>
+                  {num(hoje)}
+                </span>
+                <span className="text-right w-12 xl:w-16 text-xl xl:text-3xl font-black leading-none text-white/90">
+                  {num(s.agendadas)}
+                </span>
+              </div>
+            );
+          })}
+        </RankingShell>
+      </div>
     </TVShell>
   );
 }
