@@ -25,6 +25,16 @@ interface AgendaBloco {
 interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number }
 interface RankingSdr { nome: string; agendadas: number; realizadas: number }
 
+interface SemanaBloco {
+  inicio: string;   // ISO date, sábado
+  fim: string;      // ISO date, sexta
+  indice: number;   // 1 a 4/5, semana dentro do mês
+  meta: number | null;   // meta do mês / 4
+  cotas: number;
+  clientes: number;
+  credito: number;
+}
+
 interface Payload {
   today: string;
   updated_at: string;
@@ -36,6 +46,7 @@ interface Payload {
   ranking_closer?: RankingCloser[];
   ranking_sdr?: RankingSdr[];
   ranking_sdr_dia?: RankingSdr[];
+  semana?: SemanaBloco | null;
   error?: string;
 }
 
@@ -55,6 +66,13 @@ function num(v: number) {
 function pctTexto(parte: number, total: number) {
   if (!total) return "0%";
   return `${((parte / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
+}
+
+/** "2026-08-22" → "22/08". */
+function ddmm(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "").trim());
+  if (!m) return "—";
+  return `${m[3]}/${m[2]}`;
 }
 
 /** Primeiro + último nome ("Andre dos Santos Duarte" → "Andre Duarte"). */
@@ -87,11 +105,13 @@ function CreditoArcoCard({
   creditoHoje,
   meta,
   pct,
+  semana,
 }: {
   creditoMes: number;
   creditoHoje: number;
   meta: number;
   pct: number;
+  semana?: SemanaBloco | null;
 }) {
   const pathRef = useRef<SVGPathElement>(null);
   const [comprimento, setComprimento] = useState(1120);
@@ -140,6 +160,21 @@ function CreditoArcoCard({
               strokeDasharray={`${progresso} ${comprimento}`}
               style={{ transition: "stroke-dasharray 700ms ease-out" }}
             />
+            {/* Entalhes das semanas: três cortes em 25/50/75% do arco.
+                Mesma cor do fundo para "apagar" o traço, espessura maior
+                que o arco para cortar limpo, linecap butt (sem bolinha). */}
+            {[0.25, 0.5, 0.75].map((f) => (
+              <path
+                key={f}
+                d={arco}
+                fill="none"
+                stroke="#050505"
+                strokeWidth={20}
+                strokeLinecap="butt"
+                vectorEffect="non-scaling-stroke"
+                strokeDasharray={`0 ${comprimento * f} 5 ${comprimento}`}
+              />
+            ))}
           </svg>
         </div>
 
@@ -157,8 +192,22 @@ function CreditoArcoCard({
 
 
         <div className="absolute left-1 bottom-0 xl:left-3">
-          <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Hoje</div>
-          <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(creditoHoje)}</div>
+          {semana && semana.meta != null ? (
+            <>
+              <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">
+                Semana {semana.indice} · {ddmm(semana.inicio)} a {ddmm(semana.fim)}
+              </div>
+              <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">
+                {abreviarBRL(Number(semana.credito || 0))}
+                <span className="ml-1.5 text-white/45 text-xs xl:text-lg">/ {abreviarBRL(Number(semana.meta))}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Hoje</div>
+              <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(creditoHoje)}</div>
+            </>
+          )}
         </div>
         <div className="absolute right-1 bottom-0 text-right xl:right-3">
           <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Meta</div>
@@ -372,6 +421,7 @@ export default function TVConsorcioEquipe() {
             creditoHoje={Number(cDia.credito || 0)}
             meta={Number(meta)}
             pct={pctMeta}
+            semana={data.semana}
           />
         ) : (
           <CreditoSemMetaCard
