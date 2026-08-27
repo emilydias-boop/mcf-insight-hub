@@ -20,7 +20,10 @@ export interface GetParcelasEmpresaInput {
   tipo_produto?: string | null;
   /** Código do produto da tabela oficial, quando conhecido (fonte mais precisa). */
   produto_codigo?: string | null;
+  /** Números exatos escolhidos. Quando presente, manda — a derivação é ignorada. */
+  parcelas_numeros?: number[] | null;
 }
+
 
 /**
  * Calcula quais parcelas a empresa pagará e o valor de cada uma.
@@ -36,7 +39,16 @@ export function getParcelasEmpresa(input: GetParcelasEmpresaInput): ParcelaEmpre
   const prazo = Number(input.prazo_meses || 0);
   const qtd = Number(input.parcelas_pagas_empresa || 0);
   const valorCredito = Number(input.valor_credito || 0);
-  if (!prazo || !qtd || !valorCredito) return [];
+  // Lista exata escolhida no lançamento: deduplicada, ordenada e dentro do prazo.
+  const lista = Array.from(
+    new Set(
+      (Array.isArray(input.parcelas_numeros) ? input.parcelas_numeros : [])
+        .map(Number)
+        .filter(n => Number.isInteger(n) && n >= 1 && n <= prazo),
+    ),
+  ).sort((a, b) => a - b);
+  if (!prazo || !valorCredito) return [];
+  if (!qtd && lista.length === 0) return [];
   if (input.empresa_paga_parcelas === 'nao') return [];
 
   const tipo = input.tipo_contrato || 'normal';
@@ -51,7 +63,14 @@ export function getParcelasEmpresa(input: GetParcelasEmpresaInput): ParcelaEmpre
     return informado > 0 ? informado : valorFallback;
   };
 
+  // Quando os números exatos existem, eles SÃO o cronograma — nada é derivado.
+  if (lista.length > 0) {
+    return lista.map(numero => ({ numero, valor: valorDaParcela(numero) }));
+  }
+
   const out: ParcelaEmpresa[] = [];
+
+
 
 
   for (let i = 1; i <= prazo; i++) {

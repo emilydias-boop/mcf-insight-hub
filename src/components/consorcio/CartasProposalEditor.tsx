@@ -635,8 +635,23 @@ export function CartasProposalEditor({
                     })}
                   </div>
                   <p className="text-[11px] text-muted-foreground">
+                    {c.parcelasMcf.length > 0 ? (
+                      <>
+                        Selecionadas:{' '}
+                        <span className="font-medium tabular-nums text-foreground">
+                          {c.parcelasMcf.join(', ')}
+                        </span>{' '}
+                        — são exatamente essas parcelas que a MCF assume (a 1ª só
+                        entra se estiver marcada).
+                      </>
+                    ) : (
+                      <>Nenhuma parcela marcada: o cliente paga desde a 1ª.</>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
                     Clique para alternar entre MCF e cliente. Confirmação oficial na etapa Cotas Cadastradas.
                   </p>
+
                 </div>
               </div>
 

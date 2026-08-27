@@ -68,6 +68,13 @@ export interface PendingRegistration {
   empresa_paga_parcelas: string | null;
   tipo_contrato: string | null;
   parcelas_pagas_empresa: number | null;
+  /**
+   * Números exatos das parcelas da MCF escolhidos no lançamento. Quando
+   * preenchido, é a fonte de verdade do cronograma; nulo cai na derivação por
+   * `tipo_contrato` + quantidade (comportamento histórico).
+   */
+  parcelas_mcf_numeros: number[] | null;
+
   dia_vencimento: number | null;
   inicio_segunda_parcela: string | null;
   data_contratacao: string | null;
@@ -104,6 +111,8 @@ const PENDING_REGISTRATION_LIST_SELECT = `
   empresa_paga_parcelas,
   tipo_contrato,
   parcelas_pagas_empresa,
+  parcelas_mcf_numeros,
+
   tipo_produto,
   parcela_1a_12a,
   parcela_demais,
@@ -314,6 +323,8 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
         const parcelas = getParcelasEmpresa({
           prazo_meses: r.prazo_meses,
           parcelas_pagas_empresa: r.parcelas_pagas_empresa,
+          parcelas_numeros: r.parcelas_mcf_numeros ?? null,
+
           tipo_contrato: r.tipo_contrato,
           valor_credito: r.valor_credito,
           empresa_paga_parcelas: r.empresa_paga_parcelas,
@@ -411,6 +422,9 @@ export interface CreatePendingRegistrationInput {
   empresa_paga_parcelas?: 'sim' | 'nao';
   tipo_contrato?: 'normal' | 'intercalado' | 'intercalado_impar';
   parcelas_pagas_empresa?: number;
+  /** Números exatos das parcelas da MCF escolhidos no lançamento da carta. */
+  parcelas_mcf_numeros?: number[];
+
   valor_credito?: number;
   prazo_meses?: number;
   observacoes?: string;
@@ -1040,6 +1054,9 @@ export function useOpenCota() {
         empresa_paga_parcelas: string;
         tipo_contrato?: string;
         parcelas_pagas_empresa?: number;
+        /** Números exatos das parcelas da MCF; ausente cai no que veio do cadastro. */
+        parcelas_mcf_numeros?: number[] | null;
+
         /** Nulo = "A definir" (a Embracon informa depois da abertura). */
         dia_vencimento: number | null;
         inicio_segunda_parcela?: string;
@@ -1120,6 +1137,11 @@ export function useOpenCota() {
         tipo_produto: cotaData.tipo_produto as any,
         tipo_contrato: (cotaData.tipo_contrato || 'normal') as any,
         parcelas_pagas_empresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
+        // A lista escolhida no lançamento desce do cadastro para a cota.
+        parcelas_mcf_numeros: cotaData.empresa_paga_parcelas === 'sim'
+          ? (cotaData.parcelas_mcf_numeros ?? (registration as any).parcelas_mcf_numeros ?? undefined)
+          : undefined,
+
         tipo_registro: isReserva ? 'reserva' : 'contratacao',
         data_contratacao: isReserva ? null : cotaData.data_contratacao,
         // Contratação: se não houver data de reserva informada, deixamos a chave
@@ -1214,6 +1236,11 @@ export function useOpenCota() {
           tipoProduto: cotaData.tipo_produto,
           tipoContrato: cotaData.tipo_contrato || 'normal',
           parcelasEmpresa: cotaData.empresa_paga_parcelas === 'sim' ? (cotaData.parcelas_pagas_empresa || 0) : 0,
+          // Lista exata do lançamento: quando existe, ela define quem paga o quê.
+          parcelasNumeros: cotaData.empresa_paga_parcelas === 'sim'
+            ? (cotaData.parcelas_mcf_numeros ?? (registration as any).parcelas_mcf_numeros ?? null)
+            : null,
+
           inicioSegundaParcela: cotaData.inicio_segunda_parcela || 'automatico',
           condicaoPagamento: (cotaData as any).condicao_pagamento,
           objetivo: (cotaData as any).objetivo,

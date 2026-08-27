@@ -141,6 +141,8 @@ export function DossieCadastroDialog({ open, onOpenChange, registrationId, propo
         ? getParcelasEmpresa({
             prazo_meses: reg.prazo_meses,
             parcelas_pagas_empresa: reg.parcelas_pagas_empresa,
+            parcelas_numeros: (reg as any).parcelas_mcf_numeros ?? null,
+
             tipo_contrato: reg.tipo_contrato,
             valor_credito: reg.valor_credito,
             empresa_paga_parcelas: reg.empresa_paga_parcelas,
