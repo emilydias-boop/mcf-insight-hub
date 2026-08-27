@@ -45,6 +45,8 @@ import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
 import { toast } from 'sonner';
 import { useCreateConsorcioCard, useUpdateConsorcioCard, useConsorcioCardDetails } from '@/hooks/useConsorcio';
 import { diffContraSnapshot, nenhumaAlteracao } from '@/lib/formDiff';
+import { estruturaParcela, limiteParcelaDiferenciada } from '@/lib/consorcioParcelaOficial';
+
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';

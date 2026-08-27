@@ -319,7 +319,9 @@ export function usePendingRegistrations(statuses: string[] = ['aguardando_abertu
           empresa_paga_parcelas: r.empresa_paga_parcelas,
           parcela_1a_12a: r.parcela_1a_12a,
           parcela_demais: r.parcela_demais,
+          tipo_produto: r.tipo_produto,
         });
+
 
         const ownerRawVal = r.deal?.owner_id as string | null | undefined;
         const closerName = (() => {
