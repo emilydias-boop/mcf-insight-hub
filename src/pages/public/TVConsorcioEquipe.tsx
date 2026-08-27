@@ -335,12 +335,64 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,2fr)]"
+      mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,2fr)]"
     >
-      {/* Linha 1 */}
-      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
+      {/* Linha 1 — crédito efetivado em largura total */}
+      <div className="min-h-0 flex flex-col">
+        {meta && meta > 0 ? (
+          <CreditoArcoCard
+            creditoMes={Number(cMes.credito || 0)}
+            creditoHoje={Number(cDia.credito || 0)}
+            meta={Number(meta)}
+            pct={pctMeta}
+          />
+        ) : (
+          <CreditoSemMetaCard
+            creditoMes={Number(cMes.credito || 0)}
+            creditoHoje={Number(cDia.credito || 0)}
+          />
+        )}
+      </div>
+
+      {/* Linha 2 */}
+      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
         <DiaMesBlocoCard
-          titulo="Contratos · cotas"
+          titulo="R1 agendadas"
+          accent={ACCENT}
+          hoje={{ valor: num(aDia.agendadas) }}
+          mes={{ valor: num(aMes.agendadas) }}
+        />
+        <DiaMesBlocoCard
+          titulo="R1 realizadas"
+          accent={ACCENT}
+          hoje={{
+            valor: (
+              <Fracao
+                numerador={Number(aDia.realizadas || 0)}
+                denominador={Number(aDia.agendadas || 0)}
+                cor={ACCENT}
+              />
+            ),
+            titleAttr: `${num(aDia.realizadas)} de ${num(aDia.agendadas)} agendadas`,
+          }}
+          mes={{
+            valor: (
+              <Fracao
+                numerador={Number(aMes.realizadas || 0)}
+                denominador={Number(aMes.agendadas || 0)}
+                cor={ACCENT}
+              />
+            ),
+            titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
+              </div>
+            ),
+          }}
+        />
+        <DiaMesBlocoCard
+          titulo="Vendas"
           accent={ACCENT}
           hoje={{
             valor: num(cDia.cotas),
@@ -359,107 +411,8 @@ export default function TVConsorcioEquipe() {
             ),
           }}
         />
-        {meta && meta > 0 ? (
-          <div
-            className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.04)",
-              borderColor: "rgba(255,255,255,0.10)",
-            }}
-          >
-            <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
-              Crédito efetivado
-            </div>
-            <div className="flex-1 min-h-0 flex items-center justify-center mt-1">
-              <MedidorMeta valor={Number(cMes.credito || 0)} meta={Number(meta)} pct={pctMeta} />
-            </div>
-            <div className="mt-1 flex items-baseline justify-center gap-2 xl:gap-3">
-              <span className="text-[9px] xl:text-[11px] tracking-widest text-white/40 font-black uppercase">
-                Hoje
-              </span>
-              <span className="text-[11px] xl:text-sm font-bold text-white/70">
-                {abreviarBRL(cDia.credito)}
-              </span>
-              <span className="text-white/20">·</span>
-              <span className="text-[9px] xl:text-[11px] tracking-widest text-white/40 font-black uppercase">
-                Mês
-              </span>
-              <span className="text-[11px] xl:text-sm font-bold text-white/70">
-                {abreviarBRL(cMes.credito)}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <DiaMesBlocoCard
-            titulo="Crédito efetivado"
-            accent={ACCENT}
-            hoje={{ valor: abreviarBRL(cDia.credito), titleAttr: abreviarBRL(cDia.credito) }}
-            mes={{
-              valor: abreviarBRL(cMes.credito),
-              titleAttr: abreviarBRL(cMes.credito),
-              rodape: (
-                <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">
-                  meta não configurada
-                </div>
-              ),
-            }}
-          />
-        )}
       </div>
 
-      {/* Linha 2 */}
-      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
-        <DiaMesBlocoCard
-          titulo="R1 agendadas"
-          accent={ACCENT}
-          hoje={{ valor: num(aDia.agendadas) }}
-          mes={{ valor: num(aMes.agendadas) }}
-        />
-        <DiaMesBlocoCard
-          titulo="R1 realizadas"
-          accent="#38bdf8"
-          hoje={{
-            valor: (
-              <Fracao
-                numerador={Number(aDia.realizadas || 0)}
-                denominador={Number(aDia.agendadas || 0)}
-                cor="#38bdf8"
-              />
-            ),
-            titleAttr: `${num(aDia.realizadas)} de ${num(aDia.agendadas)} agendadas`,
-          }}
-          mes={{
-            valor: (
-              <Fracao
-                numerador={Number(aMes.realizadas || 0)}
-                denominador={Number(aMes.agendadas || 0)}
-                cor="#38bdf8"
-              />
-            ),
-            titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
-              </div>
-            ),
-          }}
-
-        />
-        <DiaMesBlocoCard
-          titulo="No-show"
-          accent="#ef4444"
-          alerta
-          hoje={{ valor: num(aDia.no_show) }}
-          mes={{
-            valor: num(aMes.no_show),
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {pctTexto(Number(aMes.no_show || 0), Number(aMes.agendadas || 0))} das agendadas
-              </div>
-            ),
-          }}
-        />
-      </div>
 
       {/* Linha 3 */}
       <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
