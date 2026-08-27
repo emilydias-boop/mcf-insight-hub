@@ -192,8 +192,22 @@ function CreditoArcoCard({
 
 
         <div className="absolute left-1 bottom-0 xl:left-3">
-          <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Hoje</div>
-          <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(creditoHoje)}</div>
+          {semana && semana.meta != null ? (
+            <>
+              <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">
+                Semana {semana.indice} · {ddmm(semana.inicio)} a {ddmm(semana.fim)}
+              </div>
+              <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">
+                {abreviarBRL(Number(semana.credito || 0))}
+                <span className="ml-1.5 text-white/45 text-xs xl:text-lg">/ {abreviarBRL(Number(semana.meta))}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Hoje</div>
+              <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(creditoHoje)}</div>
+            </>
+          )}
         </div>
         <div className="absolute right-1 bottom-0 text-right xl:right-3">
           <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Meta</div>
