@@ -1419,6 +1419,13 @@ export function useEditarProposta() {
 
       }
 
+      if (parcelasBloqueadasPorCotaAberta.length > 0) {
+        toast.warning(
+          `As parcelas da MCF não foram alteradas na carta ${parcelasBloqueadasPorCotaAberta.join(', ')}: a cota já foi aberta. Ajuste direto no Controle Consórcio.`,
+        );
+      }
+
+
       if (removiveis.length > 0) {
         const { error } = await supabase
           .from('consorcio_proposal_cartas')
