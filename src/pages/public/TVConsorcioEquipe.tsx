@@ -282,26 +282,26 @@ export default function TVConsorcioEquipe() {
         <DiaMesBlocoCard
           titulo="Crédito efetivado"
           accent={ACCENT}
-          hoje={{ valor: abreviarBRL(cDia.credito) }}
-          mes={{
-            valor: abreviarBRL(cMes.credito),
-            rodape:
-              meta && meta > 0 ? (
-                <div>
-                  <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${pctMeta}%`, backgroundColor: ACCENT }}
-                    />
-                  </div>
-                  <div className="mt-1.5 text-[11px] xl:text-sm text-white/45 font-semibold">
-                    {pctMeta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de {abreviarBRL(meta)}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
-              ),
-          }}
+          hoje={{ valor: abreviarBRL(cDia.credito), titleAttr: abreviarBRL(cDia.credito) }}
+          mes={
+            meta && meta > 0
+              ? {
+                  valor: abreviarBRL(cMes.credito),
+                  conteudo: (
+                    <MedidorMeta valor={Number(cMes.credito || 0)} meta={Number(meta)} pct={pctMeta} />
+                  ),
+                }
+              : {
+                  valor: abreviarBRL(cMes.credito),
+                  titleAttr: abreviarBRL(cMes.credito),
+                  rodape: (
+                    <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">
+                      meta não configurada
+                    </div>
+                  ),
+                }
+          }
+
         />
       </div>
 
