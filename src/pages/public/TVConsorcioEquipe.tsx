@@ -56,10 +56,57 @@ function pctTexto(parte: number, total: number) {
   return `${((parte / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
 }
 
-function primeiroESegundoNome(nome: string) {
-  const partes = String(nome || "").trim().split(/\s+/);
-  return partes.slice(0, 2).join(" ");
+/** Primeiro + último nome ("Andre dos Santos Duarte" → "Andre Duarte"). */
+function primeiroEUltimoNome(nome: string) {
+  const partes = String(nome || "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "";
+  if (partes.length === 1) return partes[0];
+  return `${partes[0]} ${partes[partes.length - 1]}`;
 }
+
+/** Fração "realizadas/agendadas" — numerador em destaque, resto discreto. */
+function Fracao({ numerador, denominador, cor }: { numerador: number; denominador: number; cor: string }) {
+  return (
+    <span className="inline-flex items-baseline">
+      <span style={{ color: cor }}>{num(numerador)}</span>
+      {denominador > 0 ? (
+        <span className="text-white/45 text-base xl:text-2xl">/{num(denominador)}</span>
+      ) : null}
+    </span>
+  );
+}
+
+/** Medidor em meia-lua do crédito do mês contra a meta. */
+function MedidorMeta({ valor, meta, pct }: { valor: number; meta: number; pct: number }) {
+  const arco = "M 20 92 A 70 70 0 0 1 160 92";
+  return (
+    <svg viewBox="0 0 180 104" className="w-full h-full" role="img" aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}>
+      <path d={arco} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={14} strokeLinecap="round" />
+      <path
+        d={arco}
+        fill="none"
+        stroke={ACCENT}
+        strokeWidth={14}
+        strokeLinecap="round"
+        strokeDasharray={`${(pct / 100) * 220} 220`}
+        style={{ transition: "stroke-dasharray 700ms ease-out" }}
+      />
+      <text x="90" y="76" textAnchor="middle" fill="#ffffff" style={{ fontSize: 27, fontWeight: 900 }}>
+        {abreviarBRL(valor)}
+      </text>
+      <text x="90" y="94" textAnchor="middle" fill={ACCENT} style={{ fontSize: 14, fontWeight: 800 }}>
+        {pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+      </text>
+      <text x="20" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
+        0
+      </text>
+      <text x="160" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
+        {abreviarBRL(meta)}
+      </text>
+    </svg>
+  );
+}
+
 
 /** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
 function DiaMesBlocoCard({
