@@ -126,6 +126,13 @@ const formSchema = z.object({
   prazo_meses: z.number().optional(),
   tipo_produto: z.enum(['select', 'parcelinha']),
   empresa_paga_parcelas: z.enum(['sim', 'nao']),
+  /**
+   * Como as parcelas da MCF são declaradas:
+   * - `padrao`: tipo_contrato + quantidade (expressa "todas as pares" de um 240);
+   * - `lista`: os números exatos das 12 primeiras parcelas.
+   */
+  modo_parcelas_mcf: z.enum(['padrao', 'lista']).default('padrao'),
+  parcelas_mcf_numeros: z.array(z.number()).optional(),
   tipo_contrato: z.enum(['normal', 'intercalado', 'intercalado_impar']).optional(),
   parcelas_pagas_empresa: z.number().min(0).optional(),
   data_reserva: z.date().optional().nullable(),
