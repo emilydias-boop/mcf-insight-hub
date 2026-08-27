@@ -72,7 +72,6 @@ export function MainLayout() {
               <AutoDialerDealDrawer />
               <AutoDialerInCallBanner />
               <AutoDialerOutcomeBanner />
-              <GamificationScheduler />
             </>
           )}
           <OverdueAlertOverlay />
