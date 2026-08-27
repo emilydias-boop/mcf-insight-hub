@@ -317,22 +317,31 @@ export default function TVConsorcioEquipe() {
           titulo="R1 realizadas"
           accent="#38bdf8"
           hoje={{
-            valor: num(aDia.realizadas),
-            rodape:
-              porAcontecer > 0 ? (
-                <div className="text-[11px] xl:text-sm text-white/50 font-semibold">
-                  {num(porAcontecer)} por acontecer
-                </div>
-              ) : null,
+            valor: (
+              <Fracao
+                numerador={Number(aDia.realizadas || 0)}
+                denominador={Number(aDia.agendadas || 0)}
+                cor="#38bdf8"
+              />
+            ),
+            titleAttr: `${num(aDia.realizadas)} de ${num(aDia.agendadas)} agendadas`,
           }}
           mes={{
-            valor: num(aMes.realizadas),
+            valor: (
+              <Fracao
+                numerador={Number(aMes.realizadas || 0)}
+                denominador={Number(aMes.agendadas || 0)}
+                cor="#38bdf8"
+              />
+            ),
+            titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
             rodape: (
               <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
                 {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
               </div>
             ),
           }}
+
         />
         <DiaMesBlocoCard
           titulo="No-show"
