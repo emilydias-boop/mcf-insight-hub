@@ -1097,7 +1097,17 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
     data: FormData,
     opts: { tipoProduto: 'select' | 'parcelinha'; parcela1a12?: number | null; parcelaDemais?: number | null },
   ): CreateConsorcioCardInput => {
-    const calculatedParcelas = data.empresa_paga_parcelas === 'sim' ? (data.parcelas_pagas_empresa || 0) : 0;
+    // Modo "lista": os números escolhidos são a verdade e os campos antigos
+    // (tipo_contrato / quantidade) passam a ser DERIVADOS deles — nunca o contrário.
+    const usaLista =
+      data.empresa_paga_parcelas === 'sim' && data.modo_parcelas_mcf === 'lista';
+    const listaMcf = usaLista ? normalizarParcelasMcf(data.parcelas_mcf_numeros) : [];
+    const derivado = usaLista ? derivarParcelasEmpresa(listaMcf) : null;
+    const calculatedParcelas = derivado
+      ? derivado.parcelas_pagas_empresa
+      : data.empresa_paga_parcelas === 'sim'
+        ? (data.parcelas_pagas_empresa || 0)
+        : 0;
     return {
       tipo_pessoa: data.tipo_pessoa,
       categoria: data.categoria,
@@ -1107,8 +1117,13 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
       valor_credito: data.valor_credito,
       prazo_meses: data.prazo_meses,
       tipo_produto: opts.tipoProduto,
-      tipo_contrato: data.empresa_paga_parcelas === 'sim' ? (data.tipo_contrato || 'normal') : 'normal',
+      tipo_contrato: derivado
+        ? derivado.tipo_contrato
+        : data.empresa_paga_parcelas === 'sim' ? (data.tipo_contrato || 'normal') : 'normal',
       parcelas_pagas_empresa: calculatedParcelas,
+      // `null` (e não `undefined`) para que o diff consiga LIMPAR a lista quando
+      // o usuário voltar ao modo padrão.
+      parcelas_mcf_numeros: listaMcf.length > 0 ? listaMcf : null,
       tipo_registro: data.tipo_registro,
       data_contratacao: data.data_contratacao ? formatDateForDB(data.data_contratacao) : null,
       data_reserva: data.data_reserva ? formatDateForDB(data.data_reserva) : null,
