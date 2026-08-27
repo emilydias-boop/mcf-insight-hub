@@ -113,45 +113,47 @@ function CreditoArcoCard({
       </div>
 
       <div className="relative flex-1 min-h-0">
-        <svg
-          viewBox="0 0 1000 150"
-          preserveAspectRatio="none"
-          className="w-full h-full"
-          role="img"
-          aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}
-        >
-          <path
-            d={arco}
-            fill="none"
-            stroke="rgba(255,255,255,0.10)"
-            strokeWidth={13}
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-          />
-          <path
-            ref={pathRef}
-            d={arco}
-            fill="none"
-            stroke={ACCENT}
-            strokeWidth={13}
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            strokeDasharray={comprimento}
-            strokeDashoffset={comprimento - progresso}
-            style={{ transition: "stroke-dashoffset 700ms ease-out" }}
-          />
-        </svg>
+        <div className="absolute inset-y-0 inset-x-[7%]">
+          <svg
+            viewBox="0 0 1000 150"
+            preserveAspectRatio="none"
+            className="w-full h-full"
+            role="img"
+            aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}
+          >
+            <path
+              d={arco}
+              fill="none"
+              stroke="rgba(255,255,255,0.10)"
+              strokeWidth={13}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+            <path
+              ref={pathRef}
+              d={arco}
+              fill="none"
+              stroke={ACCENT}
+              strokeWidth={13}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              strokeDasharray={`${progresso} ${comprimento}`}
+              style={{ transition: "stroke-dasharray 700ms ease-out" }}
+            />
+          </svg>
+        </div>
 
         {/* Valor central em HTML: não escala com o desenho. */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pt-[8%] pointer-events-none">
-
           <div className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
             {abreviarBRL(creditoMes)}
           </div>
           <div className="mt-2 text-xs xl:text-lg font-bold text-white/70">
-            {`${pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da meta`}
+            <span>{pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
+            <span className="ml-1.5">da meta</span>
           </div>
         </div>
+
 
 
         <div className="absolute left-1 bottom-0 xl:left-3">
