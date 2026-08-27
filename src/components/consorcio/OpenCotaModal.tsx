@@ -620,7 +620,25 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
 
       // O objetivo que vale é o que está na tela no momento do submit.
       objetivo: plano.valores.objetivo ?? null,
-      parcelas_pagas_empresa_count: data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
+      // Parcelas: a lista marcada manda; tipo e quantidade saem dela.
+      ...(() => {
+        const lista = normalizarParcelasMcf(data.parcelas_mcf_numeros);
+        if (lista.length === 0) {
+          return {
+            parcelas_mcf_numeros: undefined,
+            parcelas_pagas_empresa_count:
+              data.empresa_paga_parcelas === 'sim' ? data.parcelas_pagas_empresa : 0,
+          };
+        }
+        const d = derivarParcelasEmpresa(lista);
+        return {
+          parcelas_mcf_numeros: lista,
+          empresa_paga_parcelas: d.empresa_paga_parcelas,
+          tipo_contrato: d.tipo_contrato,
+          parcelas_pagas_empresa: d.parcelas_pagas_empresa,
+          parcelas_pagas_empresa_count: d.parcelas_pagas_empresa,
+        };
+      })(),
     };
     const cleanCotaData = Object.fromEntries(
       Object.entries(rawCotaData).map(([k, v]) => [k, v === '' ? null : v])
