@@ -25,6 +25,12 @@ export interface ParamsCronograma {
   tipoProduto: string;
   tipoContrato?: string | null;
   parcelasEmpresa?: number;
+  /**
+   * Números exatos das parcelas da MCF escolhidos no lançamento. Quando vem com
+   * itens, ELE manda: a derivação por `tipoContrato` + quantidade é ignorada.
+   */
+  parcelasNumeros?: number[] | null;
+
   inicioSegundaParcela?: string | null;
   /** Condição de pagamento da cota — define a coluna da tabela Embracon. */
   condicaoPagamento?: string | null;
@@ -61,6 +67,13 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
 
   const tipoContrato = p.tipoContrato || 'normal';
   const parcelasEmpresa = p.parcelasEmpresa || 0;
+  // Lista exata escolhida no lançamento (quando existe, dispensa a derivação).
+  const numerosEmpresa = new Set(
+    (Array.isArray(p.parcelasNumeros) ? p.parcelasNumeros : [])
+      .map(Number)
+      .filter(n => Number.isInteger(n) && n >= 1),
+  );
+
   const ctxComissao = await getProdutoComissaoContext(p.valorCredito, p.tipoProduto as any);
 
   // Fonte de verdade do valor da parcela: tabela Embracon (nunca crédito ÷ prazo).
@@ -92,7 +105,9 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
     const valorComissao = calcularComissao(p.valorCredito, p.tipoProduto as any, i, ctxComissao);
 
     let tipo: 'cliente' | 'empresa';
-    if (tipoContrato === 'intercalado') {
+    if (numerosEmpresa.size > 0) {
+      tipo = numerosEmpresa.has(i) ? 'empresa' : 'cliente';
+    } else if (tipoContrato === 'intercalado') {
       const ehPar = i % 2 === 0;
       tipo = ehPar && i / 2 <= parcelasEmpresa ? 'empresa' : 'cliente';
     } else if (tipoContrato === 'intercalado_impar') {
@@ -101,6 +116,7 @@ export async function montarParcelasCota(p: ParamsCronograma): Promise<any[]> {
     } else {
       tipo = i <= parcelasEmpresa ? 'empresa' : 'cliente';
     }
+
 
     parcelas.push({
       card_id: p.cardId,
@@ -140,7 +156,7 @@ export async function inserirParcelas(parcelas: any[]): Promise<void> {
 export async function gerarCronogramaSeFaltando(cardId: string): Promise<number> {
   const { data: card, error } = await supabase
     .from('consortium_cards')
-    .select('id, dia_vencimento, prazo_meses, valor_credito, tipo_produto, tipo_contrato, parcelas_pagas_empresa, tipo_registro, data_contratacao, data_reserva, condicao_pagamento, inclui_seguro_vida')
+    .select('id, dia_vencimento, prazo_meses, valor_credito, tipo_produto, tipo_contrato, parcelas_pagas_empresa, parcelas_mcf_numeros, tipo_registro, data_contratacao, data_reserva, condicao_pagamento, inclui_seguro_vida')
     .eq('id', cardId)
     .single();
   if (error) throw error;
@@ -167,6 +183,8 @@ export async function gerarCronogramaSeFaltando(cardId: string): Promise<number>
     tipoProduto: String(card.tipo_produto),
     tipoContrato: (card as any).tipo_contrato,
     parcelasEmpresa: Number((card as any).parcelas_pagas_empresa || 0),
+    parcelasNumeros: (card as any).parcelas_mcf_numeros ?? null,
+
     condicaoPagamento: (card as any).condicao_pagamento,
     incluiSeguro: !!(card as any).inclui_seguro_vida,
     isReserva,

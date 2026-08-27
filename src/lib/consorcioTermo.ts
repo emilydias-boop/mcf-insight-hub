@@ -72,7 +72,10 @@ export interface TermoSourceRegistration {
   dia_vencimento?: number | null;
   tipo_contrato?: string | null;
   parcelas_pagas_empresa?: number | null;
+  /** Números exatos das parcelas da MCF — quando presente, manda no cronograma. */
+  parcelas_mcf_numeros?: number[] | null;
   empresa_paga_parcelas?: string | null;
+
 }
 
 export function termoNomeCliente(reg: TermoSourceRegistration): string {
@@ -103,6 +106,8 @@ export function parcelasMcfComValoresDigitados(reg: TermoSourceRegistration) {
   const base = getParcelasEmpresa({
     prazo_meses: reg.prazo_meses,
     parcelas_pagas_empresa: reg.parcelas_pagas_empresa,
+    parcelas_numeros: reg.parcelas_mcf_numeros ?? null,
+
     tipo_contrato: reg.tipo_contrato,
     valor_credito: reg.valor_credito,
     empresa_paga_parcelas: reg.empresa_paga_parcelas,

@@ -101,6 +101,9 @@ export function ProposalModal({
             empresa_paga_parcelas: parcelas.empresa_paga_parcelas,
             tipo_contrato: parcelas.tipo_contrato,
             parcelas_pagas_empresa: parcelas.parcelas_pagas_empresa,
+            // Números exatos escolhidos na tela — fonte de verdade do cronograma.
+            parcelas_mcf_numeros: carta?.parcelas_mcf ?? undefined,
+
             valor_credito: carta ? Number(carta.valor_credito) : undefined,
             prazo_meses: carta ? Number(carta.prazo_meses) : undefined,
             tipo_produto: carta?.tipo_produto || undefined,

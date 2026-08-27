@@ -175,6 +175,13 @@ export interface CreateConsorcioCardInput {
   tipo_produto: TipoProduto;
   tipo_contrato: TipoContrato;
   parcelas_pagas_empresa: number;
+  /**
+   * Números exatos das parcelas sob compromisso da MCF, na ordem escolhida no
+   * lançamento. Quando preenchido, é a fonte de verdade do cronograma; nulo cai
+   * na derivação por `tipo_contrato` + quantidade (comportamento histórico).
+   */
+  parcelas_mcf_numeros?: number[] | null;
+
   data_contratacao?: string | null;
   data_reserva?: string | null;
   tipo_registro?: 'reserva' | 'contratacao';
