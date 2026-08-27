@@ -1272,27 +1272,52 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
                           </Select>
                         </FormItem>
                       )} />
-                      {empresaPaga === 'sim' && (
-                        <>
-                          <FormField control={form.control} name="tipo_contrato" render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tipo Contrato</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                  <SelectItem value="normal">Normal</SelectItem>
-                                  <SelectItem value="intercalado">Intercalado (Par)</SelectItem>
-                                  <SelectItem value="intercalado_impar">Intercalado (Ímpar)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </FormItem>
-                          )} />
-                          <FormField control={form.control} name="parcelas_pagas_empresa" render={({ field }) => (
-                            <FormItem><FormLabel>Qtd Parcelas</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>
-                          )} />
-                        </>
-                      )}
                     </div>
+
+                    {empresaPaga === 'sim' && (
+                      <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                        {/* Registro legado: avisa, mas não pré-marca a grade. */}
+                        {desenhoLegadoReg && (
+                          <p className="text-xs text-muted-foreground">
+                            Este registro foi criado antes do controle por parcela. O desenho atual
+                            é:{' '}
+                            <strong className="text-foreground">
+                              {rotuloTipoContrato(desenhoLegadoReg.tipo_contrato)} com{' '}
+                              {desenhoLegadoReg.parcelas_pagas_empresa} parcela(s)
+                            </strong>
+                            . Marcar parcelas aqui substitui esse desenho.
+                          </p>
+                        )}
+                        <FormField control={form.control} name={'parcelas_mcf_numeros' as any} render={({ field }) => (
+                          <FormItem>
+                            <ParcelasMcfPicker
+                              value={(field.value as number[]) || []}
+                              onChange={field.onChange}
+                              disabled={readOnly}
+                            />
+                          </FormItem>
+                        )} />
+                        <p className="text-xs text-muted-foreground">
+                          {listaMcfWatch.length > 0 ? (
+                            <>
+                              equivale a:{' '}
+                              <strong className="text-foreground">
+                                {derivadoMcfWatch.parcelas_pagas_empresa} parcela(s), padrão{' '}
+                                {rotuloTipoContrato(derivadoMcfWatch.tipo_contrato)}
+                              </strong>
+                            </>
+                          ) : desenhoLegadoReg ? (
+                            <>
+                              Nenhuma parcela marcada: o desenho gravado (
+                              {rotuloTipoContrato(desenhoLegadoReg.tipo_contrato)},{' '}
+                              {desenhoLegadoReg.parcelas_pagas_empresa} parcela(s)) é mantido.
+                            </>
+                          ) : (
+                            <>Nenhuma parcela marcada: a MCF não assume parcela nenhuma.</>
+                          )}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Vencimento + 2a parcela */}
                     <div className="grid grid-cols-3 gap-3">
