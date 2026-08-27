@@ -17,6 +17,12 @@ import {
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
 import { CATEGORIA_OPTIONS } from '@/types/consorcio';
+import {
+  estruturaParcela,
+  faixaParcelaCurta,
+  rotulosParcela,
+} from '@/lib/consorcioParcelaOficial';
+
 
 
 import {
