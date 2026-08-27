@@ -201,7 +201,7 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-3"
+      mainRowsClassName="grid-rows-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,2fr)]"
     >
       {/* Linha 1 */}
       <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
