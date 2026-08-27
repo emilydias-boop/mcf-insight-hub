@@ -448,6 +448,19 @@ export function OpenCotaModal({ open, onOpenChange, registrationId, mode = 'open
   }, [prazoMeses]);
   const empresaPaga = form.watch('empresa_paga_parcelas');
   const vendedorId = form.watch('vendedor_id');
+  /** Lista marcada (entrada única) e os campos antigos derivados dela (saída). */
+  const listaMcfWatch = normalizarParcelasMcf(form.watch('parcelas_mcf_numeros' as any) as any);
+  const derivadoMcfWatch = derivarParcelasEmpresa(listaMcfWatch);
+  /** Desenho antigo do cadastro (sem lista gravada): serve só para avisar. */
+  const desenhoLegadoReg =
+    registration &&
+    normalizarParcelasMcf((registration as any).parcelas_mcf_numeros).length === 0 &&
+    Number((registration as any).parcelas_pagas_empresa) > 0
+      ? {
+          tipo_contrato: ((registration as any).tipo_contrato as string) || 'normal',
+          parcelas_pagas_empresa: Number((registration as any).parcelas_pagas_empresa),
+        }
+      : null;
 
   // Bloco "Dados do plano" compartilhado com o AcceptProposalModal (mesmo autopreenchimento e selos).
   // Prazo e condição NÃO são duplicados aqui: o hook lê e escreve direto no formulário desta tela.
