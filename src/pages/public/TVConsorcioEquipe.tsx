@@ -78,29 +78,29 @@ function DiaMesBlocoCard({
   const cor = alerta ? "#ef4444" : accent;
   return (
     <div
-      className="rounded-2xl border p-3 xl:p-5 flex flex-col min-h-0"
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
       style={{
         backgroundColor: alerta ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.04)",
         borderColor: alerta ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.10)",
       }}
     >
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">{titulo}</div>
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 xl:gap-5 mt-2">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-2 xl:gap-3 mt-1">
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
             key={label}
-            className={`flex flex-col min-w-0 ${i === 1 ? "pl-3 xl:pl-5 border-l" : ""}`}
+            className={`flex flex-col min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
             <div
-              className="mt-1 text-2xl xl:text-4xl font-black leading-none truncate"
+              className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
               style={{ color: cor }}
               title={bloco.valor}
             >
               {bloco.valor}
             </div>
-            <div className="mt-auto pt-2">{bloco.rodape}</div>
+            <div className="mt-auto pt-1">{bloco.rodape}</div>
           </div>
         ))}
       </div>
