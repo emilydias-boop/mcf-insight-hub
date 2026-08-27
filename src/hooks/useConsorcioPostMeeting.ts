@@ -1322,13 +1322,28 @@ export function useEditarProposta() {
           if (a?.pending_registration_id) {
             const { data: reg, error: regErr } = await supabase
               .from('consorcio_pending_registrations')
-              .select('id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria, consortium_card_id')
+              .select('id, valor_credito, prazo_meses, tipo_produto, parcela_1a_12a, parcela_demais, condicao_pagamento, objetivo, categoria, consortium_card_id, parcelas_mcf_numeros')
               .eq('id', a.pending_registration_id)
               .maybeSingle();
             if (regErr) throw regErr;
+            const listaNova = normalizarParcelasMcf(c.parcelas_mcf);
+            const listaAtual = normalizarParcelasMcf((reg as any)?.parcelas_mcf_numeros);
+            const parcelasMudaram = listaNova.join(',') !== listaAtual.join(',');
+            // Cota já aberta: as parcelas viraram fato operacional (cronograma,
+            // pagamentos). Não se toca — apenas avisa quem editou.
+            if (reg && (reg as any).consortium_card_id && parcelasMudaram) {
+              parcelasBloqueadasPorCotaAberta.push(ordem);
+            }
             if (reg && !(reg as any).consortium_card_id) {
               const r = reg as any;
               const difs: Array<{ campo: string; de: unknown; para: unknown }> = [];
+              if (parcelasMudaram) {
+                difs.push({
+                  campo: `cadastro[${ordem}].parcelas_mcf`,
+                  de: listaAtual.join(', ') || '(nenhuma)',
+                  para: listaNova.join(', ') || '(nenhuma)',
+                });
+              }
               if (Number(r.valor_credito) !== Number(c.valor_credito)) {
                 difs.push({ campo: `cadastro[${ordem}].valor_credito`, de: Number(r.valor_credito) || 0, para: Number(c.valor_credito) });
               }
@@ -1365,6 +1380,9 @@ export function useEditarProposta() {
                     condicao_pagamento: c.condicao_pagamento ?? null,
                     objetivo: c.objetivo ?? null,
                     categoria: c.categoria ?? null,
+                    // A lista marcada é a única verdade; tipo/quantidade derivam dela.
+                    parcelas_mcf_numeros: listaNova.length > 0 ? listaNova : null,
+                    ...derivarParcelasEmpresa(listaNova),
                   } as any)
                   .eq('id', r.id);
                 // Propagação é obrigatória: se falhar, a edição inteira falha.
