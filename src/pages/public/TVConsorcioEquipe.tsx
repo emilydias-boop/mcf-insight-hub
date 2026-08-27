@@ -1,7 +1,8 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TVShell, TVMsg } from "@/components/public/TVTeamShared";
+
 
 const TOKEN = "24151d71-1f8e-44b9-9761-b01f1fca7bec";
 
@@ -76,36 +77,125 @@ function Fracao({ numerador, denominador, cor }: { numerador: number; denominado
   );
 }
 
-/** Medidor em meia-lua do crédito do mês contra a meta. */
-function MedidorMeta({ valor, meta, pct }: { valor: number; meta: number; pct: number }) {
-  const arco = "M 20 92 A 70 70 0 0 1 160 92";
+/**
+ * Cartão de largura total do crédito efetivado: arco largo e raso desenhado em
+ * SVG, com todos os textos em HTML sobreposto (texto dentro do SVG escalava
+ * junto com o desenho e transbordava).
+ */
+function CreditoArcoCard({
+  creditoMes,
+  creditoHoje,
+  meta,
+  pct,
+}: {
+  creditoMes: number;
+  creditoHoje: number;
+  meta: number;
+  pct: number;
+}) {
+  const pathRef = useRef<SVGPathElement>(null);
+  const [comprimento, setComprimento] = useState(1120);
+  useEffect(() => {
+    const total = pathRef.current?.getTotalLength();
+    if (total && Number.isFinite(total)) setComprimento(total);
+  }, []);
+
+  const arco = "M 40 140 Q 500 -30 960 140";
+  const progresso = (Math.min(Math.max(pct, 0), 100) / 100) * comprimento;
+
   return (
-    <svg viewBox="0 0 180 104" preserveAspectRatio="xMidYMid meet" className="h-full w-auto max-h-[150px] xl:max-h-[210px]" role="img" aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}>
-      <path d={arco} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth={14} strokeLinecap="round" />
-      <path
-        d={arco}
-        fill="none"
-        stroke={ACCENT}
-        strokeWidth={14}
-        strokeLinecap="round"
-        strokeDasharray={`${(pct / 100) * 220} 220`}
-        style={{ transition: "stroke-dasharray 700ms ease-out" }}
-      />
-      <text x="90" y="76" textAnchor="middle" fill="#ffffff" style={{ fontSize: 27, fontWeight: 900 }}>
-        {abreviarBRL(valor)}
-      </text>
-      <text x="90" y="94" textAnchor="middle" fill={ACCENT} style={{ fontSize: 14, fontWeight: 800 }}>
-        {pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
-      </text>
-      <text x="20" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
-        0
-      </text>
-      <text x="160" y="103" textAnchor="middle" fill="#5a5a5a" style={{ fontSize: 8 }}>
-        {abreviarBRL(meta)}
-      </text>
-    </svg>
+    <div
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0 overflow-hidden"
+      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
+    >
+      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+        Crédito efetivado
+      </div>
+
+      <div className="relative flex-1 min-h-0">
+        <div className="absolute inset-y-0 inset-x-[7%]">
+          <svg
+            viewBox="0 0 1000 150"
+            preserveAspectRatio="none"
+            className="w-full h-full"
+            role="img"
+            aria-label={`Crédito do mês: ${pct.toFixed(0)}% da meta`}
+          >
+            <path
+              d={arco}
+              fill="none"
+              stroke="rgba(255,255,255,0.10)"
+              strokeWidth={13}
+              strokeLinecap="round"
+            />
+            <path
+              ref={pathRef}
+              d={arco}
+              fill="none"
+              stroke={ACCENT}
+              strokeWidth={13}
+              strokeLinecap="round"
+              strokeDasharray={`${progresso} ${comprimento}`}
+              style={{ transition: "stroke-dasharray 700ms ease-out" }}
+            />
+          </svg>
+        </div>
+
+        {/* Valor central em HTML: não escala com o desenho. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pt-[8%] pointer-events-none">
+          <div className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
+            {abreviarBRL(creditoMes)}
+          </div>
+          <div className="mt-2 text-xs xl:text-lg font-bold text-white/70">
+            <span>{pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
+            <span className="ml-1.5">da meta</span>
+          </div>
+        </div>
+
+
+
+        <div className="absolute left-1 bottom-0 xl:left-3">
+          <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Hoje</div>
+          <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(creditoHoje)}</div>
+        </div>
+        <div className="absolute right-1 bottom-0 text-right xl:right-3">
+          <div className="text-[9px] xl:text-[11px] tracking-widest text-white/35 font-black uppercase">Meta</div>
+          <div className="text-sm xl:text-2xl font-black text-white/80 leading-none">{abreviarBRL(meta)}</div>
+        </div>
+      </div>
+    </div>
   );
 }
+
+/** Mesmo cartão de largura total, sem arco, quando não há meta configurada. */
+function CreditoSemMetaCard({ creditoMes, creditoHoje }: { creditoMes: number; creditoHoje: number }) {
+  return (
+    <div
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0"
+
+      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
+    >
+      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+        Crédito efetivado
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1">
+        <div className="flex items-baseline gap-3 xl:gap-5">
+          <span className="text-[10px] xl:text-sm tracking-widest text-white/40 font-black uppercase">Hoje</span>
+          <span className="text-2xl xl:text-4xl font-black" style={{ color: ACCENT }}>
+            {abreviarBRL(creditoHoje)}
+          </span>
+          <span className="text-white/20">·</span>
+          <span className="text-[10px] xl:text-sm tracking-widest text-white/40 font-black uppercase">Mês</span>
+          <span className="text-2xl xl:text-4xl font-black" style={{ color: ACCENT }}>
+            {abreviarBRL(creditoMes)}
+          </span>
+        </div>
+        <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
+      </div>
+    </div>
+  );
+}
+
 
 
 /** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
@@ -136,25 +226,26 @@ function DiaMesBlocoCard({
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
             key={label}
-            className={`flex flex-col min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
+            className={`flex flex-col justify-center min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
             {bloco.conteudo ? (
-              <div className="flex-1 min-h-0 mt-0.5">{bloco.conteudo}</div>
+              <div className="mt-0.5">{bloco.conteudo}</div>
             ) : (
               <>
                 <div
-                  className="mt-1 text-xl xl:text-3xl font-black leading-none truncate"
+                  className="mt-1 text-2xl xl:text-5xl font-black leading-none truncate"
                   style={{ color: cor }}
                   title={bloco.titleAttr}
                 >
                   {bloco.valor}
                 </div>
-                <div className="mt-auto pt-1">{bloco.rodape}</div>
+                {bloco.rodape ? <div className="mt-1">{bloco.rodape}</div> : null}
               </>
             )}
           </div>
+
         ))}
       </div>
     </div>
@@ -255,12 +346,64 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,2fr)]"
+      mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,2fr)]"
     >
-      {/* Linha 1 */}
-      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
+      {/* Linha 1 — crédito efetivado em largura total */}
+      <div className="min-h-0 flex flex-col">
+        {meta && meta > 0 ? (
+          <CreditoArcoCard
+            creditoMes={Number(cMes.credito || 0)}
+            creditoHoje={Number(cDia.credito || 0)}
+            meta={Number(meta)}
+            pct={pctMeta}
+          />
+        ) : (
+          <CreditoSemMetaCard
+            creditoMes={Number(cMes.credito || 0)}
+            creditoHoje={Number(cDia.credito || 0)}
+          />
+        )}
+      </div>
+
+      {/* Linha 2 */}
+      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
         <DiaMesBlocoCard
-          titulo="Contratos · cotas"
+          titulo="R1 agendadas"
+          accent={ACCENT}
+          hoje={{ valor: num(aDia.agendadas) }}
+          mes={{ valor: num(aMes.agendadas) }}
+        />
+        <DiaMesBlocoCard
+          titulo="R1 realizadas"
+          accent={ACCENT}
+          hoje={{
+            valor: (
+              <Fracao
+                numerador={Number(aDia.realizadas || 0)}
+                denominador={Number(aDia.agendadas || 0)}
+                cor={ACCENT}
+              />
+            ),
+            titleAttr: `${num(aDia.realizadas)} de ${num(aDia.agendadas)} agendadas`,
+          }}
+          mes={{
+            valor: (
+              <Fracao
+                numerador={Number(aMes.realizadas || 0)}
+                denominador={Number(aMes.agendadas || 0)}
+                cor={ACCENT}
+              />
+            ),
+            titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
+              </div>
+            ),
+          }}
+        />
+        <DiaMesBlocoCard
+          titulo="Vendas"
           accent={ACCENT}
           hoje={{
             valor: num(cDia.cotas),
@@ -279,107 +422,8 @@ export default function TVConsorcioEquipe() {
             ),
           }}
         />
-        {meta && meta > 0 ? (
-          <div
-            className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.04)",
-              borderColor: "rgba(255,255,255,0.10)",
-            }}
-          >
-            <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
-              Crédito efetivado
-            </div>
-            <div className="flex-1 min-h-0 flex items-center justify-center mt-1">
-              <MedidorMeta valor={Number(cMes.credito || 0)} meta={Number(meta)} pct={pctMeta} />
-            </div>
-            <div className="mt-1 flex items-baseline justify-center gap-2 xl:gap-3">
-              <span className="text-[9px] xl:text-[11px] tracking-widest text-white/40 font-black uppercase">
-                Hoje
-              </span>
-              <span className="text-[11px] xl:text-sm font-bold text-white/70">
-                {abreviarBRL(cDia.credito)}
-              </span>
-              <span className="text-white/20">·</span>
-              <span className="text-[9px] xl:text-[11px] tracking-widest text-white/40 font-black uppercase">
-                Mês
-              </span>
-              <span className="text-[11px] xl:text-sm font-bold text-white/70">
-                {abreviarBRL(cMes.credito)}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <DiaMesBlocoCard
-            titulo="Crédito efetivado"
-            accent={ACCENT}
-            hoje={{ valor: abreviarBRL(cDia.credito), titleAttr: abreviarBRL(cDia.credito) }}
-            mes={{
-              valor: abreviarBRL(cMes.credito),
-              titleAttr: abreviarBRL(cMes.credito),
-              rodape: (
-                <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">
-                  meta não configurada
-                </div>
-              ),
-            }}
-          />
-        )}
       </div>
 
-      {/* Linha 2 */}
-      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
-        <DiaMesBlocoCard
-          titulo="R1 agendadas"
-          accent={ACCENT}
-          hoje={{ valor: num(aDia.agendadas) }}
-          mes={{ valor: num(aMes.agendadas) }}
-        />
-        <DiaMesBlocoCard
-          titulo="R1 realizadas"
-          accent="#38bdf8"
-          hoje={{
-            valor: (
-              <Fracao
-                numerador={Number(aDia.realizadas || 0)}
-                denominador={Number(aDia.agendadas || 0)}
-                cor="#38bdf8"
-              />
-            ),
-            titleAttr: `${num(aDia.realizadas)} de ${num(aDia.agendadas)} agendadas`,
-          }}
-          mes={{
-            valor: (
-              <Fracao
-                numerador={Number(aMes.realizadas || 0)}
-                denominador={Number(aMes.agendadas || 0)}
-                cor="#38bdf8"
-              />
-            ),
-            titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
-              </div>
-            ),
-          }}
-
-        />
-        <DiaMesBlocoCard
-          titulo="No-show"
-          accent="#ef4444"
-          alerta
-          hoje={{ valor: num(aDia.no_show) }}
-          mes={{
-            valor: num(aMes.no_show),
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {pctTexto(Number(aMes.no_show || 0), Number(aMes.agendadas || 0))} das agendadas
-              </div>
-            ),
-          }}
-        />
-      </div>
 
       {/* Linha 3 */}
       <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
