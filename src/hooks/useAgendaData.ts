@@ -1181,10 +1181,18 @@ export function useSearchDealsForSchedule(
           // estado terminal de agendamento — SDRs precisam poder reagendar
           // mesmo após marca operacional de venda.
           const isConsorcio = bu === 'consorcio';
-          if (hasContractPaid && meetingType !== 'r2' && !isConsorcio) {
+          // Exceção "outside": deals marcados com a tag outside não bloqueiam
+          // agendamento por contrato pago/venda fechada — alinhado com o guard
+          // da edge function calendly-create-event (mesma normalização).
+          const isOutside =
+            Array.isArray((deal as any).tags) &&
+            ((deal as any).tags as string[]).some(
+              (t) => (t ?? '').toString().trim().toLowerCase() === 'outside',
+            );
+          if (hasContractPaid && meetingType !== 'r2' && !isConsorcio && !isOutside) {
             leadState = 'contract_paid';
             blockReason = 'Lead já tem contrato pago — não é possível agendar nova reunião.';
-          } else if (dealStatus === 'won' && meetingType !== 'r2' && !isConsorcio) {
+          } else if (dealStatus === 'won' && meetingType !== 'r2' && !isConsorcio && !isOutside) {
             leadState = 'won';
             blockReason = 'Lead já fechou contrato — não é possível agendar nova reunião.';
           } else {
