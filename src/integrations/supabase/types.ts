@@ -15932,6 +15932,11 @@ export type Database = {
       }
       closers_do_usuario: { Args: never; Returns: string[] }
       compute_cobranca_stage: { Args: { _titulo_id: string }; Returns: string }
+      consorcio_chave_cliente: {
+        Args: { _cnpj: string; _cpf: string; _id: string; _nome: string }
+        Returns: string
+      }
+      consorcio_chave_nome: { Args: { _nome: string }; Returns: string }
       consorcio_corrigir_vinculo_cota: {
         Args: {
           p_card_id: string
@@ -17022,6 +17027,15 @@ export type Database = {
         Args: { p_attendee_id: string }
         Returns: undefined
       }
+      tv_consorcio_agenda: {
+        Args: { _ate: string; _de: string }
+        Returns: Json
+      }
+      tv_consorcio_contratos: {
+        Args: { _ate: string; _de: string }
+        Returns: Json
+      }
+      tv_consorcio_payload: { Args: never; Returns: Json }
       tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_ligacao_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_payload: { Args: never; Returns: Json }
@@ -17036,6 +17050,7 @@ export type Database = {
           r1_realizada: number
         }[]
       }
+      tv_refresh_consorcio_snapshot: { Args: never; Returns: undefined }
       tv_refresh_incorporador_snapshot: { Args: never; Returns: undefined }
       update_overdue_billing_status: { Args: never; Returns: undefined }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
