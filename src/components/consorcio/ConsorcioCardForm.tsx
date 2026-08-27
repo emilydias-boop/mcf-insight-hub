@@ -822,17 +822,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card, duplicateFrom }: C
   // Calculate total value of installments paid by the company
   const valorTotalParcelasEmpresa = useMemo(() => {
     if (empresaPagaParcelas !== 'sim' || prazoMeses <= 0) return 0;
-    
-    // Use calculated installment value if available
     const valorParcela = calculoParcela?.parcelaDemais || (valorCredito / prazoMeses);
-    
-    if (tipoContrato === 'intercalado') {
-      // Intercalado: empresa paga as parcelas pares (2, 4, 6, ...)
-      return parcelasPagasEmpresa * valorParcela;
-    }
-    // Normal: empresa paga as primeiras N parcelas
-    return parcelasPagasEmpresa * valorParcela;
-  }, [empresaPagaParcelas, valorCredito, prazoMeses, tipoContrato, parcelasPagasEmpresa, calculoParcela]);
+    // Quantidade sai da lista marcada (fonte única); sem lista, cai no valor legado.
+    const qtd = listaMcfSelecionada.length > 0 ? listaMcfSelecionada.length : parcelasPagasEmpresa;
+    return qtd * valorParcela;
+  }, [empresaPagaParcelas, valorCredito, prazoMeses, listaMcfSelecionada, parcelasPagasEmpresa, calculoParcela]);
 
   // === Tab navigation logic ===
   const tabOrder = useMemo(() => {
