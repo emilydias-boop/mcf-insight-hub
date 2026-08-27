@@ -1,62 +1,126 @@
-# Mapa do fluxo "Adicionar Carta" — somente leitura (nada implementado)
+# Mapa: parcela por produto (Select × Parcelinha) no lançamento da venda
 
-Objetivo futuro: impedir que o closer crie lead novo quando já existe lead com R1 de consórcio (casos Rodrigo e Naufel). Este documento é só o mapa; a implementação fica para uma próxima rodada aprovada.
+Somente leitura. Nada foi alterado.
 
-## 1) AddCartaModal.tsx — campos, ordem e o ponto de decisão
+## 1) O editor de cartas — `src/components/consorcio/CartasProposalEditor.tsx`
 
-Arquivo: `src/components/consorcio/AddCartaModal.tsx` (618 linhas).
+Estrutura de cada "Carta N":
 
-Ordem do formulário:
-1. **"1. Lead no CRM (obrigatório)"** (`:397-517`) — bloco de vínculo do lead.
-2. **"2. Dados da venda"** (`:520-572`): cartas via `CartasProposalEditor` (crédito, prazo, produto, parcelas — `:523-529`), origem da venda (`:532-542`), detalhe da origem (`:543-550`), **Closer responsável** (`:551-561`) e **Data de aceite** (`:562-565`), observações (`:568-571`).
-3. **"3. Dados cadastrais do cliente"** (`:574-594`, colapsável): `TipoPessoaSelect` + `DadosClienteFields` — nome, CPF/CNPJ, RG, telefone, e-mail etc. (`DadosClienteBloco.tsx:63-69`). Nome é pré-preenchido pelo lead selecionado (`:181`, `:222`).
+- Filtro do plano (linha de 3 campos), `:326-398`: **Tipo de produto** (`c.tipoProduto`, `:328-341`), **Prazo** e **Condição de pagamento**. Trocar qualquer um só refiltra, nunca reseta valores.
+- Seletor **"Escolher plano da tabela"** `:417-442`, com saída de emergência `__manual__` no topo (`:433`) e rótulo de cada opção em `:437-440`:
+  `{crédito} — 1ª à 12ª {parcela1a12} · demais {parcelaDemais} ({produtoCodigo})`.
+- Trio de valores `:474-513`: **Crédito (R$)** (`c.valorStr`), e os dois campos de parcela:
 
-**Ponto de decisão "usar lead existente vs criar novo"** — é o primeiro bloco do modal:
-- Existe busca de lead, sim: popover "Buscar lead..." (`:404-461`) alimentado pelo hook local `useConsorcioLeadSearch` (`:83-152`).
-- Critérios da busca (`:93-115`): casa em `crm_contacts` por `name ILIKE`, `email ILIKE` e, se houver ≥4 dígitos, `phone ILIKE %digitos%`; depois pega `crm_deals` desses contatos **restritos às origens da BU Consórcio** (`bu_origin_mapping` + EA fixo, `:56-71`, filtro `.in('origin_id', originIds)` em `:112`), não arquivados, 1 deal por contato (`:133-137`).
-- **Não há nenhuma verificação de reunião/R1** — a busca não olha `meeting_slots` nem sela "tem R1 de consórcio". O lead certo do Naufel existia, mas nada na tela avisava que ele tinha R1 com o André.
-- Criação de lead novo acontece por dois caminhos: botão `Criar "<termo>" no CRM` dentro do estado vazio da busca (`:429-441`), ou botão sempre visível "Criar lead novo no CRM" (`:463-466`) que abre campo de nome próprio (`:475-516`). Ambos caem em `criarLeadNovo` (`:240-303`).
+```tsx
+// :492-500
+<Label className="text-xs">Parcela 1ª à 12ª (R$)</Label>
+<CurrencyInput
+  value={c.parcela1a12Str}
+  onChange={masked => patch(c.key, { parcela1a12Str: masked })}
+  disabled={!manual}
+/>
+// :503-510
+<Label className="text-xs">Demais parcelas (R$)</Label>
+<CurrencyInput
+  value={c.parcelaDemaisStr}
+  onChange={masked => patch(c.key, { parcelaDemaisStr: masked })}
+  disabled={!manual}
+/>
+```
 
-## 2) Criação do lead novo — o que nasce (e o que não nasce)
+- Aviso inline `:409-413`: `sem parcela → cadastro incompleto`.
+- Estado por carta é `PropostaCartaDraft` (`src/types/consorcioCartas.ts:44-62`): `tipoProduto`, `prazoMeses`, `condicaoPagamento`, `valorStr`, `parcela1a12Str`, `parcelaDemaisStr`, `parcelasMcf`, `categoria`, `objetivo`. Gravação em `draftsParaInput` (`:112-128`) → `parcela_1a_12a`, `parcela_demais`.
+- `tipoProduto` entra também como **filtro do plano** em `filtrarPlanosCarta` (`src/hooks/useConsorcioPlanosCarta.ts:103-156`) e há pré-seleção de Parcelinha como padrão (`CartasProposalEditor.tsx:136-137`).
 
-`criarLeadNovo` (`AddCartaModal.tsx:240-303`), direto via `supabase.from(...).insert`, sem hook dedicado:
-- `crm_contacts`: insert só com `{ name, clint_id: 'local-...' }` (`:251-255`) — **sem telefone, sem e-mail, sem CPF**.
-- `crm_deals`: insert com `name`, `contact_id`, `origin_id = EA_ORIGIN_ID` (Efeito Alavanca + Clube), `stage_id = EA_ENTRADA_STAGE_ID` ("Parceiros") e `clint_id` sintético (`:260-270`) — **sem `owner_id`**, sem nenhum outro campo.
-- Ou seja: o lead nasce sem dono, sem telefone e sem e-mail **porque o modal não passa** — não é o usuário pulando; o formulário de criação (`:475-516`) só pede o nome. Os dados cadastrais (telefone/e-mail/CPF) são preenchidos depois no bloco 3 e vão para `consorcio_pending_registrations` (`:342-367`), nunca de volta para o contato/deal.
-- Consequência medida nos dois casos: a busca do próprio modal (que depende de contato com telefone/e-mail) nunca reencontraria esses leads órfãos por telefone/e-mail.
+## 2) Valores de `tipo_produto`
 
-## 3) Onde plugar a verificação de reunião de consórcio
+Lista vem da tabela `consorcio_tipo_produto_options` (hook `useConsorcioTipoOptions`), passada como `tipoOptions` pelos modais (`ProposalModal.tsx:56,167`; `AddCartaModal.tsx:257,751`). Linhas atuais:
 
-O sinal decisivo nos dois casos foi **vendedor da cota = closer da reunião**. No modal, o closer é escolhido no bloco 2 (`:551-561`, state `closerId` em `:173`), DEPOIS do bloco do lead. Portanto o gatilho natural é:
+| name | label |
+| --- | --- |
+| `parcelinha` | Parcelinha |
+| `select` | Select |
 
-- **Ponto A (mais fraco):** enriquecer a lista de busca `useConsorcioLeadSearch` (`:83-152`) com selo de R1 — funciona quando o usuário busca, mas não cobre quem clica direto em "Criar lead novo".
-- **Ponto B (recomendado):** em `criarLeadNovo` (`:240-303`), antes do insert — mas nesse ponto só há o nome; o `closerId` já pode estar preenchido se o usuário preencheu o bloco 2 antes (ordem não é travada).
-- **Ponto C (o mais seguro):** no `handleSubmit` (`:306-382`), antes de `enviarProposta` — aqui o modal tem TUDO (ver item 5): `lead.deal_id`, `closerId`/`closerNome` (`:187-190`), `aceiteDate`, e os dados cadastrais. Se o lead selecionado foi criado pelo próprio modal (flag a ser criada, ex.: `lead.origin_id === EA_ORIGIN_ID && lead.stage_name === 'Parceiros'` recém-criado) e existir outro deal com R1 de consórcio do mesmo closer na janela, bloquear/avisar.
+Gravado em `consorcio_proposal_cartas`:
 
-## 4) Reaproveitamento dos hooks existentes (`useCorrigirVinculoCota.ts`)
+| tipo_produto | cartas | com `parcela_1a_12a` | com `parcela_demais` |
+| --- | --- | --- | --- |
+| `parcelinha` | 197 | 33 | 33 |
+| `select` | 2 | 0 | 0 |
 
-- **`useR1ConsorcioPorDeal(dealIds, enabled)`** (`:68-129`): recebe array de `deal_id` e devolve `Map<dealId, {dia, closerName, temAgendador}>`, filtrando closers da BU Consórcio e attendees não cancelados/invited. **Serve direto** para selar os resultados da busca do AddCartaModal (basta passar os `deal_id` dos matches). Não filtra por janela de datas nem por closer específico — para o sinal "mesmo closer na janela" precisaria de `closer_id` e `scheduled_at` no retorno (hoje `closerName` e `dia` já saem; dá para comparar nome e data no cliente sem alterar o hook).
-- **`useLeadsParaVinculo(titular, termo, buscaAmpla, enabled)`** (`:161-281`): exige `titular` (vem de `useCotaTitular`, que lê `consortium_cards` — `:17-44`). **Não serve direto**: no AddCartaModal ainda não existe `consortium_cards`. Mas o corpo da query é reutilizável: casa por e-mail exato, telefone (9 dígitos finais), nome com/sem acento, e reforço por CPF/CNPJ via `consorcio_pending_registrations` (`:252-276`). O que precisaria mudar: aceitar um "titular sintético" (objeto com nome/cpf/telefone/email vindos do formulário `useDadosCliente`) em vez de depender de `cardId`. O filtro de origem também difere: `useLeadsParaVinculo` não restringe por BU; o modal atual restringe.
-- Conclusão: `useR1ConsorcioPorDeal` pluga sem mudança; `useLeadsParaVinculo` pede uma variante que receba os dados do titular por parâmetro.
+A tradução produto → estrutura de taxa é única e já existe: `src/lib/consorcioParcelaOficial.ts:44-48` — `'select' → 'primeira_parcela'`, qualquer outro → `'dividida_12'`.
 
-## 5) Dados disponíveis em cada instante
+## 3) Onde a parcela mora no banco
 
-| Dado | Na busca de lead (bloco 1) | No "criar lead novo" | No submit |
-|---|---|---|---|
-| Nome do titular | só o termo digitado | sim (campo nome) | sim (form cadastral) |
-| CPF/CNPJ | não | não | sim (bloco 3, opcional) |
-| Telefone / e-mail | não | não | sim (bloco 3, opcional) |
-| Vendedor (closer) selecionado | não (bloco 2 vem depois) | possível, se usuário preencheu antes | **sim, obrigatório** (`:201`) |
-| Data de aceite | não | possível | sim (default hoje, `:174`) |
+Mesmo par de colunas em três tabelas (nomes reais):
 
-Decisivo: o sinal forte (vendedor = closer da R1 + janela de dias) **só é garantido no submit** (Ponto C). Um aviso mais cedo (Ponto A, selo "tem R1 de consórcio" nos resultados da busca) funciona com os dados do bloco 1 e é barato — recomendação: combinar A (orienta a escolha) + C (bloqueia a duplicação).
+- `consorcio_proposal_cartas.parcela_1a_12a`, `.parcela_demais` (+ `parcelas_mcf`)
+- `consorcio_pending_registrations.parcela_1a_12a`, `.parcela_demais` (+ `parcelas_pagas_empresa`, `empresa_paga_parcelas`, `inicio_segunda_parcela`, `parcela_inicial_paga_em/por`)
+- `consortium_cards.parcela_1a_12a`, `.parcela_demais` (+ `parcelas_pagas_empresa`)
+- `consortium_installments.numero_parcela`, `.valor_parcela` (cronograma, valor por parcela)
+- Tabela oficial `consorcio_creditos`: 18 colunas `parcela_1a_12a_{conv|50|25}_{200|220|240}` e `parcela_demais_{...}`
 
-## 6) Permissão e uso — quem abre o modal
+Ou seja: o nome "1a_12a" está cravado em 3 tabelas de operação + 18 colunas da tabela oficial.
 
-- O modal só é renderizado em `src/pages/crm/PosReuniao.tsx` (`:16`, `:235`, botão "Adicionar Carta" em `:736-739`, render em `:769`).
-- A tela fica em `/consorcio/crm/venda-consorcio` (e legado `/pos-reuniao`), dentro do layout `consorcio/crm` com `ResourceGuard resource="crm"` (`App.tsx:250,257-258`). Papéis com recurso `crm`: Admin, Coordenador, Manager e Asst. Adm (BU Consórcio) com acesso total; SDR e Closer com visualização — **não há nenhum gate adicional no botão nem dentro da página** (nenhum uso de papel em `PosReuniao.tsx`). Ou seja: qualquer papel que abre a tela, inclusive closer (André, João Pedro), clica em "Adicionar Carta".
-- Se closers deveriam continuar lançando carta (casos parceiro/indicação legítimos), a correção não pode ser "esconder o botão" — tem que ser a verificação de R1 nos pontos A/C acima.
+## 4) Caminho até o termo — `src/lib/consorcioTermo.ts`
 
-## Próximo passo (quando autorizado)
+- Placeholders declarados `:22-23`: `{ key: 'parcela_1a_12a', label: 'Parcela 1ª à 12ª' }`, `{ key: 'parcela_demais', label: 'Demais parcelas' }`.
+- Montagem dos valores `:197-198`: `parcela_1a_12a: formatCurrency(...)`, `parcela_demais: formatCurrency(...)`.
+- Multi-carta: tabela markdown `:283-288` com cabeçalho `| Carta | Produto | Crédito | Prazo | Parcela 1ª–12ª | Demais |`, e agregado `:359-364`.
+- **Regra de valor por parcela, hardcoded em 12** — `:98-104` (`parcelasMcfComValoresDigitados`): `valor: p.numero <= 12 ? p12 : pDemais`. Mesma regra em `src/lib/consorcioParcelasEmpresa.ts:24-39`.
+- Bloqueio de emissão `:166-167` e `:247-248`: exige `parcela_1a_12a` e `parcela_demais` preenchidos.
 
-Implementar em rodada separada: (a) selo de R1 de consórcio nos resultados da busca reutilizando `useR1ConsorcioPorDeal`; (b) verificação no `handleSubmit`/`criarLeadNovo` — se houver outro deal com R1 de consórcio cujo closer bate com o vendedor selecionado dentro de uma janela de dias, exigir confirmação explícita ou vincular ao lead existente. Escopo exato a definir com o dono antes de escrever código.
+Modelo ativo `tipo='adesao'` (`Termo de Adesão — Consórcio Embracon`, id `f3421c82-…`), linhas com parcela:
+
+```
+**Valor da parcela (1ª à 12ª):** {{parcela_1a_12a}}
+**Valor das demais parcelas:** {{parcela_demais}}
+3. Está ciente de que **as parcelas não cobertas pelo compromisso da MCF Capital são de sua inteira responsabilidade**, ...
+```
+
+O modelo `comprovante_cadastro` ativo (id `7a344df1-…`) não imprime os dois valores; usa `{{cronograma_qtd}}`, `{{parcelas_mcf_qtd}}`, `{{parcelas_mcf_total}}`, `{{parcelas_cliente_qtd}}`.
+
+## 5) O "Plano da carta — Escolher plano da tabela"
+
+Tabela = `consorcio_creditos` (planos por crédito) cruzada com `consorcio_produtos`. Query única em `useConsorcioPlanosTabela`; filtro em memória em `filtrarPlanosCarta` (`useConsorcioPlanosCarta.ts:103-156`).
+
+Colunas de parcela: as 18 acima (`parcela_1a_12a_*` / `parcela_demais_*` por condição e prazo, prazos 200/220/240).
+
+**Ela distingue Select de Parcelinha — mas não pelo nome da coluna.** A distinção está em `consorcio_produtos.taxa_antecipada_tipo`, e o filtro já usa isso (`:123-128`, via `taxaAntecipadaTipoDeProduto`):
+
+| taxa_antecipada_tipo | produtos (codigo) |
+| --- | --- |
+| `primeira_parcela` (Select) | EI1, PSE, SEP, SEP_ALTO |
+| `dividida_12` (Parcelinha) | TEP, TEP_ALTO, TP, TPA |
+
+Ou seja, para o plano escolhido na tabela **o sistema já sabe a estrutura** e não precisa perguntar: `valorParcelaOficial` (`consorcioParcelaOficial.ts:228-233`) já lê `primeira_parcela` como "1ª diferente, resto igual". A coluna `parcela_1a_12a`, para Select, é na prática "parcela 1ª"; `parcela_demais` é "2ª em diante". O que está errado é só o **rótulo** (e os pontos que hardcodam `<= 12`).
+
+## 6) Aviso "sem parcela → cadastro incompleto"
+
+Dois cálculos, mesma regra:
+
+- Tela: `cartaSemParcela` (`src/types/consorcioCartas.ts:96-98`) — só exige `parcela1a12Str > 0`; renderizado em `CartasProposalEditor.tsx:409`.
+- Cadastro: `camposCadastroFaltantes` (`src/lib/consorcioCadastroIncompleto.ts:38-42`) — exige `parcela_1a_12a`, `categoria`, `origem` (mais os campos de pessoa) e o par completo no termo (`consorcioTermo.ts:166-167,247-248`).
+
+## 7) Raio de impacto — quem lê `parcela_1a_12a` / `parcela_demais`
+
+Escrita/propagação: `useConsorcioPostMeeting.ts` (:557-572, :760-788, :1253-1391 — carta → cadastro → cota, com diff de auditoria), `AcceptProposalModal.tsx` (:31-97,:173), `ProposalModal.tsx:108-109`, `EditProposalModal.tsx:70-71`, `AddCartaModal.tsx`, `useConsorcioPendingRegistrations.ts` (:65-109, :320-321, :425-426, :983-1146 — inclui abertura de cota), `supabase/functions/webhook-consorcio/index.ts:112-113,335-336`.
+
+Leitura/derivação: `consorcioTermo.ts`, `consorcioParcelasEmpresa.ts` (cronograma MCF), `consorcioComprovante.ts`, `consorcioParcelaOficial.ts`, `consorcioCalculos.ts`, `useConsorcio.ts:45`, `useContemplacao.ts:14`, `useLeadReport.ts` (:130-131,:205-206,:260-317,:702-762), `RelatorioLead.tsx:523-524,651-652`, `ConsorcioCardForm.tsx:731-765`, `PlanosTab.tsx` (cadastro da tabela oficial), `DadosPlanoFields.tsx:118-119,432-446`, `useConsorcioPlanosFaltando.ts:113,209`, `ParcelaComposicao.tsx`, `DossieCadastroDialog.tsx`, `GerarComprovanteModal.tsx`, `OpenCotaModal.tsx`, `CotaCadastradaModal.tsx`.
+
+Leitura do mapa: **renomear coluna toca 3 tabelas de operação, 18 colunas da tabela oficial, 1 edge function e ~25 arquivos**. Reinterpretar por produto toca os rótulos de tela e os poucos pontos que hardcodam a faixa de 12 (`consorcioTermo.ts:98-104`, `consorcioParcelasEmpresa.ts:38-39`, `ConsorcioCardForm.tsx:737-742`), reaproveitando `taxaAntecipadaTipoDeProduto` e `valorParcelaOficial`, que já existem.
+
+## 8) Histórico — mudar a interpretação quebra documento emitido?
+
+`consorcio_proposal_cartas`: 2 cartas `select`, **ambas sem parcela gravada** (0 de 2 em cada coluna). Parcelinha: 197 cartas, 33 com parcela.
+
+`consorcio_pending_registrations`: 33 `select` com `parcela_1a_12a` = **0**; 389 `parcelinha` com 45 preenchidas; 41 sem tipo, todas vazias.
+
+`consortium_cards`: 258 `select`, **todas as 258 com os dois valores preenchidos** (carga da base de cotas), e 1 523 de 1 549 `parcelinha`.
+
+Consequência: **nenhuma carta ou cadastro Select tem valor de parcela gravado hoje** — logo nenhum termo de adesão Select foi emitido a partir dessas colunas, e reinterpretar não reescreve documento nenhum. O risco fica em `consortium_cards` Select (258 linhas), lidas por cronograma/comprovante/relatórios: hoje elas são exibidas como "1ª à 12ª", e a reinterpretação mudaria o cronograma derivado dessas cotas (não o dado, apenas a leitura). Termo já emitido segue snapshot e intocado.
+
+## Perguntas abertas para a próxima rodada
+
+1. Nas 258 cotas Select de `consortium_cards`, o valor em `parcela_1a_12a` é o da **1ª parcela** (leitura Select) ou foi carregado como faixa de 12? Isso decide se a reinterpretação é neutra ou precisa de conferência caso a caso.
+2. O rótulo deve mudar por `tipo_produto` escolhido na carta, ou derivar do `taxa_antecipada_tipo` do produto do plano da tabela (mais preciso, mas só existe quando o plano vem da tabela)?
