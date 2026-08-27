@@ -17,6 +17,7 @@ import {
 import { useConsorcioObjetivoOptions } from '@/hooks/useConsorcioObjetivoOptions';
 import { useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
 import { CATEGORIA_OPTIONS } from '@/types/consorcio';
+import { ParcelasMcfPicker } from '@/components/consorcio/ParcelasMcfPicker';
 import {
   estruturaParcela,
   faixaParcelaCurta,
@@ -27,7 +28,6 @@ import {
 
 import {
   MAX_CARTAS_POR_PROPOSTA,
-  PARCELAS_MARCAVEIS,
   PropostaCartaDraft,
   cartaDraftValida,
   cartaSemParcela,
