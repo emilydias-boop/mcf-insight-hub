@@ -68,12 +68,12 @@ export function MainLayout() {
             <>
               <TwilioSoftphone />
               <QuickDialerLauncher />
-              <SonaxWebphoneWidget />
               <AutoDialerDealDrawer />
               <AutoDialerInCallBanner />
               <AutoDialerOutcomeBanner />
             </>
           )}
+          <SonaxWebphoneWidget />
           <OverdueAlertOverlay />
           <CloserPendingDocsAlert />
           <GlobalQualificationModal />
