@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -2153,6 +2153,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      bkp_cota_contratada_backfill: {
+        Row: {
+          deal_id: string
+          feito_em: string | null
+          origem: string | null
+          stage_id_anterior: string | null
+        }
+        Insert: {
+          deal_id: string
+          feito_em?: string | null
+          origem?: string | null
+          stage_id_anterior?: string | null
+        }
+        Update: {
+          deal_id?: string
+          feito_em?: string | null
+          origem?: string | null
+          stage_id_anterior?: string | null
+        }
+        Relationships: []
       }
       bkp_cotas_duplicadas_20260821: {
         Row: {
