@@ -59,6 +59,15 @@ interface Payload {
     mes: { cotas: number; clientes: number; credito: number };
   } | null;
   semanas?: SemanaItem[] | null;
+  semanas_producao?: Array<{
+    indice: number;
+    inicio: string;
+    fim: string;
+    atual: boolean;
+    futura: boolean;
+    credito: number;
+    cotas: number;
+  }> | null;
   error?: string;
 }
 
@@ -173,7 +182,7 @@ function CreditoSemanasCard({
           return (
             <div
               key={s.indice}
-              className={`flex flex-col min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
+              className={`flex flex-col justify-center min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
               style={{
                 opacity: isFutura ? 0.4 : 1,
                 borderColor: isAtual ? "rgba(191,255,0,0.25)" : undefined,
@@ -197,15 +206,16 @@ function CreditoSemanasCard({
                 </span>
               </div>
 
-              {/* 2 — crédito da semana em destaque médio. */}
-              <div className="flex-1 min-h-0 flex items-center mt-1">
+              {/* 2 — crédito da semana em destaque médio (agrupado, sem vazio). */}
+              <div className="mt-1">
                 <span
-                  className="text-base xl:text-2xl font-black leading-none truncate"
+                  className="block text-base xl:text-2xl font-black leading-none truncate"
                   style={{ color: isFutura ? "rgba(255,255,255,0.45)" : corTexto }}
                 >
                   {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
                 </span>
               </div>
+
 
               {/* 3 — barra horizontal. */}
               <div
@@ -256,6 +266,102 @@ function CreditoSemMetaCard({ creditoMes, creditoHoje }: { creditoMes: number; c
   );
 }
 
+const ACCENT_PROD = "#38bdf8";
+
+/**
+ * Produção gerada — mesma estrutura visual do crédito, sem meta.
+ * A barra é proporcional: a semana de maior valor preenche 100%.
+ */
+function ProducaoSemanasCard({
+  creditoMes,
+  cotasMes,
+  clientesMes,
+  semanas,
+}: {
+  creditoMes: number;
+  cotasMes: number;
+  clientesMes: number;
+  semanas: Array<{ indice: number; inicio: string; fim: string; atual: boolean; futura: boolean; credito: number; cotas: number }>;
+}) {
+  const maior = semanas.reduce((max, s) => Math.max(max, Number(s.credito || 0)), 0);
+  return (
+    <div
+      className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0 overflow-hidden"
+      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
+    >
+      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+        Produção gerada
+      </div>
+      <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
+        <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: ACCENT_PROD }}>
+          {abreviarBRL(creditoMes)}
+        </span>
+        <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
+          {num(cotasMes)} cotas · {num(clientesMes)} clientes
+        </span>
+      </div>
+
+      {/* Sem meta — faixa neutra apenas para manter o mesmo ritmo visual do cartão vizinho. */}
+      <div
+        className="w-full rounded-full mt-1 xl:mt-1.5 mb-1 xl:mb-1.5 h-2.5 xl:h-4 overflow-hidden"
+        style={{ backgroundColor: "rgba(56,189,248,0.14)" }}
+      />
+
+      <div className="flex-1 min-h-0 grid grid-cols-4 gap-2 xl:gap-4 mt-1">
+        {semanas.map((s) => {
+          const valor = Number(s.credito || 0);
+          const pct = maior > 0 ? Math.min((valor / maior) * 100, 100) : 0;
+          const isAtual = s.atual === true;
+          const isFutura = s.futura === true;
+          return (
+            <div
+              key={s.indice}
+              className={`flex flex-col justify-center min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
+              style={{
+                opacity: isFutura ? 0.4 : 1,
+                borderColor: isAtual ? "rgba(56,189,248,0.3)" : undefined,
+              }}
+            >
+              <div className="flex items-baseline justify-between gap-1 min-w-0">
+                <span
+                  className="text-[10px] xl:text-xs font-black tracking-widest uppercase truncate"
+                  style={{ color: isAtual ? ACCENT_PROD : "rgba(255,255,255,0.45)" }}
+                >
+                  S{s.indice} · {dd(s.inicio)}–{dd(s.fim)}
+                </span>
+                <span
+                  className="text-[10px] xl:text-xs font-bold shrink-0"
+                  style={{ color: isAtual ? ACCENT_PROD : "rgba(255,255,255,0.45)" }}
+                >
+                  {isFutura ? "—" : `${num(s.cotas)} cotas`}
+                </span>
+              </div>
+              <div className="mt-1">
+                <span
+                  className="block text-base xl:text-2xl font-black leading-none truncate"
+                  style={{ color: isFutura ? "rgba(255,255,255,0.45)" : isAtual ? ACCENT_PROD : "rgba(255,255,255,0.85)" }}
+                >
+                  {isFutura ? "—" : abreviarBRL(valor)}
+                </span>
+              </div>
+              <div
+                className="w-full rounded-full mt-1 h-1.5 xl:h-2.5 overflow-hidden"
+                style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
+              >
+                {!isFutura && pct > 0 ? (
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${pct}%`, backgroundColor: isAtual ? ACCENT_PROD : "rgba(56,189,248,0.55)" }}
+                  />
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 
 /** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
@@ -286,41 +392,30 @@ function DiaMesBlocoCard({
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
             key={label}
-            className={`flex flex-col min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
+            className={`flex flex-col justify-center min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
-            {/* Faixa do rótulo — altura natural, igual nas duas colunas. */}
+            {/* Rótulo, número e legenda agrupados e centrados na coluna. */}
             <div className="text-xs xl:text-sm font-black tracking-widest text-white/40 uppercase">{label}</div>
             {bloco.conteudo ? (
-              /* Caminho alternativo (fração/conteúdo custom): mantém as 3 faixas
-                 para alinhar com a coluna vizinha. */
-              <>
-                <div className="flex-1 min-h-0 flex items-center mt-0.5">{bloco.conteudo}</div>
-                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
-                  {bloco.rodape ?? <>&nbsp;</>}
-                </div>
-              </>
+              <div className="mt-0.5">{bloco.conteudo}</div>
             ) : (
-              <>
-                {/* Faixa do número — flex-1 para centrar no espaço que sobra. */}
-                <div className="flex-1 min-h-0 flex items-center mt-0.5">
-                  <div
-                    className="text-3xl xl:text-6xl font-black leading-none truncate w-full"
-                    style={{ color: cor }}
-                    title={bloco.titleAttr}
-                  >
-                    {bloco.valor}
-                  </div>
-                </div>
-                {/* Faixa do rodapé — sempre renderizada, reserva a mesma altura. */}
-                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
-                  {bloco.rodape ?? <>&nbsp;</>}
-                </div>
-              </>
+              <div
+                className="mt-0.5 text-3xl xl:text-6xl font-black leading-none truncate w-full"
+                style={{ color: cor }}
+                title={bloco.titleAttr}
+              >
+                {bloco.valor}
+              </div>
             )}
+            {/* Legenda — sempre renderizada, reserva a mesma altura nas duas colunas. */}
+            <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
+              {bloco.rodape ?? <>&nbsp;</>}
+            </div>
           </div>
 
         ))}
+
       </div>
     </div>
   );
@@ -353,7 +448,7 @@ function RankingShell({
           <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">{extra}</span>
         ) : null}
       </div>
-      <div className="flex-1 min-h-0 mt-2 flex flex-col gap-2 xl:gap-2.5 overflow-hidden">
+      <div className="flex-1 min-h-0 mt-2 flex flex-col justify-stretch gap-2 xl:gap-2.5 overflow-hidden">
         {vazio ? <div className="text-white/35 font-semibold italic text-sm mt-2">sem dados no mês</div> : children}
       </div>
     </section>
@@ -424,27 +519,38 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,2fr)]"
+      mainRowsClassName="grid-rows-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,2.2fr)]"
     >
-      {/* Linha 1 — crédito efetivado em largura total (barras semanais). */}
-      <div className="min-h-0 flex flex-col">
-        {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
-          <CreditoSemanasCard
-            creditoMes={Number(cMes.credito || 0)}
-            meta={Number(meta)}
-            pct={pctMeta}
-            semanas={data.semanas}
+      {/* Linha 1 — crédito efetivado (com meta) + produção gerada (sem meta). */}
+      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
+        <div className="min-h-0 flex flex-col">
+          {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
+            <CreditoSemanasCard
+              creditoMes={Number(cMes.credito || 0)}
+              meta={Number(meta)}
+              pct={pctMeta}
+              semanas={data.semanas}
+            />
+          ) : (
+            <CreditoSemMetaCard
+              creditoMes={Number(cMes.credito || 0)}
+              creditoHoje={Number(cDia.credito || 0)}
+            />
+          )}
+        </div>
+        <div className="min-h-0 flex flex-col">
+          <ProducaoSemanasCard
+            creditoMes={Number(pMes.credito || 0)}
+            cotasMes={Number(pMes.cotas || 0)}
+            clientesMes={Number(pMes.clientes || 0)}
+            semanas={data.semanas_producao ?? []}
           />
-        ) : (
-          <CreditoSemMetaCard
-            creditoMes={Number(cMes.credito || 0)}
-            creditoHoje={Number(cDia.credito || 0)}
-          />
-        )}
+        </div>
       </div>
 
       {/* Linha 2 */}
-      <div className="grid grid-cols-4 gap-4 xl:gap-8 min-h-0">
+      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
+
         <DiaMesBlocoCard
           titulo="Agendamento"
           accent={ACCENT}
@@ -523,36 +629,16 @@ export default function TVConsorcioEquipe() {
             ),
           }}
         />
-        <DiaMesBlocoCard
-          titulo="Produção gerada"
-          accent={ACCENT}
-          hoje={{
-            valor: abreviarBRL(Number(pDia.credito || 0)),
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {num(pDia.cotas)} cotas
-              </div>
-            ),
-          }}
-          mes={{
-            valor: abreviarBRL(Number(pMes.credito || 0)),
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {num(pMes.cotas)} cotas · {num(pMes.clientes)} clientes
-              </div>
-            ),
-          }}
-        />
       </div>
 
 
       {/* Linha 3 */}
       <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
-        <RankingShell titulo="Closers · crédito no mês" accent={ACCENT} vazio={closers.length === 0}>
+        <RankingShell titulo="Closers · produção no mês" accent={ACCENT} vazio={closers.length === 0}>
           {closers.map((c, idx) => (
             <div
               key={`${c.nome}-${idx}`}
-              className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
+              className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
               style={{
                 backgroundColor: "rgba(255,255,255,0.04)",
                 borderColor: "rgba(255,255,255,0.10)",
@@ -581,7 +667,7 @@ export default function TVConsorcioEquipe() {
             return (
               <div
                 key={`${s.nome}-${idx}`}
-                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
+                className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.04)",
                   borderColor: "rgba(255,255,255,0.10)",
