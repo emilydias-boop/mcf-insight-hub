@@ -203,7 +203,7 @@ function MetaSemanasCard({
               className={`flex flex-col justify-center min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
               style={{
                 opacity: isFutura ? 0.4 : 1,
-                borderColor: isAtual ? "rgba(191,255,0,0.25)" : undefined,
+                borderColor: isAtual ? corTrilhoSemana : undefined,
               }}
             >
               {/* 1 — rótulo à esquerda, percentual à direita. */}
