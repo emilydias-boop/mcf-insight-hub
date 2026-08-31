@@ -207,36 +207,47 @@ Deno.serve(async (req) => {
         idFila = String(filaRow.id_fila)
       }
 
-      // 1) resolver IDs reais das tabulações
+      // 1) tabulações: a própria API informa P/N na 3ª coluna. Parser de pipe
+      // primeiro; fallback para extractTabulacoes se algum dia voltar JSON.
       const listagem = await callSonax('lista_tabulacao', {})
-      const tabs = extractTabulacoes(listagem.data)
-      const padrao = tabs.filter((t) => !t.grupo || norm(t.grupo).includes('padrao'))
-      const posSet = normSet(TAB_POSITIVAS)
-      const negSet = normSet(TAB_NEGATIVAS)
-      const positivas = padrao.filter((t) => posSet.has(norm(t.nome))).map((t) => t.id)
-      const negativas = padrao.filter((t) => negSet.has(norm(t.nome))).map((t) => t.id)
+      const linhasTab = parsePipe(listagem.data)
+      const tabs = linhasTab.length
+        ? linhasTab.map(([id, nome, tipo]) => ({ id, nome, tipo: (tipo ?? '').toUpperCase() }))
+        : extractTabulacoes(listagem.data).map((t) => ({ id: t.id, nome: t.nome, tipo: '' }))
+      const positivas = tabs.filter((t) => t.tipo === 'P').map((t) => t.nome)
+      const negativas = tabs.filter((t) => t.tipo === 'N').map((t) => t.nome)
+
+      // 1.1) pausas: doc pede nomes separados por vírgula, não ids.
+      const listaPausas = await callSonax('lista_pausas', {})
+      const linhasPausas = parsePipe(listaPausas.data)
+      const pausasNomes = linhasPausas
+        .filter(([id]) => PAUSAS.includes(id))
+        .map(([, nome]) => nome)
+        .filter(Boolean)
 
       // 2) criar campanha no Sonax
       const r = await callSonax('criar_campanha', {
-        descricao,
+        descricao_campanha: descricao,
         id_fila: idFila,
-        tabulacao_positiva: positivas,
-        tabulacao_negativa: negativas,
-        pausa: PAUSAS,
+        tabulacoes_positivas: positivas.join(','),
+        tabulacoes_negativas: negativas.join(','),
+        pausas: pausasNomes.join(','),
+        ...CAMPANHA_PADRAO,
       })
 
       // 3) extrair id da campanha
       let sonaxCampaignId: string | null = null
       const d = r.data as Record<string, unknown> | string
-      if (d && typeof d === 'object') {
+      if (typeof d === 'string') {
+        const first = parsePipe(d)[0]
+        if (first?.[0]) sonaxCampaignId = first[0]
+      } else if (d && typeof d === 'object') {
         const cand = (d as Record<string, unknown>).id_campanha
           ?? (d as Record<string, unknown>).id
           ?? ((d as Record<string, unknown>).data as Record<string, unknown> | undefined)?.id_campanha
         if (cand != null) sonaxCampaignId = String(cand)
-      } else if (typeof d === 'string') {
-        const m = d.match(/\d+/)
-        if (m) sonaxCampaignId = m[0]
       }
+
 
       // 3.1) validar: id real da Sonax é numérico com 4+ dígitos (ex.: 604803).
       // Sem id válido a campanha não serve para nada — não gravamos nada.
