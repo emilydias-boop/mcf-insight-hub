@@ -428,6 +428,7 @@ export default function TVConsorcioEquipe() {
 
   return (
     <TVShell
+      escalaDivisor={104}
       title="MCF · Painel de Equipe"
       subtitle="Consórcio · Equipe"
       accent={ACCENT}
