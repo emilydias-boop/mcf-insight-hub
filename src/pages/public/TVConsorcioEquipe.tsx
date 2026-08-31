@@ -173,7 +173,7 @@ function CreditoSemanasCard({
           return (
             <div
               key={s.indice}
-              className={`flex flex-col min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
+              className={`flex flex-col justify-center min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
               style={{
                 opacity: isFutura ? 0.4 : 1,
                 borderColor: isAtual ? "rgba(191,255,0,0.25)" : undefined,
@@ -197,15 +197,16 @@ function CreditoSemanasCard({
                 </span>
               </div>
 
-              {/* 2 — crédito da semana em destaque médio. */}
-              <div className="flex-1 min-h-0 flex items-center mt-1">
+              {/* 2 — crédito da semana em destaque médio (agrupado, sem vazio). */}
+              <div className="mt-1">
                 <span
-                  className="text-base xl:text-2xl font-black leading-none truncate"
+                  className="block text-base xl:text-2xl font-black leading-none truncate"
                   style={{ color: isFutura ? "rgba(255,255,255,0.45)" : corTexto }}
                 >
                   {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
                 </span>
               </div>
+
 
               {/* 3 — barra horizontal. */}
               <div
