@@ -110,7 +110,7 @@ function Fracao({ numerador, denominador, cor }: { numerador: number; denominado
     <span className="inline-flex items-baseline">
       <span style={{ color: cor }}>{num(numerador)}</span>
       {denominador > 0 ? (
-        <span className="text-white/45 text-base xl:text-2xl">/{num(denominador)}</span>
+        <span className="text-white/45 text-xl xl:text-4xl">/{num(denominador)}</span>
       ) : null}
     </span>
   );
@@ -312,7 +312,7 @@ function DiaMesBlocoCard({
               <div className="mt-0.5">{bloco.conteudo}</div>
             ) : (
               <div
-                className="mt-0.5 text-3xl xl:text-6xl font-black leading-none truncate w-full"
+                className="mt-0.5 text-4xl xl:text-7xl font-black leading-none truncate w-full"
                 style={{ color: cor }}
                 title={bloco.titleAttr}
               >
@@ -320,7 +320,7 @@ function DiaMesBlocoCard({
               </div>
             )}
             {/* Legenda — sempre renderizada, reserva a mesma altura nas duas colunas. */}
-            <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
+            <div className="mt-1 text-[10px] xl:text-base text-white/40 font-bold leading-none min-h-[1em]">
               {bloco.rodape ?? <>&nbsp;</>}
             </div>
           </div>
@@ -497,9 +497,9 @@ export default function TVConsorcioEquipe() {
             ),
             titleAttr: `${num(aMes.agendamentos)} de ${num(data.meta_agendamento?.mes ?? 0)} na meta do mês`,
             rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+              <span className="text-white/45">
                 {pctTexto(Number(aMes.agendamentos || 0), Number(data.meta_agendamento?.mes ?? 0))} da meta
-              </div>
+              </span>
             ),
           }}
         />
@@ -526,9 +526,9 @@ export default function TVConsorcioEquipe() {
             ),
             titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
             rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+              <span className="text-white/45">
                 {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
-              </div>
+              </span>
             ),
           }}
         />
@@ -538,17 +538,17 @@ export default function TVConsorcioEquipe() {
           hoje={{
             valor: num(cDia.clientes),
             rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+              <span className="text-white/45">
                 {num(cDia.cotas)} cotas
-              </div>
+              </span>
             ),
           }}
           mes={{
             valor: num(cMes.clientes),
             rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+              <span className="text-white/45">
                 {num(cMes.cotas)} cotas · ticket {abreviarBRL(cMes.ticket)}
-              </div>
+              </span>
             ),
           }}
         />
