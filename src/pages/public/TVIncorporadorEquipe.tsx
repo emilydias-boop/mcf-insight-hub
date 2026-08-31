@@ -22,6 +22,10 @@ interface Payload {
   updated_at: string;
   dia: Block;
   mes: Block;
+  leads_novos?: {
+    dia: Metric;
+    mes: Metric;
+  } | null;
   sdr_ranking?: TVSdrRankingRow[];
   closer_ranking?: TVCloserRankingRow[];
   ligacao_ranking?: TVLigacaoRankingRow[];
