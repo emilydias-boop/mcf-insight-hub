@@ -29,7 +29,8 @@ type Action =
   | 'stop_campanha'
   | 'status_chamadas_na_fila'
   | 'status_chamadas_andamento'
-  | 'lista_tabulacao';
+  | 'lista_tabulacao'
+  | 'diagnostico';
 
 export async function callSonaxProxy<T = any>(action: Action, payload: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke('sonax-campaign-proxy', {
