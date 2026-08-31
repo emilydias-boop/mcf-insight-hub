@@ -451,34 +451,43 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,2.2fr)]"
+      mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,2fr)]"
     >
-      {/* Linha 1 — crédito efetivado (com meta) + produção gerada (sem meta). */}
-      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
-        <div className="min-h-0 flex flex-col">
-          {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
-            <CreditoSemanasCard
-              creditoMes={Number(cMes.credito || 0)}
-              meta={Number(meta)}
-              pct={pctMeta}
-              semanas={data.semanas}
-            />
-          ) : (
-            <CreditoSemMetaCard
-              creditoMes={Number(cMes.credito || 0)}
-              creditoHoje={Number(cDia.credito || 0)}
-            />
-          )}
-        </div>
-        <div className="min-h-0 flex flex-col">
-          <ProducaoSemanasCard
-            creditoMes={Number(pMes.credito || 0)}
-            cotasMes={Number(pMes.cotas || 0)}
-            clientesMes={Number(pMes.clientes || 0)}
-            semanas={data.semanas_producao ?? []}
-          />
-        </div>
+      {/* Linha 1 — produção gerada, largura total (mesma meta do crédito). */}
+      <div className="min-h-0 flex flex-col">
+        <MetaSemanasCard
+          titulo="Produção gerada"
+          accent={ACCENT_PROD}
+          corTrilhoSemana="rgba(56,189,248,0.55)"
+          creditoMes={Number(pMes.credito || 0)}
+          meta={meta && meta > 0 ? Number(meta) : 0}
+          pct={pctProducao}
+          semanas={semanasProducao}
+          rodapeValor={`· ${num(Number(pMes.cotas || 0))} cotas · ${num(Number(pMes.clientes || 0))} clientes`}
+          legendaSemana={(s) => `${num(s.cotas)} cotas`}
+        />
       </div>
+
+      {/* Linha 2 — crédito efetivado, largura total. */}
+      <div className="min-h-0 flex flex-col">
+        {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
+          <MetaSemanasCard
+            titulo="Crédito efetivado"
+            accent={ACCENT}
+            corTrilhoSemana="rgba(191,255,0,0.55)"
+            creditoMes={Number(cMes.credito || 0)}
+            meta={Number(meta)}
+            pct={pctMeta}
+            semanas={data.semanas}
+          />
+        ) : (
+          <CreditoSemMetaCard
+            creditoMes={Number(cMes.credito || 0)}
+            creditoHoje={Number(cDia.credito || 0)}
+          />
+        )}
+      </div>
+
 
       {/* Linha 2 */}
       <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
