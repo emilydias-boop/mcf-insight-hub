@@ -35,7 +35,9 @@ const ALLOWED_ACTIONS = new Set([
   'status_chamadas_na_fila',
   'status_chamadas_andamento',
   'lista_tabulacao',
+  'lista_campanha',
   'diagnostico',
+
 ])
 
 const json = (body: unknown, status = 200) =>
