@@ -111,6 +111,15 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }
   }, [mode, pipelineId, restrictToSdrOrigins, sdrPipelineOptions]);
 
+  // Cobrança: pipeline travado no funil de Cobrança Consorcio
+  useEffect(() => {
+    if (!isCobrancaConsorcio) return;
+    if (!cobrancaOrigin?.id) return;
+    if (pipelineId === cobrancaOrigin.id) return;
+    setPipelineId(cobrancaOrigin.id);
+    setStageId(null);
+  }, [isCobrancaConsorcio, cobrancaOrigin?.id, pipelineId]);
+
   // Mantemos useCRMDeals só para mostrar a CONTAGEM aproximada no botão
   // (limite do hook = 1000). O carregamento real da fila é paginado abaixo
   // e respeita o filtro "discado hoje".
@@ -118,7 +127,9 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     stageId
       ? (restrictToSdrOrigins && pipelineId
           ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 1000 }
-          : { stageId, limit: 1000 })
+          : isCobrancaConsorcio && cobrancaOrigin?.id
+            ? { stageId, originId: cobrancaOrigin.id, limit: 1000 }
+            : { stageId, limit: 1000 })
       : {}
   );
 
