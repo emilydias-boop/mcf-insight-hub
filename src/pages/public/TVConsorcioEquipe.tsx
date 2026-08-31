@@ -135,7 +135,6 @@ function MetaSemanasCard({
   pct,
   semanas,
   rodapeValor,
-  legendaSemana,
 }: {
   titulo: string;
   accent: string;
@@ -146,7 +145,6 @@ function MetaSemanasCard({
   semanas: Array<{ indice: number; inicio: string; fim: string; atual: boolean; futura: boolean; credito: number; cotas: number; meta?: number | null }>;
   /** Texto discreto extra ao lado do percentual (ex.: "135 cotas · 48 clientes"). */
   rodapeValor?: ReactNode;
-  legendaSemana?: (s: { cotas: number }) => ReactNode;
 }) {
   const ACCENT = accent;
   return (
@@ -206,44 +204,25 @@ function MetaSemanasCard({
                 borderColor: isAtual ? corTrilhoSemana : undefined,
               }}
             >
-              {/* 1 — rótulo à esquerda, percentual à direita. */}
-              <div className="flex items-baseline justify-between gap-1 min-w-0">
-                <span
-                  className="text-[10px] xl:text-xs font-black tracking-widest uppercase truncate"
-                  style={{ color: isAtual ? ACCENT : "rgba(255,255,255,0.45)" }}
-                >
-                  S{s.indice} · {dd(s.inicio)}–{dd(s.fim)}
-                </span>
-                <span
-                  className="text-[10px] xl:text-xs font-bold shrink-0"
-                  style={{ color: isAtual ? ACCENT : "rgba(255,255,255,0.45)" }}
-                >
-                  {semanaMeta > 0
-                    ? Math.round((Number(s.credito || 0) / semanaMeta) * 100) + "%"
-                    : "—"}
-                </span>
-              </div>
+              {/* 1 — rótulo da semana (discreto). */}
+              <span
+                className="text-[10px] xl:text-xs font-black tracking-widest uppercase truncate"
+                style={{ color: isAtual ? ACCENT : "rgba(255,255,255,0.45)" }}
+              >
+                S{s.indice} · {dd(s.inicio)}–{dd(s.fim)}
+              </span>
 
-              {/* 2 — crédito da semana em destaque médio (agrupado, sem vazio). */}
-              <div className="mt-1">
-                <span
-                  className="block text-base xl:text-2xl font-black leading-none truncate"
-                  style={{ color: isFutura ? "rgba(255,255,255,0.45)" : corTexto }}
-                >
-                  {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
-                </span>
-                {legendaSemana && !isFutura ? (
-                  <span className="block mt-0.5 text-[10px] xl:text-xs font-bold text-white/40 leading-none truncate">
-                    {legendaSemana({ cotas: Number(s.cotas || 0) })}
-                  </span>
-                ) : null}
-              </div>
-
-
+              {/* 2 — valor em reais, grande e em destaque (número principal do bloco). */}
+              <span
+                className="block mt-1 text-2xl xl:text-4xl font-black leading-none truncate"
+                style={{ color: isFutura ? "rgba(255,255,255,0.45)" : corTexto }}
+              >
+                {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
+              </span>
 
               {/* 3 — barra horizontal. */}
               <div
-                className="w-full rounded-full mt-1 h-1.5 xl:h-2.5 overflow-hidden"
+                className="w-full rounded-full mt-1.5 h-1.5 xl:h-2.5 overflow-hidden"
                 style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
               >
                 {!isFutura && semanaPct > 0 ? (
@@ -468,7 +447,6 @@ export default function TVConsorcioEquipe() {
           pct={pctProducao}
           semanas={semanasProducao}
           rodapeValor={`· ${num(Number(pMes.cotas || 0))} cotas · ${num(Number(pMes.clientes || 0))} clientes`}
-          legendaSemana={(s) => `${num(s.cotas)} cotas`}
         />
       </div>
 
