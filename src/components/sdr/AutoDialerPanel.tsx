@@ -73,6 +73,26 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   // Para SDR: usa origens permitidas (a "pipeline" é a origem aqui)
   const restrictToSdrOrigins = isSdr;
 
+  // Cobrança do consórcio: escopo próprio. Quem acumula SDR + cobrança
+  // permanece no fluxo de SDR (mais restritivo, filtra por dono).
+  const isCobrancaConsorcio = !isSdr && ((allRoles as string[] | undefined) ?? []).includes('cobranca_consorcio');
+
+  // Pipeline fixo da cobrança, resolvido pelo NOME da origem (sem hardcode de UUID).
+  const { data: cobrancaOrigin } = useQuery({
+    queryKey: ['autodialer-cobranca-origin'],
+    queryFn: async (): Promise<{ id: string; name: string } | null> => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name')
+        .eq('name', 'Cobrança Consorcio')
+        .maybeSingle();
+      if (error || !data) return null;
+      return { id: data.id as string, name: data.name as string };
+    },
+    enabled: isCobrancaConsorcio,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const [pasted, setPasted] = useState('');
   const [mode, setMode] = useState<'pipeline' | 'paste'>('pipeline');
   const [pipelineId, setPipelineId] = useState<string | null>(null);
@@ -91,6 +111,15 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     }
   }, [mode, pipelineId, restrictToSdrOrigins, sdrPipelineOptions]);
 
+  // Cobrança: pipeline travado no funil de Cobrança Consorcio
+  useEffect(() => {
+    if (!isCobrancaConsorcio) return;
+    if (!cobrancaOrigin?.id) return;
+    if (pipelineId === cobrancaOrigin.id) return;
+    setPipelineId(cobrancaOrigin.id);
+    setStageId(null);
+  }, [isCobrancaConsorcio, cobrancaOrigin?.id, pipelineId]);
+
   // Mantemos useCRMDeals só para mostrar a CONTAGEM aproximada no botão
   // (limite do hook = 1000). O carregamento real da fila é paginado abaixo
   // e respeita o filtro "discado hoje".
@@ -98,7 +127,9 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
     stageId
       ? (restrictToSdrOrigins && pipelineId
           ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 1000 }
-          : { stageId, limit: 1000 })
+          : isCobrancaConsorcio && cobrancaOrigin?.id
+            ? { stageId, originId: cobrancaOrigin.id, limit: 1000 }
+            : { stageId, limit: 1000 })
       : {}
   );
 
@@ -121,6 +152,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   // já filtrando server-side os que foram discados hoje.
   const fetchEligibleStageDeals = async (): Promise<any[]> => {
     if (!stageId) return [];
+    // Cobrança sem o pipeline resolvido: não carregar nada (evita fila global).
+    if (isCobrancaConsorcio && !cobrancaOrigin?.id) return [];
     const cutoff = startOfTodaySaoPauloIso();
     const all: any[] = [];
     const pageSize = 1000;
@@ -137,6 +170,9 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         .range(from, from + pageSize - 1);
       if (restrictToSdrOrigins && pipelineId) q = q.eq('origin_id', pipelineId);
       if (restrictToSdrOrigins && user?.id) q = q.eq('owner_profile_id', user.id);
+      // Cobrança: escopo é o pipeline de Cobrança Consorcio, sem filtro por
+      // dono — a carteira é trabalhada em conjunto pelo time.
+      if (isCobrancaConsorcio && cobrancaOrigin?.id) q = q.eq('origin_id', cobrancaOrigin.id);
       const { data, error } = await q;
       if (error) { console.error('[autodialer] paginated fetch error', error); break; }
       const rows = data || [];
@@ -540,6 +576,19 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                           ))}
                         </SelectContent>
                       </Select>
+                    )}
+                  </div>
+                ) : isCobrancaConsorcio ? (
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
+                    {cobrancaOrigin?.name ? (
+                      <div className="h-8 flex items-center rounded border border-border bg-muted/40 px-2 text-xs">
+                        {cobrancaOrigin.name}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-2 leading-snug">
+                        Pipeline de cobrança não encontrada. Fale com o gestor.
+                      </div>
                     )}
                   </div>
                 ) : (

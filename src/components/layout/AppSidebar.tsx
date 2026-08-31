@@ -393,10 +393,12 @@ export function AppSidebar() {
   const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
 
-  // Dialer (visível APENAS para SDRs — closers e admins não fazem ligação ativa)
+  
+  // Dialer (visível para SDRs e para o time de cobrança do consórcio —
+  // closers e admins não fazem ligação ativa por aqui)
   const dialer = useDialerLauncher();
   const autoDialer = useAutoDialer();
-  const dialerRoles = new Set(['sdr']);
+  const dialerRoles = new Set(['sdr', 'cobranca_consorcio']);
   const showDialerSection = (allRoles as string[]).some(r => dialerRoles.has(r));
 
   // === ITENS DINÂMICOS PARA SDR/CLOSER ===
