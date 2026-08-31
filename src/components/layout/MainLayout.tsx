@@ -43,9 +43,13 @@ function GlobalQualificationModal() {
 export function MainLayout() {
   const { allRoles } = useAuth();
   usePageAccessLog();
-  // Dialer/Twilio para SDRs e Closers — admins, managers e demais não ligam pelo sistema
+  // Quem tem papel operacional de telefone (SDR, closer, closer sombra e cobrança do consórcio) recebe softphone e discador. Admin e manager não ligam pelo sistema.
   const roles = (allRoles as string[] | undefined) ?? [];
-  const isSDR = roles.includes("sdr") || roles.includes("closer") || roles.includes("closer_sombra");
+  const podeDiscar =
+    roles.includes("sdr") ||
+    roles.includes("closer") ||
+    roles.includes("closer_sombra") ||
+    roles.includes("cobranca_consorcio");
   return (
       <SidebarProvider defaultOpen={false}>
         <AutoDialerProvider>
@@ -64,7 +68,7 @@ export function MainLayout() {
               <Outlet />
             </div>
           </SidebarInset>
-          {isSDR && (
+          {podeDiscar && (
             <>
               <TwilioSoftphone />
               <QuickDialerLauncher />
