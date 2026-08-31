@@ -252,6 +252,50 @@ export default function Discador() {
           </CardContent>
         </Card>
       )}
+
+      {podeMontarCampanha && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Stethoscope className="h-4 w-4 text-primary" />
+              Diagnóstico Sonax
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Consulta <code>lista_filas</code>, <code>lista_pausas</code> e <code>lista_tabulacao</code> na API do Sonax
+              e devolve o corpo cru de cada uma. Somente leitura — não cria nem altera nada.
+            </p>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={diagLoading}
+              onClick={rodarDiagnostico}
+            >
+              {diagLoading ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Rodando...</>
+              ) : (
+                <><Stethoscope className="h-4 w-4 mr-2" /> Rodar diagnóstico</>
+              )}
+            </Button>
+
+            {diagError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                <p className="text-xs font-medium text-destructive mb-1">Erro ao rodar diagnóstico</p>
+                <pre className="text-xs text-destructive whitespace-pre-wrap break-all">{diagError}</pre>
+              </div>
+            )}
+
+            {diagResult && (
+              <div className="grid gap-4 md:grid-cols-3">
+                <DiagnosticoBloco titulo="Filas" dados={diagResult.filas} />
+                <DiagnosticoBloco titulo="Pausas" dados={diagResult.pausas} />
+                <DiagnosticoBloco titulo="Tabulações" dados={diagResult.tabulacoes} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
