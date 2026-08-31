@@ -5,16 +5,43 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Play, Square, PhoneCall, RefreshCw, Loader2 } from 'lucide-react';
+import { Play, Square, PhoneCall, RefreshCw, Loader2, Stethoscope } from 'lucide-react';
 import {
   useSonaxCampaignsToday,
   useSonaxCampaignContacts,
   useSonaxCampaignControl,
   useSonaxCallStatus,
   useSonaxTabulacoes,
+  callSonaxProxy,
 } from '@/hooks/useSonaxDialer';
 import { useAuth } from '@/contexts/AuthContext';
 import DiscadorAudienceBuilder from '@/components/crm/DiscadorAudienceBuilder';
+
+interface DiagnosticoResult {
+  filas: { status: number; raw: unknown };
+  pausas: { status: number; raw: unknown };
+  tabulacoes: { status: number; raw: unknown };
+}
+
+const DiagnosticoBloco = ({ titulo, dados }: { titulo: string; dados: { status: number; raw: unknown } }) => (
+  <div>
+    <div className="flex items-center gap-2 mb-1">
+      <p className="text-xs font-medium text-muted-foreground">{titulo}</p>
+      <Badge variant={dados.status >= 200 && dados.status < 300 ? 'default' : 'destructive'}>
+        {dados.status}
+      </Badge>
+    </div>
+    <pre className="text-xs bg-muted rounded p-3 overflow-auto max-h-48">
+{(() => {
+  try {
+    return JSON.stringify(dados.raw, null, 2);
+  } catch {
+    return String(dados.raw);
+  }
+})()}
+    </pre>
+  </div>
+);
 
 
 const statusVariant = (status: string) => {
