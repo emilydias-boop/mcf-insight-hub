@@ -523,6 +523,26 @@ export default function TVConsorcioEquipe() {
             ),
           }}
         />
+        <DiaMesBlocoCard
+          titulo="Produção gerada"
+          accent={ACCENT}
+          hoje={{
+            valor: abreviarBRL(Number(pDia.credito || 0)),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {num(pDia.cotas)} cotas
+              </div>
+            ),
+          }}
+          mes={{
+            valor: abreviarBRL(Number(pMes.credito || 0)),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {num(pMes.cotas)} cotas · {num(pMes.clientes)} clientes
+              </div>
+            ),
+          }}
+        />
       </div>
 
 
