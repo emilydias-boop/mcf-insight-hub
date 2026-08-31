@@ -235,12 +235,16 @@ Deno.serve(async (req) => {
         ...CAMPANHA_PADRAO,
       })
 
-      // 3) extrair id da campanha
+      // 3) extrair id da campanha. A API responde o id cru (ex.: 2814002), que
+      // o JSON.parse transforma em number — por isso number é tratado primeiro.
       let sonaxCampaignId: string | null = null
-      const d = r.data as Record<string, unknown> | string
-      if (typeof d === 'string') {
-        const first = parsePipe(d)[0]
-        if (first?.[0]) sonaxCampaignId = first[0]
+      const d = r.data as unknown
+      if (typeof d === 'number' && Number.isFinite(d)) {
+        sonaxCampaignId = String(d)
+      } else if (typeof d === 'string') {
+        // pode vir "2814002" puro ou no formato pipe "id|algo"
+        const bruto = d.trim()
+        sonaxCampaignId = /^\d+$/.test(bruto) ? bruto : (parsePipe(d)[0]?.[0] ?? null)
       } else if (d && typeof d === 'object') {
         const cand = (d as Record<string, unknown>).id_campanha
           ?? (d as Record<string, unknown>).id
@@ -320,9 +324,16 @@ Deno.serve(async (req) => {
         nome: nome.slice(0, 80),
       })
 
+      // id_contato_campanha pode vir como número cru (ex.: 6011875473),
+      // string pura de dígitos ou no formato pipe "id|algo".
       let idContato: string | null = null
-      const d = r.data as Record<string, unknown> | string
-      if (d && typeof d === 'object') {
+      const d = r.data as unknown
+      if (typeof d === 'number' && Number.isFinite(d)) {
+        idContato = String(d)
+      } else if (typeof d === 'string') {
+        const bruto = d.trim()
+        idContato = /^\d+$/.test(bruto) ? bruto : (parsePipe(d)[0]?.[0] ?? null)
+      } else if (d && typeof d === 'object') {
         const cand = (d as Record<string, unknown>).id_contato_campanha
           ?? (d as Record<string, unknown>).id_contato
           ?? (d as Record<string, unknown>).id
