@@ -286,41 +286,30 @@ function DiaMesBlocoCard({
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
             key={label}
-            className={`flex flex-col min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
+            className={`flex flex-col justify-center min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
-            {/* Faixa do rótulo — altura natural, igual nas duas colunas. */}
+            {/* Rótulo, número e legenda agrupados e centrados na coluna. */}
             <div className="text-xs xl:text-sm font-black tracking-widest text-white/40 uppercase">{label}</div>
             {bloco.conteudo ? (
-              /* Caminho alternativo (fração/conteúdo custom): mantém as 3 faixas
-                 para alinhar com a coluna vizinha. */
-              <>
-                <div className="flex-1 min-h-0 flex items-center mt-0.5">{bloco.conteudo}</div>
-                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
-                  {bloco.rodape ?? <>&nbsp;</>}
-                </div>
-              </>
+              <div className="mt-0.5">{bloco.conteudo}</div>
             ) : (
-              <>
-                {/* Faixa do número — flex-1 para centrar no espaço que sobra. */}
-                <div className="flex-1 min-h-0 flex items-center mt-0.5">
-                  <div
-                    className="text-3xl xl:text-6xl font-black leading-none truncate w-full"
-                    style={{ color: cor }}
-                    title={bloco.titleAttr}
-                  >
-                    {bloco.valor}
-                  </div>
-                </div>
-                {/* Faixa do rodapé — sempre renderizada, reserva a mesma altura. */}
-                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
-                  {bloco.rodape ?? <>&nbsp;</>}
-                </div>
-              </>
+              <div
+                className="mt-0.5 text-3xl xl:text-6xl font-black leading-none truncate w-full"
+                style={{ color: cor }}
+                title={bloco.titleAttr}
+              >
+                {bloco.valor}
+              </div>
             )}
+            {/* Legenda — sempre renderizada, reserva a mesma altura nas duas colunas. */}
+            <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
+              {bloco.rodape ?? <>&nbsp;</>}
+            </div>
           </div>
 
         ))}
+
       </div>
     </div>
   );
@@ -353,7 +342,7 @@ function RankingShell({
           <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">{extra}</span>
         ) : null}
       </div>
-      <div className="flex-1 min-h-0 mt-2 flex flex-col gap-2 xl:gap-2.5 overflow-hidden">
+      <div className="flex-1 min-h-0 mt-2 flex flex-col justify-stretch gap-2 xl:gap-2.5 overflow-hidden">
         {vazio ? <div className="text-white/35 font-semibold italic text-sm mt-2">sem dados no mês</div> : children}
       </div>
     </section>
