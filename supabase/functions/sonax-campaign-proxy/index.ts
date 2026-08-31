@@ -336,15 +336,20 @@ Deno.serve(async (req) => {
 
     // status_chamadas_na_fila | status_chamadas_andamento
     const params: Record<string, string> = {}
-    if (payload.campaign_id) {
-      const { data: campanha } = await admin
-        .from('sonax_campaigns')
-        .select('sonax_campaign_id')
-        .eq('id', String(payload.campaign_id))
-        .maybeSingle()
-      if (campanha?.sonax_campaign_id) params.id_campanha = String(campanha.sonax_campaign_id)
+    if (action === 'status_chamadas_na_fila') {
+      // Doc oficial: esta ação recebe id_fila, não id_campanha.
+      params.id_fila = payload.id_fila ? String(payload.id_fila) : ID_FILA_FALLBACK
+    } else {
+      if (payload.campaign_id) {
+        const { data: campanha } = await admin
+          .from('sonax_campaigns')
+          .select('sonax_campaign_id')
+          .eq('id', String(payload.campaign_id))
+          .maybeSingle()
+        if (campanha?.sonax_campaign_id) params.id_campanha = String(campanha.sonax_campaign_id)
+      }
+      if (payload.sonax_campaign_id) params.id_campanha = String(payload.sonax_campaign_id)
     }
-    if (payload.sonax_campaign_id) params.id_campanha = String(payload.sonax_campaign_id)
     const r = await callSonax(action, params)
     if (!r.ok) return json({ error: 'sonax_erro', status: r.status, detail: r.data }, 502)
     return json({ success: true, raw: r.data, requested_by: email })
