@@ -517,11 +517,6 @@ export default function TVConsorcioEquipe() {
               />
             ),
             titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
-            rodape: (
-              <span className="text-white/45">
-                {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
-              </span>
-            ),
           }}
         />
         <DiaMesBlocoCard
