@@ -5,16 +5,43 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Play, Square, PhoneCall, RefreshCw, Loader2 } from 'lucide-react';
+import { Play, Square, PhoneCall, RefreshCw, Loader2, Stethoscope } from 'lucide-react';
 import {
   useSonaxCampaignsToday,
   useSonaxCampaignContacts,
   useSonaxCampaignControl,
   useSonaxCallStatus,
   useSonaxTabulacoes,
+  callSonaxProxy,
 } from '@/hooks/useSonaxDialer';
 import { useAuth } from '@/contexts/AuthContext';
 import DiscadorAudienceBuilder from '@/components/crm/DiscadorAudienceBuilder';
+
+interface DiagnosticoResult {
+  filas: { status: number; raw: unknown };
+  pausas: { status: number; raw: unknown };
+  tabulacoes: { status: number; raw: unknown };
+}
+
+const DiagnosticoBloco = ({ titulo, dados }: { titulo: string; dados: { status: number; raw: unknown } }) => (
+  <div>
+    <div className="flex items-center gap-2 mb-1">
+      <p className="text-xs font-medium text-muted-foreground">{titulo}</p>
+      <Badge variant={dados.status >= 200 && dados.status < 300 ? 'default' : 'destructive'}>
+        {dados.status}
+      </Badge>
+    </div>
+    <pre className="text-xs bg-muted rounded p-3 overflow-auto max-h-48">
+{(() => {
+  try {
+    return JSON.stringify(dados.raw, null, 2);
+  } catch {
+    return String(dados.raw);
+  }
+})()}
+    </pre>
+  </div>
+);
 
 
 const statusVariant = (status: string) => {
@@ -46,6 +73,23 @@ export default function Discador() {
   const { allRoles = [] } = useAuth();
   const podeMontarCampanha = (allRoles as string[]).some((r) => r === 'admin' || r === 'manager');
 
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<DiagnosticoResult | null>(null);
+  const [diagError, setDiagError] = useState<string | null>(null);
+
+  const rodarDiagnostico = async () => {
+    setDiagLoading(true);
+    setDiagError(null);
+    setDiagResult(null);
+    try {
+      const res = await callSonaxProxy<DiagnosticoResult>('diagnostico');
+      setDiagResult(res);
+    } catch (e) {
+      setDiagError((e as Error).message || 'erro_desconhecido');
+    } finally {
+      setDiagLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -205,6 +249,50 @@ export default function Discador() {
             {tabulacoes.tabulacoes.map((t) => (
               <Badge key={t.id} variant="outline">{t.nome}</Badge>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {podeMontarCampanha && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Stethoscope className="h-4 w-4 text-primary" />
+              Diagnóstico Sonax
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Consulta <code>lista_filas</code>, <code>lista_pausas</code> e <code>lista_tabulacao</code> na API do Sonax
+              e devolve o corpo cru de cada uma. Somente leitura — não cria nem altera nada.
+            </p>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={diagLoading}
+              onClick={rodarDiagnostico}
+            >
+              {diagLoading ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Rodando...</>
+              ) : (
+                <><Stethoscope className="h-4 w-4 mr-2" /> Rodar diagnóstico</>
+              )}
+            </Button>
+
+            {diagError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                <p className="text-xs font-medium text-destructive mb-1">Erro ao rodar diagnóstico</p>
+                <pre className="text-xs text-destructive whitespace-pre-wrap break-all">{diagError}</pre>
+              </div>
+            )}
+
+            {diagResult && (
+              <div className="grid gap-4 md:grid-cols-3">
+                <DiagnosticoBloco titulo="Filas" dados={diagResult.filas} />
+                <DiagnosticoBloco titulo="Pausas" dados={diagResult.pausas} />
+                <DiagnosticoBloco titulo="Tabulações" dados={diagResult.tabulacoes} />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
