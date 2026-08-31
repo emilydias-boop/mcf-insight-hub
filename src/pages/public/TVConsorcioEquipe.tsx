@@ -146,7 +146,6 @@ function MetaSemanasCard({
   semanas: Array<{ indice: number; inicio: string; fim: string; atual: boolean; futura: boolean; credito: number; cotas: number; meta?: number | null }>;
   /** Texto discreto extra ao lado do percentual (ex.: "135 cotas · 48 clientes"). */
   rodapeValor?: ReactNode;
-  legendaSemana?: (s: { cotas: number }) => ReactNode;
 }) {
   const ACCENT = accent;
   return (
