@@ -106,10 +106,35 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
   // SDRs mantêm o fluxo de evidência + IA; closers/liderança marcam direto.
   const requiresEvidence = role === 'sdr';
 
+  /**
+   * Propostas que ainda "ocupam" o deal. Decisão do dono: proposta com
+   * desistência da carta (`carta_excluida`) deixa de ocupar — o lead volta a
+   * Pendentes e pode receber uma nova venda. O rastro antigo continua visível
+   * em "Tratados" (aba de Termos), nada é escondido nem alterado.
+   */
   const dealsWithProposal = useMemo(
-    () => new Set((proposals || []).map((p: any) => p.deal_id).filter(Boolean)),
+    () =>
+      new Set(
+        (proposals || [])
+          .filter((p: any) => p?.carta_excluida !== true)
+          .map((p: any) => p.deal_id)
+          .filter(Boolean),
+      ),
     [proposals],
   );
+
+  /** Deals que já tiveram uma venda lançada e desistiram da carta — só informativo. */
+  const dealsComDesistencia = useMemo(
+    () =>
+      new Set(
+        (proposals || [])
+          .filter((p: any) => p?.carta_excluida === true)
+          .map((p: any) => p.deal_id)
+          .filter(Boolean),
+      ),
+    [proposals],
+  );
+
 
   /** Negócios já marcados como "sem sucesso" — desfecho comercial da etapa 2. */
   const dealsSemSucesso = useMemo(
@@ -245,6 +270,8 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
         {linhas.map(p => {
           const short = r1StatusShortLabel(p.status);
           const jaTemCarta = p.deal_id ? dealsWithProposal.has(p.deal_id) : false;
+          const houveDesistencia =
+            !jaTemCarta && p.deal_id ? dealsComDesistencia.has(p.deal_id) : false;
           const reasonLabel = getReasonLabel(p.outcome_reason);
           return (
             <TableRow
@@ -264,6 +291,11 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
                           : 'Dias desde o horário da reunião sem nenhum desfecho registrado. Âmbar de 2 a 5 dias, vermelho a partir de 6.'
                       }
                     />
+                  )}
+                  {houveDesistencia && (
+                    <span className="text-[10px] text-muted-foreground">
+                      venda anterior com desistência
+                    </span>
                   )}
                 </div>
               </TableCell>
