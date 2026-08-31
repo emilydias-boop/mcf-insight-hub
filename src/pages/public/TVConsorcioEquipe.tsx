@@ -281,7 +281,7 @@ function DiaMesBlocoCard({
         borderColor: alerta ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.10)",
       }}
     >
-      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">{titulo}</div>
+      <div className="text-white/60 uppercase tracking-widest text-xs xl:text-base font-bold">{titulo}</div>
       <div className="flex-1 min-h-0 grid grid-cols-2 gap-2 xl:gap-3 mt-1">
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
@@ -290,13 +290,13 @@ function DiaMesBlocoCard({
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             {/* Faixa do rótulo — altura natural, igual nas duas colunas. */}
-            <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
+            <div className="text-xs xl:text-sm font-black tracking-widest text-white/40 uppercase">{label}</div>
             {bloco.conteudo ? (
               /* Caminho alternativo (fração/conteúdo custom): mantém as 3 faixas
                  para alinhar com a coluna vizinha. */
               <>
                 <div className="flex-1 min-h-0 flex items-center mt-0.5">{bloco.conteudo}</div>
-                <div className="mt-1 text-[9px] xl:text-[11px] text-white/40 font-bold leading-none min-h-[1em]">
+                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
                   {bloco.rodape ?? <>&nbsp;</>}
                 </div>
               </>
@@ -305,7 +305,7 @@ function DiaMesBlocoCard({
                 {/* Faixa do número — flex-1 para centrar no espaço que sobra. */}
                 <div className="flex-1 min-h-0 flex items-center mt-0.5">
                   <div
-                    className="text-2xl xl:text-5xl font-black leading-none truncate w-full"
+                    className="text-3xl xl:text-6xl font-black leading-none truncate w-full"
                     style={{ color: cor }}
                     title={bloco.titleAttr}
                   >
@@ -313,7 +313,7 @@ function DiaMesBlocoCard({
                   </div>
                 </div>
                 {/* Faixa do rodapé — sempre renderizada, reserva a mesma altura. */}
-                <div className="mt-1 text-[9px] xl:text-[11px] text-white/40 font-bold leading-none min-h-[1em]">
+                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
                   {bloco.rodape ?? <>&nbsp;</>}
                 </div>
               </>
