@@ -135,7 +135,6 @@ function MetaSemanasCard({
   pct,
   semanas,
   rodapeValor,
-  legendaSemana,
 }: {
   titulo: string;
   accent: string;
