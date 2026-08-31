@@ -153,20 +153,20 @@ function MetaSemanasCard({
       style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
     >
       {/* Cabeçalho — rótulo acima, valor grande + percentual alinhados pela base. */}
-      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+      <div className="text-white/60 uppercase tracking-widest text-sm xl:text-xl font-bold">
         {titulo}
       </div>
       <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
-        <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: ACCENT }}>
+        <span className="text-5xl xl:text-8xl font-black leading-none" style={{ color: ACCENT }}>
           {abreviarBRL(creditoMes)}
         </span>
         {meta > 0 ? (
-          <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
+          <span className="text-sm xl:text-2xl font-bold text-white/55 leading-none">
             {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
           </span>
         ) : null}
         {rodapeValor ? (
-          <span className="text-[11px] xl:text-base font-semibold text-white/40 leading-none">{rodapeValor}</span>
+          <span className="text-sm xl:text-2xl font-semibold text-white/40 leading-none">{rodapeValor}</span>
         ) : null}
       </div>
 
