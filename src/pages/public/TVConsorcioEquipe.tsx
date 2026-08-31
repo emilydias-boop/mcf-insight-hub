@@ -123,21 +123,32 @@ function dd(iso: string): string {
 }
 
 /**
- * Cartão de largura total do crédito efetivado, com quatro colunas semanais e
- * barras horizontais retas (o arco SVG era achatado por preserveAspectRatio e
- * deixava entalhes e texto desalinhados).
+ * Cartão de largura total com quatro colunas semanais e barras horizontais retas.
+ * Reutilizado por Crédito efetivado e Produção gerada (mesma anatomia).
  */
-function CreditoSemanasCard({
+function MetaSemanasCard({
+  titulo,
+  accent,
+  corTrilhoSemana,
   creditoMes,
   meta,
   pct,
   semanas,
+  rodapeValor,
+  legendaSemana,
 }: {
+  titulo: string;
+  accent: string;
+  corTrilhoSemana: string;
   creditoMes: number;
   meta: number;
   pct: number;
-  semanas: SemanaItem[];
+  semanas: Array<{ indice: number; inicio: string; fim: string; atual: boolean; futura: boolean; credito: number; cotas: number; meta?: number | null }>;
+  /** Texto discreto extra ao lado do percentual (ex.: "135 cotas · 48 clientes"). */
+  rodapeValor?: ReactNode;
+  legendaSemana?: (s: { cotas: number }) => ReactNode;
 }) {
+  const ACCENT = accent;
   return (
     <div
       className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0 overflow-hidden"
@@ -145,16 +156,22 @@ function CreditoSemanasCard({
     >
       {/* Cabeçalho — rótulo acima, valor grande + percentual alinhados pela base. */}
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
-        Crédito efetivado
+        {titulo}
       </div>
       <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
         <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: ACCENT }}>
           {abreviarBRL(creditoMes)}
         </span>
-        <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
-          {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
-        </span>
+        {meta > 0 ? (
+          <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
+            {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
+          </span>
+        ) : null}
+        {rodapeValor ? (
+          <span className="text-[11px] xl:text-base font-semibold text-white/40 leading-none">{rodapeValor}</span>
+        ) : null}
       </div>
+
 
       {/* Barra do mês — largura total, trilho e preenchimento. */}
       <div
@@ -177,7 +194,8 @@ function CreditoSemanasCard({
           const isAtual = s.atual === true;
           const isFutura = s.futura === true;
           const corTexto = isAtual ? ACCENT : "rgba(255,255,255,0.85)";
-          const corFill = isAtual ? ACCENT : "rgba(191,255,0,0.55)";
+          const corFill = isAtual ? ACCENT : corTrilhoSemana;
+
 
           return (
             <div
@@ -185,7 +203,7 @@ function CreditoSemanasCard({
               className={`flex flex-col justify-center min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
               style={{
                 opacity: isFutura ? 0.4 : 1,
-                borderColor: isAtual ? "rgba(191,255,0,0.25)" : undefined,
+                borderColor: isAtual ? corTrilhoSemana : undefined,
               }}
             >
               {/* 1 — rótulo à esquerda, percentual à direita. */}
@@ -214,7 +232,13 @@ function CreditoSemanasCard({
                 >
                   {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
                 </span>
+                {legendaSemana && !isFutura ? (
+                  <span className="block mt-0.5 text-[10px] xl:text-xs font-bold text-white/40 leading-none truncate">
+                    {legendaSemana({ cotas: Number(s.cotas || 0) })}
+                  </span>
+                ) : null}
               </div>
+
 
 
               {/* 3 — barra horizontal. */}
@@ -268,100 +292,8 @@ function CreditoSemMetaCard({ creditoMes, creditoHoje }: { creditoMes: number; c
 
 const ACCENT_PROD = "#38bdf8";
 
-/**
- * Produção gerada — mesma estrutura visual do crédito, sem meta.
- * A barra é proporcional: a semana de maior valor preenche 100%.
- */
-function ProducaoSemanasCard({
-  creditoMes,
-  cotasMes,
-  clientesMes,
-  semanas,
-}: {
-  creditoMes: number;
-  cotasMes: number;
-  clientesMes: number;
-  semanas: Array<{ indice: number; inicio: string; fim: string; atual: boolean; futura: boolean; credito: number; cotas: number }>;
-}) {
-  const maior = semanas.reduce((max, s) => Math.max(max, Number(s.credito || 0)), 0);
-  return (
-    <div
-      className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0 overflow-hidden"
-      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
-    >
-      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
-        Produção gerada
-      </div>
-      <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
-        <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: ACCENT_PROD }}>
-          {abreviarBRL(creditoMes)}
-        </span>
-        <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
-          {num(cotasMes)} cotas · {num(clientesMes)} clientes
-        </span>
-      </div>
 
-      {/* Sem meta — faixa neutra apenas para manter o mesmo ritmo visual do cartão vizinho. */}
-      <div
-        className="w-full rounded-full mt-1 xl:mt-1.5 mb-1 xl:mb-1.5 h-2.5 xl:h-4 overflow-hidden"
-        style={{ backgroundColor: "rgba(56,189,248,0.14)" }}
-      />
 
-      <div className="flex-1 min-h-0 grid grid-cols-4 gap-2 xl:gap-4 mt-1">
-        {semanas.map((s) => {
-          const valor = Number(s.credito || 0);
-          const pct = maior > 0 ? Math.min((valor / maior) * 100, 100) : 0;
-          const isAtual = s.atual === true;
-          const isFutura = s.futura === true;
-          return (
-            <div
-              key={s.indice}
-              className={`flex flex-col justify-center min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
-              style={{
-                opacity: isFutura ? 0.4 : 1,
-                borderColor: isAtual ? "rgba(56,189,248,0.3)" : undefined,
-              }}
-            >
-              <div className="flex items-baseline justify-between gap-1 min-w-0">
-                <span
-                  className="text-[10px] xl:text-xs font-black tracking-widest uppercase truncate"
-                  style={{ color: isAtual ? ACCENT_PROD : "rgba(255,255,255,0.45)" }}
-                >
-                  S{s.indice} · {dd(s.inicio)}–{dd(s.fim)}
-                </span>
-                <span
-                  className="text-[10px] xl:text-xs font-bold shrink-0"
-                  style={{ color: isAtual ? ACCENT_PROD : "rgba(255,255,255,0.45)" }}
-                >
-                  {isFutura ? "—" : `${num(s.cotas)} cotas`}
-                </span>
-              </div>
-              <div className="mt-1">
-                <span
-                  className="block text-base xl:text-2xl font-black leading-none truncate"
-                  style={{ color: isFutura ? "rgba(255,255,255,0.45)" : isAtual ? ACCENT_PROD : "rgba(255,255,255,0.85)" }}
-                >
-                  {isFutura ? "—" : abreviarBRL(valor)}
-                </span>
-              </div>
-              <div
-                className="w-full rounded-full mt-1 h-1.5 xl:h-2.5 overflow-hidden"
-                style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
-              >
-                {!isFutura && pct > 0 ? (
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${pct}%`, backgroundColor: isAtual ? ACCENT_PROD : "rgba(56,189,248,0.55)" }}
-                  />
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 
 /** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
@@ -495,6 +427,10 @@ export default function TVConsorcioEquipe() {
 
   const meta = data.meta_credito_mes ?? null;
   const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
+  const pctProducao = meta && meta > 0 ? Math.min((Number(pMes.credito || 0) / meta) * 100, 100) : 0;
+  const metaSemanaProducao = meta && meta > 0 ? Number(meta) / 4 : null;
+  const semanasProducao = (data.semanas_producao ?? []).map((s) => ({ ...s, meta: metaSemanaProducao }));
+
 
 
 
@@ -519,34 +455,43 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,2.2fr)]"
+      mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,2fr)]"
     >
-      {/* Linha 1 — crédito efetivado (com meta) + produção gerada (sem meta). */}
-      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
-        <div className="min-h-0 flex flex-col">
-          {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
-            <CreditoSemanasCard
-              creditoMes={Number(cMes.credito || 0)}
-              meta={Number(meta)}
-              pct={pctMeta}
-              semanas={data.semanas}
-            />
-          ) : (
-            <CreditoSemMetaCard
-              creditoMes={Number(cMes.credito || 0)}
-              creditoHoje={Number(cDia.credito || 0)}
-            />
-          )}
-        </div>
-        <div className="min-h-0 flex flex-col">
-          <ProducaoSemanasCard
-            creditoMes={Number(pMes.credito || 0)}
-            cotasMes={Number(pMes.cotas || 0)}
-            clientesMes={Number(pMes.clientes || 0)}
-            semanas={data.semanas_producao ?? []}
-          />
-        </div>
+      {/* Linha 1 — produção gerada, largura total (mesma meta do crédito). */}
+      <div className="min-h-0 flex flex-col">
+        <MetaSemanasCard
+          titulo="Produção gerada"
+          accent={ACCENT_PROD}
+          corTrilhoSemana="rgba(56,189,248,0.55)"
+          creditoMes={Number(pMes.credito || 0)}
+          meta={meta && meta > 0 ? Number(meta) : 0}
+          pct={pctProducao}
+          semanas={semanasProducao}
+          rodapeValor={`· ${num(Number(pMes.cotas || 0))} cotas · ${num(Number(pMes.clientes || 0))} clientes`}
+          legendaSemana={(s) => `${num(s.cotas)} cotas`}
+        />
       </div>
+
+      {/* Linha 2 — crédito efetivado, largura total. */}
+      <div className="min-h-0 flex flex-col">
+        {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
+          <MetaSemanasCard
+            titulo="Crédito efetivado"
+            accent={ACCENT}
+            corTrilhoSemana="rgba(191,255,0,0.55)"
+            creditoMes={Number(cMes.credito || 0)}
+            meta={Number(meta)}
+            pct={pctMeta}
+            semanas={data.semanas}
+          />
+        ) : (
+          <CreditoSemMetaCard
+            creditoMes={Number(cMes.credito || 0)}
+            creditoHoje={Number(cDia.credito || 0)}
+          />
+        )}
+      </div>
+
 
       {/* Linha 2 */}
       <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
