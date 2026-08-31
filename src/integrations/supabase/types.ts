@@ -17144,6 +17144,10 @@ export type Database = {
         Args: { _hoje: string; _ini: string; _meta: number }
         Returns: Json
       }
+      tv_consorcio_semanas_producao: {
+        Args: { _hoje: string; _ini: string }
+        Returns: Json
+      }
       tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_ligacao_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_payload: { Args: never; Returns: Json }
