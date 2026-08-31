@@ -87,15 +87,24 @@ export function useSonaxCampaignContacts(campaignId?: string) {
   });
 }
 
-/** Envia leads selecionados para o discador (cria/reaproveita campanha do dia) */
+/** Envia leads selecionados para o discador (cria/reaproveita campanha do dia da BU) */
 export function useSendDealsToDialer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (dealIds: string[]) => {
+    mutationFn: async (
+      args: string[] | { dealIds: string[]; bu?: string; onProgress?: (enviados: number, total: number) => void },
+    ) => {
+      const dealIds = Array.isArray(args) ? args : args.dealIds;
+      const bu = Array.isArray(args) ? undefined : args.bu;
+      const onProgress = Array.isArray(args) ? undefined : args.onProgress;
       if (!dealIds.length) throw new Error('nenhum_lead_selecionado');
 
-      // 1) Reaproveita campanha ativa do dia
+      const descricao = bu
+        ? `Discador ${bu} - ${todayLabel()}`
+        : `Discador SDR - ${todayLabel()}`;
+
+      // 1) Reaproveita campanha ativa do dia — apenas da mesma descrição (mesma BU)
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       const { data: existing } = await supabase
@@ -103,6 +112,7 @@ export function useSendDealsToDialer() {
         .select('*')
         .gte('created_at', start.toISOString())
         .eq('status', 'ativa')
+        .eq('descricao', descricao)
         .not('sonax_campaign_id', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -110,9 +120,7 @@ export function useSendDealsToDialer() {
       let campaign = (existing?.[0] as SonaxCampaign | undefined) ?? undefined;
 
       if (!campaign) {
-        const res = await callSonaxProxy<{ campanha: SonaxCampaign }>('criar_campanha', {
-          descricao: `Discador SDR - ${todayLabel()}`,
-        });
+        const res = await callSonaxProxy<{ campanha: SonaxCampaign }>('criar_campanha', { descricao });
         campaign = res.campanha;
       }
       if (!campaign?.id) throw new Error('falha_ao_criar_campanha');
@@ -127,10 +135,12 @@ export function useSendDealsToDialer() {
         } catch (e) {
           falhas.push((e as Error).message);
         }
+        onProgress?.(enviados + falhas.length, dealIds.length);
       }
 
       return { campaign, enviados, falhas, total: dealIds.length };
     },
+
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['sonax-campaigns-today'] });
       queryClient.invalidateQueries({ queryKey: ['sonax-campaign-contacts'] });

@@ -13,6 +13,9 @@ import {
   useSonaxCallStatus,
   useSonaxTabulacoes,
 } from '@/hooks/useSonaxDialer';
+import { useAuth } from '@/contexts/AuthContext';
+import DiscadorAudienceBuilder from '@/components/crm/DiscadorAudienceBuilder';
+
 
 const statusVariant = (status: string) => {
   switch (status) {
@@ -40,6 +43,9 @@ export default function Discador() {
   const control = useSonaxCampaignControl();
   const { data: liveStatus, isFetching: fetchingStatus } = useSonaxCallStatus(selectedId, 15000);
   const { data: tabulacoes } = useSonaxTabulacoes();
+  const { allRoles = [] } = useAuth();
+  const podeMontarCampanha = (allRoles as string[]).some((r) => r === 'admin' || r === 'manager');
+
 
   return (
     <div className="space-y-6 p-6">
@@ -58,9 +64,11 @@ export default function Discador() {
           Atualizar
         </Button>
       </div>
+      {podeMontarCampanha && <DiscadorAudienceBuilder />}
 
       <Card>
         <CardHeader className="pb-3">
+
           <CardTitle className="text-base">Campanhas de hoje</CardTitle>
         </CardHeader>
         <CardContent>
