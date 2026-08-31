@@ -21,6 +21,10 @@ const TAB_NEGATIVAS = [
   'caixa postal', 'ligação muda', 'não atendeu', 'contato não alcançado',
 ]
 
+// Tradução dos nomes internos para os nomes reais da API Sonax.
+// Mantemos os nomes internos (usados pelo front e pelo ALLOWED_ACTIONS) intactos.
+const ACAO_SONAX: Record<string, string> = { criar_campanha: 'cria_campanha' }
+
 const ALLOWED_ACTIONS = new Set([
   'criar_campanha',
   'chamada',
@@ -29,6 +33,7 @@ const ALLOWED_ACTIONS = new Set([
   'status_chamadas_na_fila',
   'status_chamadas_andamento',
   'lista_tabulacao',
+  'diagnostico',
 ])
 
 const json = (body: unknown, status = 200) =>
