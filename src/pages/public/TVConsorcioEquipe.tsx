@@ -448,7 +448,6 @@ export default function TVConsorcioEquipe() {
           pct={pctProducao}
           semanas={semanasProducao}
           rodapeValor={`· ${num(Number(pMes.cotas || 0))} cotas · ${num(Number(pMes.clientes || 0))} clientes`}
-          legendaSemana={(s) => `${num(s.cotas)} cotas`}
         />
       </div>
 
