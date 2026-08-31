@@ -395,6 +395,8 @@ export default function TVConsorcioEquipe() {
   const cMes = data.contratos?.mes ?? { cotas: 0, clientes: 0, credito: 0, ticket: 0 };
   const aDia = data.agenda?.dia ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
   const aMes = data.agenda?.mes ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
+  const pDia = data.producao?.dia ?? { cotas: 0, clientes: 0, credito: 0 };
+  const pMes = data.producao?.mes ?? { cotas: 0, clientes: 0, credito: 0 };
 
   const meta = data.meta_credito_mes ?? null;
   const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
@@ -442,7 +444,7 @@ export default function TVConsorcioEquipe() {
       </div>
 
       {/* Linha 2 */}
-      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
+      <div className="grid grid-cols-4 gap-4 xl:gap-8 min-h-0">
         <DiaMesBlocoCard
           titulo="Agendamento"
           accent={ACCENT}
