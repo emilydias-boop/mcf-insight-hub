@@ -178,8 +178,13 @@ Deno.serve(async (req) => {
     if (action === 'lista_tabulacao') {
       const r = await callSonax('lista_tabulacao', {})
       if (!r.ok) return json({ error: 'sonax_erro', status: r.status, detail: r.data }, 502)
-      return json({ success: true, raw: r.data, tabulacoes: extractTabulacoes(r.data) })
+      const linhas = parsePipe(r.data)
+      const tabulacoes = linhas.length
+        ? linhas.map(([id, nome, tipo]) => ({ id, nome, grupo: '', tipo: tipo ?? '' }))
+        : extractTabulacoes(r.data)
+      return json({ success: true, raw: r.data, tabulacoes })
     }
+
 
     if (action === 'criar_campanha') {
       const descricao = String(payload.descricao ?? `Discador SDR - ${new Date().toISOString().slice(0, 10)}`)
