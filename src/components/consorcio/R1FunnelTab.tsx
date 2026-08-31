@@ -270,6 +270,8 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
         {linhas.map(p => {
           const short = r1StatusShortLabel(p.status);
           const jaTemCarta = p.deal_id ? dealsWithProposal.has(p.deal_id) : false;
+          const houveDesistencia =
+            !jaTemCarta && p.deal_id ? dealsComDesistencia.has(p.deal_id) : false;
           const reasonLabel = getReasonLabel(p.outcome_reason);
           return (
             <TableRow
