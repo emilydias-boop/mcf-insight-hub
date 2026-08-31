@@ -152,6 +152,8 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   // já filtrando server-side os que foram discados hoje.
   const fetchEligibleStageDeals = async (): Promise<any[]> => {
     if (!stageId) return [];
+    // Cobrança sem o pipeline resolvido: não carregar nada (evita fila global).
+    if (isCobrancaConsorcio && !cobrancaOrigin?.id) return [];
     const cutoff = startOfTodaySaoPauloIso();
     const all: any[] = [];
     const pageSize = 1000;
