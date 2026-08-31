@@ -153,20 +153,20 @@ function MetaSemanasCard({
       style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
     >
       {/* Cabeçalho — rótulo acima, valor grande + percentual alinhados pela base. */}
-      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
+      <div className="text-white/60 uppercase tracking-widest text-sm xl:text-xl font-bold">
         {titulo}
       </div>
       <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
-        <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: ACCENT }}>
+        <span className="text-5xl xl:text-8xl font-black leading-none" style={{ color: ACCENT }}>
           {abreviarBRL(creditoMes)}
         </span>
         {meta > 0 ? (
-          <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
+          <span className="text-sm xl:text-2xl font-bold text-white/55 leading-none">
             {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
           </span>
         ) : null}
         {rodapeValor ? (
-          <span className="text-[11px] xl:text-base font-semibold text-white/40 leading-none">{rodapeValor}</span>
+          <span className="text-sm xl:text-2xl font-semibold text-white/40 leading-none">{rodapeValor}</span>
         ) : null}
       </div>
 
@@ -370,7 +370,7 @@ function Posicao({ idx, accent }: { idx: number; accent: string }) {
   const primeiro = idx === 0;
   return (
     <span
-      className="h-7 w-7 xl:h-9 xl:w-9 shrink-0 rounded-lg flex items-center justify-center text-sm xl:text-base font-black"
+      className="h-9 w-9 xl:h-14 xl:w-14 shrink-0 rounded-lg flex items-center justify-center text-base xl:text-2xl font-black"
       style={
         primeiro
           ? { color: "#050505", backgroundColor: accent }
@@ -570,14 +570,14 @@ export default function TVConsorcioEquipe() {
             >
               <Posicao idx={idx} accent={ACCENT} />
               <div className="min-w-0">
-                <div className="truncate text-lg xl:text-2xl font-bold text-white/90">
+                <div className="truncate text-xl xl:text-3xl font-bold text-white/90">
                   {primeiroEUltimoNome(c.nome)}
                 </div>
-                <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
+                <div className="text-[10px] xl:text-base text-white/40 font-semibold">
                   {num(c.clientes)} clientes · {num(c.cotas)} cotas
                 </div>
               </div>
-              <span className="text-2xl xl:text-4xl font-black leading-none" style={{ color: ACCENT }}>
+              <span className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
                 {abreviarBRL(c.credito)}
               </span>
             </div>
@@ -598,13 +598,13 @@ export default function TVConsorcioEquipe() {
                 }}
               >
                 <Posicao idx={idx} accent={ACCENT_SDR} />
-                <span className="truncate text-lg xl:text-2xl font-bold text-white/90 capitalize">
+                <span className="truncate text-xl xl:text-3xl font-bold text-white/90 capitalize">
                   {primeiroEUltimoNome(s.nome)}
                 </span>
-                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ACCENT_SDR }}>
+                <span className="text-right w-16 xl:w-24 text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT_SDR }}>
                   {num(hoje)}
                 </span>
-                <span className="text-right w-12 xl:w-16 text-2xl xl:text-4xl font-black leading-none text-white/90">
+                <span className="text-right w-20 xl:w-32 text-3xl xl:text-6xl font-black leading-none text-white/90">
                   {num(s.agendamentos)}
                 </span>
               </div>
