@@ -110,7 +110,7 @@ function Fracao({ numerador, denominador, cor }: { numerador: number; denominado
     <span className="inline-flex items-baseline">
       <span style={{ color: cor }}>{num(numerador)}</span>
       {denominador > 0 ? (
-        <span className="text-white/45 text-base xl:text-2xl">/{num(denominador)}</span>
+        <span className="text-white/45 text-xl xl:text-4xl">/{num(denominador)}</span>
       ) : null}
     </span>
   );
