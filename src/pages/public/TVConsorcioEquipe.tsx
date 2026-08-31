@@ -59,6 +59,15 @@ interface Payload {
     mes: { cotas: number; clientes: number; credito: number };
   } | null;
   semanas?: SemanaItem[] | null;
+  semanas_producao?: Array<{
+    indice: number;
+    inicio: string;
+    fim: string;
+    atual: boolean;
+    futura: boolean;
+    credito: number;
+    cotas: number;
+  }> | null;
   error?: string;
 }
 
