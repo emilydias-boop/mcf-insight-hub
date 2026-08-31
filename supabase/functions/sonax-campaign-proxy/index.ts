@@ -63,7 +63,7 @@ async function callSonax(action: string, params: Record<string, string | string[
   if (!idCliente || !token) throw new Error('sonax_credenciais_ausentes')
 
   const url = new URL(SONAX_BASE)
-  url.searchParams.set('action', action)
+  url.searchParams.set('acao', ACAO_SONAX[action] ?? action)
   url.searchParams.set('id_cliente', idCliente)
   url.searchParams.set('token', token)
   for (const [k, v] of Object.entries(params)) {
