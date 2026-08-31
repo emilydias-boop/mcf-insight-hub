@@ -13388,6 +13388,33 @@ export type Database = {
         }
         Relationships: []
       }
+      sonax_bu_filas: {
+        Row: {
+          ativo: boolean
+          bu: string
+          created_at: string
+          descricao: string | null
+          id_fila: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          bu: string
+          created_at?: string
+          descricao?: string | null
+          id_fila: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          bu?: string
+          created_at?: string
+          descricao?: string | null
+          id_fila?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sonax_call_events: {
         Row: {
           aliasramal: string | null
