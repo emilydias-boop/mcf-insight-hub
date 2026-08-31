@@ -427,6 +427,10 @@ export default function TVConsorcioEquipe() {
 
   const meta = data.meta_credito_mes ?? null;
   const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
+  const pctProducao = meta && meta > 0 ? Math.min((Number(pMes.credito || 0) / meta) * 100, 100) : 0;
+  const metaSemanaProducao = meta && meta > 0 ? Number(meta) / 4 : null;
+  const semanasProducao = (data.semanas_producao ?? []).map((s) => ({ ...s, meta: metaSemanaProducao }));
+
 
 
 
