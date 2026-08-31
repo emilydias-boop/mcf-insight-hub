@@ -10,16 +10,18 @@ const ID_FILA_FALLBACK = '992972'
 // Pausas já cadastradas no painel Sonax
 const PAUSAS = ['134769', '134759', '134619']
 
-// Tabulações do "Grupo Padrão" (resolvidas por nome via lista_tabulacao)
-const TAB_POSITIVAS = [
-  'informação geral', 'reclamação', 'contato realizado', 'venda realizada',
-  'reunião agendada', 'atendeu', 'caixa postal', 'número não é do cliente',
-  'ligação muda', 'mensagem de operadora', 'ligação completada normalmente',
-  'contato alcançado',
-]
-const TAB_NEGATIVAS = [
-  'caixa postal', 'ligação muda', 'não atendeu', 'contato não alcançado',
-]
+// Padrão de campanha (doc oficial Sonax). Ajuste aqui, não no meio da função.
+const CAMPANHA_PADRAO: Record<string, string> = {
+  descarte_caixa_postal: 'S',
+  qtd_simultanea: '1',
+  auto_concluir: 'N',
+  dia_semana_ini: '1',
+  dia_semana_fim: '6',
+  hora_ini: '08:00:00',
+  hora_fim: '20:00:00',
+  tentativas: '3',
+}
+
 
 // Tradução dos nomes internos para os nomes reais da API Sonax.
 // Mantemos os nomes internos (usados pelo front e pelo ALLOWED_ACTIONS) intactos.
@@ -33,7 +35,9 @@ const ALLOWED_ACTIONS = new Set([
   'status_chamadas_na_fila',
   'status_chamadas_andamento',
   'lista_tabulacao',
+  'lista_campanha',
   'diagnostico',
+
 ])
 
 const json = (body: unknown, status = 200) =>
@@ -55,7 +59,17 @@ function norm(s: unknown): string {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().trim()
 }
-const normSet = (arr: string[]) => new Set(arr.map(norm))
+
+// A API Sonax responde texto: registros separados por <br> e campos por "|".
+function parsePipe(data: unknown): string[][] {
+  if (typeof data !== 'string') return []
+  return data
+    .split(/<br\s*\/?>/i)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => l.split('|').map((c) => c.trim()))
+}
+
 
 async function callSonax(action: string, params: Record<string, string | string[]>) {
   const idCliente = Deno.env.get('SONAX_ID_CLIENTE')
@@ -150,19 +164,27 @@ Deno.serve(async (req) => {
       const filas = await callSonax('lista_filas', {})
       const pausas = await callSonax('lista_pausas', {})
       const tabulacoes = await callSonax('lista_tabulacao', {})
+      const campanhas = await callSonax('lista_campanha', { id_campanha: 'todas' })
 
       return json({
         filas: { status: filas.status, raw: filas.data },
         pausas: { status: pausas.status, raw: pausas.data },
         tabulacoes: { status: tabulacoes.status, raw: tabulacoes.data },
+        campanhas: { status: campanhas.status, raw: campanhas.data },
       })
+
     }
 
     if (action === 'lista_tabulacao') {
       const r = await callSonax('lista_tabulacao', {})
       if (!r.ok) return json({ error: 'sonax_erro', status: r.status, detail: r.data }, 502)
-      return json({ success: true, raw: r.data, tabulacoes: extractTabulacoes(r.data) })
+      const linhas = parsePipe(r.data)
+      const tabulacoes = linhas.length
+        ? linhas.map(([id, nome, tipo]) => ({ id, nome, grupo: '', tipo: tipo ?? '' }))
+        : extractTabulacoes(r.data)
+      return json({ success: true, raw: r.data, tabulacoes })
     }
+
 
     if (action === 'criar_campanha') {
       const descricao = String(payload.descricao ?? `Discador SDR - ${new Date().toISOString().slice(0, 10)}`)
@@ -185,36 +207,47 @@ Deno.serve(async (req) => {
         idFila = String(filaRow.id_fila)
       }
 
-      // 1) resolver IDs reais das tabulações
+      // 1) tabulações: a própria API informa P/N na 3ª coluna. Parser de pipe
+      // primeiro; fallback para extractTabulacoes se algum dia voltar JSON.
       const listagem = await callSonax('lista_tabulacao', {})
-      const tabs = extractTabulacoes(listagem.data)
-      const padrao = tabs.filter((t) => !t.grupo || norm(t.grupo).includes('padrao'))
-      const posSet = normSet(TAB_POSITIVAS)
-      const negSet = normSet(TAB_NEGATIVAS)
-      const positivas = padrao.filter((t) => posSet.has(norm(t.nome))).map((t) => t.id)
-      const negativas = padrao.filter((t) => negSet.has(norm(t.nome))).map((t) => t.id)
+      const linhasTab = parsePipe(listagem.data)
+      const tabs = linhasTab.length
+        ? linhasTab.map(([id, nome, tipo]) => ({ id, nome, tipo: (tipo ?? '').toUpperCase() }))
+        : extractTabulacoes(listagem.data).map((t) => ({ id: t.id, nome: t.nome, tipo: '' }))
+      const positivas = tabs.filter((t) => t.tipo === 'P').map((t) => t.nome)
+      const negativas = tabs.filter((t) => t.tipo === 'N').map((t) => t.nome)
+
+      // 1.1) pausas: doc pede nomes separados por vírgula, não ids.
+      const listaPausas = await callSonax('lista_pausas', {})
+      const linhasPausas = parsePipe(listaPausas.data)
+      const pausasNomes = linhasPausas
+        .filter(([id]) => PAUSAS.includes(id))
+        .map(([, nome]) => nome)
+        .filter(Boolean)
 
       // 2) criar campanha no Sonax
       const r = await callSonax('criar_campanha', {
-        descricao,
+        descricao_campanha: descricao,
         id_fila: idFila,
-        tabulacao_positiva: positivas,
-        tabulacao_negativa: negativas,
-        pausa: PAUSAS,
+        tabulacoes_positivas: positivas.join(','),
+        tabulacoes_negativas: negativas.join(','),
+        pausas: pausasNomes.join(','),
+        ...CAMPANHA_PADRAO,
       })
 
       // 3) extrair id da campanha
       let sonaxCampaignId: string | null = null
       const d = r.data as Record<string, unknown> | string
-      if (d && typeof d === 'object') {
+      if (typeof d === 'string') {
+        const first = parsePipe(d)[0]
+        if (first?.[0]) sonaxCampaignId = first[0]
+      } else if (d && typeof d === 'object') {
         const cand = (d as Record<string, unknown>).id_campanha
           ?? (d as Record<string, unknown>).id
           ?? ((d as Record<string, unknown>).data as Record<string, unknown> | undefined)?.id_campanha
         if (cand != null) sonaxCampaignId = String(cand)
-      } else if (typeof d === 'string') {
-        const m = d.match(/\d+/)
-        if (m) sonaxCampaignId = m[0]
       }
+
 
       // 3.1) validar: id real da Sonax é numérico com 4+ dígitos (ex.: 604803).
       // Sem id válido a campanha não serve para nada — não gravamos nada.
