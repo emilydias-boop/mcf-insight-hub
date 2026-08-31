@@ -598,13 +598,13 @@ export default function TVConsorcioEquipe() {
                 }}
               >
                 <Posicao idx={idx} accent={ACCENT_SDR} />
-                <span className="truncate text-lg xl:text-2xl font-bold text-white/90 capitalize">
+                <span className="truncate text-xl xl:text-3xl font-bold text-white/90 capitalize">
                   {primeiroEUltimoNome(s.nome)}
                 </span>
-                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ACCENT_SDR }}>
+                <span className="text-right w-16 xl:w-24 text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT_SDR }}>
                   {num(hoje)}
                 </span>
-                <span className="text-right w-12 xl:w-16 text-2xl xl:text-4xl font-black leading-none text-white/90">
+                <span className="text-right w-20 xl:w-32 text-3xl xl:text-6xl font-black leading-none text-white/90">
                   {num(s.agendamentos)}
                 </span>
               </div>
