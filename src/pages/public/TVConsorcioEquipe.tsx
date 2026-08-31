@@ -123,21 +123,32 @@ function dd(iso: string): string {
 }
 
 /**
- * Cartão de largura total do crédito efetivado, com quatro colunas semanais e
- * barras horizontais retas (o arco SVG era achatado por preserveAspectRatio e
- * deixava entalhes e texto desalinhados).
+ * Cartão de largura total com quatro colunas semanais e barras horizontais retas.
+ * Reutilizado por Crédito efetivado e Produção gerada (mesma anatomia).
  */
-function CreditoSemanasCard({
+function MetaSemanasCard({
+  titulo,
+  accent,
+  corTrilhoSemana,
   creditoMes,
   meta,
   pct,
   semanas,
+  rodapeValor,
+  legendaSemana,
 }: {
+  titulo: string;
+  accent: string;
+  corTrilhoSemana: string;
   creditoMes: number;
   meta: number;
   pct: number;
-  semanas: SemanaItem[];
+  semanas: Array<{ indice: number; inicio: string; fim: string; atual: boolean; futura: boolean; credito: number; cotas: number; meta?: number | null }>;
+  /** Texto discreto extra ao lado do percentual (ex.: "135 cotas · 48 clientes"). */
+  rodapeValor?: ReactNode;
+  legendaSemana?: (s: { cotas: number }) => ReactNode;
 }) {
+  const ACCENT = accent;
   return (
     <div
       className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0 overflow-hidden"
@@ -145,16 +156,22 @@ function CreditoSemanasCard({
     >
       {/* Cabeçalho — rótulo acima, valor grande + percentual alinhados pela base. */}
       <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
-        Crédito efetivado
+        {titulo}
       </div>
       <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
         <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: ACCENT }}>
           {abreviarBRL(creditoMes)}
         </span>
-        <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
-          {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
-        </span>
+        {meta > 0 ? (
+          <span className="text-sm xl:text-xl font-bold text-white/55 leading-none">
+            {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
+          </span>
+        ) : null}
+        {rodapeValor ? (
+          <span className="text-[11px] xl:text-base font-semibold text-white/40 leading-none">{rodapeValor}</span>
+        ) : null}
       </div>
+
 
       {/* Barra do mês — largura total, trilho e preenchimento. */}
       <div
