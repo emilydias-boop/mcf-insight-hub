@@ -539,21 +539,21 @@ export default function TVConsorcioEquipe() {
             >
               <Posicao idx={idx} accent={ACCENT} />
               <div className="min-w-0">
-                <div className="truncate text-base xl:text-xl font-bold text-white/90">
+                <div className="truncate text-lg xl:text-2xl font-bold text-white/90">
                   {primeiroEUltimoNome(c.nome)}
                 </div>
                 <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
                   {num(c.clientes)} clientes · {num(c.cotas)} cotas
                 </div>
               </div>
-              <span className="text-xl xl:text-3xl font-black leading-none" style={{ color: ACCENT }}>
+              <span className="text-2xl xl:text-4xl font-black leading-none" style={{ color: ACCENT }}>
                 {abreviarBRL(c.credito)}
               </span>
             </div>
           ))}
         </RankingShell>
 
-        <RankingShell titulo="SDR · agendamentos" extra="Hoje / Mês" accent={ROXO} vazio={sdrs.length === 0}>
+        <RankingShell titulo="SDR · agendamentos" extra="Hoje / Mês" accent={ACCENT_SDR} vazio={sdrs.length === 0}>
           {sdrs.map((s, idx) => {
             const hoje = Number(sdrDiaMap.get(s.nome)?.agendamentos ?? 0);
             return (
@@ -566,11 +566,11 @@ export default function TVConsorcioEquipe() {
                   opacity: Number(s.agendamentos || 0) === 0 ? 0.45 : 1,
                 }}
               >
-                <Posicao idx={idx} accent={ROXO} />
-                <span className="truncate text-base xl:text-xl font-bold text-white/90 capitalize">
+                <Posicao idx={idx} accent={ACCENT_SDR} />
+                <span className="truncate text-lg xl:text-2xl font-bold text-white/90 capitalize">
                   {primeiroEUltimoNome(s.nome)}
                 </span>
-                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ROXO }}>
+                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ACCENT_SDR }}>
                   {num(hoje)}
                 </span>
                 <span className="text-right w-12 xl:w-16 text-2xl xl:text-4xl font-black leading-none text-white/90">
