@@ -292,6 +292,11 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
                       }
                     />
                   )}
+                  {houveDesistencia && (
+                    <span className="text-[10px] text-muted-foreground">
+                      venda anterior com desistência
+                    </span>
+                  )}
                 </div>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground" onClick={e => e.stopPropagation()}>
