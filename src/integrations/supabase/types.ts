@@ -16042,6 +16042,20 @@ export type Database = {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
+      discador_opcoes_filtro: { Args: { _bu: string }; Returns: Json }
+      discador_publico: {
+        Args: {
+          _apenas_contar?: boolean
+          _ate?: string
+          _bu: string
+          _de?: string
+          _limite?: number
+          _stage_ids?: string[]
+          _tags?: string[]
+          _tipo_data?: string
+        }
+        Returns: Json
+      }
       evaluate_sdr_reschedule: {
         Args: { _bu: string; _deal_id: string; _meeting_type?: string }
         Returns: Json
