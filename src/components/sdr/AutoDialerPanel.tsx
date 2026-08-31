@@ -73,6 +73,26 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   // Para SDR: usa origens permitidas (a "pipeline" é a origem aqui)
   const restrictToSdrOrigins = isSdr;
 
+  // Cobrança do consórcio: escopo próprio. Quem acumula SDR + cobrança
+  // permanece no fluxo de SDR (mais restritivo, filtra por dono).
+  const isCobrancaConsorcio = !isSdr && ((allRoles as string[] | undefined) ?? []).includes('cobranca_consorcio');
+
+  // Pipeline fixo da cobrança, resolvido pelo NOME da origem (sem hardcode de UUID).
+  const { data: cobrancaOrigin } = useQuery({
+    queryKey: ['autodialer-cobranca-origin'],
+    queryFn: async (): Promise<{ id: string; name: string } | null> => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name')
+        .eq('name', 'Cobrança Consorcio')
+        .maybeSingle();
+      if (error || !data) return null;
+      return { id: data.id as string, name: data.name as string };
+    },
+    enabled: isCobrancaConsorcio,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const [pasted, setPasted] = useState('');
   const [mode, setMode] = useState<'pipeline' | 'paste'>('pipeline');
   const [pipelineId, setPipelineId] = useState<string | null>(null);
