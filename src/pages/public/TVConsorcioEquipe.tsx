@@ -286,8 +286,8 @@ function DiaMesBlocoCard({
   titulo: string;
   accent: string;
   alerta?: boolean;
-  hoje: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
-  mes: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
+  hoje: { valor: ReactNode; titleAttr?: string; conteudo?: ReactNode };
+  mes: { valor: ReactNode; titleAttr?: string; conteudo?: ReactNode };
 }) {
   const cor = alerta ? "#ef4444" : accent;
   return (
