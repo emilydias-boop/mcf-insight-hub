@@ -59,7 +59,17 @@ function norm(s: unknown): string {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().trim()
 }
-const normSet = (arr: string[]) => new Set(arr.map(norm))
+
+// A API Sonax responde texto: registros separados por <br> e campos por "|".
+function parsePipe(data: unknown): string[][] {
+  if (typeof data !== 'string') return []
+  return data
+    .split(/<br\s*\/?>/i)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => l.split('|').map((c) => c.trim()))
+}
+
 
 async function callSonax(action: string, params: Record<string, string | string[]>) {
   const idCliente = Deno.env.get('SONAX_ID_CLIENTE')
