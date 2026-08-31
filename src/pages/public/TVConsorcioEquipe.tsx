@@ -424,27 +424,38 @@ export default function TVConsorcioEquipe() {
       today={data.today}
       updatedAt={data.updated_at}
       warning={warning}
-      mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,2fr)]"
+      mainRowsClassName="grid-rows-[minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,2.2fr)]"
     >
-      {/* Linha 1 — crédito efetivado em largura total (barras semanais). */}
-      <div className="min-h-0 flex flex-col">
-        {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
-          <CreditoSemanasCard
-            creditoMes={Number(cMes.credito || 0)}
-            meta={Number(meta)}
-            pct={pctMeta}
-            semanas={data.semanas}
+      {/* Linha 1 — crédito efetivado (com meta) + produção gerada (sem meta). */}
+      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
+        <div className="min-h-0 flex flex-col">
+          {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
+            <CreditoSemanasCard
+              creditoMes={Number(cMes.credito || 0)}
+              meta={Number(meta)}
+              pct={pctMeta}
+              semanas={data.semanas}
+            />
+          ) : (
+            <CreditoSemMetaCard
+              creditoMes={Number(cMes.credito || 0)}
+              creditoHoje={Number(cDia.credito || 0)}
+            />
+          )}
+        </div>
+        <div className="min-h-0 flex flex-col">
+          <ProducaoSemanasCard
+            creditoMes={Number(pMes.credito || 0)}
+            cotasMes={Number(pMes.cotas || 0)}
+            clientesMes={Number(pMes.clientes || 0)}
+            semanas={data.semanas_producao ?? []}
           />
-        ) : (
-          <CreditoSemMetaCard
-            creditoMes={Number(cMes.credito || 0)}
-            creditoHoje={Number(cDia.credito || 0)}
-          />
-        )}
+        </div>
       </div>
 
       {/* Linha 2 */}
-      <div className="grid grid-cols-4 gap-4 xl:gap-8 min-h-0">
+      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
+
         <DiaMesBlocoCard
           titulo="Agendamento"
           accent={ACCENT}
