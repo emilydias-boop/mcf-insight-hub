@@ -149,7 +149,7 @@ function MetaSemanasCard({
   const ACCENT = accent;
   return (
     <div
-      className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0 overflow-hidden"
+      className="rounded-2xl border p-1.5 xl:p-2 flex flex-col flex-1 min-h-0 overflow-hidden"
       style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
     >
       {/* Cabeçalho — rótulo acima, valor grande + percentual alinhados pela base. */}
@@ -244,7 +244,7 @@ function MetaSemanasCard({
 function CreditoSemMetaCard({ creditoMes, creditoHoje }: { creditoMes: number; creditoHoje: number }) {
   return (
     <div
-      className="rounded-2xl border p-2 xl:p-3 flex flex-col flex-1 min-h-0"
+      className="rounded-2xl border p-1.5 xl:p-2 flex flex-col flex-1 min-h-0"
 
       style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
     >
@@ -292,7 +292,7 @@ function DiaMesBlocoCard({
   const cor = alerta ? "#ef4444" : accent;
   return (
     <div
-      className="rounded-2xl border p-2 xl:p-3 flex flex-col min-h-0"
+      className="rounded-2xl border p-1.5 xl:p-2 flex flex-col min-h-0"
       style={{
         backgroundColor: alerta ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.04)",
         borderColor: alerta ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.10)",
@@ -348,7 +348,7 @@ function RankingShell({
 }) {
   return (
     <section
-      className="rounded-3xl border p-3 xl:p-5 flex flex-col min-h-0"
+      className="rounded-3xl border p-2 xl:p-3 flex flex-col min-h-0"
       style={{ borderColor: `${accent}4d`, backgroundColor: `${accent}0a` }}
     >
       <div className="flex items-baseline justify-between gap-3">
@@ -359,7 +359,7 @@ function RankingShell({
           <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">{extra}</span>
         ) : null}
       </div>
-      <div className="flex-1 min-h-0 mt-2 flex flex-col justify-stretch gap-2 xl:gap-2.5 overflow-hidden">
+      <div className="flex-1 min-h-0 mt-2 flex flex-col justify-stretch gap-1.5 xl:gap-2 overflow-hidden">
         {vazio ? <div className="text-white/35 font-semibold italic text-sm mt-2">sem dados no mês</div> : children}
       </div>
     </section>
@@ -428,6 +428,7 @@ export default function TVConsorcioEquipe() {
 
   return (
     <TVShell
+      escalaDivisor={104}
       title="MCF · Painel de Equipe"
       subtitle="Consórcio · Equipe"
       accent={ACCENT}
@@ -472,7 +473,7 @@ export default function TVConsorcioEquipe() {
 
 
       {/* Linha 2 */}
-      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
+      <div className="grid grid-cols-3 gap-3 xl:gap-5 min-h-0">
 
         <DiaMesBlocoCard
           titulo="Agendamento"
@@ -556,12 +557,12 @@ export default function TVConsorcioEquipe() {
 
 
       {/* Linha 3 */}
-      <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
+      <div className="grid grid-cols-2 gap-3 xl:gap-5 min-h-0">
         <RankingShell titulo="Closers · produção no mês" accent={ACCENT} vazio={closers.length === 0}>
           {closers.map((c, idx) => (
             <div
               key={`${c.nome}-${idx}`}
-              className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
+              className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1 xl:py-2"
               style={{
                 backgroundColor: "rgba(255,255,255,0.04)",
                 borderColor: "rgba(255,255,255,0.10)",
@@ -590,7 +591,7 @@ export default function TVConsorcioEquipe() {
             return (
               <div
                 key={`${s.nome}-${idx}`}
-                className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
+                className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1 xl:py-2"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.04)",
                   borderColor: "rgba(255,255,255,0.10)",
