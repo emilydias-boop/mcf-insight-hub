@@ -526,9 +526,9 @@ export default function TVConsorcioEquipe() {
             ),
             titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
             rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+              <span className="text-white/45">
                 {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
-              </div>
+              </span>
             ),
           }}
         />
