@@ -232,7 +232,13 @@ function MetaSemanasCard({
                 >
                   {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
                 </span>
+                {legendaSemana && !isFutura ? (
+                  <span className="block mt-0.5 text-[10px] xl:text-xs font-bold text-white/40 leading-none truncate">
+                    {legendaSemana({ cotas: Number(s.cotas || 0) })}
+                  </span>
+                ) : null}
               </div>
+
 
 
               {/* 3 — barra horizontal. */}
