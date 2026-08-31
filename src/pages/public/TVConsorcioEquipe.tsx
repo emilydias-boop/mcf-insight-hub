@@ -524,19 +524,9 @@ export default function TVConsorcioEquipe() {
           accent={ACCENT}
           hoje={{
             valor: num(cDia.clientes),
-            rodape: (
-              <span className="text-white/45">
-                {num(cDia.cotas)} cotas
-              </span>
-            ),
           }}
           mes={{
             valor: num(cMes.clientes),
-            rodape: (
-              <span className="text-white/45">
-                {num(cMes.cotas)} cotas · ticket {abreviarBRL(cMes.ticket)}
-              </span>
-            ),
           }}
         />
       </div>
