@@ -319,10 +319,6 @@ function DiaMesBlocoCard({
                 {bloco.valor}
               </div>
             )}
-            {/* Legenda — sempre renderizada, reserva a mesma altura nas duas colunas. */}
-            <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
-              {bloco.rodape ?? <>&nbsp;</>}
-            </div>
           </div>
 
         ))}
