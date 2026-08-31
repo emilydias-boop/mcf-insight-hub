@@ -206,7 +206,7 @@ function MetaSemanasCard({
             >
               {/* 1 — rótulo da semana (discreto). */}
               <span
-                className="text-[10px] xl:text-xs font-black tracking-widest uppercase truncate"
+                className="text-sm xl:text-2xl font-black tracking-widest uppercase truncate"
                 style={{ color: isAtual ? ACCENT : "rgba(255,255,255,0.45)" }}
               >
                 S{s.indice} · {dd(s.inicio)}–{dd(s.fim)}
@@ -214,7 +214,7 @@ function MetaSemanasCard({
 
               {/* 2 — valor em reais, grande e em destaque (número principal do bloco). */}
               <span
-                className="block mt-1 text-2xl xl:text-4xl font-black leading-none truncate"
+                className="block mt-2 xl:mt-3 text-4xl xl:text-7xl font-black leading-none truncate"
                 style={{ color: isFutura ? "rgba(255,255,255,0.45)" : corTexto }}
               >
                 {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
@@ -222,7 +222,7 @@ function MetaSemanasCard({
 
               {/* 3 — barra horizontal. */}
               <div
-                className="w-full rounded-full mt-1.5 h-1.5 xl:h-2.5 overflow-hidden"
+                className="w-full rounded-full mt-1.5 h-2 xl:h-4 overflow-hidden"
                 style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
               >
                 {!isFutura && semanaPct > 0 ? (
@@ -307,12 +307,12 @@ function DiaMesBlocoCard({
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             {/* Rótulo, número e legenda agrupados e centrados na coluna. */}
-            <div className="text-xs xl:text-sm font-black tracking-widest text-white/40 uppercase">{label}</div>
+            <div className="text-sm xl:text-lg font-black tracking-widest text-white/40 uppercase">{label}</div>
             {bloco.conteudo ? (
-              <div className="mt-0.5">{bloco.conteudo}</div>
+              <div className="mt-2 xl:mt-3">{bloco.conteudo}</div>
             ) : (
               <div
-                className="mt-0.5 text-4xl xl:text-7xl font-black leading-none truncate w-full"
+                className="mt-2 xl:mt-3 text-4xl xl:text-7xl font-black leading-none truncate w-full"
                 style={{ color: cor }}
                 title={bloco.titleAttr}
               >
@@ -320,7 +320,7 @@ function DiaMesBlocoCard({
               </div>
             )}
             {/* Legenda — sempre renderizada, reserva a mesma altura nas duas colunas. */}
-            <div className="mt-1 text-[10px] xl:text-base text-white/40 font-bold leading-none min-h-[1em]">
+            <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
               {bloco.rodape ?? <>&nbsp;</>}
             </div>
           </div>
