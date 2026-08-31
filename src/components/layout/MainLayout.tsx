@@ -68,7 +68,7 @@ export function MainLayout() {
               <Outlet />
             </div>
           </SidebarInset>
-          {isSDR && (
+          {podeDiscar && (
             <>
               <TwilioSoftphone />
               <QuickDialerLauncher />
