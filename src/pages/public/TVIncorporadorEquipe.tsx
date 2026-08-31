@@ -22,6 +22,10 @@ interface Payload {
   updated_at: string;
   dia: Block;
   mes: Block;
+  leads_novos?: {
+    dia: Metric;
+    mes: Metric;
+  } | null;
   sdr_ranking?: TVSdrRankingRow[];
   closer_ranking?: TVCloserRankingRow[];
   ligacao_ranking?: TVLigacaoRankingRow[];
@@ -71,12 +75,12 @@ function DiaMesCard({
           return (
             <div key={label} className="flex flex-col">
               <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
-              <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-                <span className="text-2xl xl:text-4xl font-black leading-none" style={{ color }}>
+              <div className="mt-1 flex items-baseline gap-1.5 xl:gap-2 flex-wrap">
+                <span className="text-xl xl:text-3xl font-black leading-none" style={{ color }}>
                   {fmt(atual)}
                 </span>
                 {hasMeta && (
-                  <span className="text-lg xl:text-2xl font-bold text-white/40">
+                  <span className="text-base xl:text-xl font-bold text-white/40">
                     / {fmt(meta)}
                     {m?.meta_calculada ? <span className="ml-1 text-white/30">*</span> : null}
                   </span>
@@ -147,7 +151,8 @@ export default function TVIncorporadorEquipe() {
       updatedAt={data.updated_at}
       mainRowsClassName="grid-rows-[auto_1fr]"
     >
-      <div className="grid grid-cols-2 gap-5 xl:gap-8 min-h-0">
+      <div className="grid grid-cols-3 gap-4 xl:gap-6 min-h-0">
+        <DiaMesCard titulo="Leads Novos" dia={data.leads_novos?.dia} mes={data.leads_novos?.mes} accent="#38bdf8" />
         <DiaMesCard titulo="Agendamento" dia={data.dia.a?.agendamento} mes={data.mes.a?.agendamento} diaB={data.dia.b?.agendamento} mesB={data.mes.b?.agendamento} accent={ACCENT} />
         <DiaMesCard titulo="Contrato Pago" dia={data.dia.a?.contrato_pago} mes={data.mes.a?.contrato_pago} diaB={data.dia.b?.contrato_pago} mesB={data.mes.b?.contrato_pago} accent="#bfff00" invertGoal />
       </div>
