@@ -194,7 +194,8 @@ function MetaSemanasCard({
           const isAtual = s.atual === true;
           const isFutura = s.futura === true;
           const corTexto = isAtual ? ACCENT : "rgba(255,255,255,0.85)";
-          const corFill = isAtual ? ACCENT : "rgba(191,255,0,0.55)";
+          const corFill = isAtual ? ACCENT : corTrilhoSemana;
+
 
           return (
             <div
