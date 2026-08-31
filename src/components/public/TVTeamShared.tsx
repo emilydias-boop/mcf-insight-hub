@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 
 export interface Metric {
   atual: number;
@@ -122,6 +122,15 @@ export function TVShell({
   /** Aviso destacado no cabeçalho (ex.: dados atrasados). */
   warning?: ReactNode;
 }) {
+  useEffect(() => {
+    const el = document.documentElement;
+    const anterior = el.style.fontSize;
+    el.style.fontSize = "calc(100vh / 135)";
+    return () => {
+      el.style.fontSize = anterior;
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-[#050505] text-white overflow-hidden flex flex-col p-5 xl:p-9">
       <header className="flex items-center justify-between shrink-0 gap-4">
