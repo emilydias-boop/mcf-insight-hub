@@ -141,6 +141,24 @@ Deno.serve(async (req) => {
     if (action === 'criar_campanha') {
       const descricao = String(payload.descricao ?? `Discador SDR - ${new Date().toISOString().slice(0, 10)}`)
 
+      // 0) resolver id_fila por BU (sonax_bu_filas). Sem BU => fallback legado.
+      const bu = payload.bu ? String(payload.bu).trim().toLowerCase() : ''
+      let idFila = ID_FILA_FALLBACK
+      if (bu) {
+        const { data: filaRow, error: filaError } = await admin
+          .from('sonax_bu_filas')
+          .select('id_fila')
+          .ilike('bu', bu)
+          .eq('ativo', true)
+          .maybeSingle()
+        if (filaError) return json({ error: 'erro_consulta_filas', detail: filaError.message }, 500)
+        if (!filaRow?.id_fila) {
+          // BU informada mas sem fila ativa: falhar em vez de cair em fila errada.
+          return json({ error: 'fila_nao_configurada', bu }, 400)
+        }
+        idFila = String(filaRow.id_fila)
+      }
+
       // 1) resolver IDs reais das tabulações
       const listagem = await callSonax('lista_tabulacao', {})
       const tabs = extractTabulacoes(listagem.data)
@@ -153,7 +171,7 @@ Deno.serve(async (req) => {
       // 2) criar campanha no Sonax
       const r = await callSonax('criar_campanha', {
         descricao,
-        id_fila: ID_FILA,
+        id_fila: idFila,
         tabulacao_positiva: positivas,
         tabulacao_negativa: negativas,
         pausa: PAUSAS,
@@ -188,6 +206,7 @@ Deno.serve(async (req) => {
       return json({
         success: r.ok,
         campanha: saved,
+        id_fila_usada: idFila,
         tabulacoes: { positivas, negativas },
         raw: r.data,
       })
