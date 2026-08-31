@@ -120,7 +120,10 @@ export function useSendDealsToDialer() {
       let campaign = (existing?.[0] as SonaxCampaign | undefined) ?? undefined;
 
       if (!campaign) {
-        const res = await callSonaxProxy<{ campanha: SonaxCampaign }>('criar_campanha', { descricao });
+        const res = await callSonaxProxy<{ campanha: SonaxCampaign }>('criar_campanha', {
+          descricao,
+          ...(bu ? { bu } : {}),
+        });
         campaign = res.campanha;
       }
       if (!campaign?.id) throw new Error('falha_ao_criar_campanha');
