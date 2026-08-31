@@ -1,123 +1,98 @@
-# Diagnóstico — trava "CONTRATO JÁ PAGO" no modal Agendar Reunião
+# Mapa (somente leitura): registro de teste travado em "Tratados" — Thiago Felipe Faustino
 
-## 1. Onde está o bloco verde
+## 1) O que joga a linha para "Tratados"
 
-`src/components/crm/BlockedLeadCard.tsx:57-67` — texto literal:
-
-```tsx
-} else {
-  // contract_paid | won
-  title = 'CONTRATO JÁ PAGO';
-  icon = <Trophy className="h-6 w-6" />;
-  description = 'Lead concluído — venda fechada.';
-  helper = 'Não é necessário (nem permitido) agendar nova reunião.';
-  containerCls = 'border-green-500/60 bg-green-500/10 dark:bg-green-500/5';
-```
-
-Consumido em `src/components/crm/QuickScheduleModal.tsx:1392-1400` (R1) e também em `src/components/crm/R2QuickScheduleModal.tsx`.
-
-## 2. Condição exata que dispara o bloqueio (front)
-
-`src/components/crm/QuickScheduleModal.tsx:564-577`:
+Componente: `src/pages/crm/PosReuniao.tsx` (bloco renderizado por `FilaDuasListas`, `src/pages/crm/PosReuniao.tsx:758-769`).
 
 ```tsx
-const blockedLeadState = useMemo<'scheduled_future' | 'contract_paid' | 'won' | null>(() => {
-  const state = selectedDeal?.leadState;
-  if (state === 'scheduled_future' || state === 'contract_paid' || state === 'won') {
-    return state as 'scheduled_future' | 'contract_paid' | 'won';
-  }
-  return null;
-}, [selectedDeal?.leadState]);
-const isLeadBlocked = blockedLeadState !== null;
+// PosReuniao.tsx:336-346
+const propostasPendentes = useMemo(() =>
+  propostas.filter(p => !termoAssinadoDe(p)) ... );
+const propostasTratadas = useMemo(
+  () => [...propostas.filter(p => !!termoAssinadoDe(p)), ...desistidas], ...);
 ```
 
-O `leadState` é calculado em `src/hooks/useAgendaData.ts:1172-1189`:
+Duas entradas independentes para "Tratados":
 
-```ts
-// 1) Contrato pago tem prioridade absoluta
-const hasContractPaid = atts.some(
-  (a: any) => a.status === 'contract_paid' || a.contract_paid_at,
-);
-const isConsorcio = bu === 'consorcio';
-if (hasContractPaid && meetingType !== 'r2' && !isConsorcio) {
-  leadState = 'contract_paid';
-  blockReason = 'Lead já tem contrato pago — não é possível agendar nova reunião.';
-} else if (dealStatus === 'won' && meetingType !== 'r2' && !isConsorcio) {
-  leadState = 'won';
-  blockReason = 'Lead já fechou contrato — não é possível agendar nova reunião.';
-}
+- `termoAssinadoDe(p)` = `termosDe(p).find(t => t.status === 'assinado')` (`PosReuniao.tsx:317`), lendo `consorcio_termos` via `useTermosByProposal` (`PosReuniao.tsx:311`).
+- `desistidas` = propostas com `carta_excluida = true` no período (`PosReuniao.tsx:286-289`). Note que a lista principal exclui essas linhas (`PosReuniao.tsx:255-257`: `!p.carta_excluida`), então elas entram em "Tratados" **só** pelo caminho `desistidas`.
+
+Esta linha satisfaz os dois critérios ao mesmo tempo.
+
+## 2) Selo → campo
+
+| Selo | Origem |
+| --- | --- |
+| `Recusada` | `consorcio_proposals.status` renderizado cru em `PosReuniao.tsx:500-504` (`{p.status}` capitalizado) |
+| `Termo assinado · 22/08/2026` | `consorcio_termos.status = 'assinado'` + `assinado_em`, em `seloTermo` (`PosReuniao.tsx:378-388`) |
+| `Desistência da Carta` + motivo em itálico | `consorcio_proposals.carta_excluida` / `carta_excluida_em` / `carta_excluida_por_nome` / `carta_excluida_motivo` (`PosReuniao.tsx:523-536`) |
+
+`consorcio_proposal_cartas.declinada_at` / `motivo_declinio` **não** desenham selo nesta aba — eles só reduzem o agregado da venda (trigger `tg_sync_proposal_cartas_agregado`) e aparecem em Cotas a Fazer.
+
+Quem grava `carta_excluida`: `useDeleteConsorcioCard` (`src/hooks/useConsorcio.ts:649-660`) — ao excluir a cota, marca todas as propostas com aquele `consortium_card_id`. O texto do diálogo desta aba (`DeletePropostaDialog`, `PosReuniao.tsx:880-940`) diz literalmente "Esta ação não pode ser desfeita"; o hook que ele chama, `useExcluirProposta` (`src/hooks/useConsorcioPostMeeting.ts:986-1110`), faz DELETE da proposta — ou seja, não é ele que produziu este estado.
+
+## 3) O que o lápis faz
+
+`PosReuniao.tsx:645-652` → `EditProposalModal` (`PosReuniao.tsx:845-861`).
+
+```tsx
+// EditProposalModal.tsx:98-101, 139, 170-184
+const termoAssinado = useMemo(() => termos.find(t => t.status === 'assinado') || null, [termos]);
+...
+if (termoAssinado) return; // trava dura: nada muda com termo assinado
+<DialogTitle>{termoAssinado ? 'Proposta (somente leitura)' : 'Editar Proposta'}</DialogTitle>
 ```
 
-Ou seja: olha **os dois** — `meeting_slot_attendees.status = 'contract_paid'` **OU** `contract_paid_at IS NOT NULL` (qualquer attendee histórico não-cancelado do deal). O caminho `won` é derivado do **nome da etapa** do deal, via `getDealStatusFromStage` (`src/lib/dealStatusHelper.ts:9-34`, palavras-chave "contrato pago", "venda realizada", "fechado", etc.). Exceções embutidas: `meetingType === 'r2'` e `bu === 'consorcio'` não bloqueiam.
+Com termo assinado o modal abre **somente leitura**. Ele não desfaz desistência e não cancela termo assinado: `useCancelTermo` (`src/hooks/useConsorcioTermos.ts:218-245`) tem `.eq('status', 'pendente')` — cancelar termo assinado é impossível pela aplicação, por desenho (snapshot).
 
-## 3. De onde vem o dado
+## 4) Caminhos de reversão existentes
 
-`useSearchDealsForSchedule` em `src/hooks/useAgendaData.ts` (usado no modal em `QuickScheduleModal.tsx:277`). Busca deals por nome/contato (`crm_deals` + `crm_contacts` + `crm_stages`) e, em `useAgendaData.ts:1136-1144`, carrega o histórico de participantes:
+- **Reverter declínio da carta/cadastro:** existe — `useUndeclinePendingRegistration` (`src/hooks/useConsorcioPendingRegistrations.ts:790-860`), exposto em Cotas a Fazer: `src/components/consorcio/PendingRegistrationsList.tsx:381` e botão "Reverter declínio" em `:882-891`. Limpa `declinada_at/motivo_declinio/declinada_by` da carta e devolve o cadastro para `aguardando_abertura`; só reverte `proposals.status` de `recusada` para `aceita` se houver carta ativa.
+- **Desfazer `carta_excluida` (Desistência da Carta) na proposta:** **não existe**. Nenhum ponto do `src/` escreve `carta_excluida: false`.
+- **Cancelar/excluir termo assinado:** **não existe** (guard `.eq('status','pendente')`).
+- **Voltar a carta para "Pendentes" nesta aba:** **não existe** — a classificação é derivada, não editável.
 
-```ts
-const { data: allAttendees } = await supabase
-  .from('meeting_slot_attendees')
-  .select(`id, deal_id, status, contract_paid_at, created_at, booked_at,
-     meeting_slot:meeting_slots(id, scheduled_at, meeting_type, status, closer:closers(name))`)
-  .in('deal_id', dealIds)
-  .neq('status', 'cancelled')
-  .order('created_at', { ascending: false });
-```
+## 5) Reversão de etapa (`useConsorcioReversaoEtapa`)
 
-## 4. A trava é só de front? — NÃO, mas também não é do banco
+Cobre só as etapas 5 e 4 do funil de cotas: `useReverterEtapa5Para4` (5 → 4, "Cotas a Fazer") e `useDesfazerParcelaInicial` (6 → 5), expostas em `src/components/consorcio/CotasCadastradasTab.tsx:119-127, 215-228`. As RPCs validam a etapa de origem e nunca escrevem em id de outra etapa. **Não existe** reversão de etapa 3 → "Reunião Realizada"; o mecanismo não cobre este caso.
 
-Há **dois** níveis, e nenhum deles é do Postgres:
+## 6) Estado cru do registro
 
-**(a) Edge function `calendly-create-event`** — é por onde o modal cria a reunião (`useCreateMeeting`). Guards em `supabase/functions/calendly-create-event/index.ts:552-607`:
+Proposta `68a1624b-42b4-49a7-8829-37402a3a82e1` (deal `d77e2eb3-84f2-40b1-88c4-430199d70da7`, "Thiago Felipe Faustino - EFEITO ALAVANCA", etapa atual do deal: **R1 Realizada**):
 
-```ts
-if (guardMeetingType === 'r1' && !isConsorcioDeal && !isOutsideDeal) {
-if (!approvedRequest) {
-  // 1) stage "won"...
-  if (isWonStage) { ... error: "deal_already_won" ... }
+- `status = 'recusada'`, `motivo_recusa = 'teste do grima'`, `recusada_at = 2026-08-24 00:25:35Z`
+- `carta_excluida = true`, `carta_excluida_em = 2026-08-24 00:24:10Z`, por **Grimaldo de Oliveira Melo Neto**, motivo `'teste do grima .'`
+- `consortium_card_id = NULL` (a cota foi excluída; vínculo caiu por ON DELETE SET NULL), `deleted_at = NULL`
+- Crédito 350.000, prazo 240, produto `parcelinha`, `proposal_date = 2026-08-22`
 
-  // 2) Contrato pago (qualquer attendee histórico)
-  const { data: paidAttendee } = await supabase
-    .from("meeting_slot_attendees")
-    .select("id")
-    .eq("deal_id", dealId)
-    .or("status.eq.contract_paid,contract_paid_at.not.is.null")
-    .limit(1)
-    .maybeSingle();
+Cartas (`consorcio_proposal_cartas`) — três, só a primeira declinada:
 
-  if (paidAttendee) { ... error: "deal_already_paid" ... }
-}
-```
+| carta | ordem | declinada_at | motivo | pending_registration_id |
+| --- | --- | --- | --- | --- |
+| `fe0149b8-…6cc` | 1 | 2026-08-31 13:49:31Z | teste do grima | `808473fd-…673` |
+| `f057252a-…fd03` | 2 | — | — | — |
+| `dd190305-…9b6b` | 3 | — | — | — |
 
-**(b) Banco: nenhuma barreira.** Verificado por consulta:
+Cadastro pendente `808473fd-445c-406a-a928-ce5488ed6673`: `status = 'declinada'`, `declinada_at = 2026-08-31 13:51:23Z`, motivo `'termo de adesão houve divergencia pós assinatura'`, `consortium_card_id = NULL`.
 
-- Policies de `meeting_slot_attendees` / `meeting_slots`: o INSERT é `WITH CHECK (auth.uid() IS NOT NULL)` nas duas tabelas. Nada sobre contrato pago.
-- Triggers de INSERT em `meeting_slot_attendees`: `trg_auto_move_contrato_pago`, `trg_checkin_autocreate_attendee`, `trg_notify_mcf_pay_on_contract_paid`, `trg_sync_deal_closer_email_from_attendee` — todos AFTER e de efeito colateral; nenhum valida/rejeita criação. Os validadores existentes (`enforce_meeting_status_lock`, `enforce_no_show_evidence`, `protect_contract_paid_at`, `prevent_no_show_after_same_day_move`) são todos **BEFORE UPDATE**.
-- Check constraints: só `duration_minutes > 0`, `lead_type IN (A,B,C)` e a lista de `status` em `meeting_slots`. Nada de contrato pago. Nenhuma constraint UNIQUE relevante.
+Ou seja, o estado é o empilhamento de quatro ações de teste: exclusão da cota (24/08), recusa da proposta (24/08), declínio da carta 1 (31/08) e declínio do cadastro (31/08) — mais o termo assinado de 22/08.
 
-**Conclusão da pergunta mais importante:** contornando a tela, o banco **aceitaria** o insert. Um `INSERT` direto em `meeting_slots` + `meeting_slot_attendees` por qualquer usuário autenticado cria a reunião num deal com contrato pago sem erro. A única barreira efetiva além do front é a edge function — e ela só protege quem passa por ela.
+## 7) O termo
 
-Observação: existe um caminho de insert direto no próprio código do app — `useAddMeetingAttendee` em `src/hooks/useAgendaData.ts:1732-1745` insere em `meeting_slot_attendees` sem passar pela edge function (usado para adicionar sócio/participante a um slot existente). Esse caminho não checa contrato pago.
+`eb10b02a-609f-49bd-915b-fc1175cc523b`, `tipo = 'adesao'`, `status = 'assinado'` — **assinatura real, não simulada**:
 
-## 5. Caminho de exceção para admin — já existe
+- `created_at = 2026-08-22 12:14:28Z`, `visualizado_em = 12:14:34Z`, `assinado_em = 12:14:45Z`
+- `assinante_nome = 'THIAGO FELIPE FAUSTINO'`, `assinante_cpf = '068.857.656-78'`, `assinante_ip = 191.183.40.91`
+- `conteudo_renderizado` presente (2.896 caracteres), `conteudo_hash = 5047ce5b…a73b`
+- `cancelado_em = NULL`, `expires_at = 2026-09-21`
+- Vinculado ao cadastro pendente `808473fd-…673`
 
-Fluxo completo `r1_force_paid_lead` (documentado em `mem/business-logic/r1-force-paid-lead-approval-flow.md`):
+Documento assinado é snapshot: não há botão para cancelá-lo nem para reemitir sobre ele, e o guard do hook impede qualquer cancelamento de termo já assinado.
 
-- Front: `QuickScheduleModal.tsx:480-505` captura `deal_already_paid` / `deal_already_won` / `deal_r1_cooldown_active` e abre o diálogo de pedido de liberação (`RequestR1ApprovalDialog`, motivo obrigatório).
-- Persistência: `useCreateR1ForceRequest` grava em `rule_approval_requests` com `rule_key = 'r1_force_paid_lead'`.
-- Aprovação: aba "Aprovações Pendentes" em `/admin/regras-processo`; aprovadores validados pela função SECURITY DEFINER `public.is_r1_force_approver(uuid)` (admin, manager, coordenador ou Jessica Bellini).
-- Bypass: a aprovação reinvoca `calendly-create-event` com `forceFromRequestId`; ver `index.ts:343-395` (valida JWT + RPC) e `index.ts:552-608` (`if (!approvedRequest)` envolve só os guards 1 e 2). O guard 3 `duplicate_active_booking` permanece ativo.
+## Resumo em uma frase
 
-Exceções automáticas, sem aprovação: `bu === 'consorcio'` (`index.ts:539-541`) e deal com tag `outside` (`index.ts:523-525, 542-544`), além de todo `meeting_type = 'r2'`.
+A linha está presa porque três marcadores independentes convivem na mesma proposta (`status='recusada'`, `carta_excluida=true`, termo `assinado`), e a aplicação só tem reversão para um deles (declínio da carta/cadastro, em Cotas a Fazer) — não há caminho para desfazer `carta_excluida` nem para cancelar termo assinado.
 
-## 6. Reunião que ocupa agenda mas não entra na apuração
+## Antes de propor solução
 
-O único campo com esse papel é `meeting_slot_attendees.is_partner` (boolean). Não existem colunas `excluded`, `ignorar`, `interna`, `fora_funil` em `meeting_slots` nem em `meeting_slot_attendees` (verificado em `information_schema.columns`); o que existe é `is_partner` e `partner_name`.
-
-O que ele faz de fato: marca o participante como **acompanhante/sócio** do lead principal (criado com `parent_attendee_id`, herdando o `deal_id` do pai — `useAgendaData.ts:1716-1743`). O registro ocupa lugar no slot (entra na contagem de capacidade `max_leads`, `useAgendaData.ts:1708-1712`) e é filtrado fora de praticamente toda apuração:
-
-- `.eq('is_partner', false)` em `useSdrContractsFromAgenda.ts:73`, `useCloserGamificationRuntime.ts:83,93`, `useSdrOutsideMetrics.ts:157`, `external-query/index.ts:305,324`, `webhook-make-contrato/index.ts:82`, `hubla-webhook-handler/index.ts:1561`.
-- Filtro em memória `!a.is_partner` em `src/pages/crm/Agenda.tsx:182,210,224,365`, `useCloserContractsList.ts:83`, `useCarrinhoAnalysisReport.ts:969`, `InvestigationReportPanel.tsx:121,181`, `weekly-manager-report/index.ts:326,403`.
-- Automação: `automation-event-dispatcher/index.ts:154` e `send-meeting-notification/index.ts:169` usam `is_partner` para não disparar mensagem ao acompanhante.
-
-Não existe, portanto, um conceito de "reunião interna / cortesia" no nível do **slot**. A única exclusão de apuração é por participante, e ela significa "sócio/acompanhante", não "não conta". Reuniões só saem da apuração por `status = 'cancelled'` ou por `meeting_type`.
+Uma pergunta decide o desenho: o dono quer (a) um caminho genérico e auditado de "desfazer desistência da carta" nesta aba, reutilizável, ou (b) apenas destravar este registro de teste pontualmente (nominal, sem nova feature)? E o termo assinado deste teste: aceita-se permitir cancelamento de termo assinado apenas por papel de liderança e com justificativa, ou o termo deve permanecer intocável e a saída é a proposta ficar fora do funil sem tocar no documento?
