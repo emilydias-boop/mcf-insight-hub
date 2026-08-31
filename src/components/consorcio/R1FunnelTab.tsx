@@ -106,10 +106,35 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
   // SDRs mantêm o fluxo de evidência + IA; closers/liderança marcam direto.
   const requiresEvidence = role === 'sdr';
 
+  /**
+   * Propostas que ainda "ocupam" o deal. Decisão do dono: proposta com
+   * desistência da carta (`carta_excluida`) deixa de ocupar — o lead volta a
+   * Pendentes e pode receber uma nova venda. O rastro antigo continua visível
+   * em "Tratados" (aba de Termos), nada é escondido nem alterado.
+   */
   const dealsWithProposal = useMemo(
-    () => new Set((proposals || []).map((p: any) => p.deal_id).filter(Boolean)),
+    () =>
+      new Set(
+        (proposals || [])
+          .filter((p: any) => p?.carta_excluida !== true)
+          .map((p: any) => p.deal_id)
+          .filter(Boolean),
+      ),
     [proposals],
   );
+
+  /** Deals que já tiveram uma venda lançada e desistiram da carta — só informativo. */
+  const dealsComDesistencia = useMemo(
+    () =>
+      new Set(
+        (proposals || [])
+          .filter((p: any) => p?.carta_excluida === true)
+          .map((p: any) => p.deal_id)
+          .filter(Boolean),
+      ),
+    [proposals],
+  );
+
 
   /** Negócios já marcados como "sem sucesso" — desfecho comercial da etapa 2. */
   const dealsSemSucesso = useMemo(
