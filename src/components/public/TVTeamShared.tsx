@@ -112,7 +112,7 @@ export function TVSection({ label, accent, children }: { label: string; accent: 
 }
 
 export function TVShell({
-  title, subtitle, accent, today, updatedAt, children, side, mainRowsClassName = "grid-rows-2", warning,
+  title, subtitle, accent, today, updatedAt, children, side, mainRowsClassName = "grid-rows-2", warning, escalaDivisor = 135,
 }: {
   title: string; subtitle: string; accent: string; today?: string; updatedAt?: string; children: ReactNode;
   /** Coluna lateral opcional (ex.: ranking de SDRs), ocupa altura cheia à direita. */
@@ -121,15 +121,17 @@ export function TVShell({
   mainRowsClassName?: string;
   /** Aviso destacado no cabeçalho (ex.: dados atrasados). */
   warning?: ReactNode;
+  /** Divisor da escala tipográfica raiz (100vh / divisor). Menor = fonte maior. Default 135. */
+  escalaDivisor?: number;
 }) {
   useEffect(() => {
     const el = document.documentElement;
     const anterior = el.style.fontSize;
-    el.style.fontSize = "calc(100vh / 135)";
+    el.style.fontSize = `calc(100vh / ${escalaDivisor})`;
     return () => {
       el.style.fontSize = anterior;
     };
-  }, []);
+  }, [escalaDivisor]);
 
   return (
     <div className="fixed inset-0 bg-[#050505] text-white overflow-hidden flex flex-col p-5 xl:p-9">
