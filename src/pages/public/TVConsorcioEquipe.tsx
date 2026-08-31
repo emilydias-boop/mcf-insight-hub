@@ -7,7 +7,7 @@ import { TVShell, TVMsg } from "@/components/public/TVTeamShared";
 const TOKEN = "24151d71-1f8e-44b9-9761-b01f1fca7bec";
 
 const ACCENT = "#bfff00";
-const ROXO = "#7c5cff";
+const ACCENT_SDR = "#ff7a00";
 
 interface ContratosBloco {
   cotas: number;
@@ -54,6 +54,10 @@ interface Payload {
   ranking_closer?: RankingCloser[];
   ranking_sdr?: RankingSdr[];
   ranking_sdr_dia?: RankingSdr[];
+  producao?: {
+    dia: { cotas: number; clientes: number; credito: number };
+    mes: { cotas: number; clientes: number; credito: number };
+  } | null;
   semanas?: SemanaItem[] | null;
   error?: string;
 }
