@@ -286,8 +286,8 @@ function DiaMesBlocoCard({
   titulo: string;
   accent: string;
   alerta?: boolean;
-  hoje: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
-  mes: { valor: ReactNode; titleAttr?: string; rodape?: ReactNode; conteudo?: ReactNode };
+  hoje: { valor: ReactNode; titleAttr?: string; conteudo?: ReactNode };
+  mes: { valor: ReactNode; titleAttr?: string; conteudo?: ReactNode };
 }) {
   const cor = alerta ? "#ef4444" : accent;
   return (
@@ -319,10 +319,6 @@ function DiaMesBlocoCard({
                 {bloco.valor}
               </div>
             )}
-            {/* Legenda — sempre renderizada, reserva a mesma altura nas duas colunas. */}
-            <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
-              {bloco.rodape ?? <>&nbsp;</>}
-            </div>
           </div>
 
         ))}
@@ -497,11 +493,6 @@ export default function TVConsorcioEquipe() {
               />
             ),
             titleAttr: `${num(aMes.agendamentos)} de ${num(data.meta_agendamento?.mes ?? 0)} na meta do mês`,
-            rodape: (
-              <span className="text-white/45">
-                {pctTexto(Number(aMes.agendamentos || 0), Number(data.meta_agendamento?.mes ?? 0))} da meta
-              </span>
-            ),
           }}
         />
         <DiaMesBlocoCard
@@ -526,11 +517,6 @@ export default function TVConsorcioEquipe() {
               />
             ),
             titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
-            rodape: (
-              <span className="text-white/45">
-                {pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados
-              </span>
-            ),
           }}
         />
         <DiaMesBlocoCard
@@ -538,19 +524,9 @@ export default function TVConsorcioEquipe() {
           accent={ACCENT}
           hoje={{
             valor: num(cDia.clientes),
-            rodape: (
-              <span className="text-white/45">
-                {num(cDia.cotas)} cotas
-              </span>
-            ),
           }}
           mes={{
             valor: num(cMes.clientes),
-            rodape: (
-              <span className="text-white/45">
-                {num(cMes.cotas)} cotas · ticket {abreviarBRL(cMes.ticket)}
-              </span>
-            ),
           }}
         />
       </div>
