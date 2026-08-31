@@ -7,7 +7,7 @@ import { TVShell, TVMsg } from "@/components/public/TVTeamShared";
 const TOKEN = "24151d71-1f8e-44b9-9761-b01f1fca7bec";
 
 const ACCENT = "#bfff00";
-const ROXO = "#7c5cff";
+const ACCENT_SDR = "#ff7a00";
 
 interface ContratosBloco {
   cotas: number;
@@ -54,6 +54,10 @@ interface Payload {
   ranking_closer?: RankingCloser[];
   ranking_sdr?: RankingSdr[];
   ranking_sdr_dia?: RankingSdr[];
+  producao?: {
+    dia: { cotas: number; clientes: number; credito: number };
+    mes: { cotas: number; clientes: number; credito: number };
+  } | null;
   semanas?: SemanaItem[] | null;
   error?: string;
 }
@@ -277,7 +281,7 @@ function DiaMesBlocoCard({
         borderColor: alerta ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.10)",
       }}
     >
-      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">{titulo}</div>
+      <div className="text-white/60 uppercase tracking-widest text-xs xl:text-base font-bold">{titulo}</div>
       <div className="flex-1 min-h-0 grid grid-cols-2 gap-2 xl:gap-3 mt-1">
         {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
           <div
@@ -286,13 +290,13 @@ function DiaMesBlocoCard({
             style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
           >
             {/* Faixa do rótulo — altura natural, igual nas duas colunas. */}
-            <div className="text-[10px] xl:text-xs font-black tracking-widest text-white/40 uppercase">{label}</div>
+            <div className="text-xs xl:text-sm font-black tracking-widest text-white/40 uppercase">{label}</div>
             {bloco.conteudo ? (
               /* Caminho alternativo (fração/conteúdo custom): mantém as 3 faixas
                  para alinhar com a coluna vizinha. */
               <>
                 <div className="flex-1 min-h-0 flex items-center mt-0.5">{bloco.conteudo}</div>
-                <div className="mt-1 text-[9px] xl:text-[11px] text-white/40 font-bold leading-none min-h-[1em]">
+                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
                   {bloco.rodape ?? <>&nbsp;</>}
                 </div>
               </>
@@ -301,7 +305,7 @@ function DiaMesBlocoCard({
                 {/* Faixa do número — flex-1 para centrar no espaço que sobra. */}
                 <div className="flex-1 min-h-0 flex items-center mt-0.5">
                   <div
-                    className="text-2xl xl:text-5xl font-black leading-none truncate w-full"
+                    className="text-3xl xl:text-6xl font-black leading-none truncate w-full"
                     style={{ color: cor }}
                     title={bloco.titleAttr}
                   >
@@ -309,7 +313,7 @@ function DiaMesBlocoCard({
                   </div>
                 </div>
                 {/* Faixa do rodapé — sempre renderizada, reserva a mesma altura. */}
-                <div className="mt-1 text-[9px] xl:text-[11px] text-white/40 font-bold leading-none min-h-[1em]">
+                <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
                   {bloco.rodape ?? <>&nbsp;</>}
                 </div>
               </>
@@ -391,6 +395,8 @@ export default function TVConsorcioEquipe() {
   const cMes = data.contratos?.mes ?? { cotas: 0, clientes: 0, credito: 0, ticket: 0 };
   const aDia = data.agenda?.dia ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
   const aMes = data.agenda?.mes ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
+  const pDia = data.producao?.dia ?? { cotas: 0, clientes: 0, credito: 0 };
+  const pMes = data.producao?.mes ?? { cotas: 0, clientes: 0, credito: 0 };
 
   const meta = data.meta_credito_mes ?? null;
   const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
@@ -438,7 +444,7 @@ export default function TVConsorcioEquipe() {
       </div>
 
       {/* Linha 2 */}
-      <div className="grid grid-cols-3 gap-4 xl:gap-8 min-h-0">
+      <div className="grid grid-cols-4 gap-4 xl:gap-8 min-h-0">
         <DiaMesBlocoCard
           titulo="Agendamento"
           accent={ACCENT}
@@ -517,6 +523,26 @@ export default function TVConsorcioEquipe() {
             ),
           }}
         />
+        <DiaMesBlocoCard
+          titulo="Produção gerada"
+          accent={ACCENT}
+          hoje={{
+            valor: abreviarBRL(Number(pDia.credito || 0)),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {num(pDia.cotas)} cotas
+              </div>
+            ),
+          }}
+          mes={{
+            valor: abreviarBRL(Number(pMes.credito || 0)),
+            rodape: (
+              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+                {num(pMes.cotas)} cotas · {num(pMes.clientes)} clientes
+              </div>
+            ),
+          }}
+        />
       </div>
 
 
@@ -535,21 +561,21 @@ export default function TVConsorcioEquipe() {
             >
               <Posicao idx={idx} accent={ACCENT} />
               <div className="min-w-0">
-                <div className="truncate text-base xl:text-xl font-bold text-white/90">
+                <div className="truncate text-lg xl:text-2xl font-bold text-white/90">
                   {primeiroEUltimoNome(c.nome)}
                 </div>
                 <div className="text-[10px] xl:text-xs text-white/40 font-semibold">
                   {num(c.clientes)} clientes · {num(c.cotas)} cotas
                 </div>
               </div>
-              <span className="text-xl xl:text-3xl font-black leading-none" style={{ color: ACCENT }}>
+              <span className="text-2xl xl:text-4xl font-black leading-none" style={{ color: ACCENT }}>
                 {abreviarBRL(c.credito)}
               </span>
             </div>
           ))}
         </RankingShell>
 
-        <RankingShell titulo="SDR · agendamentos" extra="Hoje / Mês" accent={ROXO} vazio={sdrs.length === 0}>
+        <RankingShell titulo="SDR · agendamentos" extra="Hoje / Mês" accent={ACCENT_SDR} vazio={sdrs.length === 0}>
           {sdrs.map((s, idx) => {
             const hoje = Number(sdrDiaMap.get(s.nome)?.agendamentos ?? 0);
             return (
@@ -562,11 +588,11 @@ export default function TVConsorcioEquipe() {
                   opacity: Number(s.agendamentos || 0) === 0 ? 0.45 : 1,
                 }}
               >
-                <Posicao idx={idx} accent={ROXO} />
-                <span className="truncate text-base xl:text-xl font-bold text-white/90 capitalize">
+                <Posicao idx={idx} accent={ACCENT_SDR} />
+                <span className="truncate text-lg xl:text-2xl font-bold text-white/90 capitalize">
                   {primeiroEUltimoNome(s.nome)}
                 </span>
-                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ROXO }}>
+                <span className="text-right w-10 xl:w-12 text-base xl:text-xl font-black leading-none" style={{ color: ACCENT_SDR }}>
                   {num(hoje)}
                 </span>
                 <span className="text-right w-12 xl:w-16 text-2xl xl:text-4xl font-black leading-none text-white/90">

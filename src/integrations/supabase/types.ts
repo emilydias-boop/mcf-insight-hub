@@ -17136,6 +17136,10 @@ export type Database = {
       tv_consorcio_dias_uteis: { Args: { _ini: string }; Returns: number }
       tv_consorcio_e_dia_util: { Args: { _d: string }; Returns: boolean }
       tv_consorcio_payload: { Args: never; Returns: Json }
+      tv_consorcio_producao: {
+        Args: { _ate: string; _de: string }
+        Returns: Json
+      }
       tv_consorcio_semanas: {
         Args: { _hoje: string; _ini: string; _meta: number }
         Returns: Json
