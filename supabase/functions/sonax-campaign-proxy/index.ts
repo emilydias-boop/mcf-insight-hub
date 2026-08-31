@@ -10,16 +10,18 @@ const ID_FILA_FALLBACK = '992972'
 // Pausas já cadastradas no painel Sonax
 const PAUSAS = ['134769', '134759', '134619']
 
-// Tabulações do "Grupo Padrão" (resolvidas por nome via lista_tabulacao)
-const TAB_POSITIVAS = [
-  'informação geral', 'reclamação', 'contato realizado', 'venda realizada',
-  'reunião agendada', 'atendeu', 'caixa postal', 'número não é do cliente',
-  'ligação muda', 'mensagem de operadora', 'ligação completada normalmente',
-  'contato alcançado',
-]
-const TAB_NEGATIVAS = [
-  'caixa postal', 'ligação muda', 'não atendeu', 'contato não alcançado',
-]
+// Padrão de campanha (doc oficial Sonax). Ajuste aqui, não no meio da função.
+const CAMPANHA_PADRAO: Record<string, string> = {
+  descarte_caixa_postal: 'S',
+  qtd_simultanea: '1',
+  auto_concluir: 'N',
+  dia_semana_ini: '1',
+  dia_semana_fim: '6',
+  hora_ini: '08:00:00',
+  hora_fim: '20:00:00',
+  tentativas: '3',
+}
+
 
 // Tradução dos nomes internos para os nomes reais da API Sonax.
 // Mantemos os nomes internos (usados pelo front e pelo ALLOWED_ACTIONS) intactos.
