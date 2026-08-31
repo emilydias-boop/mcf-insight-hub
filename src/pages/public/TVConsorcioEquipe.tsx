@@ -312,7 +312,7 @@ function DiaMesBlocoCard({
               <div className="mt-0.5">{bloco.conteudo}</div>
             ) : (
               <div
-                className="mt-0.5 text-3xl xl:text-6xl font-black leading-none truncate w-full"
+                className="mt-0.5 text-4xl xl:text-7xl font-black leading-none truncate w-full"
                 style={{ color: cor }}
                 title={bloco.titleAttr}
               >
@@ -320,7 +320,7 @@ function DiaMesBlocoCard({
               </div>
             )}
             {/* Legenda — sempre renderizada, reserva a mesma altura nas duas colunas. */}
-            <div className="mt-1 text-[10px] xl:text-sm text-white/40 font-bold leading-none min-h-[1em]">
+            <div className="mt-1 text-[10px] xl:text-base text-white/40 font-bold leading-none min-h-[1em]">
               {bloco.rodape ?? <>&nbsp;</>}
             </div>
           </div>
