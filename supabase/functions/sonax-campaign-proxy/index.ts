@@ -164,12 +164,15 @@ Deno.serve(async (req) => {
       const filas = await callSonax('lista_filas', {})
       const pausas = await callSonax('lista_pausas', {})
       const tabulacoes = await callSonax('lista_tabulacao', {})
+      const campanhas = await callSonax('lista_campanha', { id_campanha: 'todas' })
 
       return json({
         filas: { status: filas.status, raw: filas.data },
         pausas: { status: pausas.status, raw: pausas.data },
         tabulacoes: { status: tabulacoes.status, raw: tabulacoes.data },
+        campanhas: { status: campanhas.status, raw: campanhas.data },
       })
+
     }
 
     if (action === 'lista_tabulacao') {
