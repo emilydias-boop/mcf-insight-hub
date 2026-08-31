@@ -523,36 +523,16 @@ export default function TVConsorcioEquipe() {
             ),
           }}
         />
-        <DiaMesBlocoCard
-          titulo="Produção gerada"
-          accent={ACCENT}
-          hoje={{
-            valor: abreviarBRL(Number(pDia.credito || 0)),
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {num(pDia.cotas)} cotas
-              </div>
-            ),
-          }}
-          mes={{
-            valor: abreviarBRL(Number(pMes.credito || 0)),
-            rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
-                {num(pMes.cotas)} cotas · {num(pMes.clientes)} clientes
-              </div>
-            ),
-          }}
-        />
       </div>
 
 
       {/* Linha 3 */}
       <div className="grid grid-cols-2 gap-4 xl:gap-8 min-h-0">
-        <RankingShell titulo="Closers · crédito no mês" accent={ACCENT} vazio={closers.length === 0}>
+        <RankingShell titulo="Closers · produção no mês" accent={ACCENT} vazio={closers.length === 0}>
           {closers.map((c, idx) => (
             <div
               key={`${c.nome}-${idx}`}
-              className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
+              className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
               style={{
                 backgroundColor: "rgba(255,255,255,0.04)",
                 borderColor: "rgba(255,255,255,0.10)",
@@ -581,7 +561,7 @@ export default function TVConsorcioEquipe() {
             return (
               <div
                 key={`${s.nome}-${idx}`}
-                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
+                className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-2 xl:py-3"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.04)",
                   borderColor: "rgba(255,255,255,0.10)",
