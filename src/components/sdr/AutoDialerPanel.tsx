@@ -168,6 +168,9 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
         .range(from, from + pageSize - 1);
       if (restrictToSdrOrigins && pipelineId) q = q.eq('origin_id', pipelineId);
       if (restrictToSdrOrigins && user?.id) q = q.eq('owner_profile_id', user.id);
+      // Cobrança: escopo é o pipeline de Cobrança Consorcio, sem filtro por
+      // dono — a carteira é trabalhada em conjunto pelo time.
+      if (isCobrancaConsorcio && cobrancaOrigin?.id) q = q.eq('origin_id', cobrancaOrigin.id);
       const { data, error } = await q;
       if (error) { console.error('[autodialer] paginated fetch error', error); break; }
       const rows = data || [];
