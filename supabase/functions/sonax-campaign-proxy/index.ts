@@ -21,6 +21,10 @@ const TAB_NEGATIVAS = [
   'caixa postal', 'ligação muda', 'não atendeu', 'contato não alcançado',
 ]
 
+// Tradução dos nomes internos para os nomes reais da API Sonax.
+// Mantemos os nomes internos (usados pelo front e pelo ALLOWED_ACTIONS) intactos.
+const ACAO_SONAX: Record<string, string> = { criar_campanha: 'cria_campanha' }
+
 const ALLOWED_ACTIONS = new Set([
   'criar_campanha',
   'chamada',
@@ -29,6 +33,7 @@ const ALLOWED_ACTIONS = new Set([
   'status_chamadas_na_fila',
   'status_chamadas_andamento',
   'lista_tabulacao',
+  'diagnostico',
 ])
 
 const json = (body: unknown, status = 200) =>
@@ -58,7 +63,7 @@ async function callSonax(action: string, params: Record<string, string | string[
   if (!idCliente || !token) throw new Error('sonax_credenciais_ausentes')
 
   const url = new URL(SONAX_BASE)
-  url.searchParams.set('action', action)
+  url.searchParams.set('acao', ACAO_SONAX[action] ?? action)
   url.searchParams.set('id_cliente', idCliente)
   url.searchParams.set('token', token)
   for (const [k, v] of Object.entries(params)) {
@@ -133,9 +138,30 @@ Deno.serve(async (req) => {
   )
 
   try {
+    if (action === 'diagnostico') {
+      const { data: roles, error: rolesError } = await admin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+      if (rolesError) return json({ error: 'erro_consulta_roles', detail: rolesError.message }, 500)
+      const isAdmin = (roles ?? []).some((r) => String((r as { role: unknown }).role) === 'admin')
+      if (!isAdmin) return json({ error: 'forbidden' }, 403)
+
+      const filas = await callSonax('lista_filas', {})
+      const pausas = await callSonax('lista_pausas', {})
+      const tabulacoes = await callSonax('lista_tabulacao', {})
+
+      return json({
+        filas: { status: filas.status, raw: filas.data },
+        pausas: { status: pausas.status, raw: pausas.data },
+        tabulacoes: { status: tabulacoes.status, raw: tabulacoes.data },
+      })
+    }
+
     if (action === 'lista_tabulacao') {
       const r = await callSonax('lista_tabulacao', {})
-      return json({ success: r.ok, raw: r.data, tabulacoes: extractTabulacoes(r.data) })
+      if (!r.ok) return json({ error: 'sonax_erro', status: r.status, detail: r.data }, 502)
+      return json({ success: true, raw: r.data, tabulacoes: extractTabulacoes(r.data) })
     }
 
     if (action === 'criar_campanha') {
@@ -188,6 +214,17 @@ Deno.serve(async (req) => {
       } else if (typeof d === 'string') {
         const m = d.match(/\d+/)
         if (m) sonaxCampaignId = m[0]
+      }
+
+      // 3.1) validar: id real da Sonax é numérico com 4+ dígitos (ex.: 604803).
+      // Sem id válido a campanha não serve para nada — não gravamos nada.
+      if (!sonaxCampaignId || !/^\d{4,}$/.test(sonaxCampaignId)) {
+        return json({
+          error: 'id_campanha_invalido',
+          status: r.status,
+          id_extraido: sonaxCampaignId,
+          detail: r.data,
+        }, 502)
       }
 
       const { data: saved, error: saveError } = await admin
@@ -299,15 +336,20 @@ Deno.serve(async (req) => {
 
     // status_chamadas_na_fila | status_chamadas_andamento
     const params: Record<string, string> = {}
-    if (payload.campaign_id) {
-      const { data: campanha } = await admin
-        .from('sonax_campaigns')
-        .select('sonax_campaign_id')
-        .eq('id', String(payload.campaign_id))
-        .maybeSingle()
-      if (campanha?.sonax_campaign_id) params.id_campanha = String(campanha.sonax_campaign_id)
+    if (action === 'status_chamadas_na_fila') {
+      // Doc oficial: esta ação recebe id_fila, não id_campanha.
+      params.id_fila = payload.id_fila ? String(payload.id_fila) : ID_FILA_FALLBACK
+    } else {
+      if (payload.campaign_id) {
+        const { data: campanha } = await admin
+          .from('sonax_campaigns')
+          .select('sonax_campaign_id')
+          .eq('id', String(payload.campaign_id))
+          .maybeSingle()
+        if (campanha?.sonax_campaign_id) params.id_campanha = String(campanha.sonax_campaign_id)
+      }
+      if (payload.sonax_campaign_id) params.id_campanha = String(payload.sonax_campaign_id)
     }
-    if (payload.sonax_campaign_id) params.id_campanha = String(payload.sonax_campaign_id)
     const r = await callSonax(action, params)
     if (!r.ok) return json({ error: 'sonax_erro', status: r.status, detail: r.data }, 502)
     return json({ success: true, raw: r.data, requested_by: email })
