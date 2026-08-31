@@ -538,9 +538,9 @@ export default function TVConsorcioEquipe() {
           hoje={{
             valor: num(cDia.clientes),
             rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+              <span className="text-white/45">
                 {num(cDia.cotas)} cotas
-              </div>
+              </span>
             ),
           }}
           mes={{
