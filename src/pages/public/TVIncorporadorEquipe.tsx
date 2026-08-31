@@ -104,6 +104,8 @@ function DiaMesCard({
                     </span>
                   </div>
                 </div>
+              ) : ocultarAvisoMeta ? (
+                <div className="mt-3 text-[11px] xl:text-sm font-semibold italic invisible">meta não configurada</div>
               ) : (
                 <div className="mt-3 text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
               )}
