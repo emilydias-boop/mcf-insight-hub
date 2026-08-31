@@ -2,7 +2,10 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
 const SONAX_BASE = 'https://api.sonax.net.br/a2billing_v2/admin/Public/dbdial_webapi.php'
-const ID_FILA = '992972'
+// Fallback legado: fila do incorporador. Usado apenas quando a campanha é criada
+// sem informar a BU (chamadores antigos). Quando a BU vem no payload, o id_fila
+// é resolvido dinamicamente em sonax_bu_filas.
+const ID_FILA_FALLBACK = '992972'
 
 // Pausas já cadastradas no painel Sonax
 const PAUSAS = ['134769', '134759', '134619']
