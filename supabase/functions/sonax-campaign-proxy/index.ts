@@ -138,9 +138,30 @@ Deno.serve(async (req) => {
   )
 
   try {
+    if (action === 'diagnostico') {
+      const { data: roles, error: rolesError } = await admin
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+      if (rolesError) return json({ error: 'erro_consulta_roles', detail: rolesError.message }, 500)
+      const isAdmin = (roles ?? []).some((r) => String((r as { role: unknown }).role) === 'admin')
+      if (!isAdmin) return json({ error: 'forbidden' }, 403)
+
+      const filas = await callSonax('lista_filas', {})
+      const pausas = await callSonax('lista_pausas', {})
+      const tabulacoes = await callSonax('lista_tabulacao', {})
+
+      return json({
+        filas: { status: filas.status, raw: filas.data },
+        pausas: { status: pausas.status, raw: pausas.data },
+        tabulacoes: { status: tabulacoes.status, raw: tabulacoes.data },
+      })
+    }
+
     if (action === 'lista_tabulacao') {
       const r = await callSonax('lista_tabulacao', {})
-      return json({ success: r.ok, raw: r.data, tabulacoes: extractTabulacoes(r.data) })
+      if (!r.ok) return json({ error: 'sonax_erro', status: r.status, detail: r.data }, 502)
+      return json({ success: true, raw: r.data, tabulacoes: extractTabulacoes(r.data) })
     }
 
     if (action === 'criar_campanha') {
