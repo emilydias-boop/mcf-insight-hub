@@ -157,7 +157,7 @@ export default function TVIncorporadorEquipe() {
       mainRowsClassName="grid-rows-[auto_1fr]"
     >
       <div className="grid grid-cols-3 gap-4 xl:gap-6 min-h-0">
-        <DiaMesCard titulo="Leads Novos" dia={data.leads_novos?.dia} mes={data.leads_novos?.mes} accent="#38bdf8" />
+        <DiaMesCard titulo="Leads Novos" dia={data.leads_novos?.dia} mes={data.leads_novos?.mes} accent="#38bdf8" ocultarAvisoMeta />
         <DiaMesCard titulo="Agendamento" dia={data.dia.a?.agendamento} mes={data.mes.a?.agendamento} diaB={data.dia.b?.agendamento} mesB={data.mes.b?.agendamento} accent={ACCENT} />
         <DiaMesCard titulo="Contrato Pago" dia={data.dia.a?.contrato_pago} mes={data.mes.a?.contrato_pago} diaB={data.dia.b?.contrato_pago} mesB={data.mes.b?.contrato_pago} accent="#bfff00" invertGoal />
       </div>
