@@ -64,9 +64,11 @@ export default function Discador() {
           Atualizar
         </Button>
       </div>
+      {podeMontarCampanha && <DiscadorAudienceBuilder />}
 
       <Card>
         <CardHeader className="pb-3">
+
           <CardTitle className="text-base">Campanhas de hoje</CardTitle>
         </CardHeader>
         <CardContent>
