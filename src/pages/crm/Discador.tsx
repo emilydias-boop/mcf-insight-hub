@@ -13,6 +13,9 @@ import {
   useSonaxCallStatus,
   useSonaxTabulacoes,
 } from '@/hooks/useSonaxDialer';
+import { useAuth } from '@/contexts/AuthContext';
+import DiscadorAudienceBuilder from '@/components/crm/DiscadorAudienceBuilder';
+
 
 const statusVariant = (status: string) => {
   switch (status) {
