@@ -546,9 +546,9 @@ export default function TVConsorcioEquipe() {
           mes={{
             valor: num(cMes.clientes),
             rodape: (
-              <div className="text-[11px] xl:text-sm text-white/45 font-semibold">
+              <span className="text-white/45">
                 {num(cMes.cotas)} cotas · ticket {abreviarBRL(cMes.ticket)}
-              </div>
+              </span>
             ),
           }}
         />
