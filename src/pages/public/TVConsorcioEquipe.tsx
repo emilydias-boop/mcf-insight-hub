@@ -493,11 +493,6 @@ export default function TVConsorcioEquipe() {
               />
             ),
             titleAttr: `${num(aMes.agendamentos)} de ${num(data.meta_agendamento?.mes ?? 0)} na meta do mês`,
-            rodape: (
-              <span className="text-white/45">
-                {pctTexto(Number(aMes.agendamentos || 0), Number(data.meta_agendamento?.mes ?? 0))} da meta
-              </span>
-            ),
           }}
         />
         <DiaMesBlocoCard
