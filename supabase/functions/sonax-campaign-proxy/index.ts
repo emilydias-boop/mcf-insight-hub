@@ -216,6 +216,17 @@ Deno.serve(async (req) => {
         if (m) sonaxCampaignId = m[0]
       }
 
+      // 3.1) validar: id real da Sonax é numérico com 4+ dígitos (ex.: 604803).
+      // Sem id válido a campanha não serve para nada — não gravamos nada.
+      if (!sonaxCampaignId || !/^\d{4,}$/.test(sonaxCampaignId)) {
+        return json({
+          error: 'id_campanha_invalido',
+          status: r.status,
+          id_extraido: sonaxCampaignId,
+          detail: r.data,
+        }, 502)
+      }
+
       const { data: saved, error: saveError } = await admin
         .from('sonax_campaigns')
         .insert({
