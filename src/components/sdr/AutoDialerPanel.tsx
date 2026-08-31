@@ -578,6 +578,19 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
                       </Select>
                     )}
                   </div>
+                ) : isCobrancaConsorcio ? (
+                  <div>
+                    <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
+                    {cobrancaOrigin?.name ? (
+                      <div className="h-8 flex items-center rounded border border-border bg-muted/40 px-2 text-xs">
+                        {cobrancaOrigin.name}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-2 leading-snug">
+                        Pipeline de cobrança não encontrada. Fale com o gestor.
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div>
                     <label className="text-[10px] text-muted-foreground uppercase">Pipeline</label>
