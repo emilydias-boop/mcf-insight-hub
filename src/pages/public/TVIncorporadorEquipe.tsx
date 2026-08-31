@@ -43,6 +43,7 @@ function DiaMesCard({
   accent,
   invertGoal,
   format,
+  ocultarAvisoMeta,
 }: {
   titulo: string;
   dia?: Metric;
@@ -52,6 +53,8 @@ function DiaMesCard({
   accent: string;
   invertGoal?: boolean;
   format?: (v: number) => string;
+  /** Quando true e sem meta, oculta a legenda "meta não configurada" mantendo a altura (espaçador invisível). */
+  ocultarAvisoMeta?: boolean;
 }) {
   const fmt = format ?? ((v: number) => v.toLocaleString("pt-BR"));
   return (
