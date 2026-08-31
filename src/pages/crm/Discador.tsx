@@ -73,6 +73,23 @@ export default function Discador() {
   const { allRoles = [] } = useAuth();
   const podeMontarCampanha = (allRoles as string[]).some((r) => r === 'admin' || r === 'manager');
 
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<DiagnosticoResult | null>(null);
+  const [diagError, setDiagError] = useState<string | null>(null);
+
+  const rodarDiagnostico = async () => {
+    setDiagLoading(true);
+    setDiagError(null);
+    setDiagResult(null);
+    try {
+      const res = await callSonaxProxy<DiagnosticoResult>('diagnostico');
+      setDiagResult(res);
+    } catch (e) {
+      setDiagError((e as Error).message || 'erro_desconhecido');
+    } finally {
+      setDiagLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 p-6">
