@@ -103,8 +103,10 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  try {
-    // ---- R1 do funil consórcio no mês (attendees + slot + deal) ----
+  const PAGE = 1000;
+
+  /** R1 do mês para um conjunto de origens, com os predicados canônicos. */
+  const calcularR1 = async (originIds: string[]) => {
     const linhas: Array<{
       deal_id: string | null;
       status: string | null;
@@ -112,7 +114,6 @@ Deno.serve(async (req) => {
       scheduled_at: string;
     }> = [];
 
-    const PAGE = 1000;
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await admin
         .from("meeting_slot_attendees")
@@ -122,7 +123,7 @@ Deno.serve(async (req) => {
         .eq("meeting_slots.meeting_type", "r1")
         .gte("meeting_slots.scheduled_at", inicio)
         .lt("meeting_slots.scheduled_at", fim)
-        .in("crm_deals.origin_id", CONSORCIO_ORIGIN_IDS)
+        .in("crm_deals.origin_id", originIds)
         .range(from, from + PAGE - 1);
       if (error) throw error;
       const rows = (data ?? []) as unknown as Array<{
@@ -170,8 +171,23 @@ Deno.serve(async (req) => {
       if ((l.status ?? "").toLowerCase() === "completed") dealsRealizados.add(l.deal_id);
       if ((l.slot_status ?? "").toLowerCase() === "completed") dealsRealizadosSlot.add(l.deal_id);
     });
-    const r1_realizadas = dealsRealizados.size;
-    const r1_realizadas_slot = dealsRealizadosSlot.size;
+
+    return {
+      r1_agendadas,
+      r1_realizadas: dealsRealizados.size,
+      r1_realizadas_slot: dealsRealizadosSlot.size,
+    };
+  };
+
+  try {
+    // ---- R1 do funil consórcio no mês ----
+    const { r1_agendadas, r1_realizadas, r1_realizadas_slot } = await calcularR1(
+      CONSORCIO_ORIGIN_IDS,
+    );
+
+    // ---- R1 do funil MCF 50K / Incorporador no mês ----
+    const inc = await calcularR1(INCORPORADOR_ORIGIN_IDS);
+
 
     // ---- Cotas contratadas no mês (uma linha = uma carta) ----
     // Também deriva "Vendas Realizadas" = CLIENTES distintos, com a MESMA
