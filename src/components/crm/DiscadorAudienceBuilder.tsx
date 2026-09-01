@@ -205,6 +205,9 @@ export default function DiscadorAudienceBuilder() {
             As ligações atendidas caem numa <strong>fila única de ramais no Sonax</strong>: quem
             estiver logado nessa fila atende, independente da BU escolhida aqui. O filtro de BU
             define <strong>quais leads entram na campanha</strong>, não quem recebe a chamada.
+            Para testar a integração, use <strong>Ver amostra</strong>, marque um ou dois leads e
+            clique em <strong>Enviar selecionados</strong> — assim a campanha nasce com
+            pouquíssimos contatos.
           </p>
         </div>
 
