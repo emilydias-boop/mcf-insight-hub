@@ -21,6 +21,10 @@ interface DiagnosticoResult {
   filas: { status: number; raw: unknown };
   pausas: { status: number; raw: unknown };
   tabulacoes: { status: number; raw: unknown };
+  campanhas?: { status: number; raw: unknown };
+  atendentes?: { status: number; raw: unknown };
+  atendente_ramal?: { status: number; raw: unknown; ramal_consultado: string };
+  campanha_detalhe?: { status: number; raw: unknown; id_consultado: string };
 }
 
 const DiagnosticoBloco = ({ titulo, dados }: { titulo: string; dados: { status: number; raw: unknown } }) => (
@@ -82,7 +86,10 @@ export default function Discador() {
     setDiagError(null);
     setDiagResult(null);
     try {
-      const res = await callSonaxProxy<DiagnosticoResult>('diagnostico');
+      const res = await callSonaxProxy<DiagnosticoResult>(
+        'diagnostico',
+        selected?.sonax_campaign_id ? { id_campanha: selected.sonax_campaign_id } : {},
+      );
       setDiagResult(res);
     } catch (e) {
       setDiagError((e as Error).message || 'erro_desconhecido');
@@ -263,7 +270,8 @@ export default function Discador() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Consulta <code>lista_filas</code>, <code>lista_pausas</code> e <code>lista_tabulacao</code> na API do Sonax
+              Consulta <code>lista_filas</code>, <code>lista_pausas</code>, <code>lista_tabulacao</code>,
+              <code>lista_campanha</code> e <code>status_atendente</code> na API do Sonax
               e devolve o corpo cru de cada uma. Somente leitura — não cria nem altera nada.
             </p>
             <Button
@@ -287,10 +295,28 @@ export default function Discador() {
             )}
 
             {diagResult && (
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2">
                 <DiagnosticoBloco titulo="Filas" dados={diagResult.filas} />
                 <DiagnosticoBloco titulo="Pausas" dados={diagResult.pausas} />
                 <DiagnosticoBloco titulo="Tabulações" dados={diagResult.tabulacoes} />
+                {diagResult.campanhas && (
+                  <DiagnosticoBloco titulo="Campanhas (todas)" dados={diagResult.campanhas} />
+                )}
+                {diagResult.atendentes && (
+                  <DiagnosticoBloco titulo="Atendentes logados" dados={diagResult.atendentes} />
+                )}
+                {diagResult.atendente_ramal && (
+                  <DiagnosticoBloco
+                    titulo={`Atendente do ramal ${diagResult.atendente_ramal.ramal_consultado}`}
+                    dados={diagResult.atendente_ramal}
+                  />
+                )}
+                {diagResult.campanha_detalhe && (
+                  <DiagnosticoBloco
+                    titulo={`Campanha ${diagResult.campanha_detalhe.id_consultado}`}
+                    dados={diagResult.campanha_detalhe}
+                  />
+                )}
               </div>
             )}
           </CardContent>
