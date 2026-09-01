@@ -166,19 +166,49 @@ Deno.serve(async (req) => {
     const r1_realizadas = dealsRealizados.size;
     const r1_realizadas_slot = dealsRealizadosSlot.size;
 
-    // ---- Cotas contratadas no mês ----
-    const { count: cotasCount, error: erroCotas } = await admin
-      .from("consortium_cards")
-      .select("id", { count: "exact", head: true })
-      .eq("tipo_registro", "contratacao")
-      .gte("data_contratacao", primeiroDia)
-      .lte("data_contratacao", ultimoDia);
-    if (erroCotas) throw erroCotas;
-    const cotas_contratadas = cotasCount ?? 0;
+    // ---- Cotas contratadas no mês (uma linha = uma carta) ----
+    // Também deriva "Vendas Realizadas" = CLIENTES distintos, com a MESMA
+    // identidade do Painel Comercial (`clienteKey` em useConsorcioCotasContratadas):
+    // documento (CPF/CNPJ) tem prioridade; sem documento, nome normalizado;
+    // sem nome, o próprio card (nunca agrupa dois desconhecidos).
+    const cartas: Array<{
+      id: string;
+      cpf: string | null;
+      cnpj: string | null;
+      nome_completo: string | null;
+    }> = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await admin
+        .from("consortium_cards")
+        .select("id, cpf, cnpj, nome_completo")
+        .eq("tipo_registro", "contratacao")
+        .gte("data_contratacao", primeiroDia)
+        .lte("data_contratacao", ultimoDia)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = data ?? [];
+      cartas.push(...(rows as typeof cartas));
+      if (rows.length < PAGE) break;
+    }
+    const cotas_contratadas = cartas.length;
 
+    const clienteKey = (c: { id: string; cpf: string | null; cnpj: string | null; nome_completo: string | null }) => {
+      const doc = String(c.cpf ?? "").replace(/\D/g, "") || String(c.cnpj ?? "").replace(/\D/g, "");
+      if (doc) return `doc:${doc}`;
+      const nome = String(c.nome_completo ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toUpperCase()
+        .replace(/\s+/g, " ")
+        .trim();
+      return nome ? `nome:${nome}` : `card:${c.id}`;
+    };
+    const vendas_realizadas = new Set(cartas.map(clienteKey)).size;
+
+    // Conversão do OTE: PESSOAS que compraram ÷ R1 realizadas.
     const conversao_pct =
       r1_realizadas > 0
-        ? Math.round((cotas_contratadas / r1_realizadas) * 1000) / 10
+        ? Math.round((vendas_realizadas / r1_realizadas) * 1000) / 10
         : null;
 
     return json({
