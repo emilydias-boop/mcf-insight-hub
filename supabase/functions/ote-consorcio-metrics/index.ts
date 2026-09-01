@@ -22,6 +22,13 @@ const CONSORCIO_ORIGIN_IDS = [
   "7d7b1cb5-2a44-4552-9eff-c3b798646b78", // Efeito Alavanca
 ];
 
+// Origens do funil MCF 50K / Incorporador (auditoria)
+const INCORPORADOR_ORIGIN_IDS = [
+  "e3c04f21-ba2c-4c66-84f8-b4341c826b1c", // PIPELINE INSIDE SALES
+  "7431cf4a-dc29-4208-95a6-28a499a06dac", // PILOTO ANAMNESE /  INDICAÇÃO
+];
+
+
 // Status que NÃO contam como agendamento vigente
 const STATUS_EXCLUIDOS = new Set([
   "cancelled",
