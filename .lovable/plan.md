@@ -1,88 +1,99 @@
-# Auditoria (somente leitura): gates de papel do auto-discador
+# Auditoria somente-leitura — confiabilidade de "reuniões qualificadas realizadas" e "conversão" no funil 50K
 
-Nenhuma alteração de código proposta aqui — este é o resultado do mapeamento pedido.
+Janela medida: últimos 30 dias (02/08/2026 → 01/09/2026, dados reais do banco). Nada foi alterado.
 
-## 1. Botões na sidebar
+## 1. Identificação do funil 50K
 
-`src/components/layout/AppSidebar.tsx:395-399`
+Não existe origin, grupo ou pipeline chamado "MCF 50K/Construção". O 50K é **produto**, vendido dentro do funil comercial do incorporador:
 
-```tsx
-// Dialer (visível APENAS para SDRs — closers e admins não fazem ligação ativa)
-const dialer = useDialerLauncher();
-const autoDialer = useAutoDialer();
-const dialerRoles = new Set(['sdr']);
-const showDialerSection = (allRoles as string[]).some(r => dialerRoles.has(r));
-```
+- BU `incorporador` → origin default **PIPELINE INSIDE SALES** (`e3c04f21-ba2c-4c66-84f8-b4341c826b1c`, grupo "Perpétuo - X1", 24.304 deals) + origin secundária "PILOTO ANAMNESE / INDICAÇÃO".
+- Produtos 50K identificados nas vendas: `A001 - MCF INCORPORADOR COMPLETO`, `A009 - ... + THE CLUB`, `A005 - MCF P2` (segundo pagamento), com ofertas explícitas como "Incorporador 50k + The Club (17k à vista)".
+- Existem origins órfãs com nome 50K e **zero deals**: "50K -> AL", "PIPELINE AL -> 50K", grupo "R - R001 - Incorporador Completo 50K". Não são funil operacional.
 
-`src/components/layout/AppSidebar.tsx:777-808` — o grupo com "Discador rápido" e "Auto-Discador" está inteiro dentro de `{showDialerSection && (...)}`.
+Stages ativos do PIPELINE INSIDE SALES (`crm_stages`, 19): ANAMNESE COMPLETA (0), Lead Gratuito (1), Lead Instagram (2), A017 - Novo Lead (3), A010 Em Aberto (5), Novo Lead (6), Em contato (7), Lead Qualificado (8), No-Show R2 (9), Reunião 01 Agendada (9), No-Show (10), Sem Interesse (11), Reunião 01 Realizada (12), Follow-up Closer (13), Contrato Pago (14), Reunião 02 Agendada (15), Reunião 02 Realizada (16), Venda realizada (17). Inativo: LEAD GUIA.
 
-Papéis aceitos: **apenas `sdr`**. Nem `closer`, nem `closer_sombra`, nem `cobranca_consorcio`.
+Ruído estrutural medido: a mesma origin tem **17 stages paralelos em `local_pipeline_stages`** (fonte que o `useCRMStages` prioriza), e há deals parados em stages que não existem na lista ativa: `NOVO LEAD ( FORM )`, `Perdido`, `SEM SUCESSO`. Duas ordens 9 empatadas (No-Show R2 e Reunião 01 Agendada).
 
-Separadamente, o item de menu "Discador" (rota `${crmBasePath}/discador`, página Sonax) tem `requiredRoles: ["sdr", "closer"]` (`AppSidebar.tsx:484-491`).
+## 2. Agendamentos (30 dias)
 
-## 2. Gates dentro do painel / contexto
+- Total de slots do funil: **712** (r1 + r2). R1: **501**.
+- R1 por semana (início segunda): 03/08 = 103 · 10/08 = 117 · 17/08 = 118 · 24/08 = 130 · 31/08 = 33 (semana parcial).
+- Excluindo `canceled` (44) e `rescheduled` (9): 93 · 107 · 104 · 114 · 30.
+- `source` de 100% dos slots da janela = **`manual`** — nenhum agendamento via Calendly na janela.
 
-`src/contexts/AutoDialerContext.tsx`: **nenhum gate de papel**. Não lê `role`/`allRoles`; só ramal, motor e filas.
+Fluxos que criam slot: `useCloserScheduling`, `QualificationAndScheduleModal`/`QuickScheduleModal`, `MoveEntireMeetingModal`, `MoveAttendeeModal`, `useR2AgendaData`, `useTransferR2Attendee`, edge functions `create-manual-approved-lead`, `calendly-create-event`, `calendly-webhook-handler`, `google-calendar-sync`.
 
-`src/components/sdr/AutoDialerPanel.tsx:40-74`:
+Reunião que acontece sem registro: possível por construção — todo registro depende de ação humana no CRM (nenhum gatilho automático a partir de WhatsApp/telefone/Meet). **Quantas ocorreram: não determinei** — não há fonte independente (não existe log de call/Meet reconciliado com slot) para medir o buraco.
 
-```tsx
-const { user, role, allRoles } = useAuth();
-const isSdr = isSdrRole(role, allRoles);
-...
-const sdrOriginIds = useMemo<string[]>(() => {
-  if (!isSdr) return [];
-  if (sdrOriginOverride && sdrOriginOverride.length > 0) return sdrOriginOverride;
-  return buMapping?.origins || [];
-}, [isSdr, sdrOriginOverride, buMapping]);
-...
-const restrictToSdrOrigins = isSdr;
-```
+## 3. Reuniões realizadas — dois predicados concorrentes, também no 50K
 
-`isSdrRole` (`src/components/auth/NegociosAccessGuard.tsx:147-152`) só retorna true para `sdr`.
+O código usa simultaneamente `meeting_slots.status` e `meeting_slot_attendees.status`, com variações (`useChannelFunnelReport`: `slotStatus==='completed' || attStatus==='completed'`; em outro trecho também aceita `contract_paid` e `refunded`).
 
-Não há bloqueio de abrir o painel, carregar fila ou iniciar discagem por papel. O que muda é o *escopo*: `isSdr === false` cai no ramo `PipelineSelector` genérico (`AutoDialerPanel.tsx:545-555`) e **não** aplica o filtro por dono.
+Medição em R1 do funil, 30 dias, deals distintos:
 
-Guard real e único: ramal. `AutoDialerPanel.tsx:411` — "Ramal não configurado — fale com o gestor antes de iniciar."
+| Predicado | Deals "realizada" |
+|---|---|
+| attendee.status = completed | 253 |
+| attendee.status in (completed, contract_paid) | 347 |
+| + refunded | 347 |
+| slot.status = completed | 280 |
+| união (slot OU attendee) | **352** |
 
-## 3. Fila de leads
+Contradições: **136** deals com slot `completed` e attendee **não** realizado; **81** com attendee realizado e slot **não** `completed`. Spread total 253 → 352 = **39% de variação** no mesmo mês.
 
-Query direta em `crm_deals` (não RPC), `AutoDialerPanel.tsx:122-145`:
+Contradições contra o stage do deal: **6** deals com attendee realizado mas stage atrasado (Novo Lead / Em contato / Lead Qualificado / R1 Agendada); **2** com attendee realizado e deal em No-Show; **16** deals em stage avançado (R1 Realizada → Venda realizada) **sem** nenhum attendee marcado como realizado.
 
-```tsx
-let q = supabase
-  .from('crm_deals')
-  .select('id, name, contact_id, origin_id, custom_fields, lead_temperature, owner_profile_id, crm_contacts(name, phone)')
-  .eq('stage_id', stageId)
-  .eq('is_duplicate', false)
-  .is('archived_at', null)
-  .eq('is_archived', false)
-  .or(`last_auto_dialer_call_at.is.null,last_auto_dialer_call_at.lt.${cutoff}`)
-  .order('created_at', { ascending: false })
-  .range(from, from + pageSize - 1);
-if (restrictToSdrOrigins && pipelineId) q = q.eq('origin_id', pipelineId);
-if (restrictToSdrOrigins && user?.id) q = q.eq('owner_profile_id', user.id);
-```
+Sobre "qualificada": não existe campo de reunião qualificada. A qualificação pré-R1 fica em `crm_deals.custom_fields` (`qualification_saved`/`qualification_answers`) e cobre **445 de 454** deals com R1 na janela (98%). Ela é do **deal**, não da reunião — reagendamento/2ª R1 não reavalia. `lead_type` (A/B/C) está **nulo em 177 dos 712** slots.
 
-Filtros: estágio (obrigatório), duplicado/arquivado, "já discado hoje". Dono (`owner_profile_id`) e origem só quando `isSdr`. Sem filtro por squad e sem filtro por papel. Modo "Colar" ignora o CRM por completo.
+## 4. Vendas / conversão — sem evento único
 
-## 4. Banco / RLS
+Quatro fontes concorrentes na janela:
 
-- `crm_deals` SELECT: `Authenticated can view crm_deals` → `qual: true`. Não barra papel.
-- `crm_deals` UPDATE: `SDRs e closers podem atualizar deals` → `manager OR admin OR sdr OR closer`. **`cobranca_consorcio` não passa** — o carimbo `last_auto_dialer_call_at` (`AutoDialerContext.tsx:255-262`) falha silenciosamente (só `console.warn`), então o lead volta na fila no mesmo dia.
-- `deal_activities` SELECT `true`, INSERT sem `qual`, UPDATE `user_id = auth.uid()` → ok.
-- `sonax_call_events` SELECT `sonax_call_events_select_scoped`: admin/manager/coordenador, ou `sdr_email = jwt email`, ou dono do deal (`owner_id`/`owner_profile_id`). Cobrança só vê o evento se o e-mail do ramal casar ou se for dona do deal — senão a detecção automática de atendimento não chega.
-- `calls` SELECT: `user_id = auth.uid()` OR admin/manager/coordenador — ok para o próprio.
-- `sdr_ramal_mapping` SELECT: `true` — não barra.
+| Fonte | Contagem 30d |
+|---|---|
+| Hubla A001/A005/A009 `completed` (linhas) | 262 |
+| Hubla, e-mails únicos | **144** (R$ 2.061.105 líquido) |
+| `attendee.contract_paid_at` na janela | 230 |
+| `deal_activities.to_stage = 'Contrato Pago'` | 139 |
+| `deal_activities.to_stage = 'Venda realizada'` | 46 |
 
-Nenhuma função de banco chamada pelo auto-discador exige `sdr`.
+Rastreabilidade Hubla → CRM está quebrada: das 262 linhas, **259 sem `linked_deal_id`**, 262 sem `linked_attendee_id`, e apenas **3** vinculadas a um deal do Inside Sales. A conciliação hoje é por e-mail/telefone no relatório, não por vínculo persistido. Reembolsos no período: 1.
 
-## 5. Atalho Ctrl+Shift+A
+Conversão medida, conforme o par escolhido: 230/347 = **66%** · 144/352 = **41%** · 46/280 = **16%**. Ou seja, a mesma performance mensal pode ser apresentada entre 16% e 66%.
 
-`src/components/crm/QuickDialerLauncher.tsx:27-40` registra o listener global; `MainLayout.tsx:71-79` monta o launcher para todo `podeDiscar`. O atalho **funciona independente da sidebar** — quem tem `podeDiscar` abre o painel pelo teclado mesmo sem o botão.
+## 5. Qualidade (30 dias, funil 50K)
 
-## Conclusão
+- No-shows: 359 linhas de attendee / 304 deals distintos.
+- `no_show_validations` no período: **60** — cobertura de ~17% dos no-shows (por regra, evidência+IA só se aplica a SDR; Closer marca direto).
+- Tentativas bloqueadas de no-show: 4. Tentativas de mudança de status fora do prazo: **259**.
+- Slots R1 **sem nenhum attendee**: **47** (9% dos slots R1).
+- Deals com 2+ reuniões no mesmo dia: **1**.
+- Registros sem autoria: 4 slots sem `booked_by`; 0 attendees sem `booked_by`.
+- Ghost appointments detectados: 0.
 
-(a) Falta só incluir `cobranca_consorcio` em `dialerRoles` no `AppSidebar.tsx:398` (e, para escopo/fila próprios, tratá-lo como restrito por dono em `AutoDialerPanel.tsx:74`); no banco, faltaria a política de UPDATE em `crm_deals` cobrir o papel, senão o carimbo anti-repetição falha.
+## 6. Veredito
 
-(b) Hoje a fila não viria vazia: sem `isSdr`, o painel usa o `PipelineSelector` genérico e retorna todos os deals do estágio escolhido — ou seja, cobrança veria leads de qualquer dono, o oposto do desejado; para fila de cobrança fazer sentido seria preciso escopo próprio (estágios/pipeline de cobrança + dono), que hoje não existe.
+**Não são confiáveis hoje** como base de apuração de meta mensal do OTE. O agendamento é sólido; "realizada" e "conversão" não têm definição única, e a ponte venda↔reunião não existe no dado.
+
+Riscos, do mais crítico ao menos:
+
+1. **"Realizada" sem definição canônica** — 253 vs 352 (39%). Qualquer OTE calculado hoje depende de qual tela/consulta o avaliador abrir.
+2. **"Venda" sem definição canônica e sem vínculo** — 46 a 262 conforme a fonte; 99% das transações Hubla do 50K sem `linked_deal_id`. Conversão de 16% a 66%.
+3. **47 slots R1 sem attendee** — reunião existe no calendário e é invisível para qualquer métrica baseada em attendee (a maioria delas).
+4. **Reuniões fora do sistema não mensuráveis** — sem fonte independente, subnotificação não é detectável nem quantificável.
+5. **No-show com evidência em ~17% dos casos** — o denominador de "realizadas" é manipulável por quem marca, sem trilha na maior parte.
+6. **259 mudanças de status fora do prazo** — status pode ser reescrito depois do fechamento do período.
+7. **Stages duplicados (`crm_stages` × `local_pipeline_stages`) e deals em stages fantasma** — o predicado alternativo "stage do deal" também não fecha (6 + 2 + 16 contradições).
+8. **"Qualificada" não é atributo da reunião** — é do deal, não reavaliado em reagendamento; `lead_type` nulo em 25% dos slots.
+
+O que precisaria mudar (nada implementado agora, apenas o escopo):
+
+- Fixar **uma** definição de R1 realizada em RPC única e fazer todas as telas consumirem só ela; reconciliar os 136 + 81 divergentes.
+- Fixar **uma** definição de venda válida do 50K (produto + status + data-âncora) e persistir o vínculo transação→deal→attendee no momento do pagamento, com relatório de órfãos.
+- Impedir slot R1 sem attendee e exigir attendee explícito ao marcar desfecho.
+- Estender evidência de no-show a todos os papéis, ou registrar no mínimo autoria + carimbo imutável.
+- Travar mudança de status após o fechamento do mês (hoje só há log de tentativa).
+- Marcar "qualificada" no **attendee**, no momento do agendamento, congelando o snapshot da qualificação.
+- Consolidar stages numa fonte só e migrar deals em stages fantasma.
+
+Se este diagnóstico estiver de acordo, o passo natural é aprovar apenas a **fase 1** (definições canônicas de "realizada" e "venda" + vínculo Hubla) antes de mexer em qualquer coisa.
