@@ -132,6 +132,7 @@ export default function DiscadorAudienceBuilder() {
     setTags([]);
     setStageIds([]);
     setAmostra(null);
+    setSelecionados([]);
   }, [bu]);
 
   const buscarAmostra = async () => {
