@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
       r1_realizadas,
       r1_realizadas_slot,
       cotas_contratadas,
+      vendas_realizadas,
       conversao_pct,
       gerado_em: new Date().toISOString(),
     });
