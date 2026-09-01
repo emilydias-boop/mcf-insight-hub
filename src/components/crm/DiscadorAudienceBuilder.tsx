@@ -89,6 +89,7 @@ export default function DiscadorAudienceBuilder() {
   const [amostra, setAmostra] = useState<LeadPublico[] | null>(null);
   const [carregandoAmostra, setCarregandoAmostra] = useState(false);
   const [progresso, setProgresso] = useState<{ feitos: number; total: number } | null>(null);
+  const [selecionados, setSelecionados] = useState<string[]>([]);
 
   const enviar = useSendDealsToDialer();
 
@@ -131,6 +132,7 @@ export default function DiscadorAudienceBuilder() {
     setTags([]);
     setStageIds([]);
     setAmostra(null);
+    setSelecionados([]);
   }, [bu]);
 
   const buscarAmostra = async () => {
@@ -141,6 +143,7 @@ export default function DiscadorAudienceBuilder() {
       });
       if (error) throw error;
       setAmostra(((data as any)?.leads || []) as LeadPublico[]);
+      setSelecionados([]);
     } finally {
       setCarregandoAmostra(false);
     }
@@ -170,6 +173,20 @@ export default function DiscadorAudienceBuilder() {
     }
   };
 
+  const enviarSelecionados = async () => {
+    if (!selecionados.length) return;
+    setProgresso({ feitos: 0, total: selecionados.length });
+    try {
+      await enviar.mutateAsync({
+        dealIds: selecionados,
+        bu,
+        onProgress: (feitos, t) => setProgresso({ feitos, total: t }),
+      });
+    } finally {
+      setProgresso(null);
+    }
+  };
+
   const fmtData = (v: string | null) =>
     v ? new Date(v).toLocaleDateString('pt-BR') : '—';
 
@@ -188,6 +205,9 @@ export default function DiscadorAudienceBuilder() {
             As ligações atendidas caem numa <strong>fila única de ramais no Sonax</strong>: quem
             estiver logado nessa fila atende, independente da BU escolhida aqui. O filtro de BU
             define <strong>quais leads entram na campanha</strong>, não quem recebe a chamada.
+            Para testar a integração, use <strong>Ver amostra</strong>, marque um ou dois leads e
+            clique em <strong>Enviar selecionados</strong> — assim a campanha nasce com
+            pouquíssimos contatos.
           </p>
         </div>
 
@@ -269,6 +289,25 @@ export default function DiscadorAudienceBuilder() {
               Ver amostra
             </Button>
             <Button
+              variant="secondary"
+              size="sm"
+              onClick={enviarSelecionados}
+              disabled={enviar.isPending || selecionados.length === 0}
+              data-testid="discador-enviar-selecionados"
+            >
+              {progresso ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  enviando {progresso.feitos} de {progresso.total}
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Enviar selecionados ({selecionados.length})
+                </>
+              )}
+            </Button>
+            <Button
               size="sm"
               onClick={criarEEnviar}
               disabled={enviar.isPending || !total}
@@ -310,6 +349,15 @@ export default function DiscadorAudienceBuilder() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={!!amostra.length && selecionados.length === amostra.length}
+                          onCheckedChange={(v) => {
+                            setSelecionados(v ? amostra.map((l) => l.deal_id) : []);
+                          }}
+                          aria-label="Selecionar todos"
+                        />
+                      </TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
                       <TableHead>Etapa</TableHead>
@@ -319,6 +367,17 @@ export default function DiscadorAudienceBuilder() {
                   <TableBody>
                     {amostra.map((l) => (
                       <TableRow key={l.deal_id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selecionados.includes(l.deal_id)}
+                            onCheckedChange={(v) => {
+                              setSelecionados((p) =>
+                                v ? [...p, l.deal_id] : p.filter((x) => x !== l.deal_id),
+                              );
+                            }}
+                            aria-label={`Selecionar ${l.nome || l.deal_id}`}
+                          />
+                        </TableCell>
                         <TableCell className="text-sm">{l.nome || '—'}</TableCell>
                         <TableCell className="font-mono text-xs">{l.telefone || '—'}</TableCell>
                         <TableCell className="text-sm">
