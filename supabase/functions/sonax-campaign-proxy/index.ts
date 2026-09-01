@@ -271,6 +271,9 @@ Deno.serve(async (req) => {
           descricao,
           status: 'ativa',
           created_by: userId || null,
+          // fila efetivamente usada nesta campanha (para o polling da fila)
+          id_fila: idFila,
+
         })
         .select()
         .single()
