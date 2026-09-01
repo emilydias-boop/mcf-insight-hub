@@ -349,6 +349,15 @@ export default function DiscadorAudienceBuilder() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={!!amostra.length && selecionados.length === amostra.length}
+                          onCheckedChange={(v) => {
+                            setSelecionados(v ? amostra.map((l) => l.deal_id) : []);
+                          }}
+                          aria-label="Selecionar todos"
+                        />
+                      </TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
                       <TableHead>Etapa</TableHead>
@@ -358,6 +367,17 @@ export default function DiscadorAudienceBuilder() {
                   <TableBody>
                     {amostra.map((l) => (
                       <TableRow key={l.deal_id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selecionados.includes(l.deal_id)}
+                            onCheckedChange={(v) => {
+                              setSelecionados((p) =>
+                                v ? [...p, l.deal_id] : p.filter((x) => x !== l.deal_id),
+                              );
+                            }}
+                            aria-label={`Selecionar ${l.nome || l.deal_id}`}
+                          />
+                        </TableCell>
                         <TableCell className="text-sm">{l.nome || '—'}</TableCell>
                         <TableCell className="font-mono text-xs">{l.telefone || '—'}</TableCell>
                         <TableCell className="text-sm">
