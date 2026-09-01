@@ -243,7 +243,18 @@ Deno.serve(async (req) => {
       cotas_contratadas,
       vendas_realizadas,
       conversao_pct,
+      // Funil MCF 50K / Incorporador — apenas R1. Sem vendas/conversão:
+      // ainda não há fonte confiável (Hubla sem vínculo com deal).
+      incorporador_50k: {
+        origin_ids: INCORPORADOR_ORIGIN_IDS,
+        r1_agendadas: inc.r1_agendadas,
+        r1_realizadas: inc.r1_realizadas,
+        r1_realizadas_slot: inc.r1_realizadas_slot,
+        vendas_50k: null,
+        conversao_pct: null,
+      },
       gerado_em: new Date().toISOString(),
+
     });
   } catch (e) {
     console.error("ote-consorcio-metrics erro:", e);
