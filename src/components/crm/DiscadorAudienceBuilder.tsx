@@ -89,6 +89,7 @@ export default function DiscadorAudienceBuilder() {
   const [amostra, setAmostra] = useState<LeadPublico[] | null>(null);
   const [carregandoAmostra, setCarregandoAmostra] = useState(false);
   const [progresso, setProgresso] = useState<{ feitos: number; total: number } | null>(null);
+  const [selecionados, setSelecionados] = useState<string[]>([]);
 
   const enviar = useSendDealsToDialer();
 
