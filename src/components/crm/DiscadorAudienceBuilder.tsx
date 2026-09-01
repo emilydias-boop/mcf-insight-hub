@@ -173,6 +173,20 @@ export default function DiscadorAudienceBuilder() {
     }
   };
 
+  const enviarSelecionados = async () => {
+    if (!selecionados.length) return;
+    setProgresso({ feitos: 0, total: selecionados.length });
+    try {
+      await enviar.mutateAsync({
+        dealIds: selecionados,
+        bu,
+        onProgress: (feitos, t) => setProgresso({ feitos, total: t }),
+      });
+    } finally {
+      setProgresso(null);
+    }
+  };
+
   const fmtData = (v: string | null) =>
     v ? new Date(v).toLocaleDateString('pt-BR') : '—';
 
