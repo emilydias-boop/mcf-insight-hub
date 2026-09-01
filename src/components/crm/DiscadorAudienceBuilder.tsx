@@ -143,6 +143,7 @@ export default function DiscadorAudienceBuilder() {
       });
       if (error) throw error;
       setAmostra(((data as any)?.leads || []) as LeadPublico[]);
+      setSelecionados([]);
     } finally {
       setCarregandoAmostra(false);
     }
