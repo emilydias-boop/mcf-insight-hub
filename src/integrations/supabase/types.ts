@@ -6547,6 +6547,35 @@ export type Database = {
           },
         ]
       }
+      cota_contratada_stage_anterior: {
+        Row: {
+          deal_id: string
+          movido_em: string
+          registration_id: string | null
+          stage_id_anterior: string | null
+        }
+        Insert: {
+          deal_id: string
+          movido_em?: string
+          registration_id?: string | null
+          stage_id_anterior?: string | null
+        }
+        Update: {
+          deal_id?: string
+          movido_em?: string
+          registration_id?: string | null
+          stage_id_anterior?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cota_contratada_stage_anterior_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: true
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_clients: {
         Row: {
           cpf: string
@@ -16057,6 +16086,10 @@ export type Database = {
       consorcio_reverter_etapa_5_para_4: {
         Args: { p_motivo: string; p_registro_id: string }
         Returns: Json
+      }
+      consorcio_sincronizar_stage_cota: {
+        Args: { _deal_id: string }
+        Returns: string
       }
       corrigir_agendador_reuniao: {
         Args: { p_attendee_id: string; p_booked_by: string }
