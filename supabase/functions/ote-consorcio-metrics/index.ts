@@ -74,13 +74,13 @@ function limitesMes(month: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const tokenEsperado = Deno.env.get("OTE_METRICS_TOKEN");
+  const tokenEsperado = (Deno.env.get("OTE_METRICS_TOKEN") ?? "").trim();
   if (!tokenEsperado) return json({ error: "token_nao_configurado" }, 500);
 
   // Aceita "Authorization: Bearer <token>" ou header "x-ote-token"
   const auth = req.headers.get("authorization") ?? "";
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-  const recebido = req.headers.get("x-ote-token")?.trim() || bearer;
+  const recebido = (req.headers.get("x-ote-token") ?? "").trim() || bearer;
   if (!recebido || recebido !== tokenEsperado) return json({ error: "unauthorized" }, 401);
 
   const url = new URL(req.url);
