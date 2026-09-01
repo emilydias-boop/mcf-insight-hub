@@ -166,11 +166,21 @@ Deno.serve(async (req) => {
       const tabulacoes = await callSonax('lista_tabulacao', {})
       const campanhas = await callSonax('lista_campanha', { id_campanha: 'todas' })
 
+      // Sondas de agente: descobrir se os ramais estão logados na fila como
+      // agente de campanha. Sem agente na fila a campanha não tem para quem
+      // entregar a ligação. Tudo só leitura — nenhuma ação altera estado.
+      const atendentes = await callSonax('status_atendente', {})
+      const atendenteRamal = await callSonax('status_atendente', { ramal: String(payload.ramal ?? '105') })
+      const campanhaDetalhe = await callSonax('lista_campanha', { id_campanha: String(payload.id_campanha ?? '2816162') })
+
       return json({
         filas: { status: filas.status, raw: filas.data },
         pausas: { status: pausas.status, raw: pausas.data },
         tabulacoes: { status: tabulacoes.status, raw: tabulacoes.data },
         campanhas: { status: campanhas.status, raw: campanhas.data },
+        atendentes: { status: atendentes.status, raw: atendentes.data },
+        atendente_ramal: { status: atendenteRamal.status, raw: atendenteRamal.data, ramal_consultado: String(payload.ramal ?? '105') },
+        campanha_detalhe: { status: campanhaDetalhe.status, raw: campanhaDetalhe.data, id_consultado: String(payload.id_campanha ?? '2816162') },
       })
 
     }
