@@ -271,6 +271,9 @@ Deno.serve(async (req) => {
           descricao,
           status: 'ativa',
           created_by: userId || null,
+          // fila efetivamente usada nesta campanha (para o polling da fila)
+          id_fila: idFila,
+
         })
         .select()
         .single()
@@ -382,7 +385,21 @@ Deno.serve(async (req) => {
     const params: Record<string, string> = {}
     if (action === 'status_chamadas_na_fila') {
       // Doc oficial: esta ação recebe id_fila, não id_campanha.
-      params.id_fila = payload.id_fila ? String(payload.id_fila) : ID_FILA_FALLBACK
+      // Prioridade: id_fila do payload > id_fila gravado na campanha > fallback.
+      if (payload.id_fila) {
+        params.id_fila = String(payload.id_fila)
+      } else {
+        let idFilaCampanha: string | null = null
+        if (payload.campaign_id) {
+          const { data: campanhaFila } = await admin
+            .from('sonax_campaigns')
+            .select('id_fila')
+            .eq('id', String(payload.campaign_id))
+            .maybeSingle()
+          if (campanhaFila?.id_fila) idFilaCampanha = String(campanhaFila.id_fila)
+        }
+        params.id_fila = idFilaCampanha ?? ID_FILA_FALLBACK
+      }
     } else {
       if (payload.campaign_id) {
         const { data: campanha } = await admin
@@ -396,7 +413,30 @@ Deno.serve(async (req) => {
     }
     const r = await callSonax(action, params)
     if (!r.ok) return json({ error: 'sonax_erro', status: r.status, detail: r.data }, 502)
+
+    // Grava no banco o status intermediário que o polling já enxerga.
+    // Formato da linha: id_contato|status|id_chamada|id_fila
+    // Só atualiza contatos ainda 'pendente' — o resultado final vem do gatilho/webhook.
+    if (action === 'status_chamadas_andamento') {
+      try {
+        for (const linha of parsePipe(r.data)) {
+          const idContato = (linha[0] ?? '').trim()
+          const statusChamada = (linha[1] ?? '').trim()
+          if (!/^\d+$/.test(idContato) || !statusChamada) continue
+          await admin
+            .from('sonax_campaign_contacts')
+            .update({ status: statusChamada, status_atualizado_em: new Date().toISOString() })
+            .eq('sonax_id_contato_campanha', idContato)
+            .eq('status', 'pendente')
+        }
+      } catch (errGravacao) {
+        // Falha de gravação não pode quebrar o polling da tela.
+        console.error('falha_ao_gravar_status_andamento', String(errGravacao))
+      }
+    }
+
     return json({ success: true, raw: r.data, requested_by: email })
+
   } catch (e) {
     return json({ error: 'falha_sonax', detail: String(e) }, 502)
   }
