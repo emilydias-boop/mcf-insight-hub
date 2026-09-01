@@ -13522,37 +13522,52 @@ export type Database = {
       sonax_campaign_contacts: {
         Row: {
           added_by: string | null
+          atendida: boolean | null
           campaign_id: string
           contact_phone: string | null
           created_at: string
           deal_id: string | null
+          duracao_segundos: number | null
           id: string
+          sonax_call_event_id: string | null
+          sonax_id_chamada: string | null
           sonax_id_contato_campanha: string | null
           status: string
+          status_atualizado_em: string | null
           tabulacao: string | null
           updated_at: string
         }
         Insert: {
           added_by?: string | null
+          atendida?: boolean | null
           campaign_id: string
           contact_phone?: string | null
           created_at?: string
           deal_id?: string | null
+          duracao_segundos?: number | null
           id?: string
+          sonax_call_event_id?: string | null
+          sonax_id_chamada?: string | null
           sonax_id_contato_campanha?: string | null
           status?: string
+          status_atualizado_em?: string | null
           tabulacao?: string | null
           updated_at?: string
         }
         Update: {
           added_by?: string | null
+          atendida?: boolean | null
           campaign_id?: string
           contact_phone?: string | null
           created_at?: string
           deal_id?: string | null
+          duracao_segundos?: number | null
           id?: string
+          sonax_call_event_id?: string | null
+          sonax_id_chamada?: string | null
           sonax_id_contato_campanha?: string | null
           status?: string
+          status_atualizado_em?: string | null
           tabulacao?: string | null
           updated_at?: string
         }
@@ -13579,6 +13594,7 @@ export type Database = {
           created_by: string | null
           descricao: string
           id: string
+          id_fila: string | null
           sonax_campaign_id: string | null
           status: string
           updated_at: string
@@ -13588,6 +13604,7 @@ export type Database = {
           created_by?: string | null
           descricao: string
           id?: string
+          id_fila?: string | null
           sonax_campaign_id?: string | null
           status?: string
           updated_at?: string
@@ -13597,6 +13614,7 @@ export type Database = {
           created_by?: string | null
           descricao?: string
           id?: string
+          id_fila?: string | null
           sonax_campaign_id?: string | null
           status?: string
           updated_at?: string
@@ -17146,6 +17164,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sonax_casar_evento_com_campanha: {
+        Args: { _event_id: string }
+        Returns: string
+      }
       sonax_duration_seconds: { Args: { raw: string }; Returns: number }
       sonax_match_lead_by_phone: {
         Args: { p_phone: string }
