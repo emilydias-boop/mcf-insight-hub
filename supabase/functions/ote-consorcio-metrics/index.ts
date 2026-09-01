@@ -22,6 +22,13 @@ const CONSORCIO_ORIGIN_IDS = [
   "7d7b1cb5-2a44-4552-9eff-c3b798646b78", // Efeito Alavanca
 ];
 
+// Origens do funil MCF 50K / Incorporador (auditoria)
+const INCORPORADOR_ORIGIN_IDS = [
+  "e3c04f21-ba2c-4c66-84f8-b4341c826b1c", // PIPELINE INSIDE SALES
+  "7431cf4a-dc29-4208-95a6-28a499a06dac", // PILOTO ANAMNESE /  INDICAÇÃO
+];
+
+
 // Status que NÃO contam como agendamento vigente
 const STATUS_EXCLUIDOS = new Set([
   "cancelled",
@@ -96,8 +103,10 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  try {
-    // ---- R1 do funil consórcio no mês (attendees + slot + deal) ----
+  const PAGE = 1000;
+
+  /** R1 do mês para um conjunto de origens, com os predicados canônicos. */
+  const calcularR1 = async (originIds: string[]) => {
     const linhas: Array<{
       deal_id: string | null;
       status: string | null;
@@ -105,7 +114,6 @@ Deno.serve(async (req) => {
       scheduled_at: string;
     }> = [];
 
-    const PAGE = 1000;
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await admin
         .from("meeting_slot_attendees")
@@ -115,7 +123,7 @@ Deno.serve(async (req) => {
         .eq("meeting_slots.meeting_type", "r1")
         .gte("meeting_slots.scheduled_at", inicio)
         .lt("meeting_slots.scheduled_at", fim)
-        .in("crm_deals.origin_id", CONSORCIO_ORIGIN_IDS)
+        .in("crm_deals.origin_id", originIds)
         .range(from, from + PAGE - 1);
       if (error) throw error;
       const rows = (data ?? []) as unknown as Array<{
@@ -163,8 +171,23 @@ Deno.serve(async (req) => {
       if ((l.status ?? "").toLowerCase() === "completed") dealsRealizados.add(l.deal_id);
       if ((l.slot_status ?? "").toLowerCase() === "completed") dealsRealizadosSlot.add(l.deal_id);
     });
-    const r1_realizadas = dealsRealizados.size;
-    const r1_realizadas_slot = dealsRealizadosSlot.size;
+
+    return {
+      r1_agendadas,
+      r1_realizadas: dealsRealizados.size,
+      r1_realizadas_slot: dealsRealizadosSlot.size,
+    };
+  };
+
+  try {
+    // ---- R1 do funil consórcio no mês ----
+    const { r1_agendadas, r1_realizadas, r1_realizadas_slot } = await calcularR1(
+      CONSORCIO_ORIGIN_IDS,
+    );
+
+    // ---- R1 do funil MCF 50K / Incorporador no mês ----
+    const inc = await calcularR1(INCORPORADOR_ORIGIN_IDS);
+
 
     // ---- Cotas contratadas no mês (uma linha = uma carta) ----
     // Também deriva "Vendas Realizadas" = CLIENTES distintos, com a MESMA
@@ -220,7 +243,18 @@ Deno.serve(async (req) => {
       cotas_contratadas,
       vendas_realizadas,
       conversao_pct,
+      // Funil MCF 50K / Incorporador — apenas R1. Sem vendas/conversão:
+      // ainda não há fonte confiável (Hubla sem vínculo com deal).
+      incorporador_50k: {
+        origin_ids: INCORPORADOR_ORIGIN_IDS,
+        r1_agendadas: inc.r1_agendadas,
+        r1_realizadas: inc.r1_realizadas,
+        r1_realizadas_slot: inc.r1_realizadas_slot,
+        vendas_50k: null,
+        conversao_pct: null,
+      },
       gerado_em: new Date().toISOString(),
+
     });
   } catch (e) {
     console.error("ote-consorcio-metrics erro:", e);
