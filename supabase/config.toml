@@ -284,3 +284,7 @@ verify_jwt = false
 
 [functions.meetgeek-webhook]
 verify_jwt = false
+
+[functions.ote-consorcio-metrics]
+verify_jwt = false
+
