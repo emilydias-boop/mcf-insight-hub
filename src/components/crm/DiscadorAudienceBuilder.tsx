@@ -289,6 +289,25 @@ export default function DiscadorAudienceBuilder() {
               Ver amostra
             </Button>
             <Button
+              variant="secondary"
+              size="sm"
+              onClick={enviarSelecionados}
+              disabled={enviar.isPending || selecionados.length === 0}
+              data-testid="discador-enviar-selecionados"
+            >
+              {progresso ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  enviando {progresso.feitos} de {progresso.total}
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Enviar selecionados ({selecionados.length})
+                </>
+              )}
+            </Button>
+            <Button
               size="sm"
               onClick={criarEEnviar}
               disabled={enviar.isPending || !total}
