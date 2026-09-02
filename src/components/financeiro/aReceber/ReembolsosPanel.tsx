@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle, Download } from 'lucide-react';
+import { loadXLSX } from '@/lib/lazyExport';
 import { toast } from 'sonner';
 import { useArTitulos } from '@/hooks/useAReceber';
 import {
@@ -222,6 +223,90 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
     });
   }, [reembolsos, listSearch]);
 
+  // Totais dos cards (sobre a lista filtrada)
+  const totais = useMemo(() => {
+    const acc = {
+      pendenteValor: 0,
+      pendenteQtd: 0,
+      pagoValor: 0,
+      pagoQtd: 0,
+      canceladoValor: 0,
+      canceladoQtd: 0,
+    };
+    reembolsosFiltrados.forEach((r) => {
+      const v = Number(r.valor || 0);
+      if (r.status === 'pendente') {
+        acc.pendenteValor += v;
+        acc.pendenteQtd += 1;
+      } else if (r.status === 'pago') {
+        acc.pagoValor += v;
+        acc.pagoQtd += 1;
+      } else {
+        acc.canceladoValor += v;
+        acc.canceladoQtd += 1;
+      }
+    });
+    return acc;
+  }, [reembolsosFiltrados]);
+
+  const [exportando, setExportando] = useState(false);
+
+  const handleExportar = async () => {
+    if (reembolsosFiltrados.length === 0) {
+      toast.error('Nada para exportar com o filtro atual.');
+      return;
+    }
+    setExportando(true);
+    try {
+      const XLSX = await loadXLSX();
+      const fmt = (d?: string | null) =>
+        d ? format(new Date(String(d).slice(0, 10) + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '';
+      const rows = reembolsosFiltrados.map((r) => {
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
+        return {
+          'Nº Título': r.titulo?.id ? ticketNumber(r.titulo.id) : '',
+          Cliente: r.titulo?.customer_name || '',
+          'E-mail': r.titulo?.customer_email || '',
+          Documento: r.titulo?.customer_document || '',
+          Produto: r.titulo?.product_code || '',
+          'Valor do reembolso': Number(r.valor || 0),
+          Status: AR_REEMBOLSO_STATUS_LABEL[r.status],
+          'Data do pedido': fmt(r.data_pedido),
+          'Prev. pagamento': fmt(r.data_prevista_pagamento),
+          'Pago em': fmt(r.data_pagamento),
+          'Data da venda': fmt(r.titulo?.sale_date),
+          'Meio de pagamento': w.methodLabel,
+          'Prazo (dias)': w.limitDays ?? '',
+          'Limite para reembolsar': w.deadline ? fmtDay(w.deadline) : '',
+          'Prazo situação':
+            w.allowed === null
+              ? 'Sem data de venda'
+              : w.allowed
+                ? `${w.daysLeft}d restantes`
+                : `Expirado há ${Math.abs(w.daysLeft!)}d`,
+          Motivo: r.motivo || '',
+        };
+      });
+      rows.push({} as any);
+      rows.push({
+        Cliente: 'TOTAIS',
+        Status: `A reembolsar: ${totais.pendenteQtd} | Reembolsados: ${totais.pagoQtd} | Cancelados: ${totais.canceladoQtd}`,
+        'Valor do reembolso': totais.pendenteValor + totais.pagoValor,
+      } as any);
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Reembolsos');
+      XLSX.writeFile(wb, `reembolsos-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
+      toast.success('Exportação gerada.');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao exportar.');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] flex flex-col overflow-hidden p-4 sm:p-6">
@@ -394,14 +479,49 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
           {/* LISTA */}
           <TabsContent value="lista" className="mt-3 flex-1 min-h-0 flex flex-col gap-3">
-            <div className="relative max-w-md shrink-0">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Filtrar por nome do contato, e-mail, CPF ou produto…"
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
-                className="pl-8"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+              <Card className="border-amber-500/40 bg-amber-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-600">
+                    <Clock className="w-4 h-4" /> A reembolsar
+                  </div>
+                  <div className="text-2xl font-bold mt-1">{brl(totais.pendenteValor)}</div>
+                  <div className="text-xs text-muted-foreground">{totais.pendenteQtd} pendente(s)</div>
+                </CardContent>
+              </Card>
+              <Card className="border-emerald-500/40 bg-emerald-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-emerald-600">
+                    <CheckCircle2 className="w-4 h-4" /> Reembolsados
+                  </div>
+                  <div className="text-2xl font-bold mt-1">{brl(totais.pagoValor)}</div>
+                  <div className="text-xs text-muted-foreground">{totais.pagoQtd} pago(s)</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <XCircle className="w-4 h-4" /> Cancelados
+                  </div>
+                  <div className="text-2xl font-bold mt-1">{brl(totais.canceladoValor)}</div>
+                  <div className="text-xs text-muted-foreground">{totais.canceladoQtd} cancelado(s)</div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative max-w-md flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filtrar por nome do contato, e-mail, CPF ou produto…"
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <Button variant="outline" onClick={handleExportar} disabled={exportando}>
+                <Download className="w-4 h-4 mr-2" />
+                {exportando ? 'Exportando…' : 'Exportar Excel'}
+              </Button>
             </div>
             <Card className="flex-1 min-h-0 flex flex-col">
               <CardContent className="pt-4 flex-1 min-h-0 overflow-auto">
