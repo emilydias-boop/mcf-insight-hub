@@ -160,6 +160,19 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
     [titulos, selectedTituloId],
   );
 
+  // Títulos filtrados pela situação do prazo (180d cartão / 90d PIX)
+  const titulosFiltrados = useMemo(() => {
+    const base = (titulos || []).slice(0, 80);
+    if (filtroPrazoTit === 'todos') return base;
+    return base.filter((t) => {
+      const w = getRefundWindow(t.sale_date, t.payment_method);
+      if (filtroPrazoTit === 'sem_data') return w.allowed === null;
+      if (filtroPrazoTit === 'dentro') return w.allowed === true;
+      if (filtroPrazoTit === 'expirado') return w.allowed === false;
+      return true;
+    });
+  }, [titulos, filtroPrazoTit]);
+
   const [valor, setValor] = useState<string>('');
   const [motivo, setMotivo] = useState<string>('');
   const [dataPedido, setDataPedido] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
