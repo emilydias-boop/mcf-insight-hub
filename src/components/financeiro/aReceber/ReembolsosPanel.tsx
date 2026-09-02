@@ -211,17 +211,49 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
   const [editando, setEditando] = useState<ArReembolsoWithTitulo | null>(null);
   const [excluindo, setExcluindo] = useState<ArReembolsoWithTitulo | null>(null);
   const [listSearch, setListSearch] = useState('');
+  const [prazoDe, setPrazoDe] = useState('');
+  const [prazoAte, setPrazoAte] = useState('');
+  const [pedidoDe, setPedidoDe] = useState('');
+  const [pedidoAte, setPedidoAte] = useState('');
+  const [previstaDe, setPrevistaDe] = useState('');
+  const [previstaAte, setPrevistaAte] = useState('');
+
+  const limparFiltrosData = () => {
+    setPrazoDe(''); setPrazoAte('');
+    setPedidoDe(''); setPedidoAte('');
+    setPrevistaDe(''); setPrevistaAte('');
+  };
+
+  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte);
 
   const reembolsosFiltrados = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
-    if (!q) return reembolsos || [];
+    const inRange = (iso: string | null | undefined, de: string, ate: string) => {
+      if (!de && !ate) return true;
+      if (!iso) return false;
+      const d = String(iso).slice(0, 10);
+      if (de && d < de) return false;
+      if (ate && d > ate) return false;
+      return true;
+    };
     return (reembolsos || []).filter((r) => {
-      const t = r.titulo;
-      return [t?.customer_name, t?.customer_email, t?.customer_document, t?.product_code]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q));
+      if (q) {
+        const t = r.titulo;
+        const match = [t?.customer_name, t?.customer_email, t?.customer_document, t?.product_code]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+        if (!match) return false;
+      }
+      if (!inRange(r.data_pedido, pedidoDe, pedidoAte)) return false;
+      if (!inRange(r.data_prevista_pagamento, previstaDe, previstaAte)) return false;
+      if (prazoDe || prazoAte) {
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
+        const deadlineIso = w.deadline ? format(w.deadline, 'yyyy-MM-dd') : null;
+        if (!inRange(deadlineIso, prazoDe, prazoAte)) return false;
+      }
+      return true;
     });
-  }, [reembolsos, listSearch]);
+  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte]);
 
   // Totais dos cards (sobre a lista filtrada)
   const totais = useMemo(() => {
