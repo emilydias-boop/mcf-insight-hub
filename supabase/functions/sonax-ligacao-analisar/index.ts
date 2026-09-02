@@ -297,9 +297,19 @@ Deno.serve(async (req) => {
           },
         });
 
+        // Normaliza o renda_mensal antes de propagar: o banco só usa o campo
+        // quando ele existe e é numérico válido (> 0). Se a IA devolveu 0,
+        // null ou string, removemos a chave numa CÓPIA — o discovery original
+        // (com texto e 0) segue intacto para a atividade e para o resumo.
+        const discoveryPropagado: Record<string, unknown> = { ...discovery };
+        const rendaNumerica = Number(discoveryPropagado.renda_mensal);
+        if (!Number.isFinite(rendaNumerica) || rendaNumerica <= 0) {
+          delete discoveryPropagado.renda_mensal;
+        }
+
         const { data: prop } = await supabase.rpc("propagar_qualificacao", {
           _deal_id: item.deal_id,
-          _respostas: discovery,
+          _respostas: discoveryPropagado,
           _origem: "ia",
           _fonte: item.id_chamada,
         });
