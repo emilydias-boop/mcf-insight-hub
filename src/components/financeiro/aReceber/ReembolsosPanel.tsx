@@ -390,8 +390,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] flex flex-col gap-3 overflow-hidden p-4 sm:p-6">
-        <DialogHeader className="shrink-0">
+      <DialogContent className="!flex max-w-[98vw] w-[98vw] h-[96dvh] max-h-[96dvh] flex-col gap-2 overflow-hidden p-3 sm:p-4">
+        <DialogHeader className="shrink-0 space-y-1">
           <DialogTitle className="flex items-center gap-2">
             <Undo2 className="w-5 h-5 text-rose-600" />
             Reembolsos — baixa sem numerário
@@ -406,41 +406,41 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
         <Tabs
           value={tab}
           onValueChange={(v) => setTab(v as any)}
-          className="flex-1 min-h-0 flex flex-col"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
-          <TabsList>
+          <TabsList className="shrink-0">
             <TabsTrigger value="novo">Novo reembolso</TabsTrigger>
             <TabsTrigger value="lista">Reembolsos ({reembolsos?.length ?? 0})</TabsTrigger>
           </TabsList>
 
           {/* NOVO */}
-          <TabsContent value="novo" className="mt-3 flex-1 min-h-0 flex flex-col gap-3">
+          <TabsContent value="novo" className="mt-2 hidden min-h-0 flex-1 flex-col gap-2 overflow-hidden data-[state=active]:flex">
             {/* Cards de totais — quitados e em aberto */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+            <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3">
               <Card className="border-emerald-500/40 bg-emerald-500/5">
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-emerald-600">
                     <CheckCircle2 className="w-4 h-4" /> Quitados
                   </div>
-                  <div className="text-2xl font-bold mt-1">{brl(totaisTitulos.quitadoValor)}</div>
+                  <div className="mt-0.5 text-xl font-bold">{brl(totaisTitulos.quitadoValor)}</div>
                   <div className="text-xs text-muted-foreground">{totaisTitulos.quitadoQtd} título(s)</div>
                 </CardContent>
               </Card>
               <Card className="border-amber-500/40 bg-amber-500/5">
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-600">
                     <Clock className="w-4 h-4" /> Em aberto
                   </div>
-                  <div className="text-2xl font-bold mt-1">{brl(totaisTitulos.abertoValor)}</div>
+                  <div className="mt-0.5 text-xl font-bold">{brl(totaisTitulos.abertoValor)}</div>
                   <div className="text-xs text-muted-foreground">{totaisTitulos.abertoQtd} título(s)</div>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <Undo2 className="w-4 h-4" /> Total exibido
                   </div>
-                  <div className="text-2xl font-bold mt-1">{brl(totaisTitulos.quitadoValor + totaisTitulos.abertoValor)}</div>
+                  <div className="mt-0.5 text-xl font-bold">{brl(totaisTitulos.quitadoValor + totaisTitulos.abertoValor)}</div>
                   <div className="text-xs text-muted-foreground">{totaisTitulos.totalQtd} título(s)</div>
                 </CardContent>
               </Card>
@@ -473,8 +473,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
             {/* Tabela ocupando todo o espaço restante */}
             {/* Grid de títulos ocupando todo o espaço restante, com scroll vertical e lateral */}
-            <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
+            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <CardContent className="min-h-0 flex-1 overflow-auto p-0">
                 {loadingTit ? (
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : (titulos || []).length === 0 ? (
@@ -542,32 +542,32 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
           </TabsContent>
 
           {/* LISTA */}
-          <TabsContent value="lista" className="mt-3 flex-1 min-h-0 flex flex-col gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+          <TabsContent value="lista" className="mt-2 hidden min-h-0 flex-1 flex-col gap-2 overflow-hidden data-[state=active]:flex">
+            <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3">
               <Card className="border-amber-500/40 bg-amber-500/5">
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-600">
                     <Clock className="w-4 h-4" /> A reembolsar
                   </div>
-                  <div className="text-2xl font-bold mt-1">{brl(totais.pendenteValor)}</div>
+                  <div className="mt-0.5 text-xl font-bold">{brl(totais.pendenteValor)}</div>
                   <div className="text-xs text-muted-foreground">{totais.pendenteQtd} pendente(s)</div>
                 </CardContent>
               </Card>
               <Card className="border-emerald-500/40 bg-emerald-500/5">
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-emerald-600">
                     <CheckCircle2 className="w-4 h-4" /> Reembolsados
                   </div>
-                  <div className="text-2xl font-bold mt-1">{brl(totais.pagoValor)}</div>
+                  <div className="mt-0.5 text-xl font-bold">{brl(totais.pagoValor)}</div>
                   <div className="text-xs text-muted-foreground">{totais.pagoQtd} pago(s)</div>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     <XCircle className="w-4 h-4" /> Cancelados
                   </div>
-                  <div className="text-2xl font-bold mt-1">{brl(totais.canceladoValor)}</div>
+                  <div className="mt-0.5 text-xl font-bold">{brl(totais.canceladoValor)}</div>
                   <div className="text-xs text-muted-foreground">{totais.canceladoQtd} cancelado(s)</div>
                 </CardContent>
               </Card>
@@ -610,7 +610,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 {exportando ? 'Exportando…' : 'Exportar Excel'}
               </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 shrink-0">
+            <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-3">
               <div className="rounded-md border p-2 space-y-1">
                 <Label className="text-xs text-muted-foreground">Prazo limite</Label>
                 <div className="flex items-center gap-2">
@@ -648,8 +648,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
               </div>
             </div>
             {/* Grid de reembolsos ocupando todo o espaço restante, com scroll vertical e lateral */}
-            <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
+            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <CardContent className="min-h-0 flex-1 overflow-auto p-0">
                 {loadingList ? (
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : reembolsosFiltrados.length === 0 ? (
