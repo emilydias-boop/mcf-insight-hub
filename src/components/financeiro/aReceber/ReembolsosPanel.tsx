@@ -561,7 +561,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                             <PrazoReembolsoBadge
                               saleDate={r.titulo?.sale_date}
                               paymentMethod={r.titulo?.payment_method}
-                              referenceDate={r.data_pedido}
+                              /* prazo restante é sempre em relação a hoje, não à data do pedido */
                             />
                           </TableCell>
                           <TableCell className="text-xs">
