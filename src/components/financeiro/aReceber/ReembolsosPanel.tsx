@@ -227,6 +227,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
   const [editando, setEditando] = useState<ArReembolsoWithTitulo | null>(null);
   const [excluindo, setExcluindo] = useState<ArReembolsoWithTitulo | null>(null);
   const [listSearch, setListSearch] = useState('');
+  // filtros por status do reembolso e por situação do prazo
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendente' | 'pago' | 'cancelado'>('todos');
+  const [filtroPrazo, setFiltroPrazo] = useState<'todos' | 'dentro' | 'expirado' | 'sem_data'>('todos');
   const [prazoDe, setPrazoDe] = useState('');
   const [prazoAte, setPrazoAte] = useState('');
   const [pedidoDe, setPedidoDe] = useState('');
