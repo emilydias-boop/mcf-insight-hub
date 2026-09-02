@@ -173,6 +173,20 @@ Deno.serve(async (req) => {
       const atendenteRamal = await callSonax('status_atendente', { ramal: String(payload.ramal ?? '105') })
       const campanhaDetalhe = await callSonax('lista_campanha', { id_campanha: String(payload.id_campanha ?? '2816162') })
 
+      // Sondas de gravação: o webhook passou a chegar com URL_GRAVACAO vazio.
+      // A ação pega_gravacao deve devolver a gravação por id da chamada, mas não
+      // sabemos o nome exato do parâmetro — sonda com id_chamada e id em paralelo.
+      // Somente leitura — não altera estado na Sonax.
+      const idChamadaSonda = String(payload.id_chamada ?? '21212788062')
+      const gravacaoPorIdChamada = await callSonax('pega_gravacao', { id_chamada: idChamadaSonda })
+      const gravacaoPorId = await callSonax('pega_gravacao', { id: idChamadaSonda })
+
+      // pega_gravacao pode devolver o binário do áudio; o callSonax faz resp.text(),
+      // o que geraria uma string enorme de bytes e estouraria a resposta. Cortamos o
+      // raw das duas sondas de gravação para os primeiros 400 caracteres quando string.
+      const truncarRaw = (x: { data: unknown }) =>
+        ({ status: x.status, raw: typeof x.data === 'string' ? x.data.slice(0, 400) : x.data })
+
       return json({
         filas: { status: filas.status, raw: filas.data },
         pausas: { status: pausas.status, raw: pausas.data },
@@ -181,6 +195,8 @@ Deno.serve(async (req) => {
         atendentes: { status: atendentes.status, raw: atendentes.data },
         atendente_ramal: { status: atendenteRamal.status, raw: atendenteRamal.data, ramal_consultado: String(payload.ramal ?? '105') },
         campanha_detalhe: { status: campanhaDetalhe.status, raw: campanhaDetalhe.data, id_consultado: String(payload.id_campanha ?? '2816162') },
+        gravacao_id_chamada: { ...truncarRaw(gravacaoPorIdChamada), id_consultado: idChamadaSonda },
+        gravacao_id: { ...truncarRaw(gravacaoPorId), id_consultado: idChamadaSonda },
       })
 
     }
