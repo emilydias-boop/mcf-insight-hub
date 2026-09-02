@@ -398,14 +398,28 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
           {/* NOVO */}
           <TabsContent value="novo" className="space-y-4 mt-3 flex-1 min-h-0 overflow-y-auto">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por cliente, e-mail ou CPF…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por cliente, e-mail ou CPF…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <Select value={filtroPrazoTit} onValueChange={(v) => setFiltroPrazoTit(v as any)}>
+                <SelectTrigger className="w-[180px] h-9 text-xs">
+                  <Filter className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
+                  <SelectValue placeholder="Prazo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os prazos</SelectItem>
+                  <SelectItem value="dentro">Dentro do prazo</SelectItem>
+                  <SelectItem value="expirado">Expirados</SelectItem>
+                  <SelectItem value="sem_data">Sem data de venda</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Card>
