@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle, Download } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle, Download, Filter } from 'lucide-react';
 import { loadXLSX } from '@/lib/lazyExport';
 import { toast } from 'sonner';
 import { useArTitulos } from '@/hooks/useAReceber';
@@ -148,6 +149,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
   // ============ NOVO REEMBOLSO ============
   const [search, setSearch] = useState('');
+  // filtro de situação do prazo na aba "Novo reembolso"
+  const [filtroPrazoTit, setFiltroPrazoTit] = useState<'todos' | 'dentro' | 'expirado' | 'sem_data'>('todos');
   const { data: titulos, isLoading: loadingTit } = useArTitulos({
     search: search.trim() || undefined,
   });
@@ -156,6 +159,19 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
     () => (titulos || []).find((t) => t.id === selectedTituloId) || null,
     [titulos, selectedTituloId],
   );
+
+  // Títulos filtrados pela situação do prazo (180d cartão / 90d PIX)
+  const titulosFiltrados = useMemo(() => {
+    const base = (titulos || []).slice(0, 80);
+    if (filtroPrazoTit === 'todos') return base;
+    return base.filter((t) => {
+      const w = getRefundWindow(t.sale_date, t.payment_method);
+      if (filtroPrazoTit === 'sem_data') return w.allowed === null;
+      if (filtroPrazoTit === 'dentro') return w.allowed === true;
+      if (filtroPrazoTit === 'expirado') return w.allowed === false;
+      return true;
+    });
+  }, [titulos, filtroPrazoTit]);
 
   const [valor, setValor] = useState<string>('');
   const [motivo, setMotivo] = useState<string>('');
@@ -211,6 +227,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
   const [editando, setEditando] = useState<ArReembolsoWithTitulo | null>(null);
   const [excluindo, setExcluindo] = useState<ArReembolsoWithTitulo | null>(null);
   const [listSearch, setListSearch] = useState('');
+  // filtros por status do reembolso e por situação do prazo
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendente' | 'pago' | 'cancelado'>('todos');
+  const [filtroPrazo, setFiltroPrazo] = useState<'todos' | 'dentro' | 'expirado' | 'sem_data'>('todos');
   const [prazoDe, setPrazoDe] = useState('');
   const [prazoAte, setPrazoAte] = useState('');
   const [pedidoDe, setPedidoDe] = useState('');
@@ -222,9 +241,11 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
     setPrazoDe(''); setPrazoAte('');
     setPedidoDe(''); setPedidoAte('');
     setPrevistaDe(''); setPrevistaAte('');
+    setFiltroStatus('todos');
+    setFiltroPrazo('todos');
   };
 
-  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte);
+  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte || filtroStatus !== 'todos' || filtroPrazo !== 'todos');
 
   const reembolsosFiltrados = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
@@ -251,9 +272,18 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
         const deadlineIso = w.deadline ? format(w.deadline, 'yyyy-MM-dd') : null;
         if (!inRange(deadlineIso, prazoDe, prazoAte)) return false;
       }
+      // filtro por status do reembolso (a pagar / pago / cancelado)
+      if (filtroStatus !== 'todos' && r.status !== filtroStatus) return false;
+      // filtro por situação do prazo (dentro / expirado / sem data)
+      if (filtroPrazo !== 'todos') {
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
+        if (filtroPrazo === 'sem_data' && w.allowed !== null) return false;
+        if (filtroPrazo === 'dentro' && w.allowed !== true) return false;
+        if (filtroPrazo === 'expirado' && w.allowed !== false) return false;
+      }
       return true;
     });
-  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte]);
+  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte, filtroStatus, filtroPrazo]);
 
   // Totais dos cards (sobre a lista filtrada)
   const totais = useMemo(() => {
@@ -368,14 +398,28 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
           {/* NOVO */}
           <TabsContent value="novo" className="space-y-4 mt-3 flex-1 min-h-0 overflow-y-auto">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por cliente, e-mail ou CPF…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por cliente, e-mail ou CPF…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <Select value={filtroPrazoTit} onValueChange={(v) => setFiltroPrazoTit(v as any)}>
+                <SelectTrigger className="w-[180px] h-9 text-xs">
+                  <Filter className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
+                  <SelectValue placeholder="Prazo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os prazos</SelectItem>
+                  <SelectItem value="dentro">Dentro do prazo</SelectItem>
+                  <SelectItem value="expirado">Expirados</SelectItem>
+                  <SelectItem value="sem_data">Sem data de venda</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Card>
@@ -395,11 +439,12 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                         <TableHead>Cliente</TableHead>
                         <TableHead>Produto</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
+                        <TableHead>Prazo</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(titulos || []).slice(0, 80).map((t) => (
+                      {titulosFiltrados.map((t) => (
                         <TableRow
                           key={t.id}
                           className={`cursor-pointer hover:bg-muted/40 ${
@@ -426,6 +471,12 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                           <TableCell className="text-xs">{t.product_code}</TableCell>
                           <TableCell className="text-right text-sm">
                             {brl(Number(t.valor_total || 0))}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <PrazoReembolsoBadge
+                              saleDate={t.sale_date}
+                              paymentMethod={t.payment_method}
+                            />
                           </TableCell>
                           <TableCell className="text-xs">{t.status}</TableCell>
                         </TableRow>
@@ -469,8 +520,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 </CardContent>
               </Card>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="relative max-w-md flex-1">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="relative max-w-md flex-1 min-w-[200px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Filtrar por nome do contato, e-mail, CPF ou produto…"
@@ -479,6 +530,29 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                   className="pl-8"
                 />
               </div>
+              <Select value={filtroStatus} onValueChange={(v) => setFiltroStatus(v as any)}>
+                <SelectTrigger className="w-[150px] h-9 text-xs">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="pendente">A pagar</SelectItem>
+                  <SelectItem value="pago">Pago</SelectItem>
+                  <SelectItem value="cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filtroPrazo} onValueChange={(v) => setFiltroPrazo(v as any)}>
+                <SelectTrigger className="w-[170px] h-9 text-xs">
+                  <Filter className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
+                  <SelectValue placeholder="Prazo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os prazos</SelectItem>
+                  <SelectItem value="dentro">Dentro do prazo</SelectItem>
+                  <SelectItem value="expirado">Expirados</SelectItem>
+                  <SelectItem value="sem_data">Sem data de venda</SelectItem>
+                </SelectContent>
+              </Select>
               <Button variant="outline" onClick={handleExportar} disabled={exportando}>
                 <Download className="w-4 h-4 mr-2" />
                 {exportando ? 'Exportando…' : 'Exportar Excel'}
@@ -527,7 +601,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : reembolsosFiltrados.length === 0 ? (
                   <div className="text-center text-sm text-muted-foreground py-6">
-                    {listSearch ? 'Nenhum reembolso encontrado para esse filtro.' : 'Nenhum reembolso registrado.'}
+                    {listSearch || filtroStatus !== 'todos' || filtroPrazo !== 'todos' || temFiltroData
+                      ? 'Nenhum reembolso encontrado para esse filtro.'
+                      : 'Nenhum reembolso registrado.'}
                   </div>
                 ) : (
                   <Table>
