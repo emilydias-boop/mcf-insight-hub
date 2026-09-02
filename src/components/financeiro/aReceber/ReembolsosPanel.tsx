@@ -472,8 +472,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
             </div>
 
             {/* Tabela ocupando todo o espaço restante */}
-            <Card className="flex-1 min-h-0 flex flex-col">
-              <CardContent className="pt-4 flex-1 min-h-0 overflow-auto">
+            {/* Grid de títulos ocupando todo o espaço restante, com scroll vertical e lateral */}
+            <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
                 {loadingTit ? (
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : (titulos || []).length === 0 ? (
@@ -481,58 +482,60 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                     Nenhum título encontrado.
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[50px]"></TableHead>
-                        <TableHead>Nº</TableHead>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>Produto</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
-                        <TableHead>Prazo</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {titulosFiltrados.map((t) => (
-                        <TableRow
-                          key={t.id}
-                          className={`cursor-pointer hover:bg-muted/40 ${
-                            selectedTituloId === t.id ? 'bg-rose-500/10' : ''
-                          }`}
-                          onClick={() => handleSelect(t.id)}
-                        >
-                          <TableCell>
-                            <input
-                              type="radio"
-                              checked={selectedTituloId === t.id}
-                              onChange={() => handleSelect(t.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {ticketNumber(t.id)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium text-sm">{t.customer_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {t.customer_email || t.customer_document || '—'}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs">{t.product_code}</TableCell>
-                          <TableCell className="text-right text-sm">
-                            {brl(Number(t.valor_total || 0))}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            <PrazoReembolsoBadge
-                              saleDate={t.sale_date}
-                              paymentMethod={t.payment_method}
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs">{t.status}</TableCell>
+                  <div className="min-w-[760px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-background">
+                        <TableRow>
+                          <TableHead className="w-[50px]"></TableHead>
+                          <TableHead>Nº</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Produto</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead>Prazo</TableHead>
+                          <TableHead>Status</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {titulosFiltrados.map((t) => (
+                          <TableRow
+                            key={t.id}
+                            className={`cursor-pointer hover:bg-muted/40 ${
+                              selectedTituloId === t.id ? 'bg-rose-500/10' : ''
+                            }`}
+                            onClick={() => handleSelect(t.id)}
+                          >
+                            <TableCell>
+                              <input
+                                type="radio"
+                                checked={selectedTituloId === t.id}
+                                onChange={() => handleSelect(t.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {ticketNumber(t.id)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium text-sm">{t.customer_name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {t.customer_email || t.customer_document || '—'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs">{t.product_code}</TableCell>
+                            <TableCell className="text-right text-sm">
+                              {brl(Number(t.valor_total || 0))}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <PrazoReembolsoBadge
+                                saleDate={t.sale_date}
+                                paymentMethod={t.payment_method}
+                              />
+                            </TableCell>
+                            <TableCell className="text-xs">{t.status}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
