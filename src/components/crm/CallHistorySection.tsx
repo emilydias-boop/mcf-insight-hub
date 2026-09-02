@@ -275,6 +275,7 @@ function SonaxCallCard({ item }: { item: SonaxItem }) {
     ? item.recordingRaw.slice('sonax-api:'.length).trim()
     : null;
 
+  return (
 
     <div className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
       <div className="flex justify-between items-start gap-2">
