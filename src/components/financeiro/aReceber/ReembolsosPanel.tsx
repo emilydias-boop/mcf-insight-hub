@@ -149,6 +149,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
   // ============ NOVO REEMBOLSO ============
   const [search, setSearch] = useState('');
+  // filtro de situação do prazo na aba "Novo reembolso"
+  const [filtroPrazoTit, setFiltroPrazoTit] = useState<'todos' | 'dentro' | 'expirado' | 'sem_data'>('todos');
   const { data: titulos, isLoading: loadingTit } = useArTitulos({
     search: search.trim() || undefined,
   });
