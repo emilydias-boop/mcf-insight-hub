@@ -7,6 +7,9 @@ const SUPABASE_URL = 'https://rehcfgqvigfcekiipqkc.supabase.co';
  */
 export function sonaxRecordingProxy(url: string | null | undefined): string | null {
   if (!url) return null;
+  // Marcadores internos (ex.: "sonax-api:<id_chamada>") não são URLs tocáveis;
+  // quem trata isso é o SonaxApiRecording, via busca autenticada.
+  if (!/^https?:\/\//i.test(url)) return null;
   try {
     const parsed = new URL(url);
     if (parsed.hostname !== 'gravacoes.sonax.cloud') return url;
