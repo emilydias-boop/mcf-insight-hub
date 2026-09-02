@@ -270,9 +270,18 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
         const deadlineIso = w.deadline ? format(w.deadline, 'yyyy-MM-dd') : null;
         if (!inRange(deadlineIso, prazoDe, prazoAte)) return false;
       }
+      // filtro por status do reembolso (a pagar / pago / cancelado)
+      if (filtroStatus !== 'todos' && r.status !== filtroStatus) return false;
+      // filtro por situação do prazo (dentro / expirado / sem data)
+      if (filtroPrazo !== 'todos') {
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
+        if (filtroPrazo === 'sem_data' && w.allowed !== null) return false;
+        if (filtroPrazo === 'dentro' && w.allowed !== true) return false;
+        if (filtroPrazo === 'expirado' && w.allowed !== false) return false;
+      }
       return true;
     });
-  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte]);
+  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte, filtroStatus, filtroPrazo]);
 
   // Totais dos cards (sobre a lista filtrada)
   const totais = useMemo(() => {
