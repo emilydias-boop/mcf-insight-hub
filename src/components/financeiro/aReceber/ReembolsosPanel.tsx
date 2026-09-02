@@ -439,11 +439,12 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                         <TableHead>Cliente</TableHead>
                         <TableHead>Produto</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
+                        <TableHead>Prazo</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(titulos || []).slice(0, 80).map((t) => (
+                      {titulosFiltrados.map((t) => (
                         <TableRow
                           key={t.id}
                           className={`cursor-pointer hover:bg-muted/40 ${
