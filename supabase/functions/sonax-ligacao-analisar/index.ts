@@ -64,6 +64,10 @@ const SCHEMA = {
       type: "object",
       properties: {
         renda: { type: "string" },
+        renda_mensal: {
+          type: "number",
+          description: "renda mensal do lead em reais, apenas o numero; 0 quando nao informado",
+        },
         socio: { type: "string" },
         profissao: { type: "string" },
         tempo_mcf: { type: "string" },
@@ -73,6 +77,7 @@ const SCHEMA = {
       },
       required: [
         "renda",
+        "renda_mensal",
         "socio",
         "profissao",
         "tempo_mcf",
