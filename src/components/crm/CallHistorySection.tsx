@@ -257,6 +257,13 @@ function SonaxCallCard({ item }: { item: SonaxItem }) {
           </audio>
         </div>
       )}
+
+      {/* Sem URL pública: o webhook gravou o marcador `sonax-api:<id_chamada>`.
+          Buscamos o áudio na API somente quando o usuário pede para ouvir. */}
+      {!item.recording && apiCallId && (
+        <SonaxApiRecording idChamada={apiCallId} />
+      )}
+
     </div>
   );
 }
