@@ -294,7 +294,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       const fmt = (d?: string | null) =>
         d ? format(new Date(String(d).slice(0, 10) + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '';
       const rows = reembolsosFiltrados.map((r) => {
-        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
+        // dias restantes calculados a partir de hoje (mesma regra do formulário)
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
+
         return {
           'Nº Título': r.titulo?.id ? ticketNumber(r.titulo.id) : '',
           Cliente: r.titulo?.customer_name || '',
