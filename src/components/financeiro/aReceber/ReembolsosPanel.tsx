@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle, Download } from 'lucide-react';
+import { loadXLSX } from '@/lib/lazyExport';
 import { toast } from 'sonner';
 import { useArTitulos } from '@/hooks/useAReceber';
 import {
