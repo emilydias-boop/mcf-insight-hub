@@ -414,8 +414,40 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
           </TabsList>
 
           {/* NOVO */}
-          <TabsContent value="novo" className="space-y-4 mt-3 flex-1 min-h-0 overflow-y-auto">
-            <div className="flex items-center gap-2">
+          <TabsContent value="novo" className="mt-3 flex-1 min-h-0 flex flex-col gap-3">
+            {/* Cards de totais — quitados e em aberto */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+              <Card className="border-emerald-500/40 bg-emerald-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-emerald-600">
+                    <CheckCircle2 className="w-4 h-4" /> Quitados
+                  </div>
+                  <div className="text-2xl font-bold mt-1">{brl(totaisTitulos.quitadoValor)}</div>
+                  <div className="text-xs text-muted-foreground">{totaisTitulos.quitadoQtd} título(s)</div>
+                </CardContent>
+              </Card>
+              <Card className="border-amber-500/40 bg-amber-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-amber-600">
+                    <Clock className="w-4 h-4" /> Em aberto
+                  </div>
+                  <div className="text-2xl font-bold mt-1">{brl(totaisTitulos.abertoValor)}</div>
+                  <div className="text-xs text-muted-foreground">{totaisTitulos.abertoQtd} título(s)</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <Undo2 className="w-4 h-4" /> Total exibido
+                  </div>
+                  <div className="text-2xl font-bold mt-1">{brl(totaisTitulos.quitadoValor + totaisTitulos.abertoValor)}</div>
+                  <div className="text-xs text-muted-foreground">{totaisTitulos.totalQtd} título(s)</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Busca + filtro de prazo */}
+            <div className="flex items-center gap-2 shrink-0">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -439,8 +471,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
               </Select>
             </div>
 
-            <Card>
-              <CardContent className="pt-4 max-h-[45vh] overflow-y-auto">
+            {/* Tabela ocupando todo o espaço restante */}
+            <Card className="flex-1 min-h-0 flex flex-col">
+              <CardContent className="pt-4 flex-1 min-h-0 overflow-auto">
                 {loadingTit ? (
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : (titulos || []).length === 0 ? (
@@ -503,7 +536,6 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 )}
               </CardContent>
             </Card>
-
           </TabsContent>
 
           {/* LISTA */}
