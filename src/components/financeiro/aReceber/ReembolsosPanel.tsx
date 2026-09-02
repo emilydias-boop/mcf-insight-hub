@@ -472,6 +472,12 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                           <TableCell className="text-right text-sm">
                             {brl(Number(t.valor_total || 0))}
                           </TableCell>
+                          <TableCell className="text-xs">
+                            <PrazoReembolsoBadge
+                              saleDate={t.sale_date}
+                              paymentMethod={t.payment_method}
+                            />
+                          </TableCell>
                           <TableCell className="text-xs">{t.status}</TableCell>
                         </TableRow>
                       ))}
