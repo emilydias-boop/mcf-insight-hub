@@ -644,6 +644,98 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
           </TabsContent>
         </Tabs>
 
+        {/* FORMULÁRIO NOVO REEMBOLSO — abre como caixinha sobre a tabela */}
+        <Dialog
+          open={!!selectedTitulo}
+          onOpenChange={(v) => {
+            if (!v) {
+              setSelectedTituloId(null);
+              setValor('');
+              setMotivo('');
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Undo2 className="w-4 h-4 text-rose-600" />
+                Novo reembolso
+              </DialogTitle>
+              <DialogDescription>
+                Título {selectedTitulo ? ticketNumber(selectedTitulo.id) : ''} —{' '}
+                <b>{selectedTitulo?.customer_name}</b>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              {selectedTitulo && (
+                <PrazoReembolsoInfo
+                  saleDate={selectedTitulo.sale_date}
+                  paymentMethod={selectedTitulo.payment_method}
+                  referenceDate={dataPedido}
+                />
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Valor do reembolso</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={valor}
+                    onChange={(e) => setValor(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Data do pedido</Label>
+                  <Input
+                    type="date"
+                    value={dataPedido}
+                    onChange={(e) => setDataPedido(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Data prevista para pagamento</Label>
+                  <Input
+                    type="date"
+                    value={dataPrevista}
+                    onChange={(e) => setDataPrevista(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Motivo</Label>
+                  <Textarea
+                    rows={2}
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder="Descreva o motivo do reembolso"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSelectedTituloId(null);
+                  setValor('');
+                  setMotivo('');
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                disabled={criar.isPending}
+                onClick={handleCriar}
+              >
+                {criar.isPending ? 'Criando…' : 'Criar reembolso'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <EditarReembolsoDialog
           reembolso={editando}
           onOpenChange={(v) => !v && setEditando(null)}
