@@ -64,6 +64,10 @@ const SCHEMA = {
       type: "object",
       properties: {
         renda: { type: "string" },
+        renda_mensal: {
+          type: "number",
+          description: "renda mensal do lead em reais, apenas o numero; 0 quando nao informado",
+        },
         socio: { type: "string" },
         profissao: { type: "string" },
         tempo_mcf: { type: "string" },
@@ -73,6 +77,7 @@ const SCHEMA = {
       },
       required: [
         "renda",
+        "renda_mensal",
         "socio",
         "profissao",
         "tempo_mcf",
@@ -158,6 +163,7 @@ REGRAS:
 - Preencha cada campo de "discovery" SOMENTE com o que o lead disse nesta ligação. Nunca deduza, nunca complete com o que seria plausível.
 - Campo sem informação na ligação = exatamente a string: não informado
 - "renda": transcreva o que o lead falou, com o número (ex.: "Ganha cerca de 10 mil por mês"). Não converta e não arredonde.
+- "renda_mensal": o MESMO valor da renda convertido em número puro de reais (ex.: "oito mil" vira 8000, "10k" vira 10000, "R$ 12.500" vira 12500). Se o lead falou faixa, use o menor valor. Se o lead falou renda do casal ou da família, use o valor total mencionado. Se não informou renda, use 0.
 - "finalidade_obra": use exatamente uma destas opções, quando o lead deixar claro: Construir para morar | Construir para vender ou investir | Construir para alugar. Se não ficou claro: não informado
 - "constroi_venda" é EXPERIÊNCIA (se o lead já constrói hoje), não intenção futura.
 - "tempo_mcf": há quanto tempo o lead conhece a MCF.
@@ -291,9 +297,19 @@ Deno.serve(async (req) => {
           },
         });
 
+        // Normaliza o renda_mensal antes de propagar: o banco só usa o campo
+        // quando ele existe e é numérico válido (> 0). Se a IA devolveu 0,
+        // null ou string, removemos a chave numa CÓPIA — o discovery original
+        // (com texto e 0) segue intacto para a atividade e para o resumo.
+        const discoveryPropagado: Record<string, unknown> = { ...discovery };
+        const rendaNumerica = Number(discoveryPropagado.renda_mensal);
+        if (!Number.isFinite(rendaNumerica) || rendaNumerica <= 0) {
+          delete discoveryPropagado.renda_mensal;
+        }
+
         const { data: prop } = await supabase.rpc("propagar_qualificacao", {
           _deal_id: item.deal_id,
-          _respostas: discovery,
+          _respostas: discoveryPropagado,
           _origem: "ia",
           _fonte: item.id_chamada,
         });
