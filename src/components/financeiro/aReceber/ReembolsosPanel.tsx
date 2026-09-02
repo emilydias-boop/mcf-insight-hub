@@ -222,6 +222,90 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
     });
   }, [reembolsos, listSearch]);
 
+  // Totais dos cards (sobre a lista filtrada)
+  const totais = useMemo(() => {
+    const acc = {
+      pendenteValor: 0,
+      pendenteQtd: 0,
+      pagoValor: 0,
+      pagoQtd: 0,
+      canceladoValor: 0,
+      canceladoQtd: 0,
+    };
+    reembolsosFiltrados.forEach((r) => {
+      const v = Number(r.valor || 0);
+      if (r.status === 'pendente') {
+        acc.pendenteValor += v;
+        acc.pendenteQtd += 1;
+      } else if (r.status === 'pago') {
+        acc.pagoValor += v;
+        acc.pagoQtd += 1;
+      } else {
+        acc.canceladoValor += v;
+        acc.canceladoQtd += 1;
+      }
+    });
+    return acc;
+  }, [reembolsosFiltrados]);
+
+  const [exportando, setExportando] = useState(false);
+
+  const handleExportar = async () => {
+    if (reembolsosFiltrados.length === 0) {
+      toast.error('Nada para exportar com o filtro atual.');
+      return;
+    }
+    setExportando(true);
+    try {
+      const XLSX = await loadXLSX();
+      const fmt = (d?: string | null) =>
+        d ? format(new Date(String(d).slice(0, 10) + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '';
+      const rows = reembolsosFiltrados.map((r) => {
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
+        return {
+          'Nº Título': r.titulo?.id ? ticketNumber(r.titulo.id) : '',
+          Cliente: r.titulo?.customer_name || '',
+          'E-mail': r.titulo?.customer_email || '',
+          Documento: r.titulo?.customer_document || '',
+          Produto: r.titulo?.product_code || '',
+          'Valor do reembolso': Number(r.valor || 0),
+          Status: AR_REEMBOLSO_STATUS_LABEL[r.status],
+          'Data do pedido': fmt(r.data_pedido),
+          'Prev. pagamento': fmt(r.data_prevista_pagamento),
+          'Pago em': fmt(r.data_pagamento),
+          'Data da venda': fmt(r.titulo?.sale_date),
+          'Meio de pagamento': w.methodLabel,
+          'Prazo (dias)': w.limitDays ?? '',
+          'Limite para reembolsar': w.deadline ? fmtDay(w.deadline) : '',
+          'Prazo situação':
+            w.allowed === null
+              ? 'Sem data de venda'
+              : w.allowed
+                ? `${w.daysLeft}d restantes`
+                : `Expirado há ${Math.abs(w.daysLeft!)}d`,
+          Motivo: r.motivo || '',
+        };
+      });
+      rows.push({} as any);
+      rows.push({
+        Cliente: 'TOTAIS',
+        Status: `A reembolsar: ${totais.pendenteQtd} | Reembolsados: ${totais.pagoQtd} | Cancelados: ${totais.canceladoQtd}`,
+        'Valor do reembolso': totais.pendenteValor + totais.pagoValor,
+      } as any);
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Reembolsos');
+      XLSX.writeFile(wb, `reembolsos-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
+      toast.success('Exportação gerada.');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao exportar.');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] flex flex-col overflow-hidden p-4 sm:p-6">
