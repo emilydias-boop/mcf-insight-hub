@@ -247,7 +247,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       if (!inRange(r.data_pedido, pedidoDe, pedidoAte)) return false;
       if (!inRange(r.data_prevista_pagamento, previstaDe, previstaAte)) return false;
       if (prazoDe || prazoAte) {
-        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
         const deadlineIso = w.deadline ? format(w.deadline, 'yyyy-MM-dd') : null;
         if (!inRange(deadlineIso, prazoDe, prazoAte)) return false;
       }
@@ -294,7 +294,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       const fmt = (d?: string | null) =>
         d ? format(new Date(String(d).slice(0, 10) + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '';
       const rows = reembolsosFiltrados.map((r) => {
-        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
+        // dias restantes calculados a partir de hoje (mesma regra do formulário)
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
+
         return {
           'Nº Título': r.titulo?.id ? ticketNumber(r.titulo.id) : '',
           Cliente: r.titulo?.customer_name || '',
@@ -561,7 +563,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                             <PrazoReembolsoBadge
                               saleDate={r.titulo?.sale_date}
                               paymentMethod={r.titulo?.payment_method}
-                              referenceDate={r.data_pedido}
+                              /* prazo restante é sempre em relação a hoje, não à data do pedido */
                             />
                           </TableCell>
                           <TableCell className="text-xs">
