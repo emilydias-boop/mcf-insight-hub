@@ -25,6 +25,8 @@ interface DiagnosticoResult {
   atendentes?: { status: number; raw: unknown };
   atendente_ramal?: { status: number; raw: unknown; ramal_consultado: string };
   campanha_detalhe?: { status: number; raw: unknown; id_consultado: string };
+  gravacao_id_chamada?: { status: number; raw: unknown; id_consultado: string };
+  gravacao_id?: { status: number; raw: unknown; id_consultado: string };
 }
 
 const DiagnosticoBloco = ({ titulo, dados }: { titulo: string; dados: { status: number; raw: unknown } }) => (
@@ -315,6 +317,18 @@ export default function Discador() {
                   <DiagnosticoBloco
                     titulo={`Campanha ${diagResult.campanha_detalhe.id_consultado}`}
                     dados={diagResult.campanha_detalhe}
+                  />
+                )}
+                {diagResult.gravacao_id_chamada && (
+                  <DiagnosticoBloco
+                    titulo={`Gravação (id_chamada=${diagResult.gravacao_id_chamada.id_consultado})`}
+                    dados={diagResult.gravacao_id_chamada}
+                  />
+                )}
+                {diagResult.gravacao_id && (
+                  <DiagnosticoBloco
+                    titulo={`Gravação (id=${diagResult.gravacao_id.id_consultado})`}
+                    dados={diagResult.gravacao_id}
                   />
                 )}
               </div>
