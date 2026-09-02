@@ -601,7 +601,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : reembolsosFiltrados.length === 0 ? (
                   <div className="text-center text-sm text-muted-foreground py-6">
-                    {listSearch ? 'Nenhum reembolso encontrado para esse filtro.' : 'Nenhum reembolso registrado.'}
+                    {listSearch || filtroStatus !== 'todos' || filtroPrazo !== 'todos' || temFiltroData
+                      ? 'Nenhum reembolso encontrado para esse filtro.'
+                      : 'Nenhum reembolso registrado.'}
                   </div>
                 ) : (
                   <Table>
