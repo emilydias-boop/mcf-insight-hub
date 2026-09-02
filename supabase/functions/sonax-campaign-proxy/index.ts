@@ -161,42 +161,23 @@ Deno.serve(async (req) => {
       const isAdmin = (roles ?? []).some((r) => String((r as { role: unknown }).role) === 'admin')
       if (!isAdmin) return json({ error: 'forbidden' }, 403)
 
+      // Regra oficial Sonax: transações que retornam '404 not found' três vezes
+      // consecutivas bloqueiam o token da conta. Por isso o diagnóstico só contém
+      // chamadas que comprovadamente respondem 200 — lista_filas, lista_pausas,
+      // lista_tabulacao e lista_campanha. As sondas de status_atendente e
+      // pega_gravacao (que sempre devolviam 404) foram removidas.
       const filas = await callSonax('lista_filas', {})
       const pausas = await callSonax('lista_pausas', {})
       const tabulacoes = await callSonax('lista_tabulacao', {})
       const campanhas = await callSonax('lista_campanha', { id_campanha: 'todas' })
-
-      // Sondas de agente: descobrir se os ramais estão logados na fila como
-      // agente de campanha. Sem agente na fila a campanha não tem para quem
-      // entregar a ligação. Tudo só leitura — nenhuma ação altera estado.
-      const atendentes = await callSonax('status_atendente', {})
-      const atendenteRamal = await callSonax('status_atendente', { ramal: String(payload.ramal ?? '105') })
       const campanhaDetalhe = await callSonax('lista_campanha', { id_campanha: String(payload.id_campanha ?? '2816162') })
-
-      // Sondas de gravação: o webhook passou a chegar com URL_GRAVACAO vazio.
-      // A ação pega_gravacao deve devolver a gravação por id da chamada, mas não
-      // sabemos o nome exato do parâmetro — sonda com id_chamada e id em paralelo.
-      // Somente leitura — não altera estado na Sonax.
-      const idChamadaSonda = String(payload.id_chamada ?? '21212788062')
-      const gravacaoPorIdChamada = await callSonax('pega_gravacao', { id_chamada: idChamadaSonda })
-      const gravacaoPorId = await callSonax('pega_gravacao', { id: idChamadaSonda })
-
-      // pega_gravacao pode devolver o binário do áudio; o callSonax faz resp.text(),
-      // o que geraria uma string enorme de bytes e estouraria a resposta. Cortamos o
-      // raw das duas sondas de gravação para os primeiros 400 caracteres quando string.
-      const truncarRaw = (x: { data: unknown }) =>
-        ({ status: x.status, raw: typeof x.data === 'string' ? x.data.slice(0, 400) : x.data })
 
       return json({
         filas: { status: filas.status, raw: filas.data },
         pausas: { status: pausas.status, raw: pausas.data },
         tabulacoes: { status: tabulacoes.status, raw: tabulacoes.data },
         campanhas: { status: campanhas.status, raw: campanhas.data },
-        atendentes: { status: atendentes.status, raw: atendentes.data },
-        atendente_ramal: { status: atendenteRamal.status, raw: atendenteRamal.data, ramal_consultado: String(payload.ramal ?? '105') },
         campanha_detalhe: { status: campanhaDetalhe.status, raw: campanhaDetalhe.data, id_consultado: String(payload.id_campanha ?? '2816162') },
-        gravacao_id_chamada: { ...truncarRaw(gravacaoPorIdChamada), id_consultado: idChamadaSonda },
-        gravacao_id: { ...truncarRaw(gravacaoPorId), id_consultado: idChamadaSonda },
       })
 
     }
