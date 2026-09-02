@@ -520,8 +520,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 </CardContent>
               </Card>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="relative max-w-md flex-1">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="relative max-w-md flex-1 min-w-[200px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Filtrar por nome do contato, e-mail, CPF ou produto…"
@@ -530,6 +530,29 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                   className="pl-8"
                 />
               </div>
+              <Select value={filtroStatus} onValueChange={(v) => setFiltroStatus(v as any)}>
+                <SelectTrigger className="w-[150px] h-9 text-xs">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="pendente">A pagar</SelectItem>
+                  <SelectItem value="pago">Pago</SelectItem>
+                  <SelectItem value="cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filtroPrazo} onValueChange={(v) => setFiltroPrazo(v as any)}>
+                <SelectTrigger className="w-[170px] h-9 text-xs">
+                  <Filter className="w-3.5 h-3.5 mr-1 text-muted-foreground" />
+                  <SelectValue placeholder="Prazo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os prazos</SelectItem>
+                  <SelectItem value="dentro">Dentro do prazo</SelectItem>
+                  <SelectItem value="expirado">Expirados</SelectItem>
+                  <SelectItem value="sem_data">Sem data de venda</SelectItem>
+                </SelectContent>
+              </Select>
               <Button variant="outline" onClick={handleExportar} disabled={exportando}>
                 <Download className="w-4 h-4 mr-2" />
                 {exportando ? 'Exportando…' : 'Exportar Excel'}
