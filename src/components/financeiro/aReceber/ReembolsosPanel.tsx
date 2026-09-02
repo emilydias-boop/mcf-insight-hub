@@ -555,6 +555,43 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 {exportando ? 'Exportando…' : 'Exportar Excel'}
               </Button>
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 shrink-0">
+              <div className="rounded-md border p-2 space-y-1">
+                <Label className="text-xs text-muted-foreground">Prazo limite</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={prazoDe} onChange={(e) => setPrazoDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={prazoAte} onChange={(e) => setPrazoAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="rounded-md border p-2 space-y-1">
+                <Label className="text-xs text-muted-foreground">Data de solicitação</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={pedidoDe} onChange={(e) => setPedidoDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={pedidoAte} onChange={(e) => setPedidoAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="rounded-md border p-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Data prevista</Label>
+                  {temFiltroData && (
+                    <button
+                      type="button"
+                      onClick={limparFiltrosData}
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                    >
+                      limpar datas
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={previstaDe} onChange={(e) => setPrevistaDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={previstaAte} onChange={(e) => setPrevistaAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+            </div>
             <Card className="flex-1 min-h-0 flex flex-col">
               <CardContent className="pt-4 flex-1 min-h-0 overflow-auto">
                 {loadingList ? (
