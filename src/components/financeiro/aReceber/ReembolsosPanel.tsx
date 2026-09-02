@@ -241,9 +241,11 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
     setPrazoDe(''); setPrazoAte('');
     setPedidoDe(''); setPedidoAte('');
     setPrevistaDe(''); setPrevistaAte('');
+    setFiltroStatus('todos');
+    setFiltroPrazo('todos');
   };
 
-  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte);
+  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte || filtroStatus !== 'todos' || filtroPrazo !== 'todos');
 
   const reembolsosFiltrados = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
