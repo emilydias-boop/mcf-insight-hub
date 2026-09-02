@@ -647,8 +647,9 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 </div>
               </div>
             </div>
-            <Card className="flex-1 min-h-0 flex flex-col">
-              <CardContent className="pt-4 flex-1 min-h-0 overflow-auto">
+            {/* Grid de reembolsos ocupando todo o espaço restante, com scroll vertical e lateral */}
+            <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
                 {loadingList ? (
                   <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
                 ) : reembolsosFiltrados.length === 0 ? (
@@ -658,116 +659,118 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                       : 'Nenhum reembolso registrado.'}
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>Produto</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
-                        <TableHead>Prazo limite</TableHead>
-                        <TableHead>Pedido</TableHead>
-                        <TableHead>Prev. pagamento</TableHead>
-                        <TableHead>Pago em</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reembolsosFiltrados.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell>
-                            <div className="font-medium text-sm">
-                              {r.titulo?.customer_name || '—'}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {r.titulo?.customer_email || r.titulo?.customer_document || '—'}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs">{r.titulo?.product_code || '—'}</TableCell>
-                          <TableCell className="text-right text-sm font-medium text-rose-600">
-                            {brl(Number(r.valor || 0))}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            <PrazoReembolsoBadge
-                              saleDate={r.titulo?.sale_date}
-                              paymentMethod={r.titulo?.payment_method}
-                              /* prazo restante é sempre em relação a hoje, não à data do pedido */
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {r.data_pedido
-                              ? format(new Date(r.data_pedido + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
-                              : '—'}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {r.data_prevista_pagamento
-                              ? format(new Date(r.data_prevista_pagamento + 'T00:00:00'), 'dd/MM/yyyy', {
-                                  locale: ptBR,
-                                })
-                              : '—'}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {r.data_pagamento
-                              ? format(new Date(r.data_pagamento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
-                              : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge status={r.status} />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              {r.status !== 'cancelado' && (
-                                <Button size="sm" variant="outline" onClick={() => setEditando(r)}>
-                                  Editar
-                                </Button>
-                              )}
-                              {r.status === 'cancelado' && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => setExcluindo(r)}
-                                >
-                                  Excluir
-                                </Button>
-                              )}
-                              {r.status === 'pendente' && (
-                                <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setPagoDialog({ id: r.id, valor: Number(r.valor || 0) });
-                                    setDataEfetiva(
-                                      r.data_prevista_pagamento || format(new Date(), 'yyyy-MM-dd'),
-                                    );
-                                  }}
-                                >
-                                  Marcar pago
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={async () => {
-                                    if (!confirm('Cancelar este reembolso?')) return;
-                                    try {
-                                      await cancelar.mutateAsync({ id: r.id });
-                                      toast.success('Reembolso cancelado.');
-                                    } catch (e: any) {
-                                      toast.error(e?.message || 'Erro ao cancelar reembolso.');
-                                    }
-                                  }}
-                                >
-                                  Cancelar
-                                </Button>
-                                </>
-                              )}
-                            </div>
-                          </TableCell>
+                  <div className="min-w-[1100px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 z-10 bg-background">
+                        <TableRow>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Produto</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead>Prazo limite</TableHead>
+                          <TableHead>Pedido</TableHead>
+                          <TableHead>Prev. pagamento</TableHead>
+                          <TableHead>Pago em</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {reembolsosFiltrados.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell>
+                              <div className="font-medium text-sm">
+                                {r.titulo?.customer_name || '—'}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {r.titulo?.customer_email || r.titulo?.customer_document || '—'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs">{r.titulo?.product_code || '—'}</TableCell>
+                            <TableCell className="text-right text-sm font-medium text-rose-600">
+                              {brl(Number(r.valor || 0))}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <PrazoReembolsoBadge
+                                saleDate={r.titulo?.sale_date}
+                                paymentMethod={r.titulo?.payment_method}
+                                /* prazo restante é sempre em relação a hoje, não à data do pedido */
+                              />
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {r.data_pedido
+                                ? format(new Date(r.data_pedido + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {r.data_prevista_pagamento
+                                ? format(new Date(r.data_prevista_pagamento + 'T00:00:00'), 'dd/MM/yyyy', {
+                                    locale: ptBR,
+                                  })
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {r.data_pagamento
+                                ? format(new Date(r.data_pagamento + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+                                : '—'}
+                            </TableCell>
+                            <TableCell>
+                              <StatusBadge status={r.status} />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                {r.status !== 'cancelado' && (
+                                  <Button size="sm" variant="outline" onClick={() => setEditando(r)}>
+                                    Editar
+                                  </Button>
+                                )}
+                                {r.status === 'cancelado' && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => setExcluindo(r)}
+                                  >
+                                    Excluir
+                                  </Button>
+                                )}
+                                {r.status === 'pendente' && (
+                                  <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setPagoDialog({ id: r.id, valor: Number(r.valor || 0) });
+                                      setDataEfetiva(
+                                        r.data_prevista_pagamento || format(new Date(), 'yyyy-MM-dd'),
+                                      );
+                                    }}
+                                  >
+                                    Marcar pago
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={async () => {
+                                      if (!confirm('Cancelar este reembolso?')) return;
+                                      try {
+                                        await cancelar.mutateAsync({ id: r.id });
+                                        toast.success('Reembolso cancelado.');
+                                      } catch (e: any) {
+                                        toast.error(e?.message || 'Erro ao cancelar reembolso.');
+                                      }
+                                    }}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
