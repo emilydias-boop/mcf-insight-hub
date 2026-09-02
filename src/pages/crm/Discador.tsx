@@ -319,6 +319,18 @@ export default function Discador() {
                     dados={diagResult.campanha_detalhe}
                   />
                 )}
+                {diagResult.gravacao_id_chamada && (
+                  <DiagnosticoBloco
+                    titulo={`Gravação (id_chamada=${diagResult.gravacao_id_chamada.id_consultado})`}
+                    dados={diagResult.gravacao_id_chamada}
+                  />
+                )}
+                {diagResult.gravacao_id && (
+                  <DiagnosticoBloco
+                    titulo={`Gravação (id=${diagResult.gravacao_id.id_consultado})`}
+                    dados={diagResult.gravacao_id}
+                  />
+                )}
               </div>
             )}
           </CardContent>
