@@ -13444,6 +13444,65 @@ export type Database = {
         }
         Relationships: []
       }
+      sonax_call_ai: {
+        Row: {
+          analisado_em: string | null
+          call_event_id: string
+          created_at: string
+          deal_id: string | null
+          duracao_segundos: number | null
+          erro: string | null
+          id: string
+          id_chamada: string
+          modelo: string | null
+          propagacao: Json | null
+          resumo: Json | null
+          status: string
+          tentativas: number
+          transcricao: string | null
+        }
+        Insert: {
+          analisado_em?: string | null
+          call_event_id: string
+          created_at?: string
+          deal_id?: string | null
+          duracao_segundos?: number | null
+          erro?: string | null
+          id?: string
+          id_chamada: string
+          modelo?: string | null
+          propagacao?: Json | null
+          resumo?: Json | null
+          status?: string
+          tentativas?: number
+          transcricao?: string | null
+        }
+        Update: {
+          analisado_em?: string | null
+          call_event_id?: string
+          created_at?: string
+          deal_id?: string | null
+          duracao_segundos?: number | null
+          erro?: string | null
+          id?: string
+          id_chamada?: string
+          modelo?: string | null
+          propagacao?: Json | null
+          resumo?: Json | null
+          status?: string
+          tentativas?: number
+          transcricao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sonax_call_ai_call_event_id_fkey"
+            columns: ["call_event_id"]
+            isOneToOne: true
+            referencedRelation: "sonax_call_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sonax_call_events: {
         Row: {
           aliasramal: string | null
@@ -16165,6 +16224,7 @@ export type Database = {
           updated_at: string
         }[]
       }
+      extrair_renda_mensal: { Args: { _texto: string }; Returns: number }
       find_or_create_crm_contact: {
         Args: {
           p_clint_id?: string
@@ -17048,6 +17108,15 @@ export type Database = {
       parse_finalidade_obra: { Args: { _resposta: string }; Returns: string }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
       phone_key_br: { Args: { _raw: string }; Returns: string }
+      propagar_qualificacao: {
+        Args: {
+          _deal_id: string
+          _fonte?: string
+          _origem?: string
+          _respostas: Json
+        }
+        Returns: Json
+      }
       recalc_automation_queue_for_deal: {
         Args: {
           p_anchor_kind: string
@@ -17174,6 +17243,17 @@ export type Database = {
         Returns: {
           contact_id: string
           deal_id: string
+        }[]
+      }
+      sonax_reivindicar_analise: {
+        Args: { _lote?: number }
+        Returns: {
+          call_event_id: string
+          deal_id: string
+          duracao_segundos: number
+          id: string
+          id_chamada: string
+          tentativas: number
         }[]
       }
       sync_hubla_buyer_to_crm: {
