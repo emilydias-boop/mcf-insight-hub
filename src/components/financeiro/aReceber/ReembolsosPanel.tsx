@@ -173,6 +173,23 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
     });
   }, [titulos, filtroPrazoTit]);
 
+  // Totais dos títulos (quitados / em aberto) sobre a lista filtrada
+  const totaisTitulos = useMemo(() => {
+    const acc = { quitadoValor: 0, quitadoQtd: 0, abertoValor: 0, abertoQtd: 0, totalQtd: 0 };
+    titulosFiltrados.forEach((t) => {
+      const v = Number(t.valor_total || 0);
+      acc.totalQtd += 1;
+      if (t.status === 'quitado') {
+        acc.quitadoValor += v;
+        acc.quitadoQtd += 1;
+      } else if (t.status === 'aberto') {
+        acc.abertoValor += v;
+        acc.abertoQtd += 1;
+      }
+    });
+    return acc;
+  }, [titulosFiltrados]);
+
   const [valor, setValor] = useState<string>('');
   const [motivo, setMotivo] = useState<string>('');
   const [dataPedido, setDataPedido] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
