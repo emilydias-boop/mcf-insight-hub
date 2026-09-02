@@ -390,7 +390,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] flex flex-col overflow-hidden p-4 sm:p-6">
+      <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] flex flex-col gap-3 overflow-hidden p-4 sm:p-6">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Undo2 className="w-5 h-5 text-rose-600" />
