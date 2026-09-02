@@ -211,17 +211,49 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
   const [editando, setEditando] = useState<ArReembolsoWithTitulo | null>(null);
   const [excluindo, setExcluindo] = useState<ArReembolsoWithTitulo | null>(null);
   const [listSearch, setListSearch] = useState('');
+  const [prazoDe, setPrazoDe] = useState('');
+  const [prazoAte, setPrazoAte] = useState('');
+  const [pedidoDe, setPedidoDe] = useState('');
+  const [pedidoAte, setPedidoAte] = useState('');
+  const [previstaDe, setPrevistaDe] = useState('');
+  const [previstaAte, setPrevistaAte] = useState('');
+
+  const limparFiltrosData = () => {
+    setPrazoDe(''); setPrazoAte('');
+    setPedidoDe(''); setPedidoAte('');
+    setPrevistaDe(''); setPrevistaAte('');
+  };
+
+  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte);
 
   const reembolsosFiltrados = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
-    if (!q) return reembolsos || [];
+    const inRange = (iso: string | null | undefined, de: string, ate: string) => {
+      if (!de && !ate) return true;
+      if (!iso) return false;
+      const d = String(iso).slice(0, 10);
+      if (de && d < de) return false;
+      if (ate && d > ate) return false;
+      return true;
+    };
     return (reembolsos || []).filter((r) => {
-      const t = r.titulo;
-      return [t?.customer_name, t?.customer_email, t?.customer_document, t?.product_code]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q));
+      if (q) {
+        const t = r.titulo;
+        const match = [t?.customer_name, t?.customer_email, t?.customer_document, t?.product_code]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+        if (!match) return false;
+      }
+      if (!inRange(r.data_pedido, pedidoDe, pedidoAte)) return false;
+      if (!inRange(r.data_prevista_pagamento, previstaDe, previstaAte)) return false;
+      if (prazoDe || prazoAte) {
+        const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
+        const deadlineIso = w.deadline ? format(w.deadline, 'yyyy-MM-dd') : null;
+        if (!inRange(deadlineIso, prazoDe, prazoAte)) return false;
+      }
+      return true;
     });
-  }, [reembolsos, listSearch]);
+  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte]);
 
   // Totais dos cards (sobre a lista filtrada)
   const totais = useMemo(() => {
@@ -522,6 +554,43 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 <Download className="w-4 h-4 mr-2" />
                 {exportando ? 'Exportando…' : 'Exportar Excel'}
               </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 shrink-0">
+              <div className="rounded-md border p-2 space-y-1">
+                <Label className="text-xs text-muted-foreground">Prazo limite</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={prazoDe} onChange={(e) => setPrazoDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={prazoAte} onChange={(e) => setPrazoAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="rounded-md border p-2 space-y-1">
+                <Label className="text-xs text-muted-foreground">Data de solicitação</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={pedidoDe} onChange={(e) => setPedidoDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={pedidoAte} onChange={(e) => setPedidoAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="rounded-md border p-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Data prevista</Label>
+                  {temFiltroData && (
+                    <button
+                      type="button"
+                      onClick={limparFiltrosData}
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                    >
+                      limpar datas
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={previstaDe} onChange={(e) => setPrevistaDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={previstaAte} onChange={(e) => setPrevistaAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
             </div>
             <Card className="flex-1 min-h-0 flex flex-col">
               <CardContent className="pt-4 flex-1 min-h-0 overflow-auto">
