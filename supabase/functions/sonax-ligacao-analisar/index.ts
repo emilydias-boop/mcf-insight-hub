@@ -163,6 +163,7 @@ REGRAS:
 - Preencha cada campo de "discovery" SOMENTE com o que o lead disse nesta ligação. Nunca deduza, nunca complete com o que seria plausível.
 - Campo sem informação na ligação = exatamente a string: não informado
 - "renda": transcreva o que o lead falou, com o número (ex.: "Ganha cerca de 10 mil por mês"). Não converta e não arredonde.
+- "renda_mensal": o MESMO valor da renda convertido em número puro de reais (ex.: "oito mil" vira 8000, "10k" vira 10000, "R$ 12.500" vira 12500). Se o lead falou faixa, use o menor valor. Se o lead falou renda do casal ou da família, use o valor total mencionado. Se não informou renda, use 0.
 - "finalidade_obra": use exatamente uma destas opções, quando o lead deixar claro: Construir para morar | Construir para vender ou investir | Construir para alugar. Se não ficou claro: não informado
 - "constroi_venda" é EXPERIÊNCIA (se o lead já constrói hoje), não intenção futura.
 - "tempo_mcf": há quanto tempo o lead conhece a MCF.
