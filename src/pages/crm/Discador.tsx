@@ -22,11 +22,7 @@ interface DiagnosticoResult {
   pausas: { status: number; raw: unknown };
   tabulacoes: { status: number; raw: unknown };
   campanhas?: { status: number; raw: unknown };
-  atendentes?: { status: number; raw: unknown };
-  atendente_ramal?: { status: number; raw: unknown; ramal_consultado: string };
   campanha_detalhe?: { status: number; raw: unknown; id_consultado: string };
-  gravacao_id_chamada?: { status: number; raw: unknown; id_consultado: string };
-  gravacao_id?: { status: number; raw: unknown; id_consultado: string };
 }
 
 const DiagnosticoBloco = ({ titulo, dados }: { titulo: string; dados: { status: number; raw: unknown } }) => (
@@ -272,9 +268,9 @@ export default function Discador() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Consulta <code>lista_filas</code>, <code>lista_pausas</code>, <code>lista_tabulacao</code>,
-              <code>lista_campanha</code> e <code>status_atendente</code> na API do Sonax
-              e devolve o corpo cru de cada uma. Somente leitura — não cria nem altera nada.
+              Consulta <code>lista_filas</code>, <code>lista_pausas</code>, <code>lista_tabulacao</code> e
+              <code>lista_campanha</code> na API do Sonax e devolve o corpo cru de cada uma.
+              Somente leitura — não cria nem altera nada.
             </p>
             <Button
               variant="default"
@@ -304,31 +300,10 @@ export default function Discador() {
                 {diagResult.campanhas && (
                   <DiagnosticoBloco titulo="Campanhas (todas)" dados={diagResult.campanhas} />
                 )}
-                {diagResult.atendentes && (
-                  <DiagnosticoBloco titulo="Atendentes logados" dados={diagResult.atendentes} />
-                )}
-                {diagResult.atendente_ramal && (
-                  <DiagnosticoBloco
-                    titulo={`Atendente do ramal ${diagResult.atendente_ramal.ramal_consultado}`}
-                    dados={diagResult.atendente_ramal}
-                  />
-                )}
                 {diagResult.campanha_detalhe && (
                   <DiagnosticoBloco
                     titulo={`Campanha ${diagResult.campanha_detalhe.id_consultado}`}
                     dados={diagResult.campanha_detalhe}
-                  />
-                )}
-                {diagResult.gravacao_id_chamada && (
-                  <DiagnosticoBloco
-                    titulo={`Gravação (id_chamada=${diagResult.gravacao_id_chamada.id_consultado})`}
-                    dados={diagResult.gravacao_id_chamada}
-                  />
-                )}
-                {diagResult.gravacao_id && (
-                  <DiagnosticoBloco
-                    titulo={`Gravação (id=${diagResult.gravacao_id.id_consultado})`}
-                    dados={diagResult.gravacao_id}
                   />
                 )}
               </div>
