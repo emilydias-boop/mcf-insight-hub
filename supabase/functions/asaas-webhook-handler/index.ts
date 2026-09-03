@@ -784,6 +784,8 @@ Deno.serve(async (req) => {
       sale_status: 'completed',
       source: sourceLabel,
       count_in_dashboard: true,
+      offer_name: offerName,
+      offer_id: offerId,
       raw_data: body
     };
 
