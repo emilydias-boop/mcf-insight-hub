@@ -12285,6 +12285,36 @@ export type Database = {
         }
         Relationships: []
       }
+      relatorio_diario_snapshots: {
+        Row: {
+          bu: string
+          data: string
+          gerado_em: string
+          metrica: string
+          revisao: number
+          status: string
+          valor: number | null
+        }
+        Insert: {
+          bu: string
+          data: string
+          gerado_em?: string
+          metrica: string
+          revisao?: number
+          status?: string
+          valor?: number | null
+        }
+        Update: {
+          bu?: string
+          data?: string
+          gerado_em?: string
+          metrica?: string
+          revisao?: number
+          status?: string
+          valor?: number | null
+        }
+        Relationships: []
+      }
       reports: {
         Row: {
           created_at: string | null
@@ -16144,6 +16174,12 @@ export type Database = {
       consorcio_gerar_parcelas: {
         Args: { p_card_id: string; p_parcelas: Json }
         Returns: number
+      }
+      consorcio_name_key: { Args: { p_name: string }; Returns: string }
+      consorcio_pessoa_nome_key: { Args: { p_name: string }; Returns: string }
+      consorcio_producao_gerada: {
+        Args: { p_bu?: string; p_fim: string; p_ini: string }
+        Returns: Json
       }
       consorcio_reversao_status: {
         Args: { p_registro_ids: string[] }
