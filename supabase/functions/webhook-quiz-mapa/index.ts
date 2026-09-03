@@ -168,12 +168,17 @@ Deno.serve(async (req) => {
 
     // 5) Negócio existente pelo mesmo critério do handler da Hubla:
     //    contact_id + origin_id (assim os dois fluxos se encontram depois).
-    const { data: dealExistente } = await supabase
+    // Não é maybeSingle: há contatos com mais de um negócio nessa origem e o
+    // PostgREST lança erro quando volta mais de uma linha — o handler da Hubla
+    // usa o mesmo critério de "mais recente" (order + limit 1).
+    const { data: deals } = await supabase
       .from("crm_deals")
       .select("id, tags, custom_fields, owner_id")
       .eq("contact_id", contactId)
       .eq("origin_id", endpoint.origin_id)
-      .maybeSingle();
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const dealExistente = deals?.[0] ?? null;
 
     const autoTags: string[] = Array.isArray(endpoint.auto_tags) ? endpoint.auto_tags : [];
     // deno-lint-ignore no-explicit-any
