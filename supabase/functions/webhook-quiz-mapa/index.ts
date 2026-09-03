@@ -156,9 +156,16 @@ Deno.serve(async (req) => {
       }
       contactId = contato.id;
     } else {
+      // clint_id é NOT NULL sem default em crm_contacts (igual a crm_deals):
+      // precisa ser gerado aqui, no mesmo estilo do negócio.
       const { data: novoContato, error: contatoError } = await supabase
         .from("crm_contacts")
-        .insert({ name: nome || email || telefone, email, phone: telefone })
+        .insert({
+          clint_id: `quiz-mapa-contact-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          name: nome || email || telefone,
+          email,
+          phone: telefone,
+        })
         .select("id")
         .single();
       if (contatoError) throw contatoError;
