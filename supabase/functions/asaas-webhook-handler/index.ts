@@ -697,7 +697,21 @@ Deno.serve(async (req) => {
       customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || '';
       customerEmail = user.email || '';
       customerPhone = user.phone || '';
-      
+
+      // Oferta: primeira offer encontrada em event.products[].offers[].
+      // ATENÇÃO: hoje o MCF Pay envia `offers` como array VAZIO — nesse caso fica null
+      // (nunca inventamos valor) e a regra de Outside abaixo permanece inerte.
+      const mcfProducts = Array.isArray(hublaEvent?.products) ? hublaEvent.products : [];
+      for (const p of mcfProducts) {
+        const offers = Array.isArray(p?.offers) ? p.offers : [];
+        const firstOffer = offers.find((o: any) => o && (o.name || o.id));
+        if (firstOffer) {
+          offerName = firstOffer.name ?? null;
+          offerId = firstOffer.id ?? null;
+          break;
+        }
+      }
+
       console.log(`[Asaas] Formato Hubla/mcfpay detectado: invoice.id = ${paymentId}, product = ${productName}`);
       
     } else {
