@@ -3453,6 +3453,18 @@ Deno.serve(async (req) => {
             });
           }
 
+          // 🗺️ [MAPA DO MERCADO][item] comprador sempre veio do quiz — só atualiza o negócio existente
+          if (isMapaMercadoProduct(productName) && !isOffer && installment === 1) {
+            await handleMapaMercadoSale(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              productName: productName,
+              value: itemNetValue,
+              hublaId: hublaId ?? null,
+            });
+          }
+
+
           // Detectar se é um pagamento de contrato (categoria 'contrato' OU produto A000 com valor ~R$ 497)
           // Isso cobre casos onde A000-Contrato é categorizado como 'incorporador' mas é realmente um contrato
           const itemPriceForContractCheck = isOffer ? itemPrice : grossValue;
