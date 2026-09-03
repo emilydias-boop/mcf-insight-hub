@@ -44,6 +44,250 @@ function normalizePhone(phone: string | null | undefined): string {
   return phone.replace(/\D/g, '').slice(-11); // Keep last 11 digits
 }
 
+// Normalizar nome de oferta: minúsculas, sem acentos, sem espaços nas pontas
+function normalizarOferta(valor: string | null | undefined): string {
+  return (valor || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+// Verifica se a oferta é uma oferta "Outside" configurada em public.outside_offers.
+// Mesmo comportamento do hubla-webhook-handler: compara por offer_name (case-insensitive,
+// sem acento) OU por offer_id. Em caso de erro na consulta, loga e retorna false —
+// nunca derruba o webhook.
+async function isOutsideOfferDb(
+  supabase: any,
+  offerName: string | null | undefined,
+  offerId?: string | null,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('outside_offers')
+      .select('offer_name, offer_id')
+      .eq('is_active', true);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      const normalizedName = normalizarOferta(offerName);
+      const normalizedId = (offerId || '').trim();
+      return data.some((row: any) => {
+        const rowName = normalizarOferta(row.offer_name);
+        const rowId = (row.offer_id || '').trim();
+        if (rowName && normalizedName && rowName === normalizedName) return true;
+        if (rowId && normalizedId && rowId === normalizedId) return true;
+        return false;
+      });
+    }
+  } catch (e) {
+    console.error('⚠️ [ASAAS OUTSIDE] Falha ao ler outside_offers:', (e as Error).message);
+    return false;
+  }
+  return false;
+}
+
+// ===================== [OUTSIDE MCF PAY] bloco isolado =====================
+// Trata compras que chegam pelo MCF Pay como vendas "Outside" (pagamento sem R1),
+// mesma regra do hubla-webhook-handler. ATENÇÃO: hoje o MCF Pay envia
+// `event.products[].offers` como array VAZIO, então offerName/offerId ficam null e
+// esta regra NUNCA dispara — comportamento idêntico ao atual. Quando o MCF Pay
+// passar a enviar a oferta, o fluxo abaixo entra em ação automaticamente.
+const OUTSIDE_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'; // PIPELINE INSIDE SALES
+const OUTSIDE_OWNER_EMAIL = 'nicola.ricci@minhacasafinanciada.com';
+
+async function handleOutsideMcfPay(supabase: any, params: {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  productName: string;
+  netValue: number;
+  offerName: string | null;
+  transactionId: string;
+}): Promise<void> {
+  const logPrefix = '🎯 [ASAAS OUTSIDE]';
+  const emailLower = (params.customerEmail || '').toLowerCase().trim();
+
+  // 1/2. Etapa: Contrato Pago (fallback Novo Lead) na origem Inside Sales
+  let { data: stage } = await supabase
+    .from('crm_stages')
+    .select('id, stage_name')
+    .eq('origin_id', OUTSIDE_ORIGIN_ID)
+    .ilike('stage_name', '%Contrato Pago%')
+    .limit(1)
+    .maybeSingle();
+
+  if (!stage?.id) {
+    const { data: fallbackStage } = await supabase
+      .from('crm_stages')
+      .select('id, stage_name')
+      .eq('origin_id', OUTSIDE_ORIGIN_ID)
+      .ilike('stage_name', '%Novo Lead%')
+      .limit(1)
+      .maybeSingle();
+    stage = fallbackStage;
+  }
+
+  if (!stage?.id) {
+    console.log(`⚠️ ${logPrefix} Nenhuma etapa (Contrato Pago/Novo Lead) encontrada — saindo sem erro`);
+    return;
+  }
+
+  // 3. Contato: por e-mail e, se não achar, pelos últimos 9 dígitos do telefone
+  let contact: any = null;
+  if (emailLower) {
+    const { data: byEmail } = await supabase
+      .from('crm_contacts')
+      .select('id, name, phone')
+      .ilike('email', emailLower)
+      .limit(1)
+      .maybeSingle();
+    contact = byEmail || null;
+  }
+
+  const phoneSuffix = (params.customerPhone || '').replace(/\D/g, '').slice(-9);
+  if (!contact?.id && phoneSuffix.length >= 8) {
+    const { data: byPhone } = await supabase
+      .from('crm_contacts')
+      .select('id, name, phone')
+      .ilike('phone', `%${phoneSuffix}`)
+      .limit(1)
+      .maybeSingle();
+    contact = byPhone || null;
+  }
+
+  if (!contact?.id) {
+    // crm_contacts.clint_id é NOT NULL sem default — gerar identificador próprio
+    const { data: newContact, error: contactErr } = await supabase
+      .from('crm_contacts')
+      .insert({
+        clint_id: `asaas-outside-contact-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        name: params.customerName || emailLower || 'Cliente MCF Pay',
+        email: emailLower || null,
+        phone: params.customerPhone || null,
+      })
+      .select('id, name, phone')
+      .single();
+
+    if (contactErr || !newContact?.id) {
+      console.error(`❌ ${logPrefix} Falha ao criar contato:`, contactErr?.message);
+      return;
+    }
+    contact = newContact;
+    console.log(`${logPrefix} Contato criado: ${contact.id}`);
+  }
+
+  // 4. Negócio mais recente do contato nessa origem (nunca maybeSingle sem limit)
+  const { data: deals } = await supabase
+    .from('crm_deals')
+    .select('id, tags, custom_fields, owner_id, owner_profile_id, value')
+    .eq('contact_id', contact.id)
+    .eq('origin_id', OUTSIDE_ORIGIN_ID)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const existingDeal = deals?.[0] ?? null;
+  const nowIso = new Date().toISOString();
+  let dealId: string | null = null;
+
+  if (existingDeal?.id) {
+    // Somar tags sem duplicar e sem remover nenhuma
+    const tags: string[] = Array.isArray(existingDeal.tags) ? [...existingDeal.tags] : [];
+    for (const tag of ['Outside', 'MCF Pay']) {
+      if (!tags.includes(tag)) tags.push(tag);
+    }
+
+    const mergedCustomFields = {
+      ...(typeof existingDeal.custom_fields === 'object' && existingDeal.custom_fields !== null
+        ? existingDeal.custom_fields
+        : {}),
+      source: 'mcfpay_outside',
+      offer_name: params.offerName,
+      outside_detected_em: nowIso,
+    };
+
+    const { error: updErr } = await supabase
+      .from('crm_deals')
+      .update({
+        stage_id: stage.id,
+        stage_moved_at: nowIso,
+        tags,
+        custom_fields: mergedCustomFields,
+        // dono atual preservado: nenhum campo de owner é tocado aqui
+      })
+      .eq('id', existingDeal.id);
+
+    if (updErr) {
+      console.error(`❌ ${logPrefix} Falha ao atualizar negócio ${existingDeal.id}:`, updErr.message);
+      return;
+    }
+    dealId = existingDeal.id;
+    console.log(`${logPrefix} Negócio existente atualizado: ${dealId} → ${stage.stage_name}`);
+  } else {
+    // Dono fixo do fluxo Outside
+    const { data: ownerProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('email', OUTSIDE_OWNER_EMAIL)
+      .limit(1)
+      .maybeSingle();
+
+    const { data: newDeal, error: dealErr } = await supabase
+      .from('crm_deals')
+      .insert({
+        clint_id: `asaas-outside-deal-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        name: params.customerName || contact.name || emailLower || 'Cliente MCF Pay',
+        contact_id: contact.id,
+        origin_id: OUTSIDE_ORIGIN_ID,
+        stage_id: stage.id,
+        stage_moved_at: nowIso,
+        value: params.netValue,
+        tags: ['Outside', 'MCF Pay'],
+        data_source: 'webhook',
+        owner_profile_id: ownerProfile?.id ?? null,
+        custom_fields: {
+          source: 'mcfpay_outside',
+          offer_name: params.offerName,
+          outside_detected_em: nowIso,
+        },
+      })
+      .select('id')
+      .single();
+
+    if (dealErr || !newDeal?.id) {
+      console.error(`❌ ${logPrefix} Falha ao criar negócio:`, dealErr?.message);
+      return;
+    }
+    dealId = newDeal.id;
+    console.log(`${logPrefix} Negócio criado: ${dealId}`);
+  }
+
+  // 5. Atividade (deal_id é coluna text)
+  const { error: actErr } = await supabase
+    .from('deal_activities')
+    .insert({
+      deal_id: String(dealId),
+      activity_type: 'outside_detected',
+      description: 'Compra Outside detectada via MCF Pay (pagamento sem R1)',
+      metadata: {
+        offer_name: params.offerName,
+        product_name: params.productName,
+        net_value: params.netValue,
+        transaction_id: params.transactionId,
+      },
+    });
+  if (actErr) console.error(`⚠️ ${logPrefix} Falha ao registrar atividade:`, actErr.message);
+
+  // 6. Vincular a transação ao negócio
+  const { error: linkErr } = await supabase
+    .from('hubla_transactions')
+    .update({ linked_deal_id: dealId, linked_method: 'outside_mcfpay' })
+    .eq('id', params.transactionId);
+  if (linkErr) console.error(`⚠️ ${logPrefix} Falha ao vincular transação:`, linkErr.message);
+}
+// =================== fim [OUTSIDE MCF PAY] ===================
+
 // Auto-mark sale as complete: move deal to "Venda Realizada" and update attendee
 // FIXED: Direct email/phone lookup instead of .limit(50) iteration
 async function autoMarkSaleComplete(supabase: any, data: {
@@ -393,6 +637,9 @@ Deno.serve(async (req) => {
     let grossValue = 0;
     let saleDate = '';
     let paymentId = '';
+    // Oferta da compra — hoje o MCF Pay manda `offers` VAZIO, então fica null
+    let offerName: string | null = null;
+    let offerId: string | null = null;
 
     if (body.payment) {
       // Formato padrão Asaas: { event, payment: { ... } }
@@ -412,7 +659,11 @@ Deno.serve(async (req) => {
         customerEmail = payment.customerEmail || payment.customer_email || '';
         customerPhone = payment.customerPhone || payment.customer_phone || '';
       }
-      
+
+      // Asaas padrão não traz oferta; usa campos equivalentes se existirem, senão null
+      offerName = payment.offer_name ?? payment.offerName ?? null;
+      offerId = payment.offer_id ?? payment.offerId ?? null;
+
       console.log(`[Asaas] Formato padrão detectado: payment.id = ${paymentId}`);
       
     } else if (body.data) {
@@ -426,7 +677,10 @@ Deno.serve(async (req) => {
       customerName = data.customer_name || data.customerName || '';
       customerEmail = data.customer_email || data.customerEmail || '';
       customerPhone = data.customer_phone || data.customerPhone || '';
-      
+      // Campos equivalentes de oferta, se existirem; senão null
+      offerName = data.offer_name ?? data.offerName ?? null;
+      offerId = data.offer_id ?? data.offerId ?? null;
+
       console.log(`[Asaas] Formato customizado detectado: data.purchase_id = ${paymentId}`);
       
     } else if (isHublaFormat) {
@@ -450,7 +704,21 @@ Deno.serve(async (req) => {
       customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || '';
       customerEmail = user.email || '';
       customerPhone = user.phone || '';
-      
+
+      // Oferta: primeira offer encontrada em event.products[].offers[].
+      // ATENÇÃO: hoje o MCF Pay envia `offers` como array VAZIO — nesse caso fica null
+      // (nunca inventamos valor) e a regra de Outside abaixo permanece inerte.
+      const mcfProducts = Array.isArray(hublaEvent?.products) ? hublaEvent.products : [];
+      for (const p of mcfProducts) {
+        const offers = Array.isArray(p?.offers) ? p.offers : [];
+        const firstOffer = offers.find((o: any) => o && (o.name || o.id));
+        if (firstOffer) {
+          offerName = firstOffer.name ?? null;
+          offerId = firstOffer.id ?? null;
+          break;
+        }
+      }
+
       console.log(`[Asaas] Formato Hubla/mcfpay detectado: invoice.id = ${paymentId}, product = ${productName}`);
       
     } else {
@@ -472,7 +740,7 @@ Deno.serve(async (req) => {
 
     // Determinar categoria do produto (busca no DB primeiro, fallback para lógica local)
     const productCategory = await getProductCategoryFromDB(supabase, productName);
-    console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory}`);
+    console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory} | Oferta: "${offerName ?? 'null'}" (id: ${offerId ?? 'null'})`);
 
     // Gerar hubla_id único para evitar duplicatas
     const sourceLabel = isHublaFormat ? 'mcfpay' : 'asaas';
@@ -516,6 +784,8 @@ Deno.serve(async (req) => {
       sale_status: 'completed',
       source: sourceLabel,
       count_in_dashboard: true,
+      offer_name: offerName,
+      offer_id: offerId,
       raw_data: body
     };
 
@@ -533,6 +803,29 @@ Deno.serve(async (req) => {
     }
 
     console.log(`✅ [Asaas] Transação inserida: ${inserted.id}`);
+
+    // ===== [OUTSIDE MCF PAY] tratamento isolado, antes do fluxo de parceria =====
+    // Só dispara quando a oferta bate em public.outside_offers. Como o MCF Pay hoje
+    // envia `offers` VAZIO, offerName/offerId são null e nada acontece (risco zero).
+    try {
+      if (await isOutsideOfferDb(supabase, offerName, offerId)) {
+        console.log(`🎯 [ASAAS OUTSIDE] Oferta Outside detectada: "${offerName}" (${offerId ?? 'sem id'})`);
+        await handleOutsideMcfPay(supabase, {
+          customerName,
+          customerEmail,
+          customerPhone,
+          productName,
+          netValue,
+          offerName,
+          transactionId: inserted.id,
+        });
+      }
+    } catch (outsideError) {
+      // Erro no bloco de outside loga e segue — nunca derruba o webhook
+      console.error('⚠️ [ASAAS OUTSIDE] Erro no tratamento de outside:', (outsideError as Error).message);
+    }
+    // ===== fim [OUTSIDE MCF PAY] =====
+
 
     // Automação: mover deal para "Venda Realizada" APENAS para produtos de parceria
     let autoResult = { success: false, message: 'Skipped - not a parceria product' };
