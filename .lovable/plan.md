@@ -1,40 +1,61 @@
-# Relatório: trava sem-R1 (A) e desvio de R$ 1,39 mi (B)
+# Medição Lead A — Agenda BU-Incorporador, setembro/2026 (somente leitura)
 
-## A — A trava NÃO falhou. Ela funcionou e foi usada com justificativa.
+Universo: `meeting_slots` + `meeting_slot_attendees`, `closers.bu='incorporador'`, `ms.meeting_type='r1'`, `msa.is_partner=false`, `msa.deal_id not null`, slot e attendee fora de cancelled/canceled/cancelada, eixo `(ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date` em 01–30/09/2026, `UPPER(TRIM(crm_deals.icp_segment))='A'`.
 
-`proposal_details` da proposta `485819b8…` (texto cru):
+| Variação | Setembro inteiro | Até 03/09 |
+| --- | --- | --- |
+| V1 attendees `completed` | 61 | 61 |
+| V2 deals distintos `completed` | 61 | 61 |
+| V3 slots distintos com ≥1 `completed` | 37 | 37 |
+| V4 deals distintos em completed+contract_paid+refunded | 91 | 91 |
+| V5 pares (closer, deal) mesmos status | 91 | 91 |
+| V6 V4 restrito a SDR elegível | 88 | 88 |
+| V6 V5 restrito a SDR elegível | 88 | 88 |
 
-```
-[lead novo sem R1] Sócios MCF
-Rodada 2 - Mutuantes 2026.1
-```
+Mês inteiro = até 03/09: nenhuma reunião com `scheduled_at` após 03/09 está marcada como realizada/paga ainda, então o corte "até hoje" não muda nada.
 
-Os **6 cadastros** têm exatamente o mesmo texto em `observacoes` (ids `990b82dc`, `5c5b5e6e`, `f31ffb4a`, `f8ae08ca`, `d58208a9`, `4502d4cf`, criados entre 22:41:48 e 22:41:56 de 27/08).
+Composição dos 91: `completed` 61 + `contract_paid` 30 + `refunded` 0. (Ainda em aberto no mesmo recorte: `invited` 59, `no_show` 37 linhas / 33 deals, `rescheduled` 4.)
 
-Leitura: o diálogo bloqueante apareceu, o operador clicou "Criar assim mesmo" e escreveu o motivo — "Sócios MCF / Rodada 2 - Mutuantes 2026.1", ou seja, foi tratado como venda de rodada de sócios/mutuantes, não como lead comercial. Não há furo de caminho: a trava está em `AddCartaModal.handleSubmit` (único arquivo que importa `useBuscarReuniaoConsorcio`, linha 45/286; prefixo gravado na linha 494) e foi por ali que a proposta passou. Não foi necessário checar `ProposalModal`/`AcceptProposalModal` como furo, porque o registro prova que o fluxo com trava foi o usado. O deploy de 26/08 estava no ar (o prefixo só existe nesse código).
+V1=V2 e V4=V5: nenhum deal aparece duas vezes e nenhum deal tem dois closers no mês — a régua de pares não infla nada aqui.
 
-Consequência real: o caso Naufel não é bug de trava, é **decisão consciente sem atribuição de closer** — a venda de sócios entra na produção como `sem_atribuicao`. Isso é regra de negócio a decidir, não código quebrado.
+V6: 3 deals ficam fora por `booked_by` que não está em `get_sdrs_for_squad_in_period('incorporador', …)`. Nenhum SDR do período foi excluído pelas roles administrativas (o filtro de roles não removeu ninguém neste mês).
 
-## B — O desvio de R$ 1,39 mi: parcialmente explicado por edição legítima, ~R$ 890 mil ainda em aberto.
+Nenhuma variação reproduz A=64 (tabela de Closers) nem A=58 (card). Com a régua da agenda + `closers.bu` o número é 91 (88 com recorte de SDR); a diferença de ~27–30 vem de outro filtro que essas telas aplicam e que não está neste recorte — provavelmente janela/eixo de data ou filtro de origem/produto do lado do card, não do universo da agenda.
 
-Janela 01–26/08 pela RPC hoje: **R$ 16.220.000** (perna A R$ 5.220.000 / 27 cartas; perna B R$ 10.850.000 / 63 cartas; perna C R$ 150.000 / 1 carta).
+## a) Origens
 
-Saídas legítimas após o print (26/08):
-- Proposta `68a1624b` — "Thiago Felipe Faustino - EFEITO ALAVANCA", `proposal_date` 22/08, **R$ 500.000**, hoje `status = recusada` e `carta_excluida = true`, alterada em **31/08 13:49**; o cadastro ligado (`808473fd`, R$ 150.000) virou `declinada` em 31/08 13:51. Em 26/08 essa venda estava viva e contava. **R$ 500.000 saíram da base por edição legítima.**
-- Único outro cadastro `declinada` de agosto (Rodrigo Costa, R$ 500.000) foi declinado em **03/08**, antes do print — não explica nada.
-- Proposta `27919b65` (Lynaldo, R$ 480.000) foi recusada em 03/09, mas o aceite é 27/08: está fora da janela 01–26 em qualquer cenário.
+Só uma origem aparece nos 91 Lead A realizados:
 
-Não encontrei nenhum `aceite_date` movido para fora da janela: todas as propostas com `updated_at` posterior a 26/08 e aceite em agosto mantêm aceite dentro do próprio mês. Também não encontrei cadastro avulso de agosto que tenha virado vinculado depois — os cadastros de 01–26/08 com `updated_at` pós-26/08 já nasceram com `proposal_id` e `deal_id` preenchidos, e `deal_vinculo_ajustado_em` está nulo em todos eles.
+| origin_id | origem | linhas | deals |
+| --- | --- | --- | --- |
+| e3c04f21-ba2c-4c66-84f8-b4341c826b1c | PIPELINE INSIDE SALES | 91 | 91 |
 
-Saldo: dos R$ 1.390.000, **R$ 500.000 são saída comprovadamente legítima**. Restam ~R$ 890.000 sem explicação por movimentação de dados.
+Zero fora das duas origens que a `ote-consorcio-metrics` usa; a segunda (PILOTO ANAMNESE / INDICAÇÃO, `7431cf4a…`) não aparece em setembro. Ou seja: com o recorte passando a ser agenda + `closers.bu='incorporador'`, o filtro por origem é redundante neste mês — não corta nada. Ele continua relevante como cinto de segurança para meses em que a origem PILOTO volte a produzir, mas não é o que define o número.
 
-## Próximo passo proposto (escolha uma linha)
+## b) `icp_segment` é mutável — sim, e isso afeta a reprodutibilidade
 
-1. **Fechar a conta dos R$ 890 mil**: abrir o painel de Produção Gerada no recorte 01–26/08 e comparar carta a carta com a RPC (hook em memória vs. RPC), até localizar quais cartas o print tinha e a RPC não tem. Somente leitura.
-2. **Aceitar R$ 21,22 mi como verdade do mês** (RPC e hook concordam entre si; o print é que está datado e já tinha R$ 500 mil depois desfeitos) e seguir para a rodada 2 — `relatorio_diario_bu`.
+`crm_deals.icp_segment` é reescrito pelo trigger `trg_classify_lead_icp_segment` a cada INSERT/UPDATE em que `qualification_answers.renda` ou `finalidade_obra`/`objetivo` mudem (renda ≥ 10.000 → A, abaixo → B, finalidade "morar" → C, e C vence). O trigger só age nas origens `e3c04f21…` e `7431cf4a…`.
 
-Recomendação: opção 1 antes da rodada 2, porque o relatório diário vai congelar snapshots e um desvio não explicado de R$ 890 mil viraria histórico imutável.
+Não existe tabela de histórico de `icp_segment`: `audit_logs` não tem nenhuma linha para `crm_deals` e os triggers de log cobrem stage, owner, closer e tags — não o segmento. As outras tabelas com coluna `icp_segment` (`meeting_ai_reviews`, `closer_resumo_ia`, `sales_script_steps`, `vw_closer_reuniao_avaliada`) são snapshots de uso próprio, não histórico.
+
+Consequência: o KPI calculado por `crm_deals.icp_segment` **não é reprodutível mês a mês**. Reprocessar setembro em outubro pode dar outro número se alguém reeditar a qualificação de um lead.
+
+Existe, porém, um snapshot aproveitável: `meeting_slots.lead_type`, preenchido por `trg_meeting_slot_herda_segmento` no momento da criação do slot e nunca reescrito depois. É o candidato natural para congelar o KPI.
+
+## c) Segmento que mudou depois do agendamento
+
+Comparando `meeting_slots.lead_type` (segmento no agendamento) com `crm_deals.icp_segment` de hoje, nas linhas realizadas (completed/contract_paid/refunded):
+
+| segmento hoje | snapshot no agendamento | linhas |
+| --- | --- | --- |
+| A | A | 91 |
+| B | A | 11 |
+| C | A | 1 |
+
+Ou seja: 12 reuniões realizadas foram agendadas como Lead A e hoje não são mais A — elas saíram do KPI depois do fato. O caminho inverso (agendado como B/C e hoje A) não aparece nas linhas realizadas.
+
+Ressalva: `lead_type` vive no slot, não no attendee, então em slot com vários attendees o snapshot é do slot. Para os 91 do V4 o snapshot bate 1:1.
 
 ## Nada foi alterado
 
-Somente consultas de leitura e leitura de arquivos. Nenhuma migration, nenhum deploy, nenhuma escrita.
+Somente SELECT. Nenhuma escrita, migration ou deploy. Não registrei esta medição em `roadmap.md` porque em modo plano só edito o arquivo do plano — posso registrar assim que a implementação for aprovada.

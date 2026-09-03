@@ -13047,6 +13047,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sdr_metrics_exceptions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          squad: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          squad: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          squad?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sdr_month_kpi: {
         Row: {
           ano_mes: string
