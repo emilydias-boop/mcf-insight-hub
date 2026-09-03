@@ -637,6 +637,9 @@ Deno.serve(async (req) => {
     let grossValue = 0;
     let saleDate = '';
     let paymentId = '';
+    // Oferta da compra — hoje o MCF Pay manda `offers` VAZIO, então fica null
+    let offerName: string | null = null;
+    let offerId: string | null = null;
 
     if (body.payment) {
       // Formato padrão Asaas: { event, payment: { ... } }
