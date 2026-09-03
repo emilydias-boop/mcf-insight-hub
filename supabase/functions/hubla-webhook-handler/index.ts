@@ -3250,6 +3250,18 @@ Deno.serve(async (req) => {
               extraTags: ['Guia', 'Hubla'],
             });
           }
+
+          // 🗺️ [MAPA DO MERCADO] comprador sempre veio do quiz — só atualiza o negócio existente
+          if (isMapaMercadoProduct(productName) && installment === 1) {
+            await handleMapaMercadoSale(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              productName: productName,
+              value: netValue,
+              hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
+            });
+          }
+
           
           // 🎯 CORREÇÃO: Detectar contrato pago mesmo quando items.length === 0
           const isContratoPago = (
