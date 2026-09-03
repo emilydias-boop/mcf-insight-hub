@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Package, ShoppingBag, Tv, DollarSign } from 'lucide-react';
+import { MapPin, Package, ShoppingBag, Tv, DollarSign, ClipboardList } from 'lucide-react';
 import { useA010Journey } from '@/hooks/useA010Journey';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 
@@ -20,6 +20,7 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
   
   // Detect sales channel based on actual purchase data
   const isA010 = a010Data?.hasA010 === true;
+  const isQuiz = customFields?.source === 'quiz-mapa' || customFields?.lead_channel === 'QUIZ-MAPA';
   
   return (
     <div className="bg-secondary/50 border-b border-border p-4 space-y-3">
@@ -57,11 +58,15 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
           className={`text-xs ${
             isA010 
               ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400' 
-              : 'border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950 dark:text-purple-400'
+              : isQuiz
+                ? 'border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 dark:text-amber-400'
+                : 'border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950 dark:text-purple-400'
           }`}
         >
           {isA010 ? (
             <><ShoppingBag className="h-3 w-3 mr-1" />A010</>
+          ) : isQuiz ? (
+            <><ClipboardList className="h-3 w-3 mr-1" />Quiz</>
           ) : (
             <><Tv className="h-3 w-3 mr-1" />LIVE</>
           )}
