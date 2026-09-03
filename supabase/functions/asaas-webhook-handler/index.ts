@@ -673,7 +673,10 @@ Deno.serve(async (req) => {
       customerName = data.customer_name || data.customerName || '';
       customerEmail = data.customer_email || data.customerEmail || '';
       customerPhone = data.customer_phone || data.customerPhone || '';
-      
+      // Campos equivalentes de oferta, se existirem; senão null
+      offerName = data.offer_name ?? data.offerName ?? null;
+      offerId = data.offer_id ?? data.offerId ?? null;
+
       console.log(`[Asaas] Formato customizado detectado: data.purchase_id = ${paymentId}`);
       
     } else if (isHublaFormat) {
