@@ -1415,6 +1415,151 @@ function normalizeNameForMatch(name: string): string {
     .trim();
 }
 
+// ===================== [MAPA DO MERCADO] bloco isolado =====================
+// Produto "O Mapa do Mercado Imobiliário" (Hubla). Não tem prefixo A0XX e o
+// product_code chega como UUID/nulo, então o casamento é POR NOME, igual ao
+// Guia, Planilha de Viabilidade e Construir Para Alugar.
+const MAPA_MERCADO_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'; // PIPELINE INSIDE SALES
+const MAPA_MERCADO_STAGE_NOVO_LEAD = 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b';
+
+// Radical "Mapa do Mercado", sem acento e em minúsculas (usa o mesmo NFD do arquivo)
+function isMapaMercadoProduct(productName: string | null | undefined): boolean {
+  const n = (productName || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return n.includes('mapa do mercado');
+}
+
+/**
+ * Quem compra o Mapa SEMPRE veio antes do quiz (`webhook-quiz-mapa`), que já
+ * criou o negócio em PIPELINE INSIDE SALES com `qualification_answers`.
+ * Por isso aqui só ATUALIZAMOS o negócio existente e NUNCA trocamos o dono:
+ * quem pegou o lead no quiz continua responsável por ele.
+ * Qualquer falha é logada e engolida — não pode derrubar as outras vendas.
+ */
+async function handleMapaMercadoSale(supabase: any, params: {
+  email: string | null;
+  phone: string | null;
+  productName: string;
+  value: number;
+  hublaId: string | null;
+}): Promise<void> {
+  try {
+    const normalizedPhone = normalizePhone(params.phone);
+    let contactId: string | null = null;
+
+    // 1. Contato por e-mail (mesma lógica já usada no arquivo)
+    if (params.email) {
+      const { data: byEmail } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', params.email)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: true })
+        .limit(1);
+      if (byEmail && byEmail.length > 0) contactId = byEmail[0].id;
+    }
+
+    // 2. Fallback por telefone (formato normalizado e sufixo de 9 dígitos)
+    if (!contactId && normalizedPhone) {
+      const phoneDigits = normalizedPhone.replace(/\D/g, '');
+      const { data: byPhone } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .or(`phone.eq.${normalizedPhone},phone.eq.+${phoneDigits},phone.eq.${phoneDigits}`)
+        .order('created_at', { ascending: true })
+        .limit(1);
+      if (byPhone && byPhone.length > 0) {
+        contactId = byPhone[0].id;
+      } else {
+        const suffix = phoneDigits.slice(-9);
+        if (suffix.length >= 8) {
+          const { data: bySuffix } = await supabase
+            .from('crm_contacts')
+            .select('id')
+            .like('phone', `%${suffix}`)
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (bySuffix && bySuffix.length > 0) contactId = bySuffix[0].id;
+        }
+      }
+    }
+
+    if (!contactId) {
+      console.log(`[MAPA] venda sem negócio do quiz — caiu no fluxo padrão (${params.email || 'sem e-mail'})`);
+      return;
+    }
+
+    // 3. Negócio do quiz: mais recente na origem (nunca maybeSingle sem limit)
+    const { data: deals } = await supabase
+      .from('crm_deals')
+      .select('id, tags, custom_fields, value, product_name')
+      .eq('contact_id', contactId)
+      .eq('origin_id', MAPA_MERCADO_ORIGIN_ID)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const deal = deals?.[0] ?? null;
+
+    if (!deal) {
+      console.log(`[MAPA] venda sem negócio do quiz — caiu no fluxo padrão (${params.email || 'sem e-mail'})`);
+      return;
+    }
+
+    // Tags: soma sem duplicar e sem remover as tags que o quiz gravou
+    const tagsAtuais: string[] = Array.isArray(deal.tags) ? deal.tags : [];
+    const tagsFinais = [...tagsAtuais];
+    for (const t of ['INVESTIMENTO', 'Hubla']) {
+      if (!tagsFinais.some((x) => String(x).toLowerCase() === t.toLowerCase())) tagsFinais.push(t);
+    }
+
+    const agora = new Date().toISOString();
+    // custom_fields mesclado: preserva qualification_answers, utm e variante_teste
+    const customFields = {
+      ...(deal.custom_fields && typeof deal.custom_fields === 'object' ? deal.custom_fields : {}),
+      mapa_compra: true,
+      mapa_produto: params.productName,
+      mapa_data: agora,
+    };
+
+    const { error: updErr } = await supabase
+      .from('crm_deals')
+      .update({
+        stage_id: MAPA_MERCADO_STAGE_NOVO_LEAD,
+        stage_moved_at: agora,
+        tags: tagsFinais,
+        value: Math.max(Number(deal.value) || 0, Number(params.value) || 0),
+        product_name: params.productName,
+        custom_fields: customFields,
+        updated_at: agora,
+      })
+      .eq('id', deal.id);
+
+    if (updErr) {
+      console.error('[MAPA] Erro ao atualizar negócio:', updErr);
+      return;
+    }
+
+    // 5. Atividade (deal_id é TEXT nessa tabela)
+    await supabase.from('deal_activities').insert({
+      deal_id: String(deal.id),
+      activity_type: 'compra_mapa_mercado',
+      description: 'Comprou O Mapa do Mercado Imobiliário',
+      metadata: {
+        product_name: params.productName,
+        value: params.value,
+        hubla_transaction_id: params.hublaId,
+      },
+    });
+
+    console.log(`[MAPA] Negócio ${deal.id} movido para Novo Lead (dono preservado) — ${params.email}`);
+  } catch (err) {
+    console.error('[MAPA] Erro isolado no tratamento do Mapa do Mercado:', err);
+  }
+}
+// =================== fim [MAPA DO MERCADO] ===================
+
+
 /**
  * Fallback de vínculo transação → negócio (mesma regra do webhook MCF Pay):
  * e-mail primeiro, telefone normalizado (sufixo 9 dígitos) como fallback.
@@ -3105,6 +3250,18 @@ Deno.serve(async (req) => {
               extraTags: ['Guia', 'Hubla'],
             });
           }
+
+          // 🗺️ [MAPA DO MERCADO] comprador sempre veio do quiz — só atualiza o negócio existente
+          if (isMapaMercadoProduct(productName) && installment === 1) {
+            await handleMapaMercadoSale(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              productName: productName,
+              value: netValue,
+              hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
+            });
+          }
+
           
           // 🎯 CORREÇÃO: Detectar contrato pago mesmo quando items.length === 0
           const isContratoPago = (
@@ -3307,6 +3464,18 @@ Deno.serve(async (req) => {
               extraTags: ['Guia', 'Hubla'],
             });
           }
+
+          // 🗺️ [MAPA DO MERCADO][item] comprador sempre veio do quiz — só atualiza o negócio existente
+          if (isMapaMercadoProduct(productName) && !isOffer && installment === 1) {
+            await handleMapaMercadoSale(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              productName: productName,
+              value: itemNetValue,
+              hublaId: hublaId ?? null,
+            });
+          }
+
 
           // Detectar se é um pagamento de contrato (categoria 'contrato' OU produto A000 com valor ~R$ 497)
           // Isso cobre casos onde A000-Contrato é categorizado como 'incorporador' mas é realmente um contrato
