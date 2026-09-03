@@ -561,27 +561,8 @@ Deno.serve(async (req) => {
 
     console.log(`✅ [Asaas] Transação inserida: ${inserted.id}`);
 
-    // ===== [OUTSIDE MCF PAY] tratamento isolado, antes do fluxo de parceria =====
-    // Só dispara quando a oferta bate em public.outside_offers. Como o MCF Pay hoje
-    // envia `offers` VAZIO, offerName/offerId são null e nada acontece (risco zero).
-    try {
-      if (await isOutsideOfferDb(supabase, offerName, offerId)) {
-        console.log(`🎯 [ASAAS OUTSIDE] Oferta Outside detectada: "${offerName}" (${offerId ?? 'sem id'})`);
-        await handleOutsideMcfPay(supabase, {
-          customerName,
-          customerEmail,
-          customerPhone,
-          productName,
-          netValue,
-          offerName,
-          transactionId: inserted.id,
-        });
-      }
-    } catch (outsideError) {
-      // Erro no bloco de outside loga e segue — nunca derruba o webhook
-      console.error('⚠️ [ASAAS OUTSIDE] Erro no tratamento de outside:', (outsideError as Error).message);
-    }
-    // ===== fim [OUTSIDE MCF PAY] =====
+    // Automação: mover deal para "Venda Realizada" APENAS para produtos de parceria
+
 
 
     // Automação: mover deal para "Venda Realizada" APENAS para produtos de parceria
