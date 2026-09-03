@@ -464,7 +464,8 @@ Deno.serve(async (req) => {
 
       // Oferta: primeira offer encontrada em event.products[].offers[].
       // ATENÇÃO: hoje o MCF Pay envia `offers` como array VAZIO — nesse caso fica null
-      // (nunca inventamos valor) e a regra de Outside abaixo permanece inerte.
+      // (nunca inventamos valor). Quando o MCF Pay passar a enviar, offerName/offerId
+      // passam a ser gravados em hubla_transactions automaticamente.
       const mcfProducts = Array.isArray(hublaEvent?.products) ? hublaEvent.products : [];
       for (const p of mcfProducts) {
         const offers = Array.isArray(p?.offers) ? p.offers : [];
