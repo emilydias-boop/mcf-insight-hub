@@ -740,7 +740,7 @@ Deno.serve(async (req) => {
 
     // Determinar categoria do produto (busca no DB primeiro, fallback para lógica local)
     const productCategory = await getProductCategoryFromDB(supabase, productName);
-    console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory}`);
+    console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory} | Oferta: "${offerName ?? 'null'}" (id: ${offerId ?? 'null'})`);
 
     // Gerar hubla_id único para evitar duplicatas
     const sourceLabel = isHublaFormat ? 'mcfpay' : 'asaas';
