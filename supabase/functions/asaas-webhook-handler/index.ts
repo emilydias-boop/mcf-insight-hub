@@ -562,10 +562,6 @@ Deno.serve(async (req) => {
     console.log(`✅ [Asaas] Transação inserida: ${inserted.id}`);
 
     // Automação: mover deal para "Venda Realizada" APENAS para produtos de parceria
-
-
-
-    // Automação: mover deal para "Venda Realizada" APENAS para produtos de parceria
     let autoResult = { success: false, message: 'Skipped - not a parceria product' };
     
     if (productCategory === 'parceria') {
