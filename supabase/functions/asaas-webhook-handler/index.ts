@@ -659,7 +659,11 @@ Deno.serve(async (req) => {
         customerEmail = payment.customerEmail || payment.customer_email || '';
         customerPhone = payment.customerPhone || payment.customer_phone || '';
       }
-      
+
+      // Asaas padrão não traz oferta; usa campos equivalentes se existirem, senão null
+      offerName = payment.offer_name ?? payment.offerName ?? null;
+      offerId = payment.offer_id ?? payment.offerId ?? null;
+
       console.log(`[Asaas] Formato padrão detectado: payment.id = ${paymentId}`);
       
     } else if (body.data) {
