@@ -1,100 +1,123 @@
-# Inventário — relatório diário de funil por BU (somente leitura)
+# Desenho: RPC `relatorio_diario_bu(p_data date)`
 
-Nada foi alterado. Todas as afirmações abaixo têm arquivo:linha ou SELECT executado.
+Somente leitura até aqui. (Não posso registrar a tarefa em `roadmap.md` em modo plano — só `.lovable/plan.md`; faço isso no primeiro passo da execução.)
 
-## Q1 — BUs que existem de fato
+## 1) Âncora de "Agendada" — confirmado, com uma ressalva
 
-`select bu, count(*), count(*) filter (where is_active) from closers group by bu`:
+Sua decisão bate com o painel de Consórcio. Em `get_agenda_fatos_consorcio`, os fatos `agendada`, `realizada`, `no_show` e `fechada_agenda` são filtrados por `meeting_day = (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date`; só o fato `agendamento` usa `booked_day` (`coalesce(booked_at, created_at)`). Logo "agendada/realizada pelo dia da reunião" é exatamente o eixo do painel, e `realizada ⊆ agendada` (realizada é o subconjunto com `attendee_status='completed'` do mesmo conjunto capado).
 
-| bu | closers | ativos |
-|---|---|---|
-| consorcio | 8 | 5 |
-| incorporador | 19 | 12 |
-| solar | 1 | 1 |
-| (null) | 1 | 1 |
+Se usássemos `booked_at`: o funil deixaria de ser conversão. "Agendada" passaria a medir produtividade de SDR no dia (é o KPI Agendamentos, hoje 320 em ago/2026 contra 310 agendadas por reunião) e "Realizada" continuaria no dia da reunião — as duas passariam a falar de populações diferentes, e `realizada > agendada` num dia qualquer seria normal. Para relatório de funil, sua escolha é a correta.
 
-`bu_origin_mapping` (join com `crm_groups`/`crm_origins`):
+Incorporador: `get_daily_view_incorporador` já usa `scheduled_at` para reuniões realizadas — mesma âncora. Nele não existe "R1 Agendada" pronta; teria de ser acrescentada com o mesmo predicado (`meeting_type='r1'`, `is_partner=false`, `status<>'cancelled'`, `scheduled_at::date = p_data`).
 
-| bu | tipo | nome | default |
-|---|---|---|---|
-| incorporador | origin | PIPELINE INSIDE SALES | sim |
-| incorporador | origin | PILOTO ANAMNESE / INDICAÇÃO | não |
-| consorcio | group | BU - LEILÃO | sim |
-| consorcio | origin | Efeito Alavanca + Clube | sim |
-| consorcio | origin | Cobrança Consorcio | não |
-| credito | group | BU - PÓS VENDA MCF / BU - MCF CAPITAL | não |
-| leilao | group/origin | BU - LEILÃO / Efeito Alavanca + Clube | não |
-| solar | group | BU - MCF SOLAR | sim |
-| solar | origin | PIPELINE MCF SOLAR | sim |
+## 2) Reaproveitar × escrever — item a item
 
-Enum de BU no front: `src/hooks/useMyBU.ts:5` (`incorporador | consorcio | credito | projetos | leilao | marketing | solar`).
+Reaproveita (a nova RPC chama a existente):
 
-## Q2 — Solar existe? Existe pela metade
+| Métrica | Reaproveita |
+|---|---|
+| Consórcio Reunião Agendada / Realizada | `get_agenda_fatos_consorcio(p_data, p_data)`, contando `fato='agendada'` / `'realizada'` |
+| Incorporador R01 Realizada | `get_daily_view_incorporador(p_data,…)` → soma `closers[].reunioes_realizadas` |
+| Incorporador Contrato Pago | mesma RPC → soma `closers[].contratos_pagos` (âncora `contract_paid_at`) |
 
-**Existe** (não é vazio):
-- Origem `PIPELINE MCF SOLAR` = `c0a10a52-...1002` e grupo `BU - MCF SOLAR` = `...1001`, mapeados em `bu_origin_mapping`.
-- 19 stages próprios em `crm_stages`; **1.006 deals**, 425 criados nos últimos 30 dias.
-- 1 closer ativo com `bu='solar'`; 63 slots R1 nos últimos 30 dias (última reunião 08/09/2026); 62 attendees ligados a deals solares.
-- Telas: rota `/solar/crm` (`src/App.tsx:268`), layout `src/pages/crm/BUCRMLayout.tsx:51,88`, sidebar `src/components/layout/AppSidebar.tsx:196-202,413`, guard `src/components/auth/NegociosAccessGuard.tsx:34,50,61`, config `src/pages/admin/ConfiguracaoBU.tsx:22`, relatórios `src/components/relatorios/BUReportCenter.tsx:29`.
+Escrever novo em SQL:
 
-**NÃO existe, com todas as letras:**
-- Nenhuma tabela própria de Solar (nenhuma migration menciona `solar`).
-- Nenhuma fonte de receita/venda: `hubla_transactions` com `product_name ilike '%solar%'` = **0**; deals solares com `value > 0` = **0**.
-- Consequência: "Venda Realizada", "Produção Gerada" e "Ticket Médio" de Solar **não têm origem de dado hoje**. Reunião Agendada/Realizada é o único par obtível (via attendees do closer solar) — e mesmo isso não tem hook/RPC de BU solar: `get_agenda_fatos_consorcio` filtra `fato_bu = 'consorcio'` explicitamente.
+| Métrica | Por quê / de onde |
+|---|---|
+| Incorporador R01 Agendada | não existe RPC; mesmo predicado da diária, contando deals distintos com `scheduled_at::date = p_data` |
+| Incorporador R02 Agendada / Realizada | hoje só existe no front (`useR2MeetingSlotsKPIs.ts:40-78`). Portar direto: `meeting_type='r2'`, agendada = `status not in ('cancelled','rescheduled')`, realizada = `status in ('completed','contract_paid','refunded')`. **Descartar o hack de +3h** das linhas 33-36 e usar `AT TIME ZONE 'America/Sao_Paulo'` — no SQL isso é resolvido corretamente, e o valor pode divergir do card do front em reuniões de borda (21h–00h) |
+| Incorporador Venda Realizada | hoje `deal_activities.to_stage='Venda realizada'` por `created_at` (`useR2VendasKPIs.ts:19-24`). Portável em 5 linhas |
+| Incorporador Faturamento Líquido | portar o filtro de `useChannelFunnelReport` (ver ponto 4) |
+| Incorporador Ticket Médio | derivado (ponto 5) |
+| Consórcio Venda Realizada | clientes distintos por `clienteKey` (`useConsorcioCotasContratadas.ts:201`) |
+| Consórcio Cotas Contratadas | `consortium_cards` por `data_contratacao` |
+| Consórcio Consórcios Efetivados | soma de `consortium_cards.valor_credito` das mesmas cotas |
+| Consórcio Produção Gerada | ver ponto 3 — o item de risco |
+| Consórcio Ticket Médio | derivado |
+| Solar Reunião Agendada / Realizada | novo: mesma consulta de `get_agenda_fatos_consorcio` mas com `cl.bu = 'solar'`. Recomendo **generalizar a função existente** para receber a BU em vez de duplicá-la — mas isso mexe numa RPC em produção; alternativa segura é uma consulta inline na nova RPC com o mesmo predicado |
+| Solar Venda / Produção / Ticket | **sem fonte** — a RPC devolve `null` com `status: 'sem_fonte'`, nunca 0 |
 
-## Q3 — Incorporador: onde mora cada métrica
+Contrato de saída sugerido: JSON `{ data, gerado_em, bus: [{ bu, metricas: [{ chave, rotulo, valor, status }] }] }`, com `status ∈ ('ok','sem_fonte','provisorio')`. O `provisorio` é o que resolve o ponto 6.
 
-| Métrica | Fonte | Âncora de data |
-|---|---|---|
-| R01 Agendada | `meeting_slot_attendees` + `meeting_slots` (`meeting_type='r1'`, `is_partner=false`, `status<>'cancelled'`) — RPC `get_daily_view_incorporador` e `get_sdr_metrics_from_agenda`; front `src/hooks/useR1CloserMetrics.ts` | dois eixos convivem: **`booked_at`** (ato de agendar; SDR) e **`scheduled_at`** (dia da reunião) |
-| R01 Realizada | mesma base, `status in ('completed','contract_paid','refunded')` (RPC diária) — o card de equipe usa os três status | `scheduled_at` em `America/Sao_Paulo` |
-| Contrato Pago | `src/hooks/useR1CloserMetrics.ts:358-402,672-714` — verdade = `contract_paid_at IS NOT NULL`, com fallback `scheduled_at` quando `status='contract_paid'` sem data, mais atribuições manuais (`manual_sale_attributions`) | **`contract_paid_at`** |
-| R02 Agendada / R02 Realizada | `src/hooks/useR2MeetingSlotsKPIs.ts:40-78` (`meeting_type='r2'`; agendada = tudo menos `cancelled`/`rescheduled`; realizada = `completed`/`contract_paid`/`refunded`) | `meeting_slots.scheduled_at` (com hack de +3h BRT, linhas 33-36) |
-| Venda Realizada | `src/hooks/useR2VendasKPIs.ts:19-24` — conta `deal_activities` com `to_stage='Venda realizada'` | **`deal_activities.created_at`** (dia do lançamento, não da venda) |
-| Faturamento Líquido | **existe no sistema**: `src/hooks/useChannelFunnelReport.ts:684-742` soma `hubla_transactions.product_price` (bruto = `reference_price` do catálogo). Config: `src/components/relatorios/funnelMetricsConfig.ts:56-66` | **`hubla_transactions.sale_date`** |
-| Ticket Médio | **não existe cálculo próprio** para Incorporador — no funil de canais só há `faturamentoBruto`/`faturamentoLiquido` e `vendaFinal`; seria derivado (faturamento ÷ vendas) |
+## 3) Produção Gerada — o risco real
 
-Observação: `get_daily_view_incorporador` (RPC de 1 dia) só entrega **agendamentos por SDR**, **reuniões realizadas** e **contratos pagos** por closer — não tem R02, venda, faturamento nem ticket.
+**(a) Dá para portar fielmente?** Sim, tecnicamente: as três pernas e os quatro caminhos de dedup são todos joins e `NOT EXISTS`, e em SQL ficam mais curtos e mais seguros que os ~300 linhas de TS (que hoje pagam paginação em `chunk()` só por causa do limite de 1000 linhas do PostgREST). Mas fiel exige replicar também a cadeia de atribuição (`created_by` → `profiles` → `closers`, com fallback dono do deal) — e é aí que a divergência nasce, não nas pernas.
 
-## Q4 — Consórcio: confirmação
+**(b) Caminho de dedup mais frágil em 1 dia:** o caminho 4 (`consorcio_pending_registrations.proposal_id`). O comentário do hook é explícito: sem ele, agosto/2026 infla R$ 2,09 mi contando o mesmo crédito na perna A e na perna B. Numa fatia de 1 dia o risco piora, porque proposta e cadastro podem ter âncoras em **dias diferentes** (`aceite_date` da proposta vs `aceite_date` do cadastro): a dedup por "existe proposta vinculada" continua correta, mas a venda cai no dia da proposta, e um relatório diário do outro dia parece ter perdido dinheiro. A perna C (`data_contratacao` estrita) é a segunda mais frágil: chega com atraso de dias.
 
-- Reunião Agendada/Realizada: `src/hooks/useConsorcioAgendaFatos.ts` → RPC `get_agenda_fatos_consorcio`. Fatos `agendada`/`realizada`/`no_show`/`fechada_agenda` ancoram no **dia da reunião**; `agendamento` ancora em **`booked_at`**. Dedup 1 por deal+dia e cap 2 por deal na janela; BU do fato = `closers.bu` do slot.
-- Venda Realizada = clientes distintos via `clienteKey(card)` (`src/hooks/useConsorcioCotasContratadas.ts:201`). Confirmado.
-- Produção Gerada: `src/hooks/useConsorcioProducaoGerada.ts` — três pernas: proposta (`coalesce(aceite_date, proposal_date)`), cadastro sem proposta (`aceite_date`, linhas 418-423), cota histórica (`data_contratacao`).
-- Cotas Contratadas: `src/hooks/useConsorcioCotasContratadas.ts:248-254` — `consortium_cards` por **`data_contratacao`**.
-- **"Consórcios Efetivados"**: sim, é a coluna "Consórcio Efetivado" de `src/components/sdr/ConsorcioCloserSummaryTable.tsx:228-232` — é o **crédito** das cotas contratadas, `creditoByCloser` = soma de `consortium_cards.valor_credito` (linhas 35-36, 124), com `creditoSemCloser` no total (linha 137). O tooltip da linha 232 confirma: "Consórcio Efetivado ÷ Vendas Realizadas".
+**(c) Alternativa melhor que reimplementar:** sim, e é a que eu recomendo — **não fatiar Produção Gerada por dia dentro da RPC nova**. Duas opções, em ordem de preferência:
+1. Extrair a regra para **uma RPC própria** (`consorcio_producao_gerada(p_ini, p_fim)`) que se torne a fonte única, e depois **apontar o hook do front para ela**, deletando o TS. Assim existe um só lugar; o relatório diário chama com `p_ini = p_fim = p_data`. Custo: uma migration e um ajuste no painel (fora do escopo "somente RPC").
+2. Escrever a RPC nova e deixar o TS como está. Custo: duas implementações da mesma regra, divergência garantida no médio prazo. É o cenário que você quer evitar.
 
-## Q5 — Funcionam para UM DIA?
+Recomendação: opção 1, mas com o teste do ponto 7 rodando lado a lado (RPC × painel) antes de trocar o hook.
 
-**Naturalmente diárias (dia anterior é estável):**
-- Incorporador: R01 Agendada (por `booked_at`), R01 Realizada, R02 Agendada/Realizada, Contrato Pago (`contract_paid_at`), Faturamento Líquido (`sale_date`).
-- Consórcio: Reunião Agendada / Realizada (dia da reunião).
+## 4) Faturamento Líquido do Incorporador — filtro real
 
-**Onde o relatório do dia anterior mentiria:**
-- **R01/R02 Realizada** — status de attendee é editado depois (`completed`, `no_show`, `refunded`). Rodar às 8h de D+1 pega muita reunião ainda sem tabulação; o número muda nos dias seguintes.
-- **Contrato Pago** — o fallback por `scheduled_at` (quando `status='contract_paid'` sem `contract_paid_at`) e as atribuições manuais são lançados retroativamente.
-- **Venda Realizada (Incorporador)** — ancorada em `deal_activities.created_at`, ou seja **dia do lançamento**, não da venda. É estável, mas não corresponde ao dia real do negócio.
-- **Produção Gerada (Consórcio)** — é a pior para D-1: âncora `aceite_date`/`data_contratacao` pode ser retroativa. O próprio hook mantém sinalizadores de **antedatação** e de **lançados retroativos** (`useConsorcioProducaoGerada.ts:42-60`), e a regra é mensal ("nunca sai desse mês"). Um recorte de 1 dia é legítimo mas volátil.
-- **Cotas Contratadas / Consórcios Efetivados** — `data_contratacao` chega com atraso (a contratação é registrada dias depois do aceite). O dia anterior quase sempre vem subestimado.
-- **Faturamento Líquido** — estorno/reembolso posterior altera o passado.
-- **Dedup e cap 2** do consórcio: em janela de 1 dia o cap praticamente não morde, então o total diário somado ≠ total semanal calculado com cap.
-- **Solar** — todas as métricas de venda/produção mentiriam porque não existe fonte.
+`src/hooks/useChannelFunnelReport.ts:717-730`:
 
-## Q6 — O que já existe pronto
+```ts
+.from('hubla_transactions')
+.select('id, customer_email, customer_phone, product_name, product_price, sale_date')
+.in('product_category', ['incorporador', 'parceria'])
+.eq('sale_status', 'completed')
+.in('source', ['hubla', 'kiwify', 'manual', 'mcfpay'])
+.gte('sale_date', windowStartIso).lte('sale_date', windowEndIso)
+```
+E depois, em memória (linha 730): `PARCERIA_VENDA_PRODUCTS.has(t.product_name)` — ou seja **há coluna de categoria (`product_category`) E lista branca de `product_name`**. Não existe coluna de BU: a separação Incorporador × Consórcio é feita por `product_category in ('incorporador','parceria')` mais a lista de produtos de parceria. Consórcio não passa por essa tabela (produção vem de `consorcio_*` / `consortium_cards`).
 
-**Por dia:**
-- RPC `get_daily_view_incorporador(p_date, ...)` + `src/hooks/useDailyViewIncorporador.ts` + tela `src/components/relatorios/DailyViewPanel.tsx`, exposta em `src/pages/bu-incorporador/Relatorios.tsx:7` (`daily_view`). Só Incorporador, só SDR-agendamentos / closer-reuniões / closer-contratos, com overrides em `daily_view_overrides`.
-- Outras RPCs de dia: `get_sdr_daily_bookings`, `get_closer_daily_meetings`, `get_closer_daily_contracts`, `get_sdr_call_daily_summary`, `operacional_incorporador_daily(p_from, p_to)`.
-- Nenhuma tela/export de "resumo diário do funil por BU" com as métricas pedidas.
+Dedup: `seen.add(email)` — **um e-mail conta uma vez na janela**. Numa fatia diária a dedup é intradiária, então a soma de 30 dias > o mês fechado quando o mesmo cliente compra em dias diferentes.
 
-**Envio já configurado (reaproveitável):**
-- `supabase/functions/weekly-bu-report/index.ts` — semanal sábado→sexta, lê `weekly_metrics`, monta HTML e envia por `brevo-send` (linha 141) para `grimaldo.neto@...` (linha 9). Tem entrada em `supabase/config.toml:231`.
-- `supabase/functions/weekly-manager-report/index.ts` (1.224 linhas) — também envia por `brevo-send` (linhas 1174, 1196).
-- `supabase/functions/brevo-send` — transporte de e-mail existente.
-- WhatsApp: `twilio-whatsapp-send`, `send-boleto-whatsapp`. Webhooks de saída: `outbound-webhook-dispatcher`.
+**"Líquido" ali é preço cheio recebido no Hubla** (`product_price`), sem dedução de taxa, imposto ou chargeback. É "líquido" apenas por oposição ao "bruto" = `reference_price` de tabela (`product_configurations`). Se o dono espera líquido fiscal, isso **não existe no sistema** e precisa ser dito.
 
-## Veredito do inventário
+## 5) Ticket Médio
 
-- **Dá para fazer hoje, com fonte existente:** Incorporador completo, exceto Ticket Médio (derivado) — e ciente da volatilidade de D-1. Consórcio completo (reuniões, vendas, produção, cotas, crédito efetivado), com as ressalvas de retroatividade.
-- **Precisa ser construído:** agregação diária por BU num único lugar (hoje as métricas estão espalhadas em hooks de front, não em RPC), Ticket Médio, e o recorte diário de Consórcio (os hooks são de janela/mês).
-- **Não existe:** qualquer fonte de venda, produção ou ticket para **Solar**; e qualquer relatório diário de funil por BU (o que existe é semanal por e-mail e a Visão Diária só do Incorporador).
+- Incorporador = Faturamento Líquido ÷ Venda Realizada: coerente, **mas** os dois numeradores vêm de fontes diferentes (Hubla `sale_date` × `deal_activities.created_at`), então o denominador não é o mesmo universo do numerador. Mais consistente: Faturamento Líquido ÷ nº de vendas Hubla do mesmo filtro (o `vendaFinal` do funil). Preciso da sua decisão.
+- Consórcio = Consórcios Efetivados ÷ Venda Realizada: **confirmado**, é literalmente o que a aba Closers faz — tooltip em `src/components/sdr/ConsorcioCloserSummaryTable.tsx:232`: "Consórcio Efetivado ÷ Vendas Realizadas. Uma venda = um cliente, mesmo que ele contrate várias cotas."
+- Solar: `sem_fonte`.
+
+## 6) Reprocessamento de 7 dias — a forma mais enxuta
+
+Nada parecido existe reutilizável: `weekly_metrics` é semanal e alimentada por outro caminho (lida por `weekly-bu-report/index.ts`), com granularidade e chave erradas para isto.
+
+Proposta mínima: **uma** tabela, chave natural, upsert pela própria RPC.
+
+```text
+relatorio_diario_snapshots
+  data date, bu text, metrica text, valor numeric null,
+  status text, gerado_em timestamptz, revisao int
+  PK (data, bu, metrica)
+```
+Formato longo (uma linha por métrica) em vez de uma coluna por métrica: métrica nova não pede migration. A RPC, ao rodar para `p_data`, recalcula `p_data` e os 6 dias anteriores, compara com o snapshot, faz upsert incrementando `revisao` quando o valor muda, e devolve no JSON o delta (`valor_anterior`) para os dias que mudaram. Com isso o relatório de amanhã pode dizer "ontem foram 12; o dia 28 subiu de 9 para 11".
+
+Uma tabela, uma PK, nenhum job de limpeza obrigatório. Precisa de GRANTs + RLS (leitura para papéis de gestão, escrita só `service_role`) e de migration — logo, é a única peça de escrita do plano.
+
+## 7) Teste de aceite — atenção: os números não fecham com a consulta crua
+
+Rodei os SELECTs antes de prometer. **Não reproduzem os seus números**, e o motivo é o filtro de funil aplicado no painel, não a regra:
+
+`select fato, count(*) from get_agenda_fatos_consorcio('2026-08-01','2026-08-31') group by 1`:
+- agendada **310** (você espera 274) · realizada **222** (você espera 183) · no_show 71 · fechada_agenda 9 · agendamento 320
+
+`consortium_cards` com `data_contratacao` em agosto/2026:
+- cotas **117** (você espera 84) · crédito **R$ 17.760.000** (você espera 13.600.000 de Efetivado e 17.610.000 de Produção) · clientes distintos **42** (você espera 31 vendas)
+
+Diagnóstico: o painel **não** consome a RPC crua. `src/pages/bu-consorcio/PainelEquipe.tsx:113-126,402-411` monta `allowedOriginNames` a partir do funil selecionado e filtra os fatos por `origin_name`; e `useConsorcioCotasContratadas(start, end, allowedOriginNames, BU_SQUAD)` (linha 329) separa resíduos que **saem** do total dos closers (`creditoSemVinculo`, `creditoSemCloser`, `creditoCadastroSemLead`, `creditoForaFunil`). Isso explica 117→84 cotas, 42→31 clientes e 17,76 mi→13,6 mi. Não é arredondamento: é escopo.
+
+**Consequência para o desenho:** a RPC precisa receber o mesmo escopo do painel, ou o teste de aceite nunca passa. Preciso da sua definição antes de escrever:
+- (i) qual funil/origens estavam selecionados quando os números 274/183/31/84/13,6 mi foram lidos, e
+- (ii) se o relatório diário deve seguir esse escopo (com resíduos fora) ou reportar o total da BU (com resíduos dentro). São números diferentes e ambos defensáveis.
+
+Motivos já identificados para a soma diária **não** fechar com o mês, independentemente disso:
+- **Cap de 2 por deal**: em `get_agenda_fatos_consorcio` o `ROW_NUMBER() … PARTITION BY unit_key ORDER BY meeting_day` capa 2 por deal **na janela**. Numa janela de 1 dia o cap quase não morde; somando 31 dias, um deal com 4 reuniões no mês entra 4 vezes contra 2 no mês fechado. **A soma diária será ≥ o mês.**
+- **Dedup por dia**: a dedup é `(unit_key, meeting_day)`, então é estável no recorte diário — este não quebra.
+- **Faturamento Líquido**: dedup por e-mail **dentro da janela** ⇒ soma diária ≥ mês.
+- **Produção Gerada**: âncora retroativa (`aceite_date`) ⇒ o valor de um dia muda depois; é o caso de uso do snapshot do ponto 6.
+- **Cotas / Efetivado**: `data_contratacao` chega com atraso ⇒ D-1 sempre subestimado; a janela de 7 dias cobre parte, não tudo.
+- Arredondamento não é problema (crédito é inteiro; só Ticket Médio arredonda, e é derivado).
+
+## Decisões que preciso de você antes de escrever
+
+1. Escopo do Consórcio na RPC: total da BU ou escopo do painel com resíduos fora (e qual funil).
+2. Ticket Médio do Incorporador: denominador `deal_activities` ou vendas Hubla.
+3. Produção Gerada: extraio para RPC própria e aponto o painel para ela (fonte única), ou duplico a regra em SQL.
+4. Cap de 2 por deal: mantenho no diário (soma ≥ mês) ou o relatório diário ignora o cap e assume divergência com o mês.
