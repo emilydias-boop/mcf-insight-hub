@@ -18,6 +18,7 @@ import { LeadJourneyCard } from './LeadJourneyCard';
 import { LeadFullTimeline } from './LeadFullTimeline';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
+import { QuizProfileCard } from './QuizProfileCard';
 import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { LossReasonCard } from './LossReasonCard';
 import { LeadProfileSection } from './LeadProfileSection';
@@ -219,6 +220,9 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                   compact
                 />
               )}
+
+              {/* ===== PERFIL DO QUIZ (respostas do quiz-mapa) — aparece em qualquer etapa ===== */}
+              <QuizProfileCard customFields={deal.custom_fields as Record<string, unknown> | null} />
               
               {/* ===== 5. RESUMO (contato + negócio unificado) ===== */}
               <SdrSummaryBlock deal={deal} contact={contact} />
