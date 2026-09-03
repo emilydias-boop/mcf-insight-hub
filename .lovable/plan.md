@@ -1,94 +1,86 @@
-# Mapa: inativação de William Ferreira do Nascimento (somente leitura)
+# Auditoria somente-leitura: R1 Realizada 69 x 44 (BU Incorporador, set/2026)
 
-Resumo: **ele já está inativado no acesso**. O que ainda está aberto é o registro de **closer** (`closers.is_active = true`) e **12 reuniões futuras** no nome dele. Nada foi executado.
+Nada foi alterado. Apenas SELECT + leitura de código. Todos os números abaixo foram medidos hoje (03/09/2026, ~11:41 America/Sao_Paulo) e reproduzem exatamente os valores da tela.
 
-## Q1 — Onde ele existe
+## 1) Predicado EXATO do card "R1 REALIZADA" (69)
 
-Saída crua da consulta pedida (linhas do "Matheus william alves elpidio" apareceram por causa do `%william%` no nome — não é ele):
+Cadeia: `src/pages/crm/ReunioesEquipe.tsx` → `useTeamMeetingsData` → `useSdrMetricsFromAgenda` → RPC `public.get_sdr_metrics_from_agenda`.
 
-```text
-t         | id                                   | full_name/name    | email                                    | extra1        | extra2
-profiles  | d27c71c8-8afb-4cf4-bf61-777a99e3b188 | Matheus william…  | matheus.alves@minhacasafinanciada.com    | null          | null
-profiles  | a3a75942-b550-4102-af6d-d5885b4ba370 | William Ferreira  | william.ferreira@minhacasafinanciada.com | null          | null
-closers   | 0d4a5264-258f-4ba4-bef1-afea307eed2b | William Ferreira  | william.ferreira@minhacasafinanciada.com | incorporador  | true
-```
+Card renderizado em `src/components/sdr/TeamKPICards.tsx:142-151` (`value: kpis.totalRealizadas`, `segLine: segLineFor('r1Realizada')`).
 
-Demais tabelas de pessoas encontradas em `information_schema` (`employees`, `sdr`, `user_roles`; não existe `squad_members`):
+Valor somado no front em `src/pages/crm/ReunioesEquipe.tsx:643`:
+`const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);`
 
-```text
-employees  | e979aa3f-dead-45ad-bda7-6428d82cc1f5 | William Ferreira | email_pessoal=william.ferreira@… | status=desligado | user_id=profile_id=a3a75942…
-sdr        | 91ef00e6-5010-459d-b484-97644605e4d1 | William Ferreira | william.ferreira@…               | (sem coluna de status)
-user_roles | user_id=a3a75942-b550-4102-af6d-d5885b4ba370 | role=closer
-profiles   | a3a75942-… | access_status=desativado | squad={"inside sales produto"}
-auth.users | a3a75942-… | banned_until=2126-08-08 | last_sign_in_at=2026-08-25
-```
+Ou seja: **soma por SDR**, e não contagem de deals. `filteredBySDR` (linhas 566-576) restringe às SDRs elegíveis do período:
+`activeSdrsList` = `get_sdrs_for_squad_in_period('incorporador', ...)` menos `nonSdrEmails` (perfis com role admin/manager/coordenador/assistente_administrativo/closer/closer_sombra — linhas 223-241, 250-261).
 
-## Q2 — O que "inativar" significa em cada lugar
+Predicado no banco (`get_sdr_metrics_from_agenda`, CTEs `raw_attendees` e `dedup_realizada`):
 
-| Tabela | Coluna de status | Valor hoje | Efeito |
-|---|---|---|---|
-| `profiles` | `access_status` (`ativo`/`bloqueado`/`desativado`) | **desativado** | **Barra o login de verdade** |
-| `auth.users` | `banned_until` | **2126-08-08** (banido) | Barra o login no Supabase Auth |
-| `employees` | `status` | **desligado** | Sai do RH; dispara a sync de acesso |
-| `closers` | `is_active` | **true (ainda ativo)** | Só some das listas/agenda; não afeta login |
-| `sdr` | não tem coluna de status | — | Registro apenas de referência |
-| `user_roles` | — (papel `closer`) | presente | Define o que ele veria se entrasse |
+- Tabelas: `meeting_slot_attendees msa` INNER `meeting_slots ms`, LEFT `closers cl` (via `ms.closer_id`), LEFT `profiles p_booker` (via `msa.booked_by`), LATERAL `sdr` + `sdr_squad_history`, LEFT `crm_deals cd`.
+- Filtros: `msa.status <> 'cancelled'`, `ms.meeting_type = 'r1'`, `msa.is_partner = false`, `p_booker.email IS NOT NULL`, e BU = `sdr_squad_history.squad = 'incorporador'` **na data do agendamento** OU (squad nulo E `cl.bu = 'incorporador'`).
+- **Não há filtro de origin_id/pipeline.** A BU vem do squad de quem agendou, não da origem do negócio.
+- Eixo de data: `meeting_day = (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date`, entre `start_d` e `effective_end = LEAST(end_d, hoje_SP)`. Com filtro 01/09–30/09 hoje, a janela real de "realizada" é **01/09–03/09**.
+- Unidade de contagem: `GROUP BY sdr_email, deal_id` com `MAX(CASE WHEN status IN ('completed','contract_paid','refunded') THEN 1 ELSE 0 END)`. Ou seja **pares (SDR, negócio)** — não attendees, não slots. `refunded` e `contract_paid` contam como realizada.
+- Status que saem: `cancelled` (attendee). `rescheduled` não é excluído do universo (só não conta como realizada). O status do **slot** é ignorado.
+- Lead A/B: `UPPER(TRIM(crm_deals.icp_segment)) = 'A' | 'B'`, via duas chamadas extras da mesma RPC com `segment_filter` (`ReunioesEquipe.tsx:609-632`). Negócio com `icp_segment` vazio/nulo entra no total e **não** aparece em A nem em B.
 
-O que barra acesso, com o código:
-- `src/contexts/AuthContext.tsx:84-96` — em background, se `access_status` for `bloqueado`/`desativado` (ou `blocked_until` no futuro), executa `supabase.auth.signOut()` e mostra "Sua conta foi bloqueada ou desativada".
-- `src/contexts/AuthContext.tsx:268-281` — no login, a mesma checagem derruba a tentativa com erro antes de entrar.
-- `supabase/functions/sync-employee-access/index.ts:74-81` — ao marcar o colaborador como `desligado`, grava `access_status='desativado'` e aplica `ban_duration` de ~100 anos no Auth. Foi isso que já aconteceu com ele.
-- `closers.is_active` não aparece em nenhuma checagem de acesso — só em filtros de listagem (`src/hooks/useClosersFromBu.ts:23`, `src/hooks/useAgendaData.ts:386,477,482,2096,2627`).
+Medição de hoje: 78 pares no predicado bruto; 9 descartados pelo filtro de SDR (nicola.ricci 3, rodrigo.martinho 3, bruno.albuquerque 2, jessica.bellini 1) → **69**. Segmentos: A 64−6 = **58**, B 7−1 = **6**, sem segmento 7−2 = **5**. 58+6+5 = 69.
 
-## Q3 — A tela existe, e é por ela que o dono deve agir
+## 2) Predicado da edge function (44)
 
-- Rota: **`/usuarios`** (`src/App.tsx:284`), item "Usuários" no menu (`src/components/layout/AppSidebar.tsx:324`), guardado por `ResourceGuard resource="usuarios"` + `RoleGuard allowedRoles={["admin"]}` na página (`src/pages/GerenciamentoUsuarios.tsx:37`).
-- Caminho: `/usuarios` → busca "William" → **Gerenciar** → aba geral → campo **Status de acesso** → `Desativado` → salvar.
-- O que o botão faz: `useUpdateUserAccess` (`src/hooks/useUserMutations.ts:211-235`) dá `update` em `profiles` (`access_status`, `blocked_until`, `squad`). Ele **não** bane no Auth — o ban veio pela rota de RH (`employees.status = desligado`).
-- Consequência prática: nesse usuário os dois já estão feitos. Pela tela não há o que mudar em `profiles`.
-- O único passo que falta é o registro de closer: hoje **não há tela** que edite `closers.is_active` neste projeto (só filtros de leitura). Isso precisa de decisão antes de qualquer ação.
+`supabase/functions/ote-consorcio-metrics/index.ts:109-180`, bloco `incorporador_50k` (linhas 248-255):
 
-## Q4 — O que quebra (histórico)
+- `meeting_slot_attendees` INNER `meeting_slots` (`meeting_type='r1'`, `scheduled_at` no mês inteiro) INNER `crm_deals` com `origin_id IN (PIPELINE INSIDE SALES, PILOTO ANAMNESE/INDICAÇÃO)`.
+- Exclui `cancelled/canceled/cancelada/rescheduled/remanejada` **no attendee E no slot** (`STATUS_EXCLUIDOS`, linhas 33-39, 146-150).
+- Realizada = `attendee.status === 'completed'` apenas, contando **deals distintos** (linhas 166-173).
+- Sem filtro de `is_partner`, sem filtro de agendador/squad, janela do mês completo (não corta em hoje).
 
-- **Deals**: `crm_deals.owner_id = a3a75942…` → **0 linhas**. Não há deal em nome dele, logo nada fica órfão.
-- **Reuniões históricas como closer**: 655 slots com `closer_id = 0d4a5264…`. A leitura de histórico é por `closer_id`/e-mail, não filtrada por `is_active`; o filtro `.eq('is_active', true)` aparece só onde se monta a lista de closers para **agendar/selecionar** (`useAgendaData.ts:386,477,482,2096,2627`, `useClosersFromBu.ts:23`) e em `useAgendaData.ts:443` a inatividade apenas zera a *disponibilidade*. Ou seja: **as reuniões e vendas passadas continuam atribuídas a ele nos painéis**.
-- **Agendamentos como SDR**: 164 slots e 162 attendees com `booked_by = a3a75942…` — continuam apontando para o `profiles.id` dele, que permanece existindo. Nada vira "sem atribuição".
-- Risco real a validar antes de desligar `closers.is_active`: telas que montam a lista de closers a partir da consulta filtrada por `is_active` podem deixar de exibir o **nome** dele em filtros/seletores de período histórico (o dado do slot continua, mas a opção de filtro pode desaparecer). Isso é cosmético em painéis que resolvem o nome pelo join do slot, e precisa de conferência tela a tela caso o dono queira desativá-lo em `closers`.
-
-## Q5 — O que está aberto no nome dele hoje
-
-- Deals como `owner_id`: **0**.
-- Propostas de consórcio criadas por ele: **0**. Cadastros pendentes de consórcio criados por ele: **0**.
-- Reuniões **futuras** (a partir de agora): **12** — 7 como closer (R1) e 5 que ele agendou como `booked_by` (R2, 5 attendees correspondentes).
+## 3) A ponte, fechando exata
 
 ```text
-2026-09-01 21:00Z  r1  closer     deal 7893696d…  scheduled
-2026-09-02 12:15Z  r1  closer     deal fcc1527a…  scheduled
-2026-09-02 13:15Z  r1  closer     deal 6d4e06c4…  scheduled
-2026-09-02 13:15Z  r2  booked_by  deal b9b14644…  scheduled
-2026-09-02 14:15Z  r2  booked_by  deal 3da344b3…  scheduled
-2026-09-02 14:30Z  r1  closer     deal 1545ff22…  scheduled
-2026-09-02 17:00Z  r1  closer     deal 707007c3…  scheduled
-2026-09-02 18:15Z  r1  closer     (sem deal)      scheduled
-2026-09-02 19:00Z  r2  booked_by  deal fb32c441…  scheduled
-2026-09-02 21:00Z  r1  closer     deal 06db3669…  scheduled
-2026-09-03 13:15Z  r2  booked_by  deal 3893f892…  scheduled
-2026-09-04 14:00Z  r2  booked_by  deal b83c1168…  scheduled
+69   card R1 REALIZADA (pares SDR x deal, SDRs elegíveis)
+-25  negócios cuja única marca é contract_paid / refunded
+     (a function só aceita status='completed')
+- 5  negócios de origem "Efeito Alavanca + Clube"
+     (o card não filtra origem; a function só aceita as 2 origens do 50K)
++ 5  negócios cujo agendador o card descarta e a function não:
+     nicola.ricci 3, rodrigo.martinho 1, jessica.bellini 1
+     (todos completed, origem INSIDE SALES, dia 01-02/09)
+----
+44   ote-consorcio-metrics.incorporador_50k.r1_realizadas
 ```
 
-As 7 R1 como closer são as que exigem redistribuição — sem closer ativo ninguém assume a reunião. As 5 R2 que ele agendou só o mantêm como autor do agendamento; não bloqueiam a reunião.
+Conferência direta dos conjuntos: 30 negócios estão só no card, 5 estão só na function (`69 − 30 + 5 = 44`).
 
-## Q6 — Auth
+Parcelas com contribuição **zero** hoje, mas que são divergências estruturais reais (podem abrir em outro mês):
+- Deals com mais de um attendee `completed` — hoje 0 (78 pares = 78 deals distintos; nenhum negócio agendado por dois SDRs no período).
+- Eixo de data: o card corta em hoje (03/09) e a function vai até 30/09 — hoje não há realizada com `scheduled_at` em 04-05/09 nas 2 origens (existem slots nesses dias, mas nenhum `completed`).
+- Slot `cancelled/rescheduled` com attendee `completed` (a function exclui, o card não): 0 no período.
 
-- Existe registro em `auth.users`: `a3a75942-b550-4102-af6d-d5885b4ba370`, `banned_until = 2126-08-08 17:36Z`, último login em **2026-08-25 13:12Z**.
-- Desativar o `profiles` **não invalida a sessão pelo servidor**: quem já tem refresh token continua com token válido até o app rodar a checagem. O corte acontece no cliente, em `AuthContext.tsx:84-96`, no próximo carregamento/refresh do app — na prática, ao recarregar a página ou reabrir o sistema ele cai imediatamente com o toast de conta desativada. Com o ban do Auth já aplicado, o refresh do token também falha ao expirar o access token (padrão de 1h).
-- Conclusão: ele não tem como entrar de novo hoje.
+### Card 69 x Total da tabela de Closers (64 + 7 = 71)
 
-## Caminho recomendado para o dono (nada executado aqui)
+A tabela de Closers vem de `useR1CloserMetrics` (`src/hooks/useR1CloserMetrics.ts:182-215, 788-848`) e a linha Total das colunas A/B usa `segTotal(segmentAData) / segTotal(segmentBData)` (`src/components/sdr/CloserSummaryTable.tsx:102-103, 247-261`). Diferenças de régua:
 
-1. `/usuarios` → William Ferreira → conferir que o Status de acesso está **Desativado** (já está). Autoria/auditoria preservadas pela tela.
-2. RH → Colaboradores → confirmar `status = desligado` (já está) — é o que aplica o ban no Auth.
-3. Redistribuir as **7 R1 futuras** onde ele é closer, pela Agenda R1, antes de qualquer outra mudança.
-4. Só depois decidir sobre `closers.is_active`: pedir uma verificação tela a tela dos painéis do incorporador antes, porque hoje não há tela para isso e a mudança afetaria seletores de closer.
+- Agrupa por **(closer, deal)** e não (SDR, deal); recorte de BU é `closers.bu`, não o squad do agendador — portanto **não aplica o filtro de SDR elegível**.
+- Janela = mês inteiro, sem corte em hoje; exclui só `slot.status` cancelled/canceled; aceita `rescheduled` no universo. Realizada = `completed | contract_paid | refunded` (mesma régua do card).
+- O Total A/B soma apenas os dois segmentos; negócio sem `icp_segment` não aparece.
 
-Aprovar este plano não executa nada — ele é o mapa. Se quiser, o próximo passo pode ser só a verificação de Q4 (painéis do incorporador com closer inativo), também em leitura.
+```text
+69  card (A 58 + B 6 + sem segmento 5)
+- 5  negócios sem icp_segment (não existem nas colunas A/B)
++ 7  negócios de agendadores excluídos pelo filtro de SDR do card
+     (nicola.ricci, rodrigo.martinho, jessica.bellini, todos com segmento)
+----
+71  Total A(64) + B(7) da tabela de Closers
+```
+
+Medição independente pelo lado do closer confirmou exatamente A = 64, B = 7, 71 pares (closer, deal), sem nenhum negócio de segmento nulo.
+
+## Leitura do diagnóstico
+
+As três contagens não são "uma certa e duas erradas": são três recortes diferentes.
+- Card: BU pelo **squad do agendador**, sem origem, realizada inclui pago/reembolsado, corta em hoje, restrito à lista oficial de SDRs.
+- Function: BU pela **origem do negócio**, realizada só `completed`, mês inteiro, sem recorte de agendador.
+- Tabela de Closers: BU pelo **closer**, mês inteiro, sem recorte de agendador, e o Total A/B perde o que não tem segmento.
+
+Nenhuma correção proposta neste momento, conforme pedido.
