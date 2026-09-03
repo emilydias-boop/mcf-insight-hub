@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -103,7 +104,7 @@ async function processOutsideOffer(supabase: any, data: {
 }): Promise<void> {
   const emailLower = (data.customerEmail || '').toLowerCase().trim();
   if (!emailLower) {
-    console.log('ℓ [Asaas][OUTSIDE] Sem e-mail do cliente — regra de outside não aplicada');
+    console.log('ℹ️ [Asaas][OUTSIDE] Sem e-mail do cliente — regra de outside não aplicada');
     return;
   }
 
@@ -929,6 +930,29 @@ Deno.serve(async (req) => {
     }
 
     console.log(`✅ [Asaas] Transação inserida: ${inserted.id}`);
+
+    // ===== Regra de Outside (independe da categoria do produto) =====
+    // Só dispara quando existe oferta no payload E ela está ativa em outside_offers.
+    try {
+      if (!offerName && !offerId) {
+        console.log('[Asaas] Sem oferta no payload — regra de outside não aplicada');
+      } else if (await isOutsideOfferDb(supabase, offerName, offerId)) {
+        await processOutsideOffer(supabase, {
+          customerName,
+          customerEmail: customerEmail.toLowerCase(),
+          customerPhone,
+          offerName,
+          offerId,
+          saleDate: transactionData.sale_date,
+          transactionHublaId: hublaId,
+        });
+      } else {
+        console.log(`[Asaas] Oferta "${offerName ?? offerId}" não está em outside_offers — regra de outside não aplicada`);
+      }
+    } catch (outsideErr) {
+      // Transação já gravada: erro na regra de outside nunca derruba o webhook
+      console.error('❌ [Asaas][OUTSIDE] Erro ao aplicar regra de Outside:', (outsideErr as Error).message);
+    }
 
     // Automação: mover deal para "Venda Realizada" APENAS para produtos de parceria
     let autoResult = { success: false, message: 'Skipped - not a parceria product' };
