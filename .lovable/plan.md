@@ -1,86 +1,100 @@
-# Auditoria somente-leitura: R1 Realizada 69 x 44 (BU Incorporador, set/2026)
+# Inventário — relatório diário de funil por BU (somente leitura)
 
-Nada foi alterado. Apenas SELECT + leitura de código. Todos os números abaixo foram medidos hoje (03/09/2026, ~11:41 America/Sao_Paulo) e reproduzem exatamente os valores da tela.
+Nada foi alterado. Todas as afirmações abaixo têm arquivo:linha ou SELECT executado.
 
-## 1) Predicado EXATO do card "R1 REALIZADA" (69)
+## Q1 — BUs que existem de fato
 
-Cadeia: `src/pages/crm/ReunioesEquipe.tsx` → `useTeamMeetingsData` → `useSdrMetricsFromAgenda` → RPC `public.get_sdr_metrics_from_agenda`.
+`select bu, count(*), count(*) filter (where is_active) from closers group by bu`:
 
-Card renderizado em `src/components/sdr/TeamKPICards.tsx:142-151` (`value: kpis.totalRealizadas`, `segLine: segLineFor('r1Realizada')`).
+| bu | closers | ativos |
+|---|---|---|
+| consorcio | 8 | 5 |
+| incorporador | 19 | 12 |
+| solar | 1 | 1 |
+| (null) | 1 | 1 |
 
-Valor somado no front em `src/pages/crm/ReunioesEquipe.tsx:643`:
-`const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);`
+`bu_origin_mapping` (join com `crm_groups`/`crm_origins`):
 
-Ou seja: **soma por SDR**, e não contagem de deals. `filteredBySDR` (linhas 566-576) restringe às SDRs elegíveis do período:
-`activeSdrsList` = `get_sdrs_for_squad_in_period('incorporador', ...)` menos `nonSdrEmails` (perfis com role admin/manager/coordenador/assistente_administrativo/closer/closer_sombra — linhas 223-241, 250-261).
+| bu | tipo | nome | default |
+|---|---|---|---|
+| incorporador | origin | PIPELINE INSIDE SALES | sim |
+| incorporador | origin | PILOTO ANAMNESE / INDICAÇÃO | não |
+| consorcio | group | BU - LEILÃO | sim |
+| consorcio | origin | Efeito Alavanca + Clube | sim |
+| consorcio | origin | Cobrança Consorcio | não |
+| credito | group | BU - PÓS VENDA MCF / BU - MCF CAPITAL | não |
+| leilao | group/origin | BU - LEILÃO / Efeito Alavanca + Clube | não |
+| solar | group | BU - MCF SOLAR | sim |
+| solar | origin | PIPELINE MCF SOLAR | sim |
 
-Predicado no banco (`get_sdr_metrics_from_agenda`, CTEs `raw_attendees` e `dedup_realizada`):
+Enum de BU no front: `src/hooks/useMyBU.ts:5` (`incorporador | consorcio | credito | projetos | leilao | marketing | solar`).
 
-- Tabelas: `meeting_slot_attendees msa` INNER `meeting_slots ms`, LEFT `closers cl` (via `ms.closer_id`), LEFT `profiles p_booker` (via `msa.booked_by`), LATERAL `sdr` + `sdr_squad_history`, LEFT `crm_deals cd`.
-- Filtros: `msa.status <> 'cancelled'`, `ms.meeting_type = 'r1'`, `msa.is_partner = false`, `p_booker.email IS NOT NULL`, e BU = `sdr_squad_history.squad = 'incorporador'` **na data do agendamento** OU (squad nulo E `cl.bu = 'incorporador'`).
-- **Não há filtro de origin_id/pipeline.** A BU vem do squad de quem agendou, não da origem do negócio.
-- Eixo de data: `meeting_day = (ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date`, entre `start_d` e `effective_end = LEAST(end_d, hoje_SP)`. Com filtro 01/09–30/09 hoje, a janela real de "realizada" é **01/09–03/09**.
-- Unidade de contagem: `GROUP BY sdr_email, deal_id` com `MAX(CASE WHEN status IN ('completed','contract_paid','refunded') THEN 1 ELSE 0 END)`. Ou seja **pares (SDR, negócio)** — não attendees, não slots. `refunded` e `contract_paid` contam como realizada.
-- Status que saem: `cancelled` (attendee). `rescheduled` não é excluído do universo (só não conta como realizada). O status do **slot** é ignorado.
-- Lead A/B: `UPPER(TRIM(crm_deals.icp_segment)) = 'A' | 'B'`, via duas chamadas extras da mesma RPC com `segment_filter` (`ReunioesEquipe.tsx:609-632`). Negócio com `icp_segment` vazio/nulo entra no total e **não** aparece em A nem em B.
+## Q2 — Solar existe? Existe pela metade
 
-Medição de hoje: 78 pares no predicado bruto; 9 descartados pelo filtro de SDR (nicola.ricci 3, rodrigo.martinho 3, bruno.albuquerque 2, jessica.bellini 1) → **69**. Segmentos: A 64−6 = **58**, B 7−1 = **6**, sem segmento 7−2 = **5**. 58+6+5 = 69.
+**Existe** (não é vazio):
+- Origem `PIPELINE MCF SOLAR` = `c0a10a52-...1002` e grupo `BU - MCF SOLAR` = `...1001`, mapeados em `bu_origin_mapping`.
+- 19 stages próprios em `crm_stages`; **1.006 deals**, 425 criados nos últimos 30 dias.
+- 1 closer ativo com `bu='solar'`; 63 slots R1 nos últimos 30 dias (última reunião 08/09/2026); 62 attendees ligados a deals solares.
+- Telas: rota `/solar/crm` (`src/App.tsx:268`), layout `src/pages/crm/BUCRMLayout.tsx:51,88`, sidebar `src/components/layout/AppSidebar.tsx:196-202,413`, guard `src/components/auth/NegociosAccessGuard.tsx:34,50,61`, config `src/pages/admin/ConfiguracaoBU.tsx:22`, relatórios `src/components/relatorios/BUReportCenter.tsx:29`.
 
-## 2) Predicado da edge function (44)
+**NÃO existe, com todas as letras:**
+- Nenhuma tabela própria de Solar (nenhuma migration menciona `solar`).
+- Nenhuma fonte de receita/venda: `hubla_transactions` com `product_name ilike '%solar%'` = **0**; deals solares com `value > 0` = **0**.
+- Consequência: "Venda Realizada", "Produção Gerada" e "Ticket Médio" de Solar **não têm origem de dado hoje**. Reunião Agendada/Realizada é o único par obtível (via attendees do closer solar) — e mesmo isso não tem hook/RPC de BU solar: `get_agenda_fatos_consorcio` filtra `fato_bu = 'consorcio'` explicitamente.
 
-`supabase/functions/ote-consorcio-metrics/index.ts:109-180`, bloco `incorporador_50k` (linhas 248-255):
+## Q3 — Incorporador: onde mora cada métrica
 
-- `meeting_slot_attendees` INNER `meeting_slots` (`meeting_type='r1'`, `scheduled_at` no mês inteiro) INNER `crm_deals` com `origin_id IN (PIPELINE INSIDE SALES, PILOTO ANAMNESE/INDICAÇÃO)`.
-- Exclui `cancelled/canceled/cancelada/rescheduled/remanejada` **no attendee E no slot** (`STATUS_EXCLUIDOS`, linhas 33-39, 146-150).
-- Realizada = `attendee.status === 'completed'` apenas, contando **deals distintos** (linhas 166-173).
-- Sem filtro de `is_partner`, sem filtro de agendador/squad, janela do mês completo (não corta em hoje).
+| Métrica | Fonte | Âncora de data |
+|---|---|---|
+| R01 Agendada | `meeting_slot_attendees` + `meeting_slots` (`meeting_type='r1'`, `is_partner=false`, `status<>'cancelled'`) — RPC `get_daily_view_incorporador` e `get_sdr_metrics_from_agenda`; front `src/hooks/useR1CloserMetrics.ts` | dois eixos convivem: **`booked_at`** (ato de agendar; SDR) e **`scheduled_at`** (dia da reunião) |
+| R01 Realizada | mesma base, `status in ('completed','contract_paid','refunded')` (RPC diária) — o card de equipe usa os três status | `scheduled_at` em `America/Sao_Paulo` |
+| Contrato Pago | `src/hooks/useR1CloserMetrics.ts:358-402,672-714` — verdade = `contract_paid_at IS NOT NULL`, com fallback `scheduled_at` quando `status='contract_paid'` sem data, mais atribuições manuais (`manual_sale_attributions`) | **`contract_paid_at`** |
+| R02 Agendada / R02 Realizada | `src/hooks/useR2MeetingSlotsKPIs.ts:40-78` (`meeting_type='r2'`; agendada = tudo menos `cancelled`/`rescheduled`; realizada = `completed`/`contract_paid`/`refunded`) | `meeting_slots.scheduled_at` (com hack de +3h BRT, linhas 33-36) |
+| Venda Realizada | `src/hooks/useR2VendasKPIs.ts:19-24` — conta `deal_activities` com `to_stage='Venda realizada'` | **`deal_activities.created_at`** (dia do lançamento, não da venda) |
+| Faturamento Líquido | **existe no sistema**: `src/hooks/useChannelFunnelReport.ts:684-742` soma `hubla_transactions.product_price` (bruto = `reference_price` do catálogo). Config: `src/components/relatorios/funnelMetricsConfig.ts:56-66` | **`hubla_transactions.sale_date`** |
+| Ticket Médio | **não existe cálculo próprio** para Incorporador — no funil de canais só há `faturamentoBruto`/`faturamentoLiquido` e `vendaFinal`; seria derivado (faturamento ÷ vendas) |
 
-## 3) A ponte, fechando exata
+Observação: `get_daily_view_incorporador` (RPC de 1 dia) só entrega **agendamentos por SDR**, **reuniões realizadas** e **contratos pagos** por closer — não tem R02, venda, faturamento nem ticket.
 
-```text
-69   card R1 REALIZADA (pares SDR x deal, SDRs elegíveis)
--25  negócios cuja única marca é contract_paid / refunded
-     (a function só aceita status='completed')
-- 5  negócios de origem "Efeito Alavanca + Clube"
-     (o card não filtra origem; a function só aceita as 2 origens do 50K)
-+ 5  negócios cujo agendador o card descarta e a function não:
-     nicola.ricci 3, rodrigo.martinho 1, jessica.bellini 1
-     (todos completed, origem INSIDE SALES, dia 01-02/09)
-----
-44   ote-consorcio-metrics.incorporador_50k.r1_realizadas
-```
+## Q4 — Consórcio: confirmação
 
-Conferência direta dos conjuntos: 30 negócios estão só no card, 5 estão só na function (`69 − 30 + 5 = 44`).
+- Reunião Agendada/Realizada: `src/hooks/useConsorcioAgendaFatos.ts` → RPC `get_agenda_fatos_consorcio`. Fatos `agendada`/`realizada`/`no_show`/`fechada_agenda` ancoram no **dia da reunião**; `agendamento` ancora em **`booked_at`**. Dedup 1 por deal+dia e cap 2 por deal na janela; BU do fato = `closers.bu` do slot.
+- Venda Realizada = clientes distintos via `clienteKey(card)` (`src/hooks/useConsorcioCotasContratadas.ts:201`). Confirmado.
+- Produção Gerada: `src/hooks/useConsorcioProducaoGerada.ts` — três pernas: proposta (`coalesce(aceite_date, proposal_date)`), cadastro sem proposta (`aceite_date`, linhas 418-423), cota histórica (`data_contratacao`).
+- Cotas Contratadas: `src/hooks/useConsorcioCotasContratadas.ts:248-254` — `consortium_cards` por **`data_contratacao`**.
+- **"Consórcios Efetivados"**: sim, é a coluna "Consórcio Efetivado" de `src/components/sdr/ConsorcioCloserSummaryTable.tsx:228-232` — é o **crédito** das cotas contratadas, `creditoByCloser` = soma de `consortium_cards.valor_credito` (linhas 35-36, 124), com `creditoSemCloser` no total (linha 137). O tooltip da linha 232 confirma: "Consórcio Efetivado ÷ Vendas Realizadas".
 
-Parcelas com contribuição **zero** hoje, mas que são divergências estruturais reais (podem abrir em outro mês):
-- Deals com mais de um attendee `completed` — hoje 0 (78 pares = 78 deals distintos; nenhum negócio agendado por dois SDRs no período).
-- Eixo de data: o card corta em hoje (03/09) e a function vai até 30/09 — hoje não há realizada com `scheduled_at` em 04-05/09 nas 2 origens (existem slots nesses dias, mas nenhum `completed`).
-- Slot `cancelled/rescheduled` com attendee `completed` (a function exclui, o card não): 0 no período.
+## Q5 — Funcionam para UM DIA?
 
-### Card 69 x Total da tabela de Closers (64 + 7 = 71)
+**Naturalmente diárias (dia anterior é estável):**
+- Incorporador: R01 Agendada (por `booked_at`), R01 Realizada, R02 Agendada/Realizada, Contrato Pago (`contract_paid_at`), Faturamento Líquido (`sale_date`).
+- Consórcio: Reunião Agendada / Realizada (dia da reunião).
 
-A tabela de Closers vem de `useR1CloserMetrics` (`src/hooks/useR1CloserMetrics.ts:182-215, 788-848`) e a linha Total das colunas A/B usa `segTotal(segmentAData) / segTotal(segmentBData)` (`src/components/sdr/CloserSummaryTable.tsx:102-103, 247-261`). Diferenças de régua:
+**Onde o relatório do dia anterior mentiria:**
+- **R01/R02 Realizada** — status de attendee é editado depois (`completed`, `no_show`, `refunded`). Rodar às 8h de D+1 pega muita reunião ainda sem tabulação; o número muda nos dias seguintes.
+- **Contrato Pago** — o fallback por `scheduled_at` (quando `status='contract_paid'` sem `contract_paid_at`) e as atribuições manuais são lançados retroativamente.
+- **Venda Realizada (Incorporador)** — ancorada em `deal_activities.created_at`, ou seja **dia do lançamento**, não da venda. É estável, mas não corresponde ao dia real do negócio.
+- **Produção Gerada (Consórcio)** — é a pior para D-1: âncora `aceite_date`/`data_contratacao` pode ser retroativa. O próprio hook mantém sinalizadores de **antedatação** e de **lançados retroativos** (`useConsorcioProducaoGerada.ts:42-60`), e a regra é mensal ("nunca sai desse mês"). Um recorte de 1 dia é legítimo mas volátil.
+- **Cotas Contratadas / Consórcios Efetivados** — `data_contratacao` chega com atraso (a contratação é registrada dias depois do aceite). O dia anterior quase sempre vem subestimado.
+- **Faturamento Líquido** — estorno/reembolso posterior altera o passado.
+- **Dedup e cap 2** do consórcio: em janela de 1 dia o cap praticamente não morde, então o total diário somado ≠ total semanal calculado com cap.
+- **Solar** — todas as métricas de venda/produção mentiriam porque não existe fonte.
 
-- Agrupa por **(closer, deal)** e não (SDR, deal); recorte de BU é `closers.bu`, não o squad do agendador — portanto **não aplica o filtro de SDR elegível**.
-- Janela = mês inteiro, sem corte em hoje; exclui só `slot.status` cancelled/canceled; aceita `rescheduled` no universo. Realizada = `completed | contract_paid | refunded` (mesma régua do card).
-- O Total A/B soma apenas os dois segmentos; negócio sem `icp_segment` não aparece.
+## Q6 — O que já existe pronto
 
-```text
-69  card (A 58 + B 6 + sem segmento 5)
-- 5  negócios sem icp_segment (não existem nas colunas A/B)
-+ 7  negócios de agendadores excluídos pelo filtro de SDR do card
-     (nicola.ricci, rodrigo.martinho, jessica.bellini, todos com segmento)
-----
-71  Total A(64) + B(7) da tabela de Closers
-```
+**Por dia:**
+- RPC `get_daily_view_incorporador(p_date, ...)` + `src/hooks/useDailyViewIncorporador.ts` + tela `src/components/relatorios/DailyViewPanel.tsx`, exposta em `src/pages/bu-incorporador/Relatorios.tsx:7` (`daily_view`). Só Incorporador, só SDR-agendamentos / closer-reuniões / closer-contratos, com overrides em `daily_view_overrides`.
+- Outras RPCs de dia: `get_sdr_daily_bookings`, `get_closer_daily_meetings`, `get_closer_daily_contracts`, `get_sdr_call_daily_summary`, `operacional_incorporador_daily(p_from, p_to)`.
+- Nenhuma tela/export de "resumo diário do funil por BU" com as métricas pedidas.
 
-Medição independente pelo lado do closer confirmou exatamente A = 64, B = 7, 71 pares (closer, deal), sem nenhum negócio de segmento nulo.
+**Envio já configurado (reaproveitável):**
+- `supabase/functions/weekly-bu-report/index.ts` — semanal sábado→sexta, lê `weekly_metrics`, monta HTML e envia por `brevo-send` (linha 141) para `grimaldo.neto@...` (linha 9). Tem entrada em `supabase/config.toml:231`.
+- `supabase/functions/weekly-manager-report/index.ts` (1.224 linhas) — também envia por `brevo-send` (linhas 1174, 1196).
+- `supabase/functions/brevo-send` — transporte de e-mail existente.
+- WhatsApp: `twilio-whatsapp-send`, `send-boleto-whatsapp`. Webhooks de saída: `outbound-webhook-dispatcher`.
 
-## Leitura do diagnóstico
+## Veredito do inventário
 
-As três contagens não são "uma certa e duas erradas": são três recortes diferentes.
-- Card: BU pelo **squad do agendador**, sem origem, realizada inclui pago/reembolsado, corta em hoje, restrito à lista oficial de SDRs.
-- Function: BU pela **origem do negócio**, realizada só `completed`, mês inteiro, sem recorte de agendador.
-- Tabela de Closers: BU pelo **closer**, mês inteiro, sem recorte de agendador, e o Total A/B perde o que não tem segmento.
-
-Nenhuma correção proposta neste momento, conforme pedido.
+- **Dá para fazer hoje, com fonte existente:** Incorporador completo, exceto Ticket Médio (derivado) — e ciente da volatilidade de D-1. Consórcio completo (reuniões, vendas, produção, cotas, crédito efetivado), com as ressalvas de retroatividade.
+- **Precisa ser construído:** agregação diária por BU num único lugar (hoje as métricas estão espalhadas em hooks de front, não em RPC), Ticket Médio, e o recorte diário de Consórcio (os hooks são de janela/mês).
+- **Não existe:** qualquer fonte de venda, produção ou ticket para **Solar**; e qualquer relatório diário de funil por BU (o que existe é semanal por e-mail e a Visão Diária só do Incorporador).
