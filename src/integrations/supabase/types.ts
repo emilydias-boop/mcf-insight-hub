@@ -17272,6 +17272,15 @@ export type Database = {
           vendas: number
         }[]
       }
+      relatorio_diario_bu: {
+        Args: { p_data: string }
+        Returns: {
+          bu: string
+          metrica: string
+          status: string
+          valor: number
+        }[]
+      }
       reset_distribution_counters: {
         Args: { p_origin_id: string }
         Returns: undefined
