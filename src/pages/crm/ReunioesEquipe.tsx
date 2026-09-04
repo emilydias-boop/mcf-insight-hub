@@ -22,7 +22,6 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { KpiDrillDownDialog, type KpiBucket } from "@/components/sdr/KpiDrillDownDialog";
-
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
@@ -37,7 +36,6 @@ import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useUnassignedContracts } from "@/hooks/useUnassignedContracts";
 import { UnassignedContractsDialog } from "@/components/sdr/UnassignedContractsDialog";
-
 import { useSdrMetricsFromAgenda } from "@/hooks/useSdrMetricsFromAgenda";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
@@ -45,7 +43,6 @@ import { usePendentesDrilldown } from "@/hooks/usePendentesDrilldown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { useCloserBreakdownMetrics, averageRate } from "@/hooks/useCloserBreakdownMetrics";
 import { useOutsideForaDoFunil } from "@/hooks/useOutsideForaDoFunil";
-
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
@@ -174,9 +171,6 @@ export default function ReunioesEquipe() {
   const { start, end } = getDateRange();
   const { data: refundDetails, isLoading: refundDetailsLoading } = useRefundDetailsInPeriod(start, end);
 
-
-
-
   // Fetch data with optional SDR filter
   const {
     teamKPIs,
@@ -191,8 +185,6 @@ export default function ReunioesEquipe() {
     endDate: end,
     sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
   });
-
-
 
   // Fetch all SDRs for meta_diaria (fallback)
   const { data: allSdrsData } = useSdrsAll();
@@ -358,11 +350,6 @@ export default function ReunioesEquipe() {
     });
     return map;
   }, [employeeAdmissaoData, activeSdrsList, start, end]);
-
-  // Tabela MÉTRICA/DIA/SEMANA/MÊS: total + sub-linhas Lead A / Lead B, sempre lado a lado.
-  // O seletor de Segmento da página NÃO afeta esta tabela (vale só para as tabelas por SDR/Closer).
-
-
 
   // Fetch Closer metrics for the selected period
   const {
@@ -719,8 +706,6 @@ export default function ReunioesEquipe() {
     enabled: drillBucket === "pendentes",
   });
 
-
-
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
@@ -814,7 +799,6 @@ export default function ReunioesEquipe() {
         title="MCF Incorporador"
         sections={[{ prefix: "setor_incorporador", label: "Incorporador" }]}
       />
-
 
       {/* Trava de fechamento mensal */}
       <MonthLockBanner anoMes={toAnoMes(start)} />
