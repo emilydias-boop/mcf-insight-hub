@@ -17275,6 +17275,7 @@ export type Database = {
       relatorio_diario_bu: {
         Args: { p_data: string }
         Returns: {
+          agregacao: string
           bu: string
           metrica: string
           status: string
