@@ -16683,6 +16683,17 @@ export type Database = {
               total_installments: number
             }[]
           }
+      get_mcf_pay_codes_for_deal: {
+        Args: { p_deal_id: string }
+        Returns: {
+          closer_bu: string
+          closer_code: string
+          closer_email: string
+          fonte: string
+          sdr_code: string
+          sdr_email: string
+        }[]
+      }
       get_merge_groups: {
         Args: { p_batch_size?: number }
         Returns: {
