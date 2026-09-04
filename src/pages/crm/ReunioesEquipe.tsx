@@ -22,7 +22,7 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { KpiDrillDownDialog, type KpiBucket } from "@/components/sdr/KpiDrillDownDialog";
-import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
+
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { SdrActivityMetricsTable } from "@/components/sdr/SdrActivityMetricsTable";
@@ -37,7 +37,7 @@ import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 import { useUnassignedContracts } from "@/hooks/useUnassignedContracts";
 import { UnassignedContractsDialog } from "@/components/sdr/UnassignedContractsDialog";
-import { useGoalsMatrixValues } from "@/hooks/useGoalsMatrixValues";
+
 import { useSdrMetricsFromAgenda } from "@/hooks/useSdrMetricsFromAgenda";
 import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
@@ -174,19 +174,8 @@ export default function ReunioesEquipe() {
   const { start, end } = getDateRange();
   const { data: refundDetails, isLoading: refundDetailsLoading } = useRefundDetailsInPeriod(start, end);
 
-  // Today's dates for day metrics
-  const today = new Date();
-  const dayStart = startOfDay(today);
-  const dayEnd = endOfDay(today);
-  
-  // Week dates for week metrics (sábado a sexta)
-  const todayNormalized = startOfDay(today);
-  const weekStartDate = startOfWeek(todayNormalized, { weekStartsOn: wso });
-  const weekEndDate = endOfWeek(todayNormalized, { weekStartsOn: wso });
 
-  // Month dates for month metrics
-  const monthStartDate = startOfMonth(today);
-  const monthEndDate = endOfMonth(today);
+
 
   // Fetch data with optional SDR filter
   const {
@@ -372,19 +361,8 @@ export default function ReunioesEquipe() {
 
   // Tabela MÉTRICA/DIA/SEMANA/MÊS: total + sub-linhas Lead A / Lead B, sempre lado a lado.
   // O seletor de Segmento da página NÃO afeta esta tabela (vale só para as tabelas por SDR/Closer).
-  const goalsMatrixDates = {
-    dayStart,
-    dayEnd,
-    weekStart: weekStartDate,
-    weekEnd: weekEndDate,
-    monthStart: monthStartDate,
-    monthEnd: monthEndDate,
-    periodStart: start,
-    periodEnd: end,
-  };
-  const goalsTotal = useGoalsMatrixValues({ segment: 'all', ...goalsMatrixDates });
-  const goalsSegmentA = useGoalsMatrixValues({ segment: 'A', ...goalsMatrixDates });
-  const goalsSegmentB = useGoalsMatrixValues({ segment: 'B', ...goalsMatrixDates });
+
+
 
   // Fetch Closer metrics for the selected period
   const {
@@ -740,20 +718,8 @@ export default function ReunioesEquipe() {
     buFilter: "incorporador",
     enabled: drillBucket === "pendentes",
   });
-  
-  const dayValues = goalsTotal.dayValues;
-  const weekValues = goalsTotal.weekValues;
-  const monthValues = goalsTotal.monthValues;
-  const segmentAValues = {
-    day: goalsSegmentA.dayValues,
-    week: goalsSegmentA.weekValues,
-    month: goalsSegmentA.monthValues,
-  };
-  const segmentBValues = {
-    day: goalsSegmentB.dayValues,
-    week: goalsSegmentB.weekValues,
-    month: goalsSegmentB.monthValues,
-  };
+
+
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
@@ -849,14 +815,6 @@ export default function ReunioesEquipe() {
         sections={[{ prefix: "setor_incorporador", label: "Incorporador" }]}
       />
 
-      {/* Goals Panel */}
-      <TeamGoalsPanel
-        dayValues={dayValues}
-        weekValues={weekValues}
-        monthValues={monthValues}
-        segmentAValues={segmentAValues}
-        segmentBValues={segmentBValues}
-      />
 
       {/* Trava de fechamento mensal */}
       <MonthLockBanner anoMes={toAnoMes(start)} />
