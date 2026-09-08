@@ -1059,6 +1059,7 @@ export default function ReunioesEquipe() {
           startDate={start}
           endDate={end}
           originId={undefined}
+          squad="incorporador"
         />
       )}
 
