@@ -66,6 +66,19 @@ function diaSP(iso: string): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Data e hora (DD/MM/AAAA HH:MM) de um ISO em America/Sao_Paulo. */
+function dataHoraSP(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
 /** Limites do mês em ISO (UTC-3 fixo, horário de Brasília). */
 function limitesMes(month: string) {
   const [y, m] = month.split("-").map(Number);
@@ -84,13 +97,15 @@ Deno.serve(async (req) => {
   const tokenEsperado = (Deno.env.get("OTE_METRICS_TOKEN") ?? "").trim();
   if (!tokenEsperado) return json({ error: "token_nao_configurado" }, 500);
 
-  // Aceita "Authorization: Bearer <token>" ou header "x-ote-token"
+  const url = new URL(req.url);
+
+  // Aceita "Authorization: Bearer <token>", header "x-ote-token" ou ?token=
   const auth = req.headers.get("authorization") ?? "";
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-  const recebido = (req.headers.get("x-ote-token") ?? "").trim() || bearer;
+  const queryToken = (url.searchParams.get("token") ?? "").trim();
+  const recebido = (req.headers.get("x-ote-token") ?? "").trim() || bearer || queryToken;
   if (!recebido || recebido !== tokenEsperado) return json({ error: "unauthorized" }, 401);
 
-  const url = new URL(req.url);
   const month = url.searchParams.get("month") || mesCorrenteSP();
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
     return json({ error: "month_invalido", esperado: "YYYY-MM" }, 400);
@@ -112,13 +127,15 @@ Deno.serve(async (req) => {
       status: string | null;
       slot_status: string | null;
       scheduled_at: string;
+      lead_nome: string | null;
+      responsavel: string | null;
     }> = [];
 
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await admin
         .from("meeting_slot_attendees")
         .select(
-          "deal_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status), deal:crm_deals!inner(origin_id)",
+          "deal_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name)), deal:crm_deals!inner(origin_id, name, owner:profiles(full_name), contact:crm_contacts(name))",
         )
         .eq("meeting_slots.meeting_type", "r1")
         .gte("meeting_slots.scheduled_at", inicio)
@@ -129,7 +146,16 @@ Deno.serve(async (req) => {
       const rows = (data ?? []) as unknown as Array<{
         deal_id: string | null;
         status: string | null;
-        meeting_slot: { scheduled_at: string; status: string | null };
+        meeting_slot: {
+          scheduled_at: string;
+          status: string | null;
+          closer?: { name: string | null } | null;
+        };
+        deal?: {
+          name: string | null;
+          owner?: { full_name: string | null } | null;
+          contact?: { name: string | null } | null;
+        } | null;
       }>;
       rows.forEach((r) =>
         linhas.push({
@@ -137,6 +163,9 @@ Deno.serve(async (req) => {
           status: r.status,
           slot_status: r.meeting_slot?.status ?? null,
           scheduled_at: r.meeting_slot?.scheduled_at,
+          lead_nome: r.deal?.contact?.name ?? r.deal?.name ?? null,
+          responsavel:
+            r.meeting_slot?.closer?.name ?? r.deal?.owner?.full_name ?? null,
         }),
       );
       if (rows.length < PAGE) break;
@@ -172,18 +201,39 @@ Deno.serve(async (req) => {
       if ((l.slot_status ?? "").toLowerCase() === "completed") dealsRealizadosSlot.add(l.deal_id);
     });
 
+    // Pendentes de marcação: slot 'completed' e attendee sem 'completed'
+    // (canceladas/reagendadas já foram excluídas em `vigentes`).
+    const pendentes = vigentes
+      .filter(
+        (l) =>
+          (l.slot_status ?? "").toLowerCase() === "completed" &&
+          (l.status ?? "").toLowerCase() !== "completed",
+      )
+      .map((l) => ({
+        deal_id: l.deal_id,
+        lead: l.lead_nome,
+        scheduled_at: l.scheduled_at,
+        scheduled_at_sp: dataHoraSP(l.scheduled_at),
+        attendee_status: l.status,
+        responsavel: l.responsavel,
+      }));
+
     return {
       r1_agendadas,
       r1_realizadas: dealsRealizados.size,
       r1_realizadas_slot: dealsRealizadosSlot.size,
+      pendentes,
     };
   };
 
   try {
     // ---- R1 do funil consórcio no mês ----
-    const { r1_agendadas, r1_realizadas, r1_realizadas_slot } = await calcularR1(
-      CONSORCIO_ORIGIN_IDS,
-    );
+    const {
+      r1_agendadas,
+      r1_realizadas,
+      r1_realizadas_slot,
+      pendentes: pendentesConsorcio,
+    } = await calcularR1(CONSORCIO_ORIGIN_IDS);
 
     // ---- R1 do funil MCF 50K / Incorporador no mês ----
     const inc = await calcularR1(INCORPORADOR_ORIGIN_IDS);
@@ -234,6 +284,19 @@ Deno.serve(async (req) => {
         ? Math.round((vendas_realizadas / r1_realizadas) * 1000) / 10
         : null;
 
+    // ?detail=pendentes — lista das R1 com slot concluído sem presença marcada
+    const querDetalhe = (url.searchParams.get("detail") ?? "") === "pendentes";
+    const pendentes_marcacao = querDetalhe
+      ? [
+          ...pendentesConsorcio.map((p) => ({ funil: "consorcio", ...p })),
+          ...inc.pendentes.map((p) => ({ funil: "incorporador_50k", ...p })),
+        ].sort(
+          (a, b) =>
+            a.funil.localeCompare(b.funil) ||
+            String(a.scheduled_at ?? "").localeCompare(String(b.scheduled_at ?? "")),
+        )
+      : undefined;
+
     return json({
       month,
       periodo: { inicio, fim },
@@ -254,7 +317,7 @@ Deno.serve(async (req) => {
         conversao_pct: null,
       },
       gerado_em: new Date().toISOString(),
-
+      ...(pendentes_marcacao ? { pendentes_marcacao } : {}),
     });
   } catch (e) {
     console.error("ote-consorcio-metrics erro:", e);

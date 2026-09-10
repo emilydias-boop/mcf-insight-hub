@@ -13044,12 +13044,15 @@ export type Database = {
       sdr_ia_links: {
         Row: {
           ativo: boolean
+          atualizado_por: string | null
           canal: string
+          categoria: string
           created_at: string
           duracao_seg: number | null
           formato: string | null
           notas: string | null
           para: string
+          publicado_em: string | null
           slug: string
           titulo: string
           updated_at: string
@@ -13057,12 +13060,15 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          atualizado_por?: string | null
           canal: string
+          categoria?: string
           created_at?: string
           duracao_seg?: number | null
           formato?: string | null
           notas?: string | null
           para: string
+          publicado_em?: string | null
           slug: string
           titulo: string
           updated_at?: string
@@ -13070,12 +13076,15 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          atualizado_por?: string | null
           canal?: string
+          categoria?: string
           created_at?: string
           duracao_seg?: number | null
           formato?: string | null
           notas?: string | null
           para?: string
+          publicado_em?: string | null
           slug?: string
           titulo?: string
           updated_at?: string
@@ -13179,6 +13188,7 @@ export type Database = {
         Row: {
           ativo: boolean
           como_perguntar: string
+          como_reperguntar: string | null
           obrigatorio: boolean
           ordem: number
           rotulo: string
@@ -13187,6 +13197,7 @@ export type Database = {
         Insert: {
           ativo?: boolean
           como_perguntar: string
+          como_reperguntar?: string | null
           obrigatorio?: boolean
           ordem: number
           rotulo: string
@@ -13195,6 +13206,7 @@ export type Database = {
         Update: {
           ativo?: boolean
           como_perguntar?: string
+          como_reperguntar?: string | null
           obrigatorio?: boolean
           ordem?: number
           rotulo?: string
