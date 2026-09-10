@@ -114,13 +114,15 @@ Deno.serve(async (req) => {
       status: string | null;
       slot_status: string | null;
       scheduled_at: string;
+      lead_nome: string | null;
+      responsavel: string | null;
     }> = [];
 
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await admin
         .from("meeting_slot_attendees")
         .select(
-          "deal_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status), deal:crm_deals!inner(origin_id)",
+          "deal_id, status, meeting_slot:meeting_slots!inner(scheduled_at, meeting_type, status, closer:closers(name)), deal:crm_deals!inner(origin_id, name, owner:profiles(full_name), contact:crm_contacts(name))",
         )
         .eq("meeting_slots.meeting_type", "r1")
         .gte("meeting_slots.scheduled_at", inicio)
@@ -131,7 +133,16 @@ Deno.serve(async (req) => {
       const rows = (data ?? []) as unknown as Array<{
         deal_id: string | null;
         status: string | null;
-        meeting_slot: { scheduled_at: string; status: string | null };
+        meeting_slot: {
+          scheduled_at: string;
+          status: string | null;
+          closer?: { name: string | null } | null;
+        };
+        deal?: {
+          name: string | null;
+          owner?: { full_name: string | null } | null;
+          contact?: { name: string | null } | null;
+        } | null;
       }>;
       rows.forEach((r) =>
         linhas.push({
@@ -139,6 +150,9 @@ Deno.serve(async (req) => {
           status: r.status,
           slot_status: r.meeting_slot?.status ?? null,
           scheduled_at: r.meeting_slot?.scheduled_at,
+          lead_nome: r.deal?.contact?.name ?? r.deal?.name ?? null,
+          responsavel:
+            r.meeting_slot?.closer?.name ?? r.deal?.owner?.full_name ?? null,
         }),
       );
       if (rows.length < PAGE) break;
