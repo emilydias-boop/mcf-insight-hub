@@ -228,9 +228,12 @@ Deno.serve(async (req) => {
 
   try {
     // ---- R1 do funil consórcio no mês ----
-    const { r1_agendadas, r1_realizadas, r1_realizadas_slot } = await calcularR1(
-      CONSORCIO_ORIGIN_IDS,
-    );
+    const {
+      r1_agendadas,
+      r1_realizadas,
+      r1_realizadas_slot,
+      pendentes: pendentesConsorcio,
+    } = await calcularR1(CONSORCIO_ORIGIN_IDS);
 
     // ---- R1 do funil MCF 50K / Incorporador no mês ----
     const inc = await calcularR1(INCORPORADOR_ORIGIN_IDS);
