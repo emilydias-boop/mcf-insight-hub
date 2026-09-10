@@ -284,6 +284,19 @@ Deno.serve(async (req) => {
         ? Math.round((vendas_realizadas / r1_realizadas) * 1000) / 10
         : null;
 
+    // ?detail=pendentes — lista das R1 com slot concluído sem presença marcada
+    const querDetalhe = (url.searchParams.get("detail") ?? "") === "pendentes";
+    const pendentes_marcacao = querDetalhe
+      ? [
+          ...pendentesConsorcio.map((p) => ({ funil: "consorcio", ...p })),
+          ...inc.pendentes.map((p) => ({ funil: "incorporador_50k", ...p })),
+        ].sort(
+          (a, b) =>
+            a.funil.localeCompare(b.funil) ||
+            String(a.scheduled_at ?? "").localeCompare(String(b.scheduled_at ?? "")),
+        )
+      : undefined;
+
     return json({
       month,
       periodo: { inicio, fim },
