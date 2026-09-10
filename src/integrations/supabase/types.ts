@@ -9418,6 +9418,57 @@ export type Database = {
         }
         Relationships: []
       }
+      kb_documents: {
+        Row: {
+          atualizado_em: string
+          busca: unknown
+          chunk_ix: number
+          contem_numeros: boolean
+          conteudo: string
+          escopo: string
+          hash: string
+          id: string
+          is_active: boolean
+          path: string
+          secao: string | null
+          tags: string[]
+          titulo: string
+          trilha: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          busca?: unknown
+          chunk_ix?: number
+          contem_numeros?: boolean
+          conteudo: string
+          escopo: string
+          hash: string
+          id?: string
+          is_active?: boolean
+          path: string
+          secao?: string | null
+          tags?: string[]
+          titulo: string
+          trilha?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          busca?: unknown
+          chunk_ix?: number
+          contem_numeros?: boolean
+          conteudo?: string
+          escopo?: string
+          hash?: string
+          id?: string
+          is_active?: boolean
+          path?: string
+          secao?: string | null
+          tags?: string[]
+          titulo?: string
+          trilha?: string | null
+        }
+        Relationships: []
+      }
       late_status_change_attempts: {
         Row: {
           ano_mes: string | null
@@ -12933,6 +12984,295 @@ export type Database = {
           },
         ]
       }
+      sdr_ia_allowlist: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          phone_e164: string
+          rotulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          phone_e164: string
+          rotulo: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          phone_e164?: string
+          rotulo?: string
+        }
+        Relationships: []
+      }
+      sdr_ia_cadencia: {
+        Row: {
+          ativo: boolean
+          atraso_minutos: number
+          etapa: number
+          exige_leitura: boolean
+          funcao: string
+          instrucao: string | null
+          respeita_horario: boolean
+          template_content_sid: string | null
+          tipo: string
+        }
+        Insert: {
+          ativo?: boolean
+          atraso_minutos: number
+          etapa: number
+          exige_leitura?: boolean
+          funcao: string
+          instrucao?: string | null
+          respeita_horario?: boolean
+          template_content_sid?: string | null
+          tipo: string
+        }
+        Update: {
+          ativo?: boolean
+          atraso_minutos?: number
+          etapa?: number
+          exige_leitura?: boolean
+          funcao?: string
+          instrucao?: string | null
+          respeita_horario?: boolean
+          template_content_sid?: string | null
+          tipo?: string
+        }
+        Relationships: []
+      }
+      sdr_ia_links: {
+        Row: {
+          ativo: boolean
+          canal: string
+          created_at: string
+          duracao_seg: number | null
+          formato: string | null
+          notas: string | null
+          para: string
+          slug: string
+          titulo: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          ativo?: boolean
+          canal: string
+          created_at?: string
+          duracao_seg?: number | null
+          formato?: string | null
+          notas?: string | null
+          para: string
+          slug: string
+          titulo: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          ativo?: boolean
+          canal?: string
+          created_at?: string
+          duracao_seg?: number | null
+          formato?: string | null
+          notas?: string | null
+          para?: string
+          slug?: string
+          titulo?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      sdr_ia_prompts: {
+        Row: {
+          conteudo: string
+          created_at: string
+          id: string
+          is_active: boolean
+          notas: string | null
+          tipo: string
+          versao: number
+        }
+        Insert: {
+          conteudo: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notas?: string | null
+          tipo: string
+          versao: number
+        }
+        Update: {
+          conteudo?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          notas?: string | null
+          tipo?: string
+          versao?: number
+        }
+        Relationships: []
+      }
+      sdr_ia_sessions: {
+        Row: {
+          atualizada_em: string
+          conversation_id: string | null
+          criada_em: string
+          deal_id: string | null
+          estado: string
+          handoff_para: string | null
+          id: string
+          modo: string
+          motivo_encerramento: string | null
+          phone_e164: string
+          prompt_versao: number | null
+          proxima_acao_em: string | null
+          qualificacao: Json
+          slots_tentativas: Json
+          tentativa: number
+        }
+        Insert: {
+          atualizada_em?: string
+          conversation_id?: string | null
+          criada_em?: string
+          deal_id?: string | null
+          estado?: string
+          handoff_para?: string | null
+          id?: string
+          modo?: string
+          motivo_encerramento?: string | null
+          phone_e164: string
+          prompt_versao?: number | null
+          proxima_acao_em?: string | null
+          qualificacao?: Json
+          slots_tentativas?: Json
+          tentativa?: number
+        }
+        Update: {
+          atualizada_em?: string
+          conversation_id?: string | null
+          criada_em?: string
+          deal_id?: string | null
+          estado?: string
+          handoff_para?: string | null
+          id?: string
+          modo?: string
+          motivo_encerramento?: string | null
+          phone_e164?: string
+          prompt_versao?: number | null
+          proxima_acao_em?: string | null
+          qualificacao?: Json
+          slots_tentativas?: Json
+          tentativa?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_ia_sessions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "wa_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_ia_slots: {
+        Row: {
+          ativo: boolean
+          como_perguntar: string
+          obrigatorio: boolean
+          ordem: number
+          rotulo: string
+          slug: string
+        }
+        Insert: {
+          ativo?: boolean
+          como_perguntar: string
+          obrigatorio?: boolean
+          ordem: number
+          rotulo: string
+          slug: string
+        }
+        Update: {
+          ativo?: boolean
+          como_perguntar?: string
+          obrigatorio?: boolean
+          ordem?: number
+          rotulo?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      sdr_ia_turnos: {
+        Row: {
+          confianca: number | null
+          created_at: string
+          duracao_ms: number | null
+          entrada: string | null
+          enviado: boolean
+          erro: string | null
+          etapa: number | null
+          id: string
+          intencao: string | null
+          kb_hits: Json | null
+          modelo: string | null
+          phone_e164: string
+          precisa_humano: boolean | null
+          prompt_versao: number | null
+          qualificacao: Json | null
+          resposta: string | null
+          session_id: string | null
+          tipo: string
+        }
+        Insert: {
+          confianca?: number | null
+          created_at?: string
+          duracao_ms?: number | null
+          entrada?: string | null
+          enviado?: boolean
+          erro?: string | null
+          etapa?: number | null
+          id?: string
+          intencao?: string | null
+          kb_hits?: Json | null
+          modelo?: string | null
+          phone_e164: string
+          precisa_humano?: boolean | null
+          prompt_versao?: number | null
+          qualificacao?: Json | null
+          resposta?: string | null
+          session_id?: string | null
+          tipo?: string
+        }
+        Update: {
+          confianca?: number | null
+          created_at?: string
+          duracao_ms?: number | null
+          entrada?: string | null
+          enviado?: boolean
+          erro?: string | null
+          etapa?: number | null
+          id?: string
+          intencao?: string | null
+          kb_hits?: Json | null
+          modelo?: string | null
+          phone_e164?: string
+          precisa_humano?: boolean | null
+          prompt_versao?: number | null
+          qualificacao?: Json | null
+          resposta?: string | null
+          session_id?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_ia_turnos_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sdr_ia_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sdr_intermediacoes: {
         Row: {
           ano_mes: string
@@ -14975,8 +15315,8 @@ export type Database = {
         Row: {
           atualizado_em: string
           cooldown_dias: number
-          id: boolean
           pausar_se_falha_percentual: number
+          phone_e164: string
           reserva_atendimento_diaria: number
           ritmo_por_minuto: number
           teto_diario: number
@@ -14988,8 +15328,8 @@ export type Database = {
         Insert: {
           atualizado_em?: string
           cooldown_dias?: number
-          id?: boolean
           pausar_se_falha_percentual?: number
+          phone_e164: string
           reserva_atendimento_diaria?: number
           ritmo_por_minuto?: number
           teto_diario?: number
@@ -15001,8 +15341,8 @@ export type Database = {
         Update: {
           atualizado_em?: string
           cooldown_dias?: number
-          id?: boolean
           pausar_se_falha_percentual?: number
+          phone_e164?: string
           reserva_atendimento_diaria?: number
           ritmo_por_minuto?: number
           teto_diario?: number
@@ -15011,7 +15351,15 @@ export type Database = {
           teto_observado_em?: string | null
           teto_por_usuario_diario?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "wa_send_budget_sender_fk"
+            columns: ["phone_e164"]
+            isOneToOne: true
+            referencedRelation: "wa_senders"
+            referencedColumns: ["phone_e164"]
+          },
+        ]
       }
       wa_senders: {
         Row: {
@@ -15019,6 +15367,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           observacao: string | null
+          operado_por: string
           papel: string
           phone_e164: string
         }
@@ -15027,6 +15376,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           observacao?: string | null
+          operado_por?: string
           papel: string
           phone_e164: string
         }
@@ -15035,6 +15385,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           observacao?: string | null
+          operado_por?: string
           papel?: string
           phone_e164?: string
         }
@@ -17041,6 +17392,19 @@ export type Database = {
       is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
+      kb_buscar: {
+        Args: { _escopos?: string[]; _limite?: number; _query: string }
+        Returns: {
+          contem_numeros: boolean
+          conteudo: string
+          escopo: string
+          path: string
+          rank: number
+          secao: string
+          titulo: string
+          via: string
+        }[]
+      }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       list_transferable_users: {
         Args: never
@@ -17318,6 +17682,31 @@ export type Database = {
           versao: number
         }[]
       }
+      sdr_ia_agendar: { Args: { _session_id: string }; Returns: string }
+      sdr_ia_gravar_qualificacao: {
+        Args: { _deal_id: string; _qual: Json }
+        Returns: string
+      }
+      sdr_ia_horario_valido: { Args: { _ts: string }; Returns: string }
+      sdr_ia_nome_seguro: { Args: { _nome: string }; Returns: string }
+      sdr_ia_sessoes_para_seguir: {
+        Args: { _limite?: number }
+        Returns: {
+          conversation_id: string
+          deal_id: string
+          dentro_janela_24h: boolean
+          etapa: number
+          exige_leitura: boolean
+          funcao: string
+          instrucao: string
+          minutos_desde_inbound: number
+          phone_e164: string
+          saida_anterior_lida: boolean
+          session_id: string
+          template_content_sid: string
+          tipo: string
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sonax_casar_evento_com_campanha: {
@@ -17386,6 +17775,7 @@ export type Database = {
       }
       tv_refresh_consorcio_snapshot: { Args: never; Returns: undefined }
       tv_refresh_incorporador_snapshot: { Args: never; Returns: undefined }
+      unaccent: { Args: { "": string }; Returns: string }
       update_overdue_billing_status: { Args: never; Returns: undefined }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
@@ -17494,6 +17884,10 @@ export type Database = {
       wa_e164_br: { Args: { _raw: string }; Returns: string }
       wa_enviados_1a1_hoje: { Args: { _user_id?: string }; Returns: number }
       wa_enviados_hoje: { Args: { _user_id?: string }; Returns: number }
+      wa_enviados_hoje_numero: {
+        Args: { _sender: string; _user_id?: string }
+        Returns: number
+      }
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
         Returns: string
@@ -17531,10 +17925,9 @@ export type Database = {
         Args: { _motivo?: string; _phone: string }
         Returns: undefined
       }
-      wa_registrar_teto_observado: {
-        Args: { _codigo: string }
-        Returns: undefined
-      }
+      wa_registrar_teto_observado:
+        | { Args: { _codigo: string }; Returns: undefined }
+        | { Args: { _codigo: string; _sender: string }; Returns: undefined }
       wa_responsaveis_conversas: {
         Args: never
         Returns: {
@@ -17546,6 +17939,11 @@ export type Database = {
         }[]
       }
       wa_saldo_disparo_hoje: { Args: never; Returns: number }
+      wa_saldo_disparo_hoje_numero: {
+        Args: { _sender: string }
+        Returns: number
+      }
+      wa_sender_padrao: { Args: never; Returns: string }
       wa_window_open: { Args: { _conversation_id: string }; Returns: boolean }
     }
     Enums: {
