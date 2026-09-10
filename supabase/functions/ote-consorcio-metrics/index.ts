@@ -66,6 +66,19 @@ function diaSP(iso: string): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Data e hora (DD/MM/AAAA HH:MM) de um ISO em America/Sao_Paulo. */
+function dataHoraSP(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
 /** Limites do mês em ISO (UTC-3 fixo, horário de Brasília). */
 function limitesMes(month: string) {
   const [y, m] = month.split("-").map(Number);
