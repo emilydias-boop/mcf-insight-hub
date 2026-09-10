@@ -188,10 +188,28 @@ Deno.serve(async (req) => {
       if ((l.slot_status ?? "").toLowerCase() === "completed") dealsRealizadosSlot.add(l.deal_id);
     });
 
+    // Pendentes de marcação: slot 'completed' e attendee sem 'completed'
+    // (canceladas/reagendadas já foram excluídas em `vigentes`).
+    const pendentes = vigentes
+      .filter(
+        (l) =>
+          (l.slot_status ?? "").toLowerCase() === "completed" &&
+          (l.status ?? "").toLowerCase() !== "completed",
+      )
+      .map((l) => ({
+        deal_id: l.deal_id,
+        lead: l.lead_nome,
+        scheduled_at: l.scheduled_at,
+        scheduled_at_sp: dataHoraSP(l.scheduled_at),
+        attendee_status: l.status,
+        responsavel: l.responsavel,
+      }));
+
     return {
       r1_agendadas,
       r1_realizadas: dealsRealizados.size,
       r1_realizadas_slot: dealsRealizadosSlot.size,
+      pendentes,
     };
   };
 
