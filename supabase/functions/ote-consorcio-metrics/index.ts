@@ -317,7 +317,7 @@ Deno.serve(async (req) => {
         conversao_pct: null,
       },
       gerado_em: new Date().toISOString(),
-
+      ...(pendentes_marcacao ? { pendentes_marcacao } : {}),
     });
   } catch (e) {
     console.error("ote-consorcio-metrics erro:", e);
