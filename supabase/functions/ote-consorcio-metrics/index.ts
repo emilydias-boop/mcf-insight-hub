@@ -84,13 +84,15 @@ Deno.serve(async (req) => {
   const tokenEsperado = (Deno.env.get("OTE_METRICS_TOKEN") ?? "").trim();
   if (!tokenEsperado) return json({ error: "token_nao_configurado" }, 500);
 
-  // Aceita "Authorization: Bearer <token>" ou header "x-ote-token"
+  const url = new URL(req.url);
+
+  // Aceita "Authorization: Bearer <token>", header "x-ote-token" ou ?token=
   const auth = req.headers.get("authorization") ?? "";
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-  const recebido = (req.headers.get("x-ote-token") ?? "").trim() || bearer;
+  const queryToken = (url.searchParams.get("token") ?? "").trim();
+  const recebido = (req.headers.get("x-ote-token") ?? "").trim() || bearer || queryToken;
   if (!recebido || recebido !== tokenEsperado) return json({ error: "unauthorized" }, 401);
 
-  const url = new URL(req.url);
   const month = url.searchParams.get("month") || mesCorrenteSP();
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
     return json({ error: "month_invalido", esperado: "YYYY-MM" }, 400);
