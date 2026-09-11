@@ -232,8 +232,14 @@ export function TeamKPICards({
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
       tooltip: isConsorcio
-        ? "Vendas Realizadas (clientes distintos que contrataram no período, contados uma única vez em todo o conjunto) ÷ Reuniões Realizadas × 100. É o mesmo número do Total das abas SDRs e Closers."
-        : "Global agregada: Σ Contratos / Σ R1 Realizada × 100.",
+        ? "Conversão Bruta = Vendas Realizadas ÷ Reuniões Realizadas × 100 (o que gera de venda).\nConversão Líquida = (Vendas − Reembolsos) ÷ Reuniões Realizadas × 100 (o que vai até o final)."
+        : "Conversão Bruta = Σ Contratos ÷ Σ R1 Realizada × 100 (o que gera de venda).\nConversão Líquida = (Σ Contratos − Σ Reembolsos) ÷ Σ R1 Realizada × 100 (o que vai até o final).",
+      subline: (() => {
+        const realizadas = kpis.totalRealizadas || 0;
+        if (realizadas === 0) return undefined;
+        const liquida = ((kpis.totalContratos - (kpis.totalReembolsos || 0)) / realizadas) * 100;
+        return `líquida: ${liquida.toFixed(1)}%`;
+      })(),
     },
     {
       title: "Taxa No-Show",
