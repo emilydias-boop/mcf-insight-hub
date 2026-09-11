@@ -75,7 +75,7 @@ export function MeetingSummaryCards({ summary, isLoading, bu, segmentTotals = nu
     const b = segmentTotals.b[key] ?? 0;
     const c = segmentTotals.c?.[key] ?? 0;
     const semIcp = Math.max(0, total - a - b - c);
-    return { ab: `A: ${a} · B: ${b} · C: ${c}`, semIcp: `Sem ICP: ${semIcp}` };
+    return { ab: `A ${a} · B ${b} · C ${c}`, semIcp: `s/ICP ${semIcp}` };
   };
 
 
