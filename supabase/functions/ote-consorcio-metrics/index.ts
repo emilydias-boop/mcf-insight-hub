@@ -192,22 +192,24 @@ Deno.serve(async (req) => {
       r1_agendadas += Math.min(dias.size, 2);
     });
 
-    // Realizadas — predicado canônico: attendee.status = 'completed' (deals distintos)
+    // Realizadas — predicado canônico: attendee.status = 'completed' OU 'contract_paid'
+    // (contract_paid = o lead realizou a reunião e comprou). Deals distintos.
+    const REALIZADOS_STATUS = new Set(["completed", "contract_paid"]);
     const dealsRealizados = new Set<string>();
     const dealsRealizadosSlot = new Set<string>();
     vigentes.forEach((l) => {
       if (!l.deal_id) return;
-      if ((l.status ?? "").toLowerCase() === "completed") dealsRealizados.add(l.deal_id);
+      if (REALIZADOS_STATUS.has((l.status ?? "").toLowerCase())) dealsRealizados.add(l.deal_id);
       if ((l.slot_status ?? "").toLowerCase() === "completed") dealsRealizadosSlot.add(l.deal_id);
     });
 
-    // Pendentes de marcação: slot 'completed' e attendee sem 'completed'
+    // Pendentes de marcação: slot 'completed' e attendee sem 'completed' nem 'contract_paid'
     // (canceladas/reagendadas já foram excluídas em `vigentes`).
     const pendentes = vigentes
       .filter(
         (l) =>
           (l.slot_status ?? "").toLowerCase() === "completed" &&
-          (l.status ?? "").toLowerCase() !== "completed",
+          !REALIZADOS_STATUS.has((l.status ?? "").toLowerCase()),
       )
       .map((l) => ({
         deal_id: l.deal_id,
