@@ -101,7 +101,8 @@ export function TeamKPICards({
     const b = segmentTotals.b[key] ?? 0;
     const c = segmentTotals.c?.[key] ?? 0;
     const semIcp = Math.max(0, (total || 0) - a - b - c);
-    return `A: ${a} · B: ${b} · C: ${c} · Sem ICP: ${semIcp}`;
+    // Formato compacto para caber no card sem truncar.
+    return `A ${a} · B ${b} · C ${c} · s/ICP ${semIcp}`;
   };
   const contratosSegLine = segLineFor('contratos', kpis.totalContratos || 0);
 
@@ -293,12 +294,12 @@ export function TeamKPICards({
                         {isLoading ? "..." : card.value}
                       </p>
                       {card.subline && !isLoading && (
-                        <p className="text-[9px] text-muted-foreground/80 truncate mt-0.5">
+                        <p className="text-[9px] text-muted-foreground/80 mt-0.5 whitespace-normal break-words leading-tight">
                           {card.subline}
                         </p>
                       )}
                       {card.segLine && !isLoading && (
-                        <p className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
+                        <p className="text-[9px] text-muted-foreground/70 mt-0.5 whitespace-normal break-words leading-tight">
                           {card.segLine}
                         </p>
                       )}
