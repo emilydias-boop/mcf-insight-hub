@@ -90,15 +90,21 @@ export function TeamKPICards({
   const pendentesTooltip = pendentesBreakdown
     ? `Reuniões marcadas para o período que não viraram Realizada nem No-Show:\n• Futuras (ainda vão acontecer): ${pendentesBreakdown.futuras}\n• Vencidas s/ desfecho (já passaram e ninguém atualizou): ${pendentesBreakdown.vencidas}\n• Remanejados/Restituídos: ${pendentesBreakdown.canceladas}\nClique para destrinchar.`
     : `${isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada"} − (Realizada + No-Show). Inclui futuras (ainda vão acontecer), vencidas sem desfecho registrado e canceladas/remarcadas. Clique para destrinchar.`;
+  // Quebra por segmento ICP mostrando TODOS os segmentos (A, B, C) e o resíduo
+  // realmente sem ICP, para que total = A + B + C + Sem ICP em todos os cards.
   const segLineFor = (
     key: 'agendamentos' | 'r1Agendada' | 'r1Realizada' | 'noShows' | 'contratos',
-  ): string | undefined =>
-    segmentTotals
-      ? `A: ${segmentTotals.a[key] ?? 0} · B: ${segmentTotals.b[key] ?? 0}`
-      : undefined;
-  const contratosSegLine = segmentTotals
-    ? `A: ${segmentTotals.a.contratos ?? 0} · B: ${segmentTotals.b.contratos ?? 0}`
-    : undefined;
+    total: number,
+  ): string | undefined => {
+    if (!segmentTotals) return undefined;
+    const a = segmentTotals.a[key] ?? 0;
+    const b = segmentTotals.b[key] ?? 0;
+    const c = segmentTotals.c?.[key] ?? 0;
+    const semIcp = Math.max(0, (total || 0) - a - b - c);
+    return `A: ${a} · B: ${b} · C: ${c} · Sem ICP: ${semIcp}`;
+  };
+  const contratosSegLine = segLineFor('contratos', kpis.totalContratos || 0);
+
 
   const cards: Array<{
     title: string;
