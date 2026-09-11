@@ -50,9 +50,9 @@ interface TeamKPICardsProps {
   /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y · C: z · Sem ICP: w".
    *  O segmento C é opcional (telas que ainda não o buscam continuam funcionando). */
   segmentTotals?: {
-    a: { agendamentos: number; r1Agendada: number; noShows: number; contratos: number; r1Realizada?: number; realizadas?: number };
-    b: { agendamentos: number; r1Agendada: number; noShows: number; contratos: number; r1Realizada?: number; realizadas?: number };
-    c?: { agendamentos: number; r1Agendada: number; noShows: number; contratos: number; r1Realizada?: number; realizadas?: number };
+    a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
+    b: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
+    c?: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
   } | null;
 }
 
