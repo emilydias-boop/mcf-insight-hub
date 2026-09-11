@@ -1,53 +1,80 @@
-# Reconciliação Consórcio 01–26/08/2026 e ajuste da função
+# Auditoria somente-leitura — /crm/reunioes-equipe (setembro/2026)
 
-## Resultado da comparação (soma dos 26 dias vs painel)
+Nada foi alterado no código nem no banco. Todos os números abaixo vieram de leitura de código + consultas SELECT.
 
-| métrica | soma dos 26 dias | painel | bate? |
-|---|---|---|---|
-| reuniao_agendada | 271 | 268 | não (+3) |
-| reuniao_realizada | 200 | 198 | não (+2) |
-| venda_realizada | 36 | 33 | não (+3) |
-| producao_gerada | 16.220.000 | 16.220.000 | sim |
-| cotas_contratadas | 89 | 89 | sim |
-| consorcios_efetivados | 14.370.000 | 14.370.000 | sim |
-| ticket_medio | 7.189.583 (soma sem sentido) | 435.455 | não somável |
+## 1. Por que o total do card não é A + B
 
-## Ponto 1 — Vendas Realizadas = 33
+Os cards têm **duas fontes diferentes**:
 
-Rodei as duas fontes no recorte inteiro:
+- O número grande vem de `filteredBySDR` (RPC `get_sdr_metrics_from_agenda` **sem** filtro de segmento) — `src/pages/crm/ReunioesEquipe.tsx:605-642`.
+- A linha "A: … · B: …" vem de duas chamadas separadas da mesma RPC com `segment_filter='A'` e `'B'` (`ReunioesEquipe.tsx:365-370`, somadas em `segmentTotals`, linhas 575-598).
 
-- clientes distintos das cotas contratadas (`consortium_cards`, `tipo_registro='contratacao'`, identidade CPF/CNPJ com fallback no nome, igual a `clienteKey` em `src/hooks/useConsorcioCotasContratadas.ts:201`): **33** — é essa.
-- campo `vendas` dentro de `consorcio_producao_gerada('2026-08-01','2026-08-26','consorcio')`: **40** — não é essa.
+A RPC filtra por `UPPER(TRIM(crm_deals.icp_segment)) = 'A'|'B'`. Em setembro/2026 (R1, BU incorporador, sem canceladas) o banco tem:
 
-Ou seja: a métrica do painel é pessoa distinta que contratou cota no período, não venda de proposta aceita. Na função diária eu contei o mesmo eixo, mas por dia — e a soma dá 36 porque 3 clientes contrataram cotas em dias diferentes e são contados uma vez no período e duas vezes na soma diária.
+| icp_segment | reuniões (attendees) | negócios |
+|---|---|---|
+| A | 394 | 342 |
+| B | 59 | 54 |
+| **C** | **15** | **11** |
+| nulo | 1 | 1 |
 
-## Ponto 2 — fórmula literal do Ticket Médio
+Ou seja: existe um terceiro segmento (**C**) e um negócio sem segmento. O total inclui C + nulo; a linha A/B não. Recomputando a RPC por segmento (mês inteiro, sem o recorte de squad da tela):
 
-`src/components/sdr/ConsorcioCloserSummaryTable.tsx:181`
+| métrica | total | A | B | C | A+B+C+nulo = total? |
+|---|---|---|---|---|---|
+| agendamentos | 402 | 339 | 52 | 10 | sim (≈, +1 nulo) |
+| r1_agendada | 461 | 388 | 59 | 13 | sim |
+| r1_realizada | 265 | 228 | 31 | 6 | sim |
+| no_shows | 131 | 111 | 14 | 5 | sim |
+| contratos | 99 | 84 | 14 | 1 | sim |
 
-```ts
-const totalTicket = totals.clientes > 0 ? totals.credito / totals.clientes : null;
-```
+**Veredito: comportamento correto na origem, apresentação enganosa.** As diferenças que o dono viu (371−361=10, 428−415=13, 245−239=6, 125−119=6) são exatamente o volume de segmento C + nulo. O componente `MeetingSummaryCards` até calcula "Sem ICP: total−A−B" (`src/components/sdr/MeetingSummaryCards.tsx:68-77`), mas rotula como "Sem ICP" o que na verdade é **C + sem ICP** — daí a leitura de "não bate".
 
-`totals.credito` é o Consórcio Efetivado (`ConsorcioCloserSummaryTable.tsx:137`) e `totals.clientes` é o distinct global de clientes (`:135-136`). Confere: 14.370.000 / 33 = 435.454,5 — é o número do painel. Não é média de tickets por closer e **não** é produção ÷ vendas, que é o que a função faz hoje.
+Os valores da tela (371/428/245/125) são menores que os brutos (402/461/265/131) porque a página restringe a SDRs do squad no período e exclui quem tem cargo admin/manager/coordenador/closer (`ReunioesEquipe.tsx:200-242, 522-542`). Isso é intencional.
 
-## Ponto 3 — reuniões: a diferença é dedup de período, sim
+## 2. Contratos e Taxa de Conversão — divergência real (eixos diferentes)
 
-Fonte é `get_agenda_fatos_consorcio`. No período: `agendada`=268, `realizada`=198 (idêntico ao painel). Somando dia a dia: 271 e 200.
+- Card **Contratos = A + B do eixo CLOSER**: `segmentTotals` usa `closerMetricsA/closerMetricsB` (`useR1CloserMetrics`, agregação em JavaScript, `src/hooks/useR1CloserMetrics.ts`), somando só `contrato_pago` (`ReunioesEquipe.tsx:590-596, 619-621`). 84 + 14 = **98**. O segmento C (1 contrato) fica de fora do card.
+- Tabela de SDRs: contratos vêm do **eixo SDR** (RPC, via `caucoes_efetivas` + e-mail do SDR da última R1) e ainda são restritos à lista de SDRs válidos; contratos sem SDR reconhecido caem na linha "Não atribuído" (`useUnassignedContracts`).
+- Taxa: o card mostra a taxa **bruta** `contratos / realizadas` (`ReunioesEquipe.tsx:638-640` → 98/245 = 40,0%); a linha de total da tabela mostra a taxa **líquida** `(contratos − reembolsos) / realizadas` (`src/components/sdr/SdrSummaryTable.tsx:475-481` → 37,1%).
 
-Causa medida: **3 deals** têm mais de 2 dias com fato `agendada` no recorte; o cap de 2 por deal age no período inteiro e não na fatia diária. Mesmo mecanismo explica +2 em realizada. Confirmado: essas métricas **não são somáveis por dia** — a soma de 26 dias é sempre ≥ o valor do período.
+**Veredito: divergente por definição inconsistente.** Card e tabela nunca vão fechar enquanto um usar eixo closer/taxa bruta e o outro eixo SDR/taxa líquida.
 
-## Consequência para o relatório diário
+## 3. Outros períodos (recomputado pela mesma RPC, BU incorporador, sem recorte de squad)
 
-O relatório diário é um retrato do dia (D-1), não uma parcela que reconstrói o mês. Métricas com dedup por deal/cliente (reuniões, vendas realizadas) não devem ser somadas entre dias; o fechamento do mês continua sendo lido no painel/período. Produção, cotas e efetivado são aditivos e somam exato.
+| período | agend. | R1 agendada | realizada | no-show | pendentes | contratos |
+|---|---|---|---|---|---|---|
+| Hoje 11/09 | 1 | 42 | 1 | 0 | 41 | 1 |
+| Semana 05–11/09 | 181 | 230 | 113 | 75 | 42 | 42 |
+| Custom 01–10/09 | 401 | 414 | 264 | 131 | 20 | 98 |
+| Mês 01–30/09 | 402 | 461 | 265 | 131 | 65 | 99 |
 
-## Mudança que proponho aplicar na função (depois do seu ok)
+Fuso e limites de dia estão consistentes: a RPC converte tudo com `AT TIME ZONE 'America/Sao_Paulo'` e usa `effective_end = LEAST(end, hoje_SP)` para realizada/no-show/agendamentos/contratos, enquanto R1 Agendada usa a janela cheia (planejamento). Por isso 01–10/09 tem quase o mesmo "agendamentos" do mês (o corte é hoje, 11/09) e "Hoje" mostra 41 pendentes (reuniões do dia ainda sem desfecho). Comportamento correto.
 
-Uma única migration de função, sem tocar em dados ou tabelas:
+## 4. Predicado de "R1 realizada" e exclusividade
 
-1. Remover as 5 linhas `bu='solar'` → a função passa a devolver **15 linhas** (8 incorporador + 7 consórcio).
-2. `consorcio.ticket_medio` passa a ser `consorcios_efetivados / venda_realizada` (crédito efetivado ÷ clientes distintos do dia), exatamente a conta da linha 181 do painel, em vez de produção ÷ vendas internas.
-3. `consorcio.venda_realizada` fica como está (clientes distintos do dia, mesmo `clienteKey`) — é o mesmo eixo do painel, só recortado no dia. Documentar no comentário da função que é métrica não somável.
-4. Sem mudança em produção, cotas, efetivado e em nenhuma métrica do incorporador.
+`get_sdr_metrics_from_agenda` conta como realizada o negócio com attendee em `('completed','contract_paid','refunded')` — flag máxima por (SDR, negócio), não por dia.
 
-Depois de aplicar: rodar 26/08 e 03/09 e trazer a saída bruta, ler `/tmp/observability/build-errors.log`, build e typecheck. Sem publicar.
+- **Diverge da regra oficial da edge function** `ote-consorcio-metrics`, que usa apenas `completed` + `contract_paid`. Aqui entra também **`refunded`**. Definição a decidir pelo dono.
+- No-show é contado **por dia** com cap (1 antes de 01/05/2026, 2 depois); realizada é 0/1 por negócio.
+- Pendentes = `GREATEST(r1_agendada − realizada − no_shows, 0)`. Como as três usam chaves e caps diferentes, **não são mutuamente exclusivas**: um negócio com um dia de no-show e outro dia realizado entra nas duas contagens, e o `GREATEST(...,0)` esconde o estouro. A página ainda reconcilia a diferença jogando o resto em "vencidas" (`ReunioesEquipe.tsx:689-697`), o que mascara o problema em vez de expô-lo.
+
+## 5. Relatório final
+
+| Card | Exibido | Recomputado | Veredito | Causa / local |
+|---|---|---|---|---|
+| Agendamentos | 371 (A322·B39) | total inclui C(10)+nulo | correto, rótulo enganoso | `ReunioesEquipe.tsx:605-642` vs `365-370`; rótulo em `MeetingSummaryCards.tsx:68-77` |
+| R1 Agendada | 428 (A369·B46) | C = 13 | correto, rótulo enganoso | idem |
+| R1 Realizada | 245 (A216·B23) | C = 6; inclui `refunded` | definição a decidir | RPC `get_sdr_metrics_from_agenda`, CTE `dedup_realizada` |
+| No-Shows | 125 (A107·B12) | C = 5 | correto, rótulo enganoso | CTE `noshow_per_lead` (cap por dia) |
+| Pendentes | reconciliado | aritmético, não exclusivo | divergente | RPC `pendentes` + `ReunioesEquipe.tsx:689-697` |
+| Contratos | 98 (A84·B14) | eixo closer; SDR dá 99 (A84·B14·C1) | divergente (eixos diferentes) | `ReunioesEquipe.tsx:590-596, 619-621` vs `useUnassignedContracts` |
+| Taxa Conversão | 40,0% | 98/245 bruta; tabela usa líquida 37,1% | divergente por definição | card `ReunioesEquipe.tsx:638-640`; tabela `SdrSummaryTable.tsx:475-481` |
+| Taxa No-Show | — | `no_shows / r1_agendada`, bases com caps diferentes | consistente entre card e tabela | `ReunioesEquipe.tsx:635-637`, `SdrSummaryTable.tsx:104-105` |
+
+## Decisões que dependem do dono (nada foi mexido)
+
+1. "R1 realizada" deve continuar contando `refunded` nesta tela, ou alinhar com a regra oficial (`completed` + `contract_paid`)?
+2. O card Contratos deve virar eixo SDR (fechando com a tabela) ou a tabela deve virar eixo closer?
+3. A taxa do card deve ser bruta ou líquida (descontando reembolsos), para bater com a tabela?
+4. A linha do card deve passar a mostrar "A · B · C · Sem ICP" (hoje C é somado dentro de "Sem ICP")?
