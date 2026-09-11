@@ -615,13 +615,12 @@ export default function ReunioesEquipe() {
     // fora dos links CLS de closer). É a lista completa do período: não soma
     // com o cálculo antigo de "pagou antes da R1".
     const outsideCount = outsideForaDoFunil?.length ?? 0;
-    // Taxa de Conversão usa exatamente o mesmo número exibido no card Contratos,
-    // para as duas informações nunca divergirem. O Outside foi retirado do
-    // cálculo por decisão do gestor — ele não aparece no card e não deve inflar
-    // a taxa.
-    const totalContratosCard = segmentTotals
-      ? (segmentTotals.a.contratos || 0) + (segmentTotals.b.contratos || 0)
-      : contractsFromClosers.contratoPago;
+    // CONTRATOS — UM ÚNICO NÚMERO (decisão do dono):
+    // fonte canônica = régua caucoes_efetivas no eixo SDR (mesma da tabela),
+    // somando a distribuição por SDR exibida na tabela + a linha "Não atribuído".
+    // Assim card == total da tabela, incluindo segmento C e os não atribuídos.
+    const totalContratosSdr = filteredBySDR.reduce((s, r) => s + (r.contratos || 0), 0);
+    const totalContratosCard = totalContratosSdr + (unassignedSdr.total || 0);
     return {
       ...teamKPIs,
       sdrCount: filteredBySDR.length,
@@ -630,8 +629,8 @@ export default function ReunioesEquipe() {
       totalRealizadas,
       totalNoShows,
       totalSemStatus,
-      // Regra oficial: cauções com negócio no CRM apenas (A + B). Transações
-      // órfãs sem deal NÃO entram em nenhum KPI/total.
+      // Universo único: contratos pagos do período no funil, atribuídos a SDR
+      // ou não (os sem SDR aparecem na linha "Não atribuído" da tabela).
       totalContratos: totalContratosCard,
       totalOutside: outsideCount,
       totalReembolsos: contractsFromClosers.reembolsos,
