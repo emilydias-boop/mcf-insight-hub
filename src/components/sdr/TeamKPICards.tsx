@@ -47,10 +47,12 @@ interface TeamKPICardsProps {
   /** Consórcio: clientes distintos que contrataram no período (Vendas Realizadas).
    *  Mesmo totalClientes global usado no Total das abas — sem query nova. */
   totalVendasRealizadas?: number;
-  /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y" abaixo do número. */
+  /** Aditivo: totais por segmento ICP, exibidos como "A: x · B: y · C: z · Sem ICP: w".
+   *  O segmento C é opcional (telas que ainda não o buscam continuam funcionando). */
   segmentTotals?: {
-    a: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
-    b: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
+    a: { agendamentos: number; r1Agendada: number; noShows: number; contratos: number; r1Realizada?: number; realizadas?: number };
+    b: { agendamentos: number; r1Agendada: number; noShows: number; contratos: number; r1Realizada?: number; realizadas?: number };
+    c?: { agendamentos: number; r1Agendada: number; noShows: number; contratos: number; r1Realizada?: number; realizadas?: number };
   } | null;
 }
 
