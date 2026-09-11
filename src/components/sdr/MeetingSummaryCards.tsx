@@ -31,11 +31,12 @@ interface MeetingSummaryCardsProps {
   summary: MeetingSummaryV2 | MeetingSummary;
   isLoading?: boolean;
   bu?: string;
-  /** Totais por segmento ICP (Lead A / Lead B). Quando ausente, os cards
+  /** Totais por segmento ICP (Lead A / Lead B / Lead C). Quando ausente, os cards
    *  ficam sem a linha de quebra. */
   segmentTotals?: {
     a: { agendamentos: number; r1Agendada: number; realizadas: number; noShows: number; contratos: number };
     b: { agendamentos: number; r1Agendada: number; realizadas: number; noShows: number; contratos: number };
+    c?: { agendamentos: number; r1Agendada: number; realizadas: number; noShows: number; contratos: number };
   } | null;
 }
 
@@ -72,9 +73,11 @@ export function MeetingSummaryCards({ summary, isLoading, bu, segmentTotals = nu
     if (!showSeg || !segmentTotals) return undefined;
     const a = segmentTotals.a[key] ?? 0;
     const b = segmentTotals.b[key] ?? 0;
-    const semIcp = Math.max(0, total - a - b);
-    return { ab: `A: ${a} · B: ${b}`, semIcp: `Sem ICP: ${semIcp}` };
+    const c = segmentTotals.c?.[key] ?? 0;
+    const semIcp = Math.max(0, total - a - b - c);
+    return { ab: `A: ${a} · B: ${b} · C: ${c}`, semIcp: `Sem ICP: ${semIcp}` };
   };
+
 
   const cards = [
     {

@@ -137,7 +137,7 @@ export function TeamKPICards({
         ? "Agendamentos feitos no período (data do agendamento), enquanto Reuniões Agendadas conta reuniões marcadas para o período (data da reunião). Por serem eixos diferentes, os dois números não precisam ser iguais."
         : "Reuniões criadas (booked_at) no período. Fato consumado — só conta o que já foi criado até hoje.",
       bucket: "agendamentos" as KpiBucket,
-      segLine: segLineFor('agendamentos'),
+      segLine: segLineFor('agendamentos', kpis.totalAgendamentos),
     }]),
     {
       title: isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada",
@@ -147,7 +147,7 @@ export function TeamKPICards({
       bgColor: "bg-cyan-500/10",
       tooltip: "Reuniões marcadas PARA o período (scheduled_at). Inclui datas futuras dentro do range — visão de planejamento.",
       bucket: "r1_agendada" as KpiBucket,
-      segLine: segLineFor('r1Agendada'),
+      segLine: segLineFor('r1Agendada', kpis.totalR1Agendada),
     },
     {
       title: isConsorcio ? CONSORCIO_LABELS.reunioesRealizadas : "R1 Realizada",
@@ -157,7 +157,7 @@ export function TeamKPICards({
       bgColor: "bg-green-500/10",
       tooltip: "Reuniões efetivamente realizadas no período. Fato consumado — não inclui reuniões futuras.",
       bucket: "realizada" as KpiBucket,
-      segLine: segLineFor('r1Realizada'),
+      segLine: segLineFor('r1Realizada', kpis.totalRealizadas),
     },
     {
       title: "No-Shows",
@@ -167,7 +167,7 @@ export function TeamKPICards({
       bgColor: "bg-red-500/10",
       tooltip: "No-shows ocorridos (cap de 1/lead antes de 28/04, cap de 2/lead a partir de 28/04). Fato consumado — não inclui futuro.",
       bucket: "no_show" as KpiBucket,
-      segLine: segLineFor('noShows'),
+      segLine: segLineFor('noShows', kpis.totalNoShows),
     },
     // Card unificado: Pendentes / Sem Desfecho
     ...(pendentesTotal > 0 ? [{
