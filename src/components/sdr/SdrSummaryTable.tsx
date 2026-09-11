@@ -472,13 +472,23 @@ export function SdrSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 {(() => {
-                  const totalLiquida = totals.r1Realizada > 0
-                    ? ((totalContratos - (totals.reembolsos || 0)) / totals.r1Realizada) * 100
+                  const realizadas = totals.r1Realizada;
+                  const bruta = realizadas > 0 ? (totalContratos / realizadas) * 100 : 0;
+                  const liquida = realizadas > 0
+                    ? ((totalContratos - (totals.reembolsos || 0)) / realizadas) * 100
                     : 0;
-                  const cls = totalLiquida >= 20 ? 'text-green-400'
-                    : totalLiquida >= 10 ? 'text-amber-400'
+                  const clsBruta = bruta >= 20 ? 'text-green-400'
+                    : bruta >= 10 ? 'text-amber-400'
                     : 'text-red-400';
-                  return <span className={`font-medium ${cls}`}>{totalLiquida.toFixed(1)}%</span>;
+                  const clsLiquida = liquida >= 20 ? 'text-green-400'
+                    : liquida >= 10 ? 'text-amber-400'
+                    : 'text-red-400';
+                  return (
+                    <div className="flex flex-col items-center">
+                      <span className={`font-medium ${clsBruta}`}>{bruta.toFixed(1)}%</span>
+                      <span className={`text-xs ${clsLiquida}`}>(líq. {liquida.toFixed(1)}%)</span>
+                    </div>
+                  );
                 })()}
               </TableCell>
               {!disableNavigation && <TableCell />}
