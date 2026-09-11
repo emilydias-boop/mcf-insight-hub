@@ -101,7 +101,8 @@ export function TeamKPICards({
     const b = segmentTotals.b[key] ?? 0;
     const c = segmentTotals.c?.[key] ?? 0;
     const semIcp = Math.max(0, (total || 0) - a - b - c);
-    return `A: ${a} · B: ${b} · C: ${c} · Sem ICP: ${semIcp}`;
+    // Formato compacto para caber no card sem truncar.
+    return `A ${a} · B ${b} · C ${c} · s/ICP ${semIcp}`;
   };
   const contratosSegLine = segLineFor('contratos', kpis.totalContratos || 0);
 
