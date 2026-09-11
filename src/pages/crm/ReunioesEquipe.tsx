@@ -641,7 +641,7 @@ export default function ReunioesEquipe() {
         ? (totalContratosCard / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR, segmentTotals, outsideForaDoFunil]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, outsideForaDoFunil]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
