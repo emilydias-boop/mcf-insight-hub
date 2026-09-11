@@ -574,8 +574,11 @@ export default function ReunioesEquipe() {
   };
   const sdrSegmentAMap = useMemo(() => buildSdrSegmentMap(sdrMetricsA), [sdrMetricsA]);
   const sdrSegmentBMap = useMemo(() => buildSdrSegmentMap(sdrMetricsB), [sdrMetricsB]);
+  const sdrSegmentCMap = useMemo(() => buildSdrSegmentMap(sdrMetricsC), [sdrMetricsC]);
 
-  // Totais por segmento para os KPI cards
+  // Totais por segmento para os KPI cards.
+  // Contratos passam a vir do MESMO eixo da tabela de SDRs (régua caucoes_efetivas
+  // por SDR da última R1), para o card e a tabela nunca divergirem.
   const segmentTotals = useMemo(() => {
     const sumSdr = (map: Map<string, any>) => {
       const acc = { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 };
@@ -586,20 +589,16 @@ export default function ReunioesEquipe() {
         acc.r1Agendada += v.r1Agendada;
         acc.r1Realizada += v.r1Realizada;
         acc.noShows += v.noShows;
+        acc.contratos += v.contratos || 0;
       });
       return acc;
     };
-    // Consistência com o número grande do card "Contratos": só Contrato Pago
-    // (Outside tem card próprio).
-    const sumCloserContratos = (rows?: any[]) =>
-      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0), 0);
-    const a = sumSdr(sdrSegmentAMap);
-    const b = sumSdr(sdrSegmentBMap);
     return {
-      a: { ...a, contratos: sumCloserContratos(closerMetricsA) },
-      b: { ...b, contratos: sumCloserContratos(closerMetricsB) },
+      a: sumSdr(sdrSegmentAMap),
+      b: sumSdr(sdrSegmentBMap),
+      c: sumSdr(sdrSegmentCMap),
     };
-  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR]);
+  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
