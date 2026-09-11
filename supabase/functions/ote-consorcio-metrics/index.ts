@@ -192,9 +192,11 @@ Deno.serve(async (req) => {
       r1_agendadas += Math.min(dias.size, 2);
     });
 
-    // Realizadas — predicado canônico: attendee.status = 'completed' OU 'contract_paid'
-    // (contract_paid = o lead realizou a reunião e comprou). Deals distintos.
-    const REALIZADOS_STATUS = new Set(["completed", "contract_paid"]);
+    // Realizadas — predicado canônico: attendee.status = 'completed', 'contract_paid'
+    // OU 'refunded' (contract_paid = o lead realizou a reunião e comprou;
+    // refunded = a reunião aconteceu e a compra foi reembolsada depois).
+    // Deals distintos.
+    const REALIZADOS_STATUS = new Set(["completed", "contract_paid", "refunded"]);
     const dealsRealizados = new Set<string>();
     const dealsRealizadosSlot = new Set<string>();
     vigentes.forEach((l) => {
@@ -203,8 +205,8 @@ Deno.serve(async (req) => {
       if ((l.slot_status ?? "").toLowerCase() === "completed") dealsRealizadosSlot.add(l.deal_id);
     });
 
-    // Pendentes de marcação: slot 'completed' e attendee sem 'completed' nem 'contract_paid'
-    // (canceladas/reagendadas já foram excluídas em `vigentes`).
+    // Pendentes de marcação: slot 'completed' e attendee fora do predicado canônico
+    // de realizada (canceladas/reagendadas já foram excluídas em `vigentes`).
     const pendentes = vigentes
       .filter(
         (l) =>

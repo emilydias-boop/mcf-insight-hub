@@ -368,6 +368,10 @@ export default function ReunioesEquipe() {
   const { data: sdrMetricsB } = useSdrMetricsFromAgenda(
     start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'B',
   );
+  // Segmento C também é exibido nos cards (decisão do dono: total = A+B+C+Sem ICP).
+  const { data: sdrMetricsC } = useSdrMetricsFromAgenda(
+    start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'C',
+  );
 
   // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)
   // — usado para a média individual entre Closers nos cards de Taxa.
@@ -570,8 +574,11 @@ export default function ReunioesEquipe() {
   };
   const sdrSegmentAMap = useMemo(() => buildSdrSegmentMap(sdrMetricsA), [sdrMetricsA]);
   const sdrSegmentBMap = useMemo(() => buildSdrSegmentMap(sdrMetricsB), [sdrMetricsB]);
+  const sdrSegmentCMap = useMemo(() => buildSdrSegmentMap(sdrMetricsC), [sdrMetricsC]);
 
-  // Totais por segmento para os KPI cards
+  // Totais por segmento para os KPI cards.
+  // Contratos passam a vir do MESMO eixo da tabela de SDRs (régua caucoes_efetivas
+  // por SDR da última R1), para o card e a tabela nunca divergirem.
   const segmentTotals = useMemo(() => {
     const sumSdr = (map: Map<string, any>) => {
       const acc = { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 };
@@ -582,20 +589,16 @@ export default function ReunioesEquipe() {
         acc.r1Agendada += v.r1Agendada;
         acc.r1Realizada += v.r1Realizada;
         acc.noShows += v.noShows;
+        acc.contratos += v.contratos || 0;
       });
       return acc;
     };
-    // Consistência com o número grande do card "Contratos": só Contrato Pago
-    // (Outside tem card próprio).
-    const sumCloserContratos = (rows?: any[]) =>
-      (rows || []).reduce((s, c) => s + (c.contrato_pago || 0), 0);
-    const a = sumSdr(sdrSegmentAMap);
-    const b = sumSdr(sdrSegmentBMap);
     return {
-      a: { ...a, contratos: sumCloserContratos(closerMetricsA) },
-      b: { ...b, contratos: sumCloserContratos(closerMetricsB) },
+      a: sumSdr(sdrSegmentAMap),
+      b: sumSdr(sdrSegmentBMap),
+      c: sumSdr(sdrSegmentCMap),
     };
-  }, [sdrSegmentAMap, sdrSegmentBMap, closerMetricsA, closerMetricsB, filteredBySDR]);
+  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR]);
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
@@ -612,13 +615,12 @@ export default function ReunioesEquipe() {
     // fora dos links CLS de closer). É a lista completa do período: não soma
     // com o cálculo antigo de "pagou antes da R1".
     const outsideCount = outsideForaDoFunil?.length ?? 0;
-    // Taxa de Conversão usa exatamente o mesmo número exibido no card Contratos,
-    // para as duas informações nunca divergirem. O Outside foi retirado do
-    // cálculo por decisão do gestor — ele não aparece no card e não deve inflar
-    // a taxa.
-    const totalContratosCard = segmentTotals
-      ? (segmentTotals.a.contratos || 0) + (segmentTotals.b.contratos || 0)
-      : contractsFromClosers.contratoPago;
+    // CONTRATOS — UM ÚNICO NÚMERO (decisão do dono):
+    // fonte canônica = régua caucoes_efetivas no eixo SDR (mesma da tabela),
+    // somando a distribuição por SDR exibida na tabela + a linha "Não atribuído".
+    // Assim card == total da tabela, incluindo segmento C e os não atribuídos.
+    const totalContratosSdr = filteredBySDR.reduce((s, r) => s + (r.contratos || 0), 0);
+    const totalContratosCard = totalContratosSdr + (unassignedSdr.total || 0);
     return {
       ...teamKPIs,
       sdrCount: filteredBySDR.length,
@@ -627,8 +629,8 @@ export default function ReunioesEquipe() {
       totalRealizadas,
       totalNoShows,
       totalSemStatus,
-      // Regra oficial: cauções com negócio no CRM apenas (A + B). Transações
-      // órfãs sem deal NÃO entram em nenhum KPI/total.
+      // Universo único: contratos pagos do período no funil, atribuídos a SDR
+      // ou não (os sem SDR aparecem na linha "Não atribuído" da tabela).
       totalContratos: totalContratosCard,
       totalOutside: outsideCount,
       totalReembolsos: contractsFromClosers.reembolsos,
@@ -639,7 +641,7 @@ export default function ReunioesEquipe() {
         ? (totalContratosCard / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR, segmentTotals, outsideForaDoFunil]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, outsideForaDoFunil]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
