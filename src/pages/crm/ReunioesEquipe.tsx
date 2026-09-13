@@ -359,9 +359,10 @@ export default function ReunioesEquipe() {
     refetch: refetchCloserMetrics,
   } = useR1CloserMetrics(start, end, 'incorporador');
 
-  // Segmentação ICP exibida lado a lado (Lead A / Lead B) — sempre visível.
+  // Segmentação ICP exibida lado a lado (Lead A / Lead B / Lead C) — sempre visível.
   const { data: closerMetricsA } = useR1CloserMetrics(start, end, 'incorporador', 'A');
   const { data: closerMetricsB } = useR1CloserMetrics(start, end, 'incorporador', 'B');
+  const { data: closerMetricsC } = useR1CloserMetrics(start, end, 'incorporador', 'C');
   const { data: sdrMetricsA } = useSdrMetricsFromAgenda(
     start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'A',
   );
@@ -1035,6 +1036,7 @@ export default function ReunioesEquipe() {
               totalContratosFromKPI={contractsFromClosers.total}
               segmentAData={closerMetricsA}
               segmentBData={closerMetricsB}
+              segmentCData={closerMetricsC}
               unassigned={unassignedCloser}
               onUnassignedClick={(segment) =>
                 setUnassignedDialog({ open: true, segment, context: 'closers' })
