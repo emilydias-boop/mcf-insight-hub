@@ -5,4 +5,4 @@
 - [x] Remover renderização do card "Metas da Equipe" do Painel Comercial do Incorporador (`src/pages/crm/ReunioesEquipe.tsx`), preservando componente, hook e tabelas de metas.
 - [x] Ajustar `public.relatorio_diario_bu(date)`: remover linhas `bu='solar'` (15 linhas), ticket consórcio = efetivado/clientes, e nova coluna `agregacao` ('aditivo' | 'nao_somavel').
 - [ ] Painel Comercial (/crm/reunioes-equipe): cards mostram A·B·C·Sem ICP; Contratos unificado no eixo SDR + Não atribuído; predicado de realizada (`completed`/`contract_paid`/`refunded`) replicado na edge function `ote-consorcio-metrics`. Taxa de conversão (bruta × líquida) segue pendente de decisão do dono.
-- [ ] Painel Comercial: acrescentar C e s/ICP na tabela de Closers, preservando A/B/Total e garantindo fechamento por linha e no Total.
+- [x] Painel Comercial: acrescentar C e s/ICP na tabela de Closers, preservando A/B/Total e garantindo fechamento por linha e no Total.
