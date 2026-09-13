@@ -94,7 +94,7 @@ export const UNASSIGNED_REASON_LABELS: Record<UnassignedReason, string> = {
   closer_inativo: 'closer inativo no período',
 };
 
-export type IcpSegmentFilter = 'all' | 'A' | 'B';
+export type IcpSegmentFilter = 'all' | 'A' | 'B' | 'C';
 
 export function useR1CloserMetrics(
   startDate: Date,
@@ -109,7 +109,7 @@ export function useR1CloserMetrics(
     queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu, segment, includeUnassigned],
     queryFn: async (): Promise<R1CloserMetric[]> => {
       // Filtro ICP (aditivo): com 'all' nada muda no comportamento existente.
-      const segmentActive = segment === 'A' || segment === 'B';
+      const segmentActive = segment === 'A' || segment === 'B' || segment === 'C';
       let segmentAllowedContracts: Set<string> | null = null;
       const allowedDealIds = async (ids: string[]): Promise<Set<string>> => {
         if (!segmentActive || ids.length === 0) return new Set(ids);

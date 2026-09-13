@@ -16,9 +16,10 @@ interface CloserSummaryTableProps {
   isLoading?: boolean;
   onCloserClick?: (closerId: string) => void;
   totalContratosFromKPI?: number;
-  /** Aditivo: quando informados, cada closer ganha sub-linhas "↳ Lead A" / "↳ Lead B". */
+  /** Quando informados, exibe A/B/C e calcula s/ICP como resíduo do total. */
   segmentAData?: R1CloserMetric[];
   segmentBData?: R1CloserMetric[];
+  segmentCData?: R1CloserMetric[];
   /** Contratos pagos no período que não puderam ser atribuídos a nenhum closer. */
   unassigned?: { total: number; a: number; b: number };
   /** Abre o detalhamento dos contratos não atribuídos (opcionalmente por segmento). */
@@ -32,6 +33,7 @@ export function CloserSummaryTable({
   totalContratosFromKPI,
   segmentAData,
   segmentBData,
+  segmentCData,
   unassigned,
   onUnassignedClick,
 }: CloserSummaryTableProps) {
@@ -79,7 +81,7 @@ export function CloserSummaryTable({
     ? ((totals.noshow / totals.r1_agendada) * 100)
     : 0;
 
-  const showSegments = !!(segmentAData || segmentBData);
+  const showSegments = !!(segmentAData || segmentBData || segmentCData);
   const byId = (rows?: R1CloserMetric[]) => {
     const m = new Map<string, R1CloserMetric>();
     (rows || []).forEach((r) => m.set(r.closer_id, r));
@@ -87,6 +89,7 @@ export function CloserSummaryTable({
   };
   const segAMap = byId(segmentAData);
   const segBMap = byId(segmentBData);
+  const segCMap = byId(segmentCData);
 
   type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_pago' | 'r2_agendada';
   const SEG_COLS: { key: SegKey; label: string; cls: string }[] = [
@@ -101,6 +104,13 @@ export function CloserSummaryTable({
     (map.get(closerId)?.[key] as number | undefined) ?? 0;
   const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
     (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
+  const segmentedKeys = new Set<SegKey>(['r1_agendada', 'r1_realizada', 'noshow', 'contrato_pago', 'r2_agendada']);
+  const segmentsForRow = (row: R1CloserMetric, key: SegKey) => {
+    const a = segValue(segAMap, row.closer_id, key);
+    const b = segValue(segBMap, row.closer_id, key);
+    const c = segValue(segCMap, row.closer_id, key);
+    return { a, b, c, noIcp: ((row[key] as number) || 0) - a - b - c };
+  };
 
   const un = unassigned && unassigned.total > 0 ? unassigned : null;
   const unFor = (key: SegKey, seg?: 'a' | 'b') =>
@@ -112,11 +122,11 @@ export function CloserSummaryTable({
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
-              <TableHead className="text-muted-foreground font-medium">Closer</TableHead>
+              <TableHead rowSpan={showSegments ? 2 : 1} className="text-muted-foreground font-medium align-middle">Closer</TableHead>
               {showSegments
-                ? SEG_COLS.flatMap((c) => [`${c.label} A`, `${c.label} B`]).map((h) => (
-                    <TableHead key={h} className="text-muted-foreground text-center font-medium whitespace-nowrap">
-                      {h}
+                ? SEG_COLS.map((c) => (
+                    <TableHead key={c.key} colSpan={segmentedKeys.has(c.key) ? 4 : 2} className="text-muted-foreground text-center font-medium whitespace-nowrap border-l border-border/60">
+                      {c.label}
                     </TableHead>
                   ))
                 : SEG_COLS.map((c) => (
@@ -124,10 +134,19 @@ export function CloserSummaryTable({
                       {c.label}
                     </TableHead>
                   ))}
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Reembolsos</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
+              <TableHead rowSpan={showSegments ? 2 : 1} className="text-muted-foreground text-center font-medium align-middle">Taxa No-Show</TableHead>
+              <TableHead rowSpan={showSegments ? 2 : 1} className="text-muted-foreground text-center font-medium align-middle">Reembolsos</TableHead>
+              <TableHead rowSpan={showSegments ? 2 : 1} className="text-muted-foreground text-center font-medium align-middle">Taxa Conv.</TableHead>
             </TableRow>
+            {showSegments && (
+              <TableRow className="hover:bg-muted/50">
+                {SEG_COLS.flatMap((c) => (segmentedKeys.has(c.key) ? ['A', 'B', 'C', 's/ICP'] : ['A', 'B']).map((segment) => (
+                  <TableHead key={`${c.key}-${segment}`} className="min-w-14 text-muted-foreground text-center font-medium whitespace-nowrap first:border-l first:border-border/60">
+                    {segment}
+                  </TableHead>
+                )))}
+              </TableRow>
+            )}
           </TableHeader>
           <TableBody>
             {data.map((row) => {
@@ -167,14 +186,17 @@ export function CloserSummaryTable({
                     <span className="text-foreground">{row.closer_name}</span>
                   </TableCell>
                   {showSegments
-                    ? SEG_COLS.flatMap((c) => [
-                        <TableCell key={`${c.key}-a`} className="text-center">
-                          <span className={`${c.cls} font-medium`}>{segValue(segAMap, row.closer_id, c.key)}</span>
-                        </TableCell>,
-                        <TableCell key={`${c.key}-b`} className="text-center">
-                          <span className={`${c.cls} font-medium`}>{segValue(segBMap, row.closer_id, c.key)}</span>
-                        </TableCell>,
-                      ])
+                    ? SEG_COLS.flatMap((c) => {
+                        const segments = segmentsForRow(row, c.key);
+                        const values = segmentedKeys.has(c.key)
+                          ? [segments.a, segments.b, segments.c, segments.noIcp]
+                          : [segments.a, segments.b];
+                        return values.map((value, index) => (
+                          <TableCell key={`${c.key}-${index}`} className={`text-center ${index === 0 ? 'border-l border-border/60' : ''}`}>
+                            <span className={`${c.cls} font-medium`}>{value}</span>
+                          </TableCell>
+                        ));
+                      })
                     : SEG_COLS.map((c) => (
                         <TableCell key={c.key} className="text-center">
                           <span className={`${c.cls} font-medium`}>{(row[c.key] as number) || 0}</span>
@@ -209,30 +231,26 @@ export function CloserSummaryTable({
               >
                 <TableCell className="font-normal underline decoration-dotted">Não atribuído</TableCell>
                 {showSegments
-                  ? SEG_COLS.flatMap((c) => [
-                      <TableCell
-                        key={`un-${c.key}-a`}
-                        className="text-center"
-                        onClick={
-                          onUnassignedClick && c.key === 'contrato_pago'
-                            ? (e) => { e.stopPropagation(); onUnassignedClick('A'); }
-                            : undefined
-                        }
-                      >
-                        {c.key === 'contrato_pago' ? unFor(c.key, 'a') : '—'}
-                      </TableCell>,
-                      <TableCell
-                        key={`un-${c.key}-b`}
-                        className="text-center"
-                        onClick={
-                          onUnassignedClick && c.key === 'contrato_pago'
-                            ? (e) => { e.stopPropagation(); onUnassignedClick('B'); }
-                            : undefined
-                        }
-                      >
-                        {c.key === 'contrato_pago' ? unFor(c.key, 'b') : '—'}
-                      </TableCell>,
-                    ])
+                  ? SEG_COLS.flatMap((c) => {
+                      const a = unFor(c.key, 'a');
+                      const b = unFor(c.key, 'b');
+                      const values = segmentedKeys.has(c.key)
+                        ? [a, b, 0, unFor(c.key) - a - b]
+                        : [a, b];
+                      return values.map((value, index) => (
+                        <TableCell
+                          key={`un-${c.key}-${index}`}
+                          className={`text-center ${index === 0 ? 'border-l border-border/60' : ''}`}
+                          onClick={
+                            onUnassignedClick && c.key === 'contrato_pago' && index < 2
+                              ? (e) => { e.stopPropagation(); onUnassignedClick(index === 0 ? 'A' : 'B'); }
+                              : undefined
+                          }
+                        >
+                          {c.key === 'contrato_pago' ? value : '—'}
+                        </TableCell>
+                      ));
+                    })
                   : SEG_COLS.map((c) => (
                       <TableCell key={`un-${c.key}`} className="text-center">
                         {c.key === 'contrato_pago' ? unFor(c.key) : '—'}
@@ -248,14 +266,20 @@ export function CloserSummaryTable({
             <TableRow className="bg-muted/30 font-semibold border-t-2 border-border">
               <TableCell className="text-foreground">Total</TableCell>
               {showSegments
-                ? SEG_COLS.flatMap((c) => [
-                    <TableCell key={`t-${c.key}-a`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentAData, c.key)}</span>
-                    </TableCell>,
-                    <TableCell key={`t-${c.key}-b`} className="text-center">
-                      <span className={c.cls}>{segTotal(segmentBData, c.key)}</span>
-                    </TableCell>,
-                  ])
+                ? SEG_COLS.flatMap((c) => {
+                    const a = segTotal(segmentAData, c.key);
+                    const b = segTotal(segmentBData, c.key);
+                    const cTotal = segTotal(segmentCData, c.key);
+                    const total = segTotal(data, c.key);
+                    const values = segmentedKeys.has(c.key)
+                      ? [a, b, cTotal, total - a - b - cTotal]
+                      : [a, b];
+                    return values.map((value, index) => (
+                      <TableCell key={`t-${c.key}-${index}`} className={`text-center ${index === 0 ? 'border-l border-border/60' : ''}`}>
+                        <span className={c.cls}>{value}</span>
+                      </TableCell>
+                    ));
+                  })
                 : SEG_COLS.map((c) => (
                     <TableCell key={`t-${c.key}`} className="text-center">
                       <span className={c.cls}>{segTotal(data, c.key)}</span>
