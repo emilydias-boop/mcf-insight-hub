@@ -1,80 +1,113 @@
-# Auditoria somente-leitura — /crm/reunioes-equipe (setembro/2026)
+# Auditoria — cards do topo × linha Total da aba Closers (/crm/reunioes-equipe, 01–30/09/2026)
 
-Nada foi alterado no código nem no banco. Todos os números abaixo vieram de leitura de código + consultas SELECT.
+Somente leitura. Nada foi editado, nada publicado. Todos os números abaixo foram **reproduzidos por SQL** no mesmo recorte (01/09 a 30/09/2026, BU incorporador, sem filtro de SDR/Closer).
 
-## 1. Por que o total do card não é A + B
+## 1. De onde vêm os cards do topo
 
-Os cards têm **duas fontes diferentes**:
+- Render: `src/pages/crm/ReunioesEquipe.tsx:929` → `<TeamKPICards kpis={enrichedKPIs} segmentTotals={segmentTotals} …>`
+- `enrichedKPIs` (`ReunioesEquipe.tsx:606-644`) soma **linha a linha o array `filteredBySDR`** (o mesmo array da aba SDRs):
 
-- O número grande vem de `filteredBySDR` (RPC `get_sdr_metrics_from_agenda` **sem** filtro de segmento) — `src/pages/crm/ReunioesEquipe.tsx:605-642`.
-- A linha "A: … · B: …" vem de duas chamadas separadas da mesma RPC com `segment_filter='A'` e `'B'` (`ReunioesEquipe.tsx:365-370`, somadas em `segmentTotals`, linhas 575-598).
+```
+const totalR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
+const totalContratosCard = totalContratosSdr + (unassignedSdr.total || 0);
+```
 
-A RPC filtra por `UPPER(TRIM(crm_deals.icp_segment)) = 'A'|'B'`. Em setembro/2026 (R1, BU incorporador, sem canceladas) o banco tem:
+- `filteredBySDR` (`ReunioesEquipe.tsx:520-556`) = saída da RPC filtrada pela lista `activeSdrsList`, que **exclui quem tem role administrativo/closer** (`ReunioesEquipe.tsx:218`: `admin, manager, coordenador, assistente_administrativo, closer, closer_sombra`).
+- Fonte dos números: `useTeamMeetingsData.ts:66` → `useSdrMetricsFromAgenda.ts:57` → RPC **`public.get_sdr_metrics_from_agenda`**.
+- Quebra A/B/C dos cards: três chamadas extra da mesma RPC com `segment_filter` (`ReunioesEquipe.tsx:363-375`); "s/ICP" é **resíduo** (`total − A − B − C`), não é medido.
 
-| icp_segment | reuniões (attendees) | negócios |
-|---|---|---|
-| A | 394 | 342 |
-| B | 59 | 54 |
-| **C** | **15** | **11** |
-| nulo | 1 | 1 |
+Tabelas e datas da RPC: `meeting_slot_attendees` + `meeting_slots` (agenda), `meeting_type='r1'`, `is_partner=false`, `status <> 'cancelled'`; BU pelo `closers.bu` do slot; data de `r1_agendada/realizada/no_show` = `(ms.scheduled_at AT TIME ZONE 'America/Sao_Paulo')::date`; `agendamentos` = `booked_at`; `contratos` = RPC `caucoes_efetivas(start, end, bu)`.
 
-Ou seja: existe um terceiro segmento (**C**) e um negócio sem segmento. O total inclui C + nulo; a linha A/B não. Recomputando a RPC por segmento (mês inteiro, sem o recorte de squad da tela):
+## 2. De onde vem a linha Total da aba Closers
 
-| métrica | total | A | B | C | A+B+C+nulo = total? |
-|---|---|---|---|---|---|
-| agendamentos | 402 | 339 | 52 | 10 | sim (≈, +1 nulo) |
-| r1_agendada | 461 | 388 | 59 | 13 | sim |
-| r1_realizada | 265 | 228 | 31 | 6 | sim |
-| no_shows | 131 | 111 | 14 | 5 | sim |
-| contratos | 99 | 84 | 14 | 1 | sim |
+- Render: `ReunioesEquipe.tsx:1032` → `<CloserSummaryTable data={closerMetrics} segmentAData={closerMetricsA} segmentBData={closerMetricsB} unassigned={unassignedCloser}>`
+- Hook: **`src/hooks/useR1CloserMetrics.ts`** (`ReunioesEquipe.tsx:360`) — hook **diferente** dos cards, TypeScript no cliente, não é a RPC.
+- Janela: `addHours(startOfDay/endOfDay, +3)` (offset BRT fixo), sobre `meeting_slots.scheduled_at` (`useR1CloserMetrics.ts:130-133`).
+- Agregação (`useR1CloserMetrics.ts:788-864`): agrupa por `(closer_id, deal_id)`, `r1_agendada += days.size >= 2 ? 2 : 1`, `realized` se algum attendee do deal está em `completed|contract_paid|refunded`, e **`else if` no-show** (`noshow++` só quando o deal não foi realizado).
+- Totais da linha Total: `CloserSummaryTable.tsx:57-80` (`reduce` das linhas exibidas). Colunas A/B: `segTotal(segmentAData|segmentBData, key)` — `CloserSummaryTable.tsx:102`.
 
-**Veredito: comportamento correto na origem, apresentação enganosa.** As diferenças que o dono viu (371−361=10, 428−415=13, 245−239=6, 125−119=6) são exatamente o volume de segmento C + nulo. O componente `MeetingSummaryCards` até calcula "Sem ICP: total−A−B" (`src/components/sdr/MeetingSummaryCards.tsx:68-77`), mas rotula como "Sem ICP" o que na verdade é **C + sem ICP** — daí a leitura de "não bate".
+## 3. Vem da agenda? Sim — os dois lados
 
-Os valores da tela (371/428/245/125) são menores que os brutos (402/461/265/131) porque a página restringe a SDRs do squad no período e exclui quem tem cargo admin/manager/coordenador/closer (`ReunioesEquipe.tsx:200-242, 522-542`). Isso é intencional.
+| lado | fonte |
+|---|---|
+| cards do topo | `meeting_slots` + `meeting_slot_attendees` (agenda) via RPC; contratos via `caucoes_efetivas` (que também parte de `meeting_slot_attendees.contract_paid_at`) + `hubla_transactions` para os órfãos |
+| tabela Closers | `meeting_slots` + `meeting_slot_attendees` (agenda) via queries no cliente; contratos via `caucoes_efetivas` |
 
-## 2. Contratos e Taxa de Conversão — divergência real (eixos diferentes)
+Nenhum dos dois lê `deal_activities`. `crm_deals` entra só como **lookup de segmento ICP**. Logo: **a divergência é de regra, não de fonte.** As três regras responsáveis, nomeadas:
 
-- Card **Contratos = A + B do eixo CLOSER**: `segmentTotals` usa `closerMetricsA/closerMetricsB` (`useR1CloserMetrics`, agregação em JavaScript, `src/hooks/useR1CloserMetrics.ts`), somando só `contrato_pago` (`ReunioesEquipe.tsx:590-596, 619-621`). 84 + 14 = **98**. O segmento C (1 contrato) fica de fora do card.
-- Tabela de SDRs: contratos vêm do **eixo SDR** (RPC, via `caucoes_efetivas` + e-mail do SDR da última R1) e ainda são restritos à lista de SDRs válidos; contratos sem SDR reconhecido caem na linha "Não atribuído" (`useUnassignedContracts`).
-- Taxa: o card mostra a taxa **bruta** `contratos / realizadas` (`ReunioesEquipe.tsx:638-640` → 98/245 = 40,0%); a linha de total da tabela mostra a taxa **líquida** `(contratos − reembolsos) / realizadas` (`src/components/sdr/SdrSummaryTable.tsx:475-481` → 37,1%).
+- **R1** — filtro de agendador por role: os cards descartam reuniões agendadas por quem tem role `closer`/`coordenador`/`admin`; a tabela de Closers não descarta ninguém.
+- **R2** — eixo de agrupamento: cards agrupam por `(SDR, deal)`, tabela por `(closer, deal)`.
+- **R3** — no-show: cards contam no-show com cap 2/deal **mesmo quando o deal também foi realizado**; a tabela usa `else if` (deal realizado nunca conta no-show).
 
-**Veredito: divergente por definição inconsistente.** Card e tabela nunca vão fechar enquanto um usar eixo closer/taxa bruta e o outro eixo SDR/taxa líquida.
+## 4. Dedup e cap — medição
 
-## 3. Outros períodos (recomputado pela mesma RPC, BU incorporador, sem recorte de squad)
+Nenhum dos lados conta linha crua. No recorte: **519 linhas de attendee**, **452 deals distintos**.
 
-| período | agend. | R1 agendada | realizada | no-show | pendentes | contratos |
-|---|---|---|---|---|---|---|
-| Hoje 11/09 | 1 | 42 | 1 | 0 | 41 | 1 |
-| Semana 05–11/09 | 181 | 230 | 113 | 75 | 42 | 42 |
-| Custom 01–10/09 | 401 | 414 | 264 | 131 | 20 | 98 |
-| Mês 01–30/09 | 402 | 461 | 265 | 131 | 65 | 99 |
+| medida | valor |
+|---|---|
+| linhas de attendee cruas | 519 |
+| dedup `(closer, deal)` cap 2 dias | **518** |
+| dedup `(agendador, deal)` cap 2 dias | 511 |
+| idem, excluindo agendadores com role closer/coordenador/admin | **478** |
 
-Fuso e limites de dia estão consistentes: a RPC converte tudo com `AT TIME ZONE 'America/Sao_Paulo'` e usa `effective_end = LEAST(end, hoje_SP)` para realizada/no-show/agendamentos/contratos, enquanto R1 Agendada usa a janela cheia (planejamento). Por isso 01–10/09 tem quase o mesmo "agendamentos" do mês (o corte é hoje, 11/09) e "Hoje" mostra 41 pendentes (reuniões do dia ainda sem desfecho). Comportamento correto.
+Prova das divergências (todas reproduzidas ao número exato):
 
-## 4. Predicado de "R1 realizada" e exclusividade
-
-`get_sdr_metrics_from_agenda` conta como realizada o negócio com attendee em `('completed','contract_paid','refunded')` — flag máxima por (SDR, negócio), não por dia.
-
-- **Diverge da regra oficial da edge function** `ote-consorcio-metrics`, que usa apenas `completed` + `contract_paid`. Aqui entra também **`refunded`**. Definição a decidir pelo dono.
-- No-show é contado **por dia** com cap (1 antes de 01/05/2026, 2 depois); realizada é 0/1 por negócio.
-- Pendentes = `GREATEST(r1_agendada − realizada − no_shows, 0)`. Como as três usam chaves e caps diferentes, **não são mutuamente exclusivas**: um negócio com um dia de no-show e outro dia realizado entra nas duas contagens, e o `GREATEST(...,0)` esconde o estouro. A página ainda reconcilia a diferença jogando o resto em "vencidas" (`ReunioesEquipe.tsx:689-697`), o que mascara o problema em vez de expô-lo.
-
-## 5. Relatório final
-
-| Card | Exibido | Recomputado | Veredito | Causa / local |
+| métrica | card | reproduzido por | tabela | reproduzido por |
 |---|---|---|---|---|
-| Agendamentos | 371 (A322·B39) | total inclui C(10)+nulo | correto, rótulo enganoso | `ReunioesEquipe.tsx:605-642` vs `365-370`; rótulo em `MeetingSummaryCards.tsx:68-77` |
-| R1 Agendada | 428 (A369·B46) | C = 13 | correto, rótulo enganoso | idem |
-| R1 Realizada | 245 (A216·B23) | C = 6; inclui `refunded` | definição a decidir | RPC `get_sdr_metrics_from_agenda`, CTE `dedup_realizada` |
-| No-Shows | 125 (A107·B12) | C = 5 | correto, rótulo enganoso | CTE `noshow_per_lead` (cap por dia) |
-| Pendentes | reconciliado | aritmético, não exclusivo | divergente | RPC `pendentes` + `ReunioesEquipe.tsx:689-697` |
-| Contratos | 98 (A84·B14) | eixo closer; SDR dá 99 (A84·B14·C1) | divergente (eixos diferentes) | `ReunioesEquipe.tsx:590-596, 619-621` vs `useUnassignedContracts` |
-| Taxa Conversão | 40,0% | 98/245 bruta; tabela usa líquida 37,1% | divergente por definição | card `ReunioesEquipe.tsx:638-640`; tabela `SdrSummaryTable.tsx:475-481` |
-| Taxa No-Show | — | `no_shows / r1_agendada`, bases com caps diferentes | consistente entre card e tabela | `ReunioesEquipe.tsx:635-637`, `SdrSummaryTable.tsx:104-105` |
+| R1 Agendada A | 418 | dedup (SDR, deal) cap2 **sem** agendadores com role excluída | 446 | dedup (closer, deal) cap2, **todos** os agendadores, `icp_segment='A'` → **446** |
+| R1 Agendada B | 48 | idem | 59 | → **59** |
+| R1 Agendada total | 478 | → **478** | 505 (A+B) | 518 no total (A 446 · B 59 · C 12 · sem ICP 1) |
+| R1 Realizada total | 277 | (SDR, deal) sem roles excluídas → **277** | 292 (A+B) | (closer, deal) → **299** total; A **257**, B **35** |
+| No-show A | 122 | cap 2/deal, conta no-show mesmo em deal realizado | 108 | `else if` → **108** exatos |
+| No-show total | 144 | (SDR, deal) cap2 sem roles → **144** | 127 | `else if` → **127**; sem o `else if` seriam 146 |
 
-## Decisões que dependem do dono (nada foi mexido)
+Ou seja: o delta de +27/+28 em agendada **não é cap nem dedup** (as duas réguas são cap 2 por dia). É o **filtro de agendador por role** (33 agendamentos feitos por closer/coordenador/admin: 511 − 478) mais as colunas A/B da tabela ignorarem C e sem-ICP. O sinal inverte no no-show porque só ali a tabela é mais restritiva (`else if`).
 
-1. "R1 realizada" deve continuar contando `refunded` nesta tela, ou alinhar com a regra oficial (`completed` + `contract_paid`)?
-2. O card Contratos deve virar eixo SDR (fechando com a tabela) ou a tabela deve virar eixo closer?
-3. A taxa do card deve ser bruta ou líquida (descontando reembolsos), para bater com a tabela?
-4. A linha do card deve passar a mostrar "A · B · C · Sem ICP" (hoje C é somado dentro de "Sem ICP")?
+## 5. Segmento A/B/C — snapshot × valor atual
+
+**Os dois lados usam o valor atual `crm_deals.icp_segment`.** A RPC: `AND UPPER(TRIM(COALESCE(cd.icp_segment,''))) = seg`. O hook de closers: `useR1CloserMetrics.ts:118-124` (`crm_deals.select('id').eq('icp_segment', segment)`). `caucoes_efetivas` também expõe `segment = cd.icp_segment`.
+
+`meeting_slots.lead_type` (snapshot do trigger `trg_meeting_slot_herda_segmento`) **não é lido por nenhum dos dois**. Comparação no recorte:
+
+| `icp_segment` (atual) | `lead_type` (snapshot) | R1 agendada cap2 |
+|---|---|---|
+| A | A | 446 |
+| B | A | 59 |
+| C | A | 12 |
+| (null) | A | 1 |
+
+O snapshot está gravado como `A` em 100% dos slots do mês — inútil como chave hoje. **Conclusão: a hipótese snapshot × atual está descartada**; a mesma reunião não é A num lado e B no outro.
+
+## 6. C e s/ICP — para onde vão
+
+- R1 Agendada: os **12 C e o 1 sem ICP** simplesmente **não aparecem** na tabela (ela só tem colunas A e B; a coluna Total os inclui — 518). Não são somados em A nem vão para "Não atribuído".
+- CONTRATOS: `caucoes_efetivas` do período tem **117 linhas, 6 reembolsadas → 111 líquidas**, todas com closer e SDR: **A 94 · B 16 · C 1**. A tabela mostra A 94 · B 16 (=110) e Total 111 — bate.
+- O card mostra **152** porque soma dois universos: `filteredBySDR.contratos` (105 = A 91 · B 13 · C 1, já restrito às SDRs permitidas) **+ `unassignedSdr.total`**. Esse segundo bloco é **`useUnassignedContracts.ts:120-188`**: transações `hubla_transactions` A000/CONTRATO pagas no período **sem nenhuma caução/reunião correspondente**. Medido: **47** (48 linhas, 47 após dedup por deal). Nenhuma tem segmento → viram os "s/ICP 47" do card, que é resíduo aritmético (152 − 91 − 13 − 1).
+- A linha "Não atribuído" da tabela de Closers mostra Contrato Pago só com `un.a`/`un.b` (`CloserSummaryTable.tsx:106-108`): dos 47 órfãos, apenas 2 têm deal com ICP A e 1 com B — daí "A 2 · B 1". Os 44 sem segmento só apareceriam na coluna Total dessa linha. O bucket "Não atribuído" do próprio hook de closers tem `contrato_pago: 0` fixo (`useR1CloserMetrics.ts:895`).
+
+## 7. As quatro taxas, literais
+
+| taxa | arquivo | numerador ÷ denominador | conta |
+|---|---|---|---|
+| Card TAXA CONVERSÃO 54,9% | `ReunioesEquipe.tsx:640` | `totalContratosCard ÷ totalRealizadas` | 152 ÷ 277 = 54,9% |
+| Card "líquida" 52,7% | `TeamKPICards.tsx:241` | `(totalContratos − totalReembolsos) ÷ realizadas` | (152 − 6) ÷ 277 = 52,7% |
+| Tabela Taxa Conv. 37,1% | `CloserSummaryTable.tsx:73` | `totals.contrato_pago ÷ totals.r1_realizada` | 111 ÷ 299 = 37,1% |
+| Card TAXA NO-SHOW 30,1% | `ReunioesEquipe.tsx:637` | `totalNoShows ÷ totalR1Agendada` | 144 ÷ 478 = 30,1% |
+| Tabela Taxa No-Show 24,5% | `CloserSummaryTable.tsx:78` | `totals.noshow ÷ totals.r1_agendada` | 127 ÷ 518 = 24,5% |
+
+A conversão do card e a da tabela **não são comparáveis**: o card mete 47 contratos que não têm reunião nenhuma no numerador, e usa um denominador menor (277 em vez de 299).
+
+## 8. Resposta em uma frase
+
+Para "quantas R1 aconteceram em setembro", a leitura certa é a da **tabela de Closers: 299** — ela conta toda reunião da agenda que teve desfecho realizado, uma vez por negócio; o card mostra **277** porque joga fora as reuniões agendadas por quem é closer/coordenador/admin (o card mede "R1 produzidas pelas SDRs do squad", não "R1 que aconteceram").
+
+## Pendências / NÃO DETERMINADO
+
+- Se a intenção é que reuniões agendadas por closer/coordenador contem no painel — decisão de negócio, não de código.
+- Coluna Total da linha "Não atribuído" na tela não foi lida no print, só A/B; a leitura de 47 vem do código + SQL.
+
+## Se você quiser que eu conserte (nada feito ainda)
+
+1. Unificar R1 Agendada / Realizada / No-Show numa única régua (escolher: com ou sem agendadores de role closer) e usar nos dois lados.
+2. Acrescentar colunas C e "sem ICP" na tabela de Closers, para total = soma das partes como já é nos cards.
+3. Separar no card CONTRATOS "com reunião" (111) de "sem reunião" (47), em vez de somar e jogar a diferença em s/ICP.
