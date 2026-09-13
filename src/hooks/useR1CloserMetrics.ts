@@ -94,7 +94,7 @@ export const UNASSIGNED_REASON_LABELS: Record<UnassignedReason, string> = {
   closer_inativo: 'closer inativo no período',
 };
 
-export type IcpSegmentFilter = 'all' | 'A' | 'B';
+export type IcpSegmentFilter = 'all' | 'A' | 'B' | 'C';
 
 export function useR1CloserMetrics(
   startDate: Date,
