@@ -1,91 +1,107 @@
-# Auditoria somente-leitura — como um contrato vira número no painel
+# Marcar `contract_paid_at` nos 16 attendees — o que custa
 
-Nada foi editado, nenhum deploy, nenhuma publicação.
+Auditoria somente-leitura. Nada foi editado, nada gravado, nada publicado.
 
-## Resposta curta (o que decide o card CONTRATOS)
+## Resposta curta
 
-As transações de R$ 241,53 e R$ 482,09 **não são parcelas**: são vendas únicas de caução/contrato (bruto R$ 249 e R$ 497), gravadas pelo checkout MCF Pay, com `installment_number = 1` e `total_installments = 1`. Em 01–30/09/2026: 42 linhas de R$ 241,53 (soma R$ 10.144,26) e 86 de R$ 482,09 (soma R$ 41.459,74). No histórico completo, R$ 241,53 aparece 96 vezes para 95 clientes distintos e **zero clientes** aparecem em mais de um mês — logo não é assinatura nem parcelamento. O card CONTRATOS conta **venda**, não parcela.
+**Marcar `contract_paid_at` fura a regra permanente.** O campo tem gatilho de saída para
+MCF Pay (`notify-mcf-pay`) e para o dispatcher de automação (WhatsApp de boas-vindas), além
+de mover o negócio de etapa no CRM e criar sala de check-in. Não é um marcador inerte.
 
----
+**Existe caminho aditivo que resolve os 16 sem tocar nele:** `manual_sale_attributions`.
+É a alternativa recomendada, com uma ressalva de segmentação descrita no fim.
 
-## 1) A origem do dado
+## 1) O que dispara em `meeting_slot_attendees`
 
-Quem escreve em `hubla_transactions` (três gravadores ativos):
+13 gatilhos ativos. Os que reagem a `contract_paid_at` / `status`:
 
-- `supabase/functions/hubla-webhook-handler/index.ts:3055` — `upsert(transactionData, { onConflict: 'hubla_id' })` para eventos `NewSale` (bloco em 3016-3057), mais os mesmos upserts em 3185 e 3398 para outros eventos. `installment_number`/`total_installments` vêm de `extractSmartInstallment(invoice)` (linha 144) e `count_in_dashboard` é `false` para ids `newsale-*` (fantasma antes do pagamento) ou `net_value <= 0`.
-- `supabase/functions/asaas-webhook-handler/index.ts:899-925` — grava as vendas do **MCF Pay** e do Asaas: `hubla_id = ${sourceLabel}_${paymentId}` com `sourceLabel = isHublaFormat ? 'mcfpay' : 'asaas'`, `sale_status: 'completed'`, `count_in_dashboard: true`, dedup por consulta prévia a `hubla_id` (linha 877). **É este gravador que produz as linhas de R$ 241,53 / R$ 482,09.**
-- `supabase/functions/kiwify-webhook-handler/index.ts` e `import-hubla-history` / `kiwify-backfill-*` (importações e reconciliações).
-- Lançamento manual pela tela: `src/hooks/useCreateCarrinhoTransaction.ts` (`hubla_id: manual-<timestamp>`, `source: 'manual'`) — usado só para parceria do R2 Carrinho.
-
-Regra literal de "é contrato" — está dentro de `caucoes_efetivas` (CTE `ctx`):
-
-```sql
-upper(COALESCE(ht.product_code,'')) LIKE 'A000%'
- OR upper(COALESCE(ht.product_name,'')) LIKE '%A000%'
- OR upper(COALESCE(ht.product_name,'')) LIKE '%CONTRATO%'
-```
-
-Status aceitos como pago, no mesmo lugar (e repetidos em `useUnassignedContracts.ts:122`):
-
-```sql
-lower(COALESCE(ht.sale_status,'')) IN ('pago','paid','approved','completed')
-```
-
-Uma linha = um evento de pagamento. Para contrato hoje é 1 linha por venda (`installment_number = 1`, `total_installments = 1` em todas as amostras). O dedup que evita contar a mesma venda duas vezes **não é por parcela** — é por negócio, no `DISTINCT ON (COALESCE(msa.deal_id, msa.id))` da CTE `paid` de `caucoes_efetivas`, mais `min(tx_date)` na CTE `tx`. Para Outside existe um segundo dedup, por primeira compra: `useR1CloserMetrics.ts:525` chama `get_first_transaction_ids()` e descarta o que não é primeira compra do e-mail.
-
-## 2) `caucoes_efetivas(p_from, p_to, p_bu)` — leitura do corpo
-
-Corpo completo em `pg_get_functiondef` (129 linhas, `LANGUAGE sql STABLE SECURITY DEFINER`). Estrutura: `paid` → `enriched` → `ctx` → `tx` → SELECT final.
-
-- **Parte da agenda, usa a Hubla só como calendário.** O universo é `meeting_slot_attendees.contract_paid_at IS NOT NULL AND is_partner = false AND status <> 'cancelled'`, com janela larga de ±400 dias. A Hubla (CTE `ctx`) só serve para *achar a data real* do pagamento.
-- **Coluna de data:** `eff_date = COALESCE(t.tx_date, (contract_paid_at AT TIME ZONE 'America/Sao_Paulo')::date)`, e o filtro do período é `eff_date BETWEEN p_from AND p_to`. `fonte` = `'transacao'` quando veio da Hubla, `'manual'` quando caiu no fallback do `contract_paid_at`. O casamento agenda×Hubla é por `linked_deal_id`, senão e-mail, senão últimos 9 dígitos do telefone.
-- **Closer:** se o pagamento foi na própria R1 (`usa_slot = slot_meeting_type='r1' AND slot_closer_id IS NOT NULL`), vale o closer do slot; senão o closer da **última R1 não cancelada/reagendada com `scheduled_at <= contract_paid_at`** (`ORDER BY ms2.scheduled_at DESC LIMIT 1`). **SDR:** o `booked_by` do mesmo slot escolhido.
-- **Reembolso:** ela **devolve** `refunded_at` (bruto, para o ranking da TV); quem exclui é o hook, em `useR1CloserMetrics.ts:501-508` — a linha reembolsada não entra em `contrato_pago` e vira `reembolsos` + `reembolsos_valor`.
-- **Segment:** `NULLIF(UPPER(TRIM(cd.icp_segment)),'')` — segmento **atual** do `crm_deals`, não snapshot. `valor` = `crm_deals.value`.
-
-## 3) `manual_sale_attributions`
-
-Correção manual de **atribuição**, não lançamento de venda. Grava `src/components/closer/ManualSaleAttributionDialog.tsx:68-74` (`insert({ closer_id, ..., contract_paid_at })`). Entra na contagem em `useR1CloserMetrics.ts:687-698`, filtrando `business_unit = bu` e `contract_paid_at` no período, e é **somada** ao closer: `contrato_pago = contractsByCloser + manualByCloser` (linhas 720, 753, 820). É ignorada quando há filtro de segmento (não tem deal vinculado).
-
-## 4) O balde "não atribuído" (os 47)
-
-`src/hooks/useUnassignedContracts.ts`. Duas famílias:
-
-- Linhas de `caucoes_efetivas` **sem closer** → `caucao_sem_r1` (tem deal) ou `caucao_sem_deal` (linhas 90-101). Sem SDR mas com closer → só órfã na aba SDRs (`caucao_sem_sdr`).
-- `transacao_sem_reuniao` (linhas 116-188): transação de contrato paga no período que **não** tem `linked_attendee_id` entre as cauções do período, **não** tem `linked_deal_id` já atribuído, e cujo deal não tem nenhum `contract_paid_at` fora da janela. Note que aqui o predicado de "é contrato" é **mais frouxo** que o da RPC: não exige `net_value > 0`, não exclui `source asaas`, nem `event_type payment_received`. É por isso que entram as linhas de R$ 0,00 e as `mcfpay`.
-
-## 5) Como cada número é montado
-
-| onde aparece | o que soma | fonte (arquivo:linha) |
+| gatilho | função | efeito |
 |---|---|---|
-| card CONTRATOS (152) | `filteredBySDR.contratos` + `unassignedSdr.total` | `ReunioesEquipe.tsx:657-673` |
-| Contrato Pago, aba Closers (111) | `caucoes_efetivas` com closer, líquido de reembolso, + atribuição manual | `useR1CloserMetrics.ts:497-510, 720` |
-| Contrato Pago, aba SDRs | mesma `caucoes_efetivas`, eixo `sdr_id` (`booked_by` da R1 escolhida) | `ReunioesEquipe.tsx:549-555` |
-| linha "Não atribuído" | linhas de `caucoes_efetivas` sem closer/SDR + transações órfãs | `useUnassignedContracts.ts:75-188` |
-| REEMBOLSOS (6 · R$ 5.638) | `refunded_at` das mesmas linhas, dedup por deal | `useR1CloserMetrics.ts:501-506`; card em `ReunioesEquipe.tsx:675` |
-| OUTSIDE (5) | RPC `outside_fora_do_funil` (contrato fora do MCF Pay e fora das ofertas CLS) | `useOutsideForaDoFunil.ts:27`; card em `ReunioesEquipe.tsx:656` |
+| `trg_notify_mcf_pay_on_contract_paid` | `trigger_notify_mcf_pay_on_contract_paid` | **`net.http_post` para a edge function `notify-mcf-pay`** com `deal_id` e `source='auto_contract_paid'`, sempre que `contract_paid_at` muda e há `deal_id`. Evento de saída para MCF Pay. |
+| `trg_notify_attendee_contract_paid` | `trg_notify_attendee_contract_paid` | **`net.http_post` para `automation-event-dispatcher`** com `event='attendee_contract_paid'` — só BU incorporador, ignora sócio, idempotente por `boas_vindas_r2_whatsapp_enviado_em`. É o WhatsApp de boas-vindas R2. |
+| `trg_auto_move_contrato_pago` | `trg_auto_move_contrato_pago` | **Move `crm_deals.stage_id`** para o estágio ganho da origem e **insere em `deal_activities`** (`stage_change`). Não regride etapa já igual ou mais avançada. |
+| `trg_checkin_autocreate_attendee` | `checkin_autocreate_from_attendee` | **Cria linha em `checkin_rooms`** ("A000 - Contrato") se o contato tem e-mail e não existe sala. |
+| `trg_attendee_sync_hubla_buyer` | `trg_attendee_sync_hubla_buyer_fn` → `sync_hubla_buyer_to_crm` | Enriquece nome/e-mail/telefone em `crm_contacts`, `crm_deals.name` e no próprio attendee com os dados da transação. |
+| `trg_protect_contract_paid_at` | `protect_contract_paid_at` | Defensivo: impede `status='contract_paid'` com data nula. |
 
-**Por que 152 ≠ 111:** 111 são as cauções da agenda com closer identificável e líquidas de reembolso; 152 = 105 cauções no eixo SDR + 47 órfãs de `hubla_transactions` que o predicado frouxo do balde deixa entrar — e 41 dessas 47 têm reunião, só com o vínculo transação↔attendee quebrado.
+Não encontrei gatilho que escreva em tabela financeira, de comissão, de meta ou de premiação,
+nem em `audit_logs`, a partir desse campo. `fechamento_*` e payout leem por consulta, não por
+gatilho — mas leem `contract_paid_at` (ex.: `recalculate-sdr-payout`), então marcar a data
+**passa a alimentar o cálculo de payout na próxima recalculação**.
 
-## 6) A pergunta do valor
+**Front-end:** 58 arquivos usam `contract_paid_at` — praticamente todo relatório de contrato,
+funil, carrinho R2, gamificação de closer, receita, relatório de lead e o painel. O uso não é
+só contagem: `useLinkContractToAttendee.ts` é o fluxo normal da tela e faz exatamente o pacote
+completo — vincula a transação, grava `status='contract_paid'` + `contract_paid_at`, move a
+etapa do negócio e **chama `notify-mcf-pay` com `force: true`**.
 
-Distribuição de `coalesce(net_value, product_price)` — contratos, 01–30/09/2026:
+**Veredito sobre a regra permanente:** fura. Há evento de saída para MCF Pay e para automação
+de mensagem. Se a regra vale como escrita, **a resposta é não** — e é por isso que a
+alternativa da seção 4 importa.
 
-| valor | qtd | soma |
-|---|---|---|
-| 482,09 | 86 | 41.459,74 |
-| 241,53 | 42 | 10.144,26 |
-| 0,00 | 7 | 0,00 |
-| 460,76 | 5 | 2.303,80 |
-| 30,06 | 5 | 150,30 |
-| 399,86 / 388,10 / 43,84 / 36,11 | 1 cada | 867,91 |
+## 2) O que muda nos números
 
-Colunas que poderiam indicar parcela: `installment_number`, `total_installments`, `subtotal_cents`, `installment_fee_cents`, `payment_method`, `offer_id`/`offer_name`, `source`. Nas 5 amostras de R$ 241,53: `installment_number = 1`, `total_installments = 1`, `source = 'mcfpay'`, `event_type = 'invoice.payment_succeeded'`, `product_name = 'Contrato MCF'`, `product_price = 249`, `offer_name` = "Contrato - 249 - LIVE Launch" / "Contrato - 249 - Rodrigo". Não existe coluna de `order_id`/`subscription_id` preenchida nessas linhas.
+- **Status não muda junto.** Marcar só a data deixa o registro num estado que o uso normal da
+  tela nunca produz (o fluxo normal grava data **e** status `contract_paid`). Só o gatilho
+  defensivo cobre o inverso; não existe nada que preencha o status a partir da data.
+- **Se marcarmos apenas a data:** R1 AGENDADA 519, R1 REALIZADA 299, NO-SHOWS 155, PENDENTES 65
+  — **nenhum muda**, porque as três métricas contam `status`, não a data
+  (`useR1CloserMetrics.ts:186,195,771`). Só o card CONTRATOS/coluna do closer mudaria.
+- **Se marcarmos data + status `contract_paid` (o fluxo normal):** 15 dos 16 já são `completed`,
+  que também conta como realizada — sem efeito. O 16º é `no_show`: **NO-SHOWS 155 → 154** e
+  **R1 REALIZADA 299 → 300**. R1 AGENDADA segue 519, PENDENTES segue 65.
+- **A soma fecha nos dois cenários:** 299+155+65 = 519 e 300+154+65 = 519.
 
-Recorrência: R$ 241,53 → 96 ocorrências, 95 clientes distintos, **0 clientes em mais de um mês**. Conclusão: venda única (caução de R$ 249 líquida de taxa), não assinatura nem parcelamento. R$ 482,09 é o mesmo padrão para a caução de R$ 497 (`A000 - Contrato`, ofertas CLS por closer).
+## 3) Os 16, nominalmente
 
-`NÃO DETERMINADO`: o que são as 7 linhas de R$ 0,00 e as 5 de R$ 30,06 (bruto 497 com líquido 30,06 sugere taxa/estorno parcial). Para determinar, falta olhar o `raw_data` dessas transações e a regra de `net_value` da Hubla nesses eventos.
+Todos casados a uma R1 existente; 15 com attendee `completed`, 1 com `no_show`.
 
-## Nenhuma alteração proposta
+| cliente | valor | pago em | closer sugerido | reunião | status | critério / força |
+|---|---|---|---|---|---|---|
+| Ana Inês Varnier | 241,53 | 01/09 | Mayara Souza | 03/09 13:00 | completed | e-mail / forte |
+| DANIEL APARECIDO AUGUSTO DE JESUS | 241,53 | 01/09 | João Pedro Martins Vieira | 05/09 14:00 | completed | e-mail / forte |
+| Delômines Antônio Santos Souza | 241,53 | 01/09 | Julio | 02/09 12:30 | completed | e-mail / forte |
+| DOUGLAS HENRIQUE DE FARIA ALVES | 241,53 | 08/09 | Rodrigo dos Santos Martinho | 10/09 18:00 | completed | telefone / média — 2 candidatos |
+| Eduardo Henrique Oliveira | 30,06 | 03/09 | Mateus Macedo | 09/04 16:00 | completed | dois primeiros nomes / fraca |
+| Francisco Edivaldo Pereira de Oliveira | 241,53 | 08/09 | Rodrigo dos Santos Martinho | 09/09 15:45 | completed | e-mail / forte |
+| Gilson Marcelo Santos | 241,53 | 08/09 | Julio | 09/09 13:30 | completed | e-mail / forte |
+| Gustavo Martins da Silva | 241,53 | 01/09 | William Ferreira | 02/09 15:15 | completed | e-mail / forte |
+| Kléber Valente de Lima | 241,53 | 01/09 | João Pedro Martins Vieira | 04/09 11:00 | completed | e-mail / forte |
+| MARCOS CAGLIARI | 399,86 | 03/09 | Cristiane Gomes | 09/02 15:00 | completed | deal vinculado / forte |
+| Márllia Kesia Gonçalves de Souza | 241,53 | 01/09 | Julio | 01/09 17:30 | completed | e-mail / forte |
+| OTACILIO GENEROSO DA SILVA JUNIOR | 241,53 | 08/09 | Leticia Faustino C | 17/06 09:15 | completed | e-mail / forte |
+| Paulo Henrique Martins Pires | 241,53 | 08/09 | Rodrigo dos Santos Martinho | 09/09 18:00 | completed | e-mail / forte — 11 candidatos |
+| Ranye Gomes | 241,53 | 08/09 | Rodrigo dos Santos Martinho | 10/09 15:45 | completed | deal vinculado / forte |
+| ROBSON MOTTA DE CARVALHO | 241,53 | 01/09 | Julio | 02/09 12:30 | completed | e-mail / forte |
+| **Patrícia Goveia** | 241,53 | 09/09 | Julio | 11/09 16:15 | **no_show** | e-mail / forte |
 
-Este documento é só a leitura pedida. Se aprovado, o próximo passo natural (e ainda não decidido) seria alinhar o predicado do balde "não atribuído" ao da RPC — mas isso mexe no card CONTRATOS e depende de decisão do dono.
+15 `completed` sem marcação de pagamento — padrão de esquecimento operacional.
+1 `no_show` com contrato pago (Patrícia Goveia, pagou 09/09 e a reunião de 11/09 ficou como
+falta): caso a olhar separado, porque marcar pagamento aí muda a taxa de no-show do mês.
+Casos com reunião muito anterior (Eduardo 09/04, MARCOS 09/02, OTACILIO 17/06) merecem
+conferência de identidade antes de qualquer decisão.
+
+## 4) Alternativa sem tocar no campo financeiro
+
+**A — `manual_sale_attributions` (recomendada).** Tabela existente
+(`closer_id`, `contact_name`, `contact_email`, `contact_phone`, `contract_paid_at`, `notes`,
+`created_by`, `business_unit`), lida em `useR1CloserMetrics.ts:687-698` e somada ao closer em
+`contrato_pago`. Resolve os 16: cada linha põe o contrato na coluna do closer sugerido.
+É aditiva, reversível (apagar a linha desfaz), não dispara gatilho nenhum, não emite evento
+para MCF Pay/FinanceHub/Asaas, não move etapa no CRM e não altera as métricas de reunião.
+**Efeito colateral único:** atribuição manual não tem negócio vinculado, então o hook a ignora
+quando há filtro de segmento — os 16 aparecem no Total do closer mas caem em **s/ICP** na
+quebra A/B/C. O fechamento por linha continua válido (s/ICP é resíduo). Se quiser segmento
+correto, seria preciso guardar o `deal_id` na atribuição — mudança de estrutura, decisão à parte.
+
+**B — mudar `caucoes_efetivas` para aceitar transação vinculada a negócio com R1 sem marcação
+na agenda.** Resolve os 16 também, mas altera a régua de contagem que você mandou não tocar, e
+o efeito extrapola setembro: passaria a valer para todo o histórico e para as outras telas que
+usam a mesma RPC (relatório de closer, TV, payout). Não recomendo sem medição mês a mês antes.
+
+**NÃO DETERMINADO:** se o dono considera aceitável que os 16 fiquem em s/ICP na quebra por
+segmento, e se `manual_sale_attributions` deve ganhar `deal_id` para resolver isso.
+
+## Nada foi alterado
+
+Este documento é só leitura. Nenhuma escrita, nenhuma migração, nenhum deploy, nada publicado.
