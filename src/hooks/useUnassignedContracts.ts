@@ -120,8 +120,9 @@ export function useUnassignedContracts(
         const { data: txs } = await supabase
           .from('hubla_transactions')
           .select('id, customer_name, product_name, product_code, sale_status, sale_date, net_value, product_price, linked_deal_id, linked_attendee_id')
-
+          .gte('sale_date', start)
           .lte('sale_date', end)
+
           .in('sale_status', ['pago', 'paid', 'approved', 'completed']);
 
         const paidAttendeeIds = new Set(rows.map((r: any) => r.attendee_id));
@@ -180,11 +181,13 @@ export function useUnassignedContracts(
             segment: t.linked_deal_id ? segByDeal.get(t.linked_deal_id) ?? null : null,
             reference: t.customer_name || t.id,
             paid_at: t.sale_date ?? null,
-            value: null,
+            value: t.net_value ?? t.product_price ?? null,
             reason: t.linked_deal_id
               ? 'Transação de contrato paga sem reunião/caução marcada no período'
               : 'Transação de contrato paga sem negócio vinculado no CRM',
             suggested: null,
+            transaction_id: t.id,
+
           };
           items.push(item);
           sdrItems.push(item);
