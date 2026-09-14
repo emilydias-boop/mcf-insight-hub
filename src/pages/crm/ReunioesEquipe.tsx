@@ -592,7 +592,9 @@ export default function ReunioesEquipe() {
     r1Agendada: sumCloser(closerMetrics, 'r1_agendada'),
     r1Realizada: sumCloser(closerMetrics, 'r1_realizada'),
     noShows: sumCloser(closerMetrics, 'noshow'),
+    pendentes: sumCloser(closerMetrics, 'pendentes'),
   }), [closerMetrics]);
+
   const closerSegTotals = useMemo(() => {
     const build = (rows: any[] | undefined) => ({
       agendamentos: sumCloser(rows, 'agendamentos'),
@@ -720,12 +722,13 @@ export default function ReunioesEquipe() {
   const pendentesTotalRpc = useMemo(
     () =>
       closerAxisForTop
-        // Fecha a aritmética com o novo eixo do topo (agenda):
-        // Pendentes = R1 Agendada − Realizadas − No-Show.
-        ? Math.max(0, closerTopTotals.r1Agendada - closerTopTotals.r1Realizada - closerTopTotals.noShows)
+        // Contagem literal da agenda: linhas sem desfecho (invited /
+        // rescheduled / scheduled), contadas direto, não por subtração.
+        ? closerTopTotals.pendentes
         : filteredBySDR.reduce((sum, r) => sum + (r.pendentes || 0), 0),
     [filteredBySDR, closerAxisForTop, closerTopTotals],
   );
+
 
 
   // Reconcilia o breakdown: se o total local for menor que o do RPC, joga a
