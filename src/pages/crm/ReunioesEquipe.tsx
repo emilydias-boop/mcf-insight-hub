@@ -577,6 +577,32 @@ export default function ReunioesEquipe() {
   const sdrSegmentBMap = useMemo(() => buildSdrSegmentMap(sdrMetricsB), [sdrMetricsB]);
   const sdrSegmentCMap = useMemo(() => buildSdrSegmentMap(sdrMetricsC), [sdrMetricsC]);
 
+  // ===== TOTAIS DO TOPO (decisão do dono, 14/09/2026) =====
+  // Os cards do topo passam a medir "o que aconteceu na agenda no período",
+  // não "o que a SDR produziu": R1 agendada/realizada/no-show/agendamentos vêm
+  // da MESMA fonte da tabela de Closers (useR1CloserMetrics), que não descarta
+  // reuniões agendadas por closer/coordenador/admin e usa a régua else-if de
+  // no-show (deal realizado não conta no-show). Só vale com "Todos os SDRs";
+  // com um SDR selecionado o topo continua no eixo de atribuição por SDR.
+  const closerAxisForTop = sdrFilter === 'all' && !!closerMetrics;
+  const sumCloser = (rows: any[] | undefined, key: string) =>
+    (rows || []).reduce((s: number, r: any) => s + (r[key] || 0), 0);
+  const closerTopTotals = useMemo(() => ({
+    agendamentos: sumCloser(closerMetrics, 'agendamentos'),
+    r1Agendada: sumCloser(closerMetrics, 'r1_agendada'),
+    r1Realizada: sumCloser(closerMetrics, 'r1_realizada'),
+    noShows: sumCloser(closerMetrics, 'noshow'),
+  }), [closerMetrics]);
+  const closerSegTotals = useMemo(() => {
+    const build = (rows: any[] | undefined) => ({
+      agendamentos: sumCloser(rows, 'agendamentos'),
+      r1Agendada: sumCloser(rows, 'r1_agendada'),
+      r1Realizada: sumCloser(rows, 'r1_realizada'),
+      noShows: sumCloser(rows, 'noshow'),
+    });
+    return { a: build(closerMetricsA), b: build(closerMetricsB), c: build(closerMetricsC) };
+  }, [closerMetricsA, closerMetricsB, closerMetricsC]);
+
   // Totais por segmento para os KPI cards.
   // Contratos passam a vir do MESMO eixo da tabela de SDRs (régua caucoes_efetivas
   // por SDR da última R1), para o card e a tabela nunca divergirem.
@@ -594,12 +620,16 @@ export default function ReunioesEquipe() {
       });
       return acc;
     };
+    // Reuniões seguem o eixo do topo (agenda); contratos continuam no eixo SDR.
+    const merge = (sdr: any, closer: any) =>
+      closerAxisForTop ? { ...closer, contratos: sdr.contratos } : sdr;
     return {
-      a: sumSdr(sdrSegmentAMap),
-      b: sumSdr(sdrSegmentBMap),
-      c: sumSdr(sdrSegmentCMap),
+      a: merge(sumSdr(sdrSegmentAMap), closerSegTotals.a),
+      b: merge(sumSdr(sdrSegmentBMap), closerSegTotals.b),
+      c: merge(sumSdr(sdrSegmentCMap), closerSegTotals.c),
     };
-  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR]);
+  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR, closerAxisForTop, closerSegTotals]);
+
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
   // tabela de SDRs) para garantir que o card e o total da tabela batam exatamente.
@@ -607,11 +637,17 @@ export default function ReunioesEquipe() {
   // do recorte oficial e inflava os KPIs.
   // Métricas financeiras (contratos/outside) continuam vindo do closer (verdade contábil).
   const enrichedKPIs = useMemo(() => {
-    const totalAgendamentos = filteredBySDR.reduce((s, r) => s + (r.agendamentos || 0), 0);
-    const totalR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
-    const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
-    const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
+    const sdrAgendamentos = filteredBySDR.reduce((s, r) => s + (r.agendamentos || 0), 0);
+    const sdrR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
+    const sdrRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
+    const sdrNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
+    // Régua unificada com a tabela de Closers (ver comentário acima).
+    const totalAgendamentos = closerAxisForTop ? closerTopTotals.agendamentos : sdrAgendamentos;
+    const totalR1Agendada = closerAxisForTop ? closerTopTotals.r1Agendada : sdrR1Agendada;
+    const totalRealizadas = closerAxisForTop ? closerTopTotals.r1Realizada : sdrRealizadas;
+    const totalNoShows = closerAxisForTop ? closerTopTotals.noShows : sdrNoShows;
     const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
+
     // Outside = venda de contrato que não passou pelo time (fora do MCF Pay e
     // fora dos links CLS de closer). É a lista completa do período: não soma
     // com o cálculo antigo de "pagou antes da R1".
@@ -642,7 +678,7 @@ export default function ReunioesEquipe() {
         ? (totalContratosCard / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, outsideForaDoFunil]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, outsideForaDoFunil, closerAxisForTop, closerTopTotals]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
@@ -682,9 +718,15 @@ export default function ReunioesEquipe() {
   // Os sub-buckets (futuras/vencidas/canceladas) continuam vindo do breakdown
   // local, mas o total exibido respeita a aritmética do RPC.
   const pendentesTotalRpc = useMemo(
-    () => filteredBySDR.reduce((sum, r) => sum + (r.pendentes || 0), 0),
-    [filteredBySDR],
+    () =>
+      closerAxisForTop
+        // Fecha a aritmética com o novo eixo do topo (agenda):
+        // Pendentes = R1 Agendada − Realizadas − No-Show.
+        ? Math.max(0, closerTopTotals.r1Agendada - closerTopTotals.r1Realizada - closerTopTotals.noShows)
+        : filteredBySDR.reduce((sum, r) => sum + (r.pendentes || 0), 0),
+    [filteredBySDR, closerAxisForTop, closerTopTotals],
   );
+
 
   // Reconcilia o breakdown: se o total local for menor que o do RPC, joga a
   // diferença em "vencidas" (cenário mais comum: reuniões antigas sem desfecho
