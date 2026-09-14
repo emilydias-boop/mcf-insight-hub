@@ -9968,6 +9968,7 @@ export type Database = {
           contract_paid_at: string
           created_at: string | null
           created_by: string
+          deal_id: string | null
           id: string
           notes: string | null
         }
@@ -9980,6 +9981,7 @@ export type Database = {
           contract_paid_at: string
           created_at?: string | null
           created_by: string
+          deal_id?: string | null
           id?: string
           notes?: string | null
         }
@@ -9992,6 +9994,7 @@ export type Database = {
           contract_paid_at?: string
           created_at?: string | null
           created_by?: string
+          deal_id?: string | null
           id?: string
           notes?: string | null
         }
@@ -10001,6 +10004,13 @@ export type Database = {
             columns: ["closer_id"]
             isOneToOne: false
             referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_sale_attributions_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
             referencedColumns: ["id"]
           },
         ]
