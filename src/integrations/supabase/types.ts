@@ -17744,6 +17744,26 @@ export type Database = {
           tentativas: number
         }[]
       }
+      sugerir_vinculo_contrato: {
+        Args: { p_bu?: string; p_fim: string; p_ini: string }
+        Returns: {
+          attendee_id: string
+          closer_id: string
+          closer_name: string
+          criterio: string
+          customer_name: string
+          deal_id: string
+          forca: string
+          meeting_type: string
+          qtd_candidatos: number
+          r1_antes_do_pagamento: boolean
+          sale_date: string
+          scheduled_at: string
+          status_attendee: string
+          transaction_id: string
+          valor: number
+        }[]
+      }
       sync_hubla_buyer_to_crm: {
         Args: { p_attendee_id: string }
         Returns: undefined

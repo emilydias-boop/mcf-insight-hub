@@ -15,6 +15,8 @@ export interface UnassignedContractItem {
   reason?: string;
   /** Closer/SDR identificável no slot (sugestão de atribuição). */
   suggested?: string | null;
+  /** Transação Hubla/MCF Pay órfã (só nas linhas 'transacao_sem_reuniao'). */
+  transaction_id?: string | null;
 }
 
 export interface UnassignedContracts {
@@ -116,7 +118,7 @@ export function useUnassignedContracts(
       if (bu === 'incorporador') {
         const { data: txs } = await supabase
           .from('hubla_transactions')
-          .select('id, customer_name, product_name, product_code, sale_status, sale_date, linked_deal_id, linked_attendee_id')
+          .select('id, customer_name, product_name, product_code, sale_status, sale_date, net_value, product_price, linked_deal_id, linked_attendee_id')
           .gte('sale_date', start)
           .lte('sale_date', end)
           .in('sale_status', ['pago', 'paid', 'approved', 'completed']);
@@ -177,11 +179,12 @@ export function useUnassignedContracts(
             segment: t.linked_deal_id ? segByDeal.get(t.linked_deal_id) ?? null : null,
             reference: t.customer_name || t.id,
             paid_at: t.sale_date ?? null,
-            value: null,
+            value: t.net_value ?? t.product_price ?? null,
             reason: t.linked_deal_id
               ? 'Transação de contrato paga sem reunião/caução marcada no período'
               : 'Transação de contrato paga sem negócio vinculado no CRM',
             suggested: null,
+            transaction_id: t.id,
           };
           items.push(item);
           sdrItems.push(item);

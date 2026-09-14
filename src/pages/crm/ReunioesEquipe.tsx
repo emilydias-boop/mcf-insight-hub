@@ -1122,6 +1122,8 @@ export default function ReunioesEquipe() {
         }
         segment={unassignedDialog.segment}
         context={unassignedDialog.context}
+        startDate={start}
+        endDate={end}
       />
     </div>
   );
