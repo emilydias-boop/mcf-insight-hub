@@ -30,17 +30,30 @@ export function useAtribuicoesManuaisPeriodo(
     queryFn: async (): Promise<AtribuicaoManual[]> => {
       const { data, error } = await supabase
         .from('manual_sale_attributions' as any)
-        .select('id, closer_id, deal_id, contact_name, contract_paid_at, notes, created_at, closers:closer_id(name)')
+        .select('id, closer_id, deal_id, contact_name, contract_paid_at, notes, created_at')
         .eq('business_unit', bu)
         .gte('contract_paid_at', start)
         .lte('contract_paid_at', `${end}T23:59:59`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return ((data as any[]) || []).map((r) => ({
+      const rows = (data as any[]) || [];
+
+      const closerIds = Array.from(new Set(rows.map((r) => r.closer_id).filter(Boolean)));
+      const nameById = new Map<string, string>();
+      if (closerIds.length) {
+        const { data: closers } = await supabase
+          .from('closers')
+          .select('id, name')
+          .in('id', closerIds);
+        (closers || []).forEach((c: any) => nameById.set(c.id, c.name));
+      }
+
+      return rows.map((r) => ({
         id: r.id,
         closer_id: r.closer_id,
-        closer_name: r.closers?.name ?? null,
+        closer_name: nameById.get(r.closer_id) ?? null,
+
         deal_id: r.deal_id ?? null,
         contact_name: r.contact_name,
         contract_paid_at: r.contract_paid_at,
