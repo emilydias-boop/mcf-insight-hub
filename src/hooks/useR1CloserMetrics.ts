@@ -750,45 +750,34 @@ export function useR1CloserMetrics(
         });
       });
 
-      // ========== DEDUPLICATION: max 2x per deal_id ==========
-      // Same-day reschedule = 1x, different days = max 2x
-      // Realizada: 1x per deal if at least one attendee has final status
-      const closerDealMap = new Map<string, Map<string, { days: Set<string>; realized: boolean; noshow: boolean }>>();
+      // ========== CONTAGEM LITERAL DA AGENDA (decisão do dono, 14/09/2026) ==========
+      // A Agenda R1 é a fonte de verdade e é contada LINHA POR LINHA de attendee,
+      // exatamente como a Lista da agenda exibe. Saíram as duas réguas que a
+      // agenda não tem:
+      //   - cap de 2 por (closer, deal) / dedup por dia → não existe mais;
+      //   - `else if` do no-show → falta registrada conta mesmo que o lead tenha
+      //     comparecido depois ("aconteceu, conta").
+      // Consequência: r1_agendada = r1_realizada + noshow + pendentes, sempre,
+      // por construção. `pendentes` é contado direto (invited + rescheduled),
+      // não por subtração.
+      const pendenteStatuses = ['scheduled', 'invited', 'rescheduled'];
 
       // ========== BUCKET "NÃO ATRIBUÍDO" ==========
       // Antes, cada um destes casos era um `return` mudo. Agora vira linha visível.
-      const unassigned = { r1_agendada: 0, r1_realizada: 0, noshow: 0 };
+      const unassigned = { r1_agendada: 0, r1_realizada: 0, noshow: 0, pendentes: 0 };
       const unassignedReasons: Record<UnassignedReason, number> = {
         sem_closer: 0, closer_desconhecido: 0, sem_negocio: 0, closer_inativo: 0,
       };
-      const unassignedDealMap = new Map<string, { days: Set<string>; realized: boolean; noshow: boolean }>();
-      const addUnassigned = (
-        reason: UnassignedReason,
-        dealId: string | null | undefined,
-        day: string,
-        status: string,
-      ) => {
+      const addUnassigned = (reason: UnassignedReason, status: string) => {
         unassignedReasons[reason] += 1;
-        if (!dealId) {
-          // Sem negócio vinculado não há como deduplicar: conta 1 individualmente.
-          unassigned.r1_agendada += 1;
-          if (realizadaStatuses.includes(status)) unassigned.r1_realizada += 1;
-          else if (status === 'no_show') unassigned.noshow += 1;
-          return;
-        }
-        const key = `${reason}:${dealId}`;
-        if (!unassignedDealMap.has(key)) {
-          unassignedDealMap.set(key, { days: new Set(), realized: false, noshow: false });
-        }
-        const entry = unassignedDealMap.get(key)!;
-        entry.days.add(day);
-        if (realizadaStatuses.includes(status)) entry.realized = true;
-        if (status === 'no_show') entry.noshow = true;
+        unassigned.r1_agendada += 1;
+        if (realizadaStatuses.includes(status)) unassigned.r1_realizada += 1;
+        else if (status === 'no_show') unassigned.noshow += 1;
+        else if (pendenteStatuses.includes(status)) unassigned.pendentes += 1;
       };
 
       meetings?.forEach(meeting => {
         const closerId = meeting.closer_id;
-        const day = format(new Date(meeting.scheduled_at), 'yyyy-MM-dd');
         const knownCloser = closerId ? closers?.find(c => c.id === closerId) : null;
         // Reunião de closer de OUTRA BU: fora do escopo deste painel — segue
         // descartada (não é dado perdido, é recorte por BU).
@@ -802,7 +791,7 @@ export function useR1CloserMetrics(
           meeting.meeting_slot_attendees?.forEach(att => {
             if ((att as any).is_partner) return;
             if (!allowedAgendadaStatuses.includes(att.status)) return;
-            addUnassigned(slotReason, att.deal_id, day, att.status);
+            addUnassigned(slotReason, att.status);
           });
           return;
         }
@@ -819,6 +808,7 @@ export function useR1CloserMetrics(
             agendamentos: agendamentosByCloser.get(closerId!) || 0,
             r1_realizada: 0,
             noshow: 0,
+            pendentes: 0,
             contrato_pago: (contractsByCloser.get(closerId!) || 0) + (manualByCloser.get(closerId!) || 0),
             outside: outsideByCloser.get(closerId!) || 0,
             r2_agendada: r2CountByCloser.get(closerId!) || 0,
@@ -833,37 +823,18 @@ export function useR1CloserMetrics(
           const status = att.status;
           if (!allowedAgendadaStatuses.includes(status)) return;
           if (!att.deal_id) {
-            addUnassigned('sem_negocio', null, day, status);
+            addUnassigned('sem_negocio', status);
             return;
           }
 
-          if (!closerDealMap.has(closerId!)) closerDealMap.set(closerId!, new Map());
-          const dealMap = closerDealMap.get(closerId!)!;
-          if (!dealMap.has(att.deal_id)) dealMap.set(att.deal_id, { days: new Set(), realized: false, noshow: false });
-          const entry = dealMap.get(att.deal_id)!;
-          entry.days.add(day);
-          if (realizadaStatuses.includes(status)) entry.realized = true;
-          if (status === 'no_show') entry.noshow = true;
+          // Contagem literal: cada linha de attendee conta uma vez.
+          metric!.r1_agendada += 1;
+          if (realizadaStatuses.includes(status)) metric!.r1_realizada += 1;
+          else if (status === 'no_show') metric!.noshow += 1;
+          else if (pendenteStatuses.includes(status)) metric!.pendentes += 1;
         });
       });
 
-      // Dedup do bucket "Não atribuído" com a MESMA régua (cap 2 por deal/dia)
-      unassignedDealMap.forEach(({ days, realized, noshow }) => {
-        unassigned.r1_agendada += days.size >= 2 ? 2 : 1;
-        if (realized) unassigned.r1_realizada += 1;
-        else if (noshow) unassigned.noshow += 1;
-      });
-
-      // Apply deduplicated metrics
-      closerDealMap.forEach((dealMap, closerId) => {
-        const metric = metricsMap.get(closerId);
-        if (!metric) return;
-        dealMap.forEach(({ days, realized, noshow }) => {
-          metric.r1_agendada += days.size >= 2 ? 2 : 1;
-          if (realized) metric.r1_realizada++;
-          else if (noshow) metric.noshow++;
-        });
-      });
 
       // Convert to array and sort by r1_agendada desc
       // Períodos "ao vivo" (que incluem hoje) não devem exibir closers inativos,
