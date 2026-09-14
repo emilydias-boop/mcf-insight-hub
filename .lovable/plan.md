@@ -1,111 +1,83 @@
-# Investigação — os 47 "contratos órfãos" de setembro/2026 tiveram reunião?
+# Agenda R1 × Painel Comercial — medição da distância (setembro/2026, BU incorporador)
 
-Somente leitura, nada escrito no banco, nada publicado. Universo: as 47 transações Hubla A000/CONTRATO pagas em 01–30/09/2026 sem caução/reunião vinculada (as que hoje viram o "s/ICP 47" do card CONTRATOS).
+Modo leitura. Nada foi editado no código nem no banco.
 
-## Resposta curta
+**Resposta curta:** a distância é de **1 linha** em R1 Agendada e **28 no-shows**. R1 Realizada é **idêntica**. O painel já lê exatamente as mesmas tabelas da Agenda R1.
 
-**Dos 47, apenas 6 não têm reunião nenhuma — e 41 têm.** O problema não é venda fora do funil: é **vínculo quebrado**. 36 delas têm R1 **no próprio mês**, com closer identificado e attendee já em `completed`/`contract_paid`.
+## 1) O que a tela da Agenda R1 lê
 
-| balde | significado | qtd |
+Arquivos: `src/pages/crm/Agenda.tsx` (tela), `src/hooks/useAgendaData.ts` → `useAgendaMeetings` (dados), `src/components/crm/MeetingsList.tsx` (Lista), `AgendaCalendar.tsx` (Calendário), `CloserColumnCalendar.tsx` (Por Closer).
+
+`useAgendaMeetings` (useAgendaData.ts:158-298):
+
+- Tabela: `meeting_slots` + embed `meeting_slot_attendees` (+ `closers`, `crm_deals`, `crm_contacts`, `profiles`).
+- Coluna de data: `meeting_slots.scheduled_at` (`gte`/`lte` do range da tela).
+- `meeting_type = 'r1'` (default; a aba R1 nunca traz R2).
+- BU: `closerIds` vindo de `useClosersWithAvailability(bu)` → `closers.bu` (Agenda.tsx:137-144); inclui closers inativos que tenham reunião no período.
+- **Sem filtro de status, sem `is_partner` no SQL, sem dedup, sem cap.**
+
+Na tela (Agenda.tsx:159-233): esconde só slot cancelado **sem participante** (`status === 'canceled' && attendees.length === 0`); filtro de status é opcional e roda no nível do attendee; `is_partner` é excluído das buscas/contagens de lead.
+
+**Resposta direta:** a Lista mostra **uma linha por attendee** (`MeetingsList.tsx:128-171` faz um loop por attendee, pulando `is_partner`); Calendário e Por Closer mostram o slot com os attendees listados dentro. Não há agrupamento por deal em lugar nenhum.
+
+## 2) Contagem literal da agenda × painel (01–30/09/2026)
+
+| medida | contagem literal da agenda | painel hoje |
 |---|---|---|
-| **A** | tem R1 dentro de 01–30/09 — vínculo falhou, reunião existe | **36** |
-| **B** | tem R1 antes de 01/09 — lead antigo, reunião existe | **4** |
-| **C** | tem reunião, mas só R2 / outro tipo | **1** |
-| **D** | pessoa existe no CRM, mas sem reunião em lugar nenhum | **2** |
-| **E** | pessoa não encontrada no CRM por nenhum dos 5 critérios | **4** |
+| R1 na agenda (linhas de attendee, não-sócio) | **519** | 518 |
+| realizadas (`completed`+`contract_paid`+`refunded`) | **299** | 299 |
+| no-show | **155** | 127 |
 
-Critério de casamento usado, na ordem pedida: documento (só dígitos) → e-mail (minúsculas/trim) → telefone (últimos 9 dígitos) → nome completo normalizado → dois primeiros nomes. Busca em `crm_contacts` → `crm_deals` → `meeting_slot_attendees` **sem filtro de data e sem filtro de `meeting_type`**.
+Universo cru por status (todas as linhas de attendee dos slots R1 do incorporador no período):
 
-Observação relevante: `hubla_transactions.customer_document` só está preenchido em 8 das 47 e não casou com `meeting_slot_attendees.cpf` em nenhuma — na prática o **e-mail** foi o critério dominante (32 casos), telefone (5), nome/dois-nomes (4).
+| status | linhas |
+|---|---|
+| completed | 190 |
+| no_show | 155 |
+| contract_paid | 109 |
+| invited | 58 |
+| rescheduled | 7 |
+| scheduled | 0 |
+| refunded | 0 |
+| cancelled / canceled | 0 |
+| **total** | **519** |
 
-## Balde A — 36 casos (tem R1 em setembro)
+Sócios (`is_partner = true`): 0 no período. Attendee sem `deal_id`: 0. Slots cancelados no período: 6 — todos **sem attendee** (a tela também os esconde), logo não afetam contagem nenhuma.
 
-Formato: cliente | valor | data da venda | critério | nº de deals casados | deal_id (8 primeiros) | reunião | status | closer
+## 3) Onde cada regra do painel morde
 
-```text
-Felipe ramos | R$ 460,76 | 01/09 | DOIS-NOMES (frágil) | 1 | 800f50f3 | r1 01/09 contract_paid | William Ferreira
-Felipe ramos | R$ 0,00    | 01/09 | DOIS-NOMES (frágil) | 1 | 800f50f3 | r1 01/09 contract_paid | William Ferreira
-Gustavo Martins da Silva | R$ 241,53 | 01/09 | e-mail | 1 | a52d3535 | r1 02/09 completed | William Ferreira
-Vinicius siqueira de souza | R$ 241,53 | 01/09 | e-mail | 1 | 34074fba | r1 04/09 contract_paid | Mayara Souza
-Delômines Antônio Santos souza | R$ 241,53 | 01/09 | e-mail | 1 | a40ed04a | r1 02/09 completed | Julio
-Douglas Henrique Marques | R$ 241,53 | 01/09 | e-mail | 2 (AMBÍGUO) | 22ce728f | r1 10/09 completed | Rodrigo dos Santos Martinho
-ROBSON MOTTA DE CARVALHO | R$ 241,53 | 01/09 | e-mail | 2 (AMBÍGUO) | 9468fe24 | r1 11/09 completed | Bruno de Souza Albuquerque
-DANIEL APARECIDO AUGUSTO DE JESUS | R$ 241,53 | 01/09 | e-mail | 1 | 2ab167f9 | r1 05/09 completed | João Pedro Martins Vieira
-Ana Inês Varnier | R$ 241,53 | 01/09 | e-mail | 1 | 3a76ef90 | r1 03/09 completed | Mayara Souza
-Márllia Kesia Gonçalves de Souza | R$ 241,53 | 01/09 | e-mail | 2 (AMBÍGUO) | baca3af2 | r1 11/09 completed | Bruno de Souza Albuquerque
-Kléber Valente de Lima | R$ 241,53 | 01/09 | e-mail | 1 | d010c3cf | r1 04/09 completed | João Pedro Martins Vieira
-Samuel Anderson Silva de Carvalho Amorim | R$ 241,53 | 02/09 | e-mail | 1 | eb9703c1 | r1 02/09 contract_paid | Mayara Souza
-Sidney Ferreira da Silva | R$ 241,53 | 02/09 | e-mail | 2 (AMBÍGUO) | 9a9f1ee4 | r1 01/09 contract_paid | Julio
-RONAN NAVES DY SIQUEIRA E SILVA | R$ 241,53 | 02/09 | e-mail | 2 (AMBÍGUO) | 3c169c5b | r1 02/09 contract_paid | Mayara Souza
-JOAO BATISTA NETO | R$ 241,53 | 02/09 | e-mail | 8 (AMBÍGUO) | 38027724 | r1 14/09 rescheduled | Jessica Bellini
-Genilson Ferreira De Araújo | R$ 241,53 | 02/09 | e-mail | 1 | d3c34b72 | r1 02/09 completed | William Ferreira
-Jorge Lima Ribeiro | R$ 241,53 | 02/09 | e-mail | 2 (AMBÍGUO) | edef8241 | r1 01/09 contract_paid | Julio
-Mônica Moura | R$ 241,53 | 02/09 | telefone | 1 | 0faee7fb | r1 02/09 contract_paid | Mayara Souza
-Lucas santos valente | R$ 241,53 | 03/09 | e-mail | 2 (AMBÍGUO) | cef9927b | r1 03/09 contract_paid | Mayara Souza
-Alex SANTIAGO MARCOLINO | R$ 241,53 | 03/09 | e-mail | 1 | de9e7674 | r1 03/09 contract_paid | Mayara Souza
-Douglas henrique marques da silva | R$ 241,53 | 03/09 | e-mail | 2 (AMBÍGUO) | 22ce728f | r1 10/09 completed | Rodrigo dos Santos Martinho
-MARCOS CAGLIARI | R$ 0,00 | 03/09 | telefone | 2 (AMBÍGUO) | 4b2bff1b | r1 04/09 completed | Mayara Souza
-Carlos Cesar Silva Siriano | R$ 241,53 | 04/09 | e-mail | 3 (AMBÍGUO) | adbd82f2 | r1 04/09 contract_paid | Rodrigo dos Santos Martinho
-DOUGLAS HENRIQUE DE FARIA ALVES | R$ 241,53 | 08/09 | telefone | 2 (AMBÍGUO) | 22ce728f | r1 10/09 completed | Rodrigo dos Santos Martinho
-Francisco edivaldo pereira de Oliveira | R$ 241,53 | 08/09 | e-mail | 1 | a80d1c17 | r1 09/09 completed | Rodrigo dos Santos Martinho
-gilson marcelo santos | R$ 241,53 | 08/09 | e-mail | 1 | 6f77c9f2 | r1 09/09 completed | Julio
-Gean Franco Ramos dos Santos | R$ 241,53 | 08/09 | e-mail | 2 (AMBÍGUO) | 24ac4735 | r1 08/09 contract_paid | Rodrigo dos Santos Martinho
-Daniel Dias | R$ 241,53 | 08/09 | e-mail | 1 | c63a31e0 | r1 14/09 invited | Julio
-Antonio Marcos Tavares da Costa Júnior | R$ 241,53 | 08/09 | e-mail | 4 (AMBÍGUO) | dcd81a29 | r1 08/09 contract_paid | Rodrigo dos Santos Martinho
-OTACILIO GENEROSO DA SILVA JUNIOR | R$ 241,53 | 08/09 | e-mail | 2 (AMBÍGUO) | 08956ede | r1 11/09 completed | Julio
-Ranye Gomes | R$ 241,53 | 08/09 | e-mail | 1 | 840d9480 | r1 10/09 completed | Rodrigo dos Santos Martinho
-Valmir Fernandes do Nascimento | R$ 241,53 | 08/09 | e-mail | 1 | ff5d1c89 | r1 08/09 contract_paid | Rodrigo dos Santos Martinho
-Paulo Henrique Martins Pires | R$ 241,53 | 08/09 | e-mail | 15 (AMBÍGUO) | b46aa2dd | r1 09/09 completed | Rodrigo dos Santos Martinho
-Miguel Alonzo Barrios | R$ 241,53 | 09/09 | telefone | 2 (AMBÍGUO) | ec426064 | r1 09/09 contract_paid | Rodrigo dos Santos Martinho
-Patrícia Goveia | R$ 241,53 | 09/09 | e-mail | 1 | 93265f7c | r1 14/09 invited | Julio
-Wénnedy Josavias Carneiro Sousa Silva | R$ 241,53 | 09/09 | e-mail | 1 | dd524e95 | r1 09/09 contract_paid | Rodrigo dos Santos Martinho
-```
+- **cap 2 por (closer, deal)** — impacto **1 linha**. 519 → 518. Só 1 par tem 2 linhas no mesmo dia; nenhum par tem mais de 2 dias distintos.
+  - A linha: deal `16d1f506…` — **Sandra Mara de Alcântara - A010**, closer **Rodrigo dos Santos Martinho**, 10/09 12:30 `no_show` e 10/09 14:30 `completed`. Mesmo dia, mesmo closer → o painel conta 1.
+- **`else if` de no-show** — impacto **19**. 146 pares com no-show, dos quais 19 também têm reunião realizada → o painel não conta esses. (E antes disso, a dedup 1-por-par já leva 155 linhas → 146 pares.) Somando: 155 → 146 (dedup) → **127** (else if).
+- **filtro de status** — impacto **0**. O painel aceita `scheduled, invited, completed, no_show, contract_paid, refunded, rescheduled`; o universo do período só tem statuses dessa lista.
+- **Realizada** — impacto **0**: 299 linhas cruas = 299 pares (closer, deal) com realizada. Coincidência aritmética do mês, não garantia estrutural.
 
-## Balde B — 4 casos (R1 antes de 01/09)
+Reproduzi os três números do painel exatamente em SQL (518 / 299 / 127) usando a régua de `useR1CloserMetrics` (cap 2 por dias distintos, 1 realizada por par, `else if` no no-show).
 
-```text
-Eduardo Henrique Oliveira | R$ 30,06  | 03/09 | telefone            | 2 (AMBÍGUO) | 43e447b0 | r1 09/04 completed      | Mateus Macedo
-KLEBER XAVIER DE LIMA     | R$ 241,53 | 08/09 | telefone            | 1           | ed1a6591 | r1 13/06 contract_paid  | Julio
-WILLIAM MENEZES           | R$ 30,06  | 11/09 | NOME (frágil)       | 1           | 6e6656bb | r1 12/05 contract_paid  | Thayna
-Carlos Aparecido Cordeiro dos Santos | R$ 482,09 | 11/09 | DOIS-NOMES (frágil) | 2 (AMBÍGUO) | 70f44926 | r1 13/08 completed | João Pedro Martins Vieira
-```
+## 4) O que NÃO vem da Agenda R1
 
-## Balde C — 1 caso (só R2)
+| card / coluna | fonte |
+|---|---|
+| AGENDAMENTOS | Agenda R1 (`meeting_slot_attendees.booked_at`, eixo do ato de agendar) |
+| R1 AGENDADA | Agenda R1 (`scheduled_at`) |
+| R1 REALIZADA | Agenda R1 |
+| NO-SHOWS | Agenda R1 |
+| Pendentes | derivado da Agenda R1 (agendada − realizada − no-show) |
+| CONTRATOS | **não** — RPC `caucoes_efetivas` + `hubla_transactions` + `manual_sale_attributions` |
+| OUTSIDE | **não** — `hubla_transactions` (venda sem R1) |
+| REEMBOLSOS (nº e R$) | **não** — `caucoes_efetivas` (`refunded_at`, `valor`) |
+| TAXA CONVERSÃO | mista — numerador fora da agenda (contratos), denominador na agenda |
+| TAXA NO-SHOW | Agenda R1 |
+| Tabela Closers: R1 Agendada / Realizada / No-show | Agenda R1 |
+| Tabela Closers: R2 Agendada | **não** — `meeting_slots` com `meeting_type = 'r2'` (outra tela) |
+| Tabela Closers: Contrato Pago | **não** — `caucoes_efetivas` |
+| Tabela Closers: Outside / Reembolsos / Taxa Conv. | **não** (ou mista, como acima) |
+| Segmento A/B/C/s-ICP | `crm_deals.icp_segment` (valor atual, mutável) — não é campo da agenda |
 
-```text
-Paulo Geraldo Cavalcante Passos Neto | R$ 241,53 | 08/09 | e-mail | 1 | 18d0bccc | r2 14/09 invited | Jessica Martins
-```
+Além dos dois que você já sabia, entram nessa lista: **OUTSIDE**, **REEMBOLSOS** (e o valor em R$), **TAXA CONVERSÃO** (numerador) e a **segmentação ICP**.
 
-## Balde D — 2 casos (pessoa no CRM, sem reunião nenhuma)
+## 5) Conclusão
 
-```text
-Humberto Cardoso de Souza | R$ 241,53 | 09/09 | casou por e-mail, telefone e nome em crm_contacts/crm_deals; nenhum attendee
-Carlos Acacio Corrêa      | R$ 36,11  | 11/09 | casou por e-mail e telefone; nenhum attendee
-```
+Se o painel passar a contar a agenda literalmente, **quase nada muda: R1 Agendada vai de 518 para 519 (+1, a linha da Sandra Mara), R1 Realizada continua 299, e No-shows sobe de 127 para 155 (+28) — sendo que 19 desses 28 são leads que deram no-show e depois foram atendidos no mesmo mês, e 9 são duas marcações de no-show do mesmo lead com o mesmo closer.** O painel já lê `meeting_slots` + `meeting_slot_attendees`, com o mesmo `meeting_type='r1'`, o mesmo recorte de BU por `closers.bu` e a mesma coluna de data; a única decisão de negócio real é se um lead que faltou e depois compareceu deve aparecer nas duas colunas (agenda literal) ou só na de realizada (painel hoje) — e é essa decisão, não a fonte de dados, que move a TAXA NO-SHOW entre 24,5% e 29,9%.
 
-## Balde E — 4 casos (pessoa não achada no CRM)
-
-```text
-SADI AMANCIO BEZ BATTI           | R$ 482,09 | 01/09
-Helena Mondardo Cardoso Pissetti | R$ 482,09 | 03/09
-Cândido Osvaldo de Moura         | R$ 388,10 | 06/09
-Cândido Osvaldo de Moura         | R$ 0,00   | 06/09
-```
-
-## Ressalvas honestas
-
-- **Casamento frágil:** 4 linhas casaram só por nome ou dois primeiros nomes (Felipe ramos ×2, WILLIAM MENEZES, Carlos Aparecido Cordeiro dos Santos). Homônimo é possível — trate essas 4 como "provável", não como fato.
-- **Ambíguos:** em 19 casos o mesmo cliente casou com mais de um negócio no CRM (até 15 no caso Paulo Henrique Martins Pires). Não escolhi nenhum: o `deal_id` mostrado é só o do attendee mais recente com R1; o número de deals casados está na coluna. Para esses, atribuição automática não é segura sem regra de desempate.
-- **Documento não serve como chave hoje:** `customer_document` preenchido em 8 de 47 e zero casamentos contra `meeting_slot_attendees.cpf`.
-- **Valor:** 41 das 47 têm valor R$ 241,53, R$ 30,06, R$ 0,00 ou R$ 482,09 — padrão de **parcela/entrada**, não de contrato cheio. NÃO DETERMINADO se essas transações deveriam contar como "contrato" no painel; isso depende da regra de produto (A000 parcelado) e não foi verificado aqui.
-
-## Conclusão para o painel
-
-**Sem reunião de fato: 6 (baldes D + E)** — e destes, 4 nem existem no CRM. Se a linha "contrato sem reunião" for criada, ela vale **6**, não 47. Os outros **41** são vínculo quebrado entre `hubla_transactions` e `meeting_slot_attendees`: a reunião existe, o closer existe, e em 21 casos o attendee já está `contract_paid`. Rotulá-los como "sem reunião" tiraria crédito de gente que trabalhou — o conserto certo é de vínculo (por e-mail/telefone), não de rótulo.
-
-## Se você quiser prosseguir (nada feito)
-
-1. Backfill de `linked_deal_id`/`linked_attendee_id` por e-mail exato para as 32 linhas de casamento forte não ambíguo — em dry-run primeiro.
-2. Tratar as 19 ambíguas e as 4 por nome manualmente, uma a uma.
-3. Só depois criar a linha "sem reunião" no painel, com o número real (hoje 6).
-4. Investigar se transações de R$ 241,53 / R$ 30,06 devem contar como contrato — decidir a régua antes de mexer no card.
+`NÃO DETERMINADO`: se contar duas vezes o mesmo lead/closer no mesmo dia (o caso Sandra Mara) é o comportamento desejado, ou se essa segunda linha é erro operacional de marcação.
