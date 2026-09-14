@@ -637,11 +637,17 @@ export default function ReunioesEquipe() {
   // do recorte oficial e inflava os KPIs.
   // Métricas financeiras (contratos/outside) continuam vindo do closer (verdade contábil).
   const enrichedKPIs = useMemo(() => {
-    const totalAgendamentos = filteredBySDR.reduce((s, r) => s + (r.agendamentos || 0), 0);
-    const totalR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
-    const totalRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
-    const totalNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
+    const sdrAgendamentos = filteredBySDR.reduce((s, r) => s + (r.agendamentos || 0), 0);
+    const sdrR1Agendada = filteredBySDR.reduce((s, r) => s + (r.r1Agendada || 0), 0);
+    const sdrRealizadas = filteredBySDR.reduce((s, r) => s + (r.r1Realizada || 0), 0);
+    const sdrNoShows = filteredBySDR.reduce((s, r) => s + (r.noShows || 0), 0);
+    // Régua unificada com a tabela de Closers (ver comentário acima).
+    const totalAgendamentos = closerAxisForTop ? closerTopTotals.agendamentos : sdrAgendamentos;
+    const totalR1Agendada = closerAxisForTop ? closerTopTotals.r1Agendada : sdrR1Agendada;
+    const totalRealizadas = closerAxisForTop ? closerTopTotals.r1Realizada : sdrRealizadas;
+    const totalNoShows = closerAxisForTop ? closerTopTotals.noShows : sdrNoShows;
     const totalSemStatus = filteredBySDR.reduce((s, r) => s + (r.semStatus || 0), 0);
+
     // Outside = venda de contrato que não passou pelo time (fora do MCF Pay e
     // fora dos links CLS de closer). É a lista completa do período: não soma
     // com o cálculo antigo de "pagou antes da R1".
