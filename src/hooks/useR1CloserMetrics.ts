@@ -859,7 +859,9 @@ export function useR1CloserMetrics(
           unassigned.r1_agendada += m.r1_agendada;
           unassigned.r1_realizada += m.r1_realizada;
           unassigned.noshow += m.noshow;
+          unassigned.pendentes += m.pendentes;
           unassignedReasons.closer_inativo += m.r1_agendada;
+
           return;
         }
         kept.push(m);
@@ -877,6 +879,8 @@ export function useR1CloserMetrics(
           agendamentos: 0,
           r1_realizada: unassigned.r1_realizada,
           noshow: unassigned.noshow,
+          pendentes: unassigned.pendentes,
+
           contrato_pago: 0,
           outside: 0,
           r2_agendada: 0,
