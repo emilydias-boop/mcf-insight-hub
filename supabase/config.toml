@@ -288,3 +288,6 @@ verify_jwt = false
 [functions.ote-consorcio-metrics]
 verify_jwt = false
 
+
+[functions.funil-incorporador]
+verify_jwt = false
