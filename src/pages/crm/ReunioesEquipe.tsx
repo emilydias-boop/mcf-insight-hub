@@ -1125,7 +1125,6 @@ export default function ReunioesEquipe() {
         startDate={start}
         endDate={end}
       />
-
     </div>
   );
 }

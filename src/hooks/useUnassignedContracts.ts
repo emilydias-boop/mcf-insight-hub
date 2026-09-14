@@ -19,7 +19,6 @@ export interface UnassignedContractItem {
   transaction_id?: string | null;
 }
 
-
 export interface UnassignedContracts {
   total: number;
   a: number;
@@ -122,7 +121,6 @@ export function useUnassignedContracts(
           .select('id, customer_name, product_name, product_code, sale_status, sale_date, net_value, product_price, linked_deal_id, linked_attendee_id')
           .gte('sale_date', start)
           .lte('sale_date', end)
-
           .in('sale_status', ['pago', 'paid', 'approved', 'completed']);
 
         const paidAttendeeIds = new Set(rows.map((r: any) => r.attendee_id));
@@ -187,7 +185,6 @@ export function useUnassignedContracts(
               : 'Transação de contrato paga sem negócio vinculado no CRM',
             suggested: null,
             transaction_id: t.id,
-
           };
           items.push(item);
           sdrItems.push(item);
