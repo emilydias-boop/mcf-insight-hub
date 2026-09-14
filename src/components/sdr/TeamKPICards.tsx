@@ -146,7 +146,7 @@ export function TeamKPICards({
       icon: CalendarCheck,
       color: "text-cyan-500",
       bgColor: "bg-cyan-500/10",
-      tooltip: "Reuniões marcadas PARA o período (scheduled_at). Inclui datas futuras dentro do range — visão de planejamento.",
+      tooltip: "Reuniões marcadas PARA o período (scheduled_at). Total do período: conta toda R1 da agenda, inclusive as agendadas por closer/coordenador — bate com a linha Total da aba Closers. As abas mostram a atribuição por pessoa.",
       bucket: "r1_agendada" as KpiBucket,
       segLine: segLineFor('r1Agendada', kpis.totalR1Agendada),
     },
