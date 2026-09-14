@@ -1,83 +1,91 @@
-# Agenda R1 × Painel Comercial — medição da distância (setembro/2026, BU incorporador)
+# Auditoria somente-leitura — como um contrato vira número no painel
 
-Modo leitura. Nada foi editado no código nem no banco.
+Nada foi editado, nenhum deploy, nenhuma publicação.
 
-**Resposta curta:** a distância é de **1 linha** em R1 Agendada e **28 no-shows**. R1 Realizada é **idêntica**. O painel já lê exatamente as mesmas tabelas da Agenda R1.
+## Resposta curta (o que decide o card CONTRATOS)
 
-## 1) O que a tela da Agenda R1 lê
+As transações de R$ 241,53 e R$ 482,09 **não são parcelas**: são vendas únicas de caução/contrato (bruto R$ 249 e R$ 497), gravadas pelo checkout MCF Pay, com `installment_number = 1` e `total_installments = 1`. Em 01–30/09/2026: 42 linhas de R$ 241,53 (soma R$ 10.144,26) e 86 de R$ 482,09 (soma R$ 41.459,74). No histórico completo, R$ 241,53 aparece 96 vezes para 95 clientes distintos e **zero clientes** aparecem em mais de um mês — logo não é assinatura nem parcelamento. O card CONTRATOS conta **venda**, não parcela.
 
-Arquivos: `src/pages/crm/Agenda.tsx` (tela), `src/hooks/useAgendaData.ts` → `useAgendaMeetings` (dados), `src/components/crm/MeetingsList.tsx` (Lista), `AgendaCalendar.tsx` (Calendário), `CloserColumnCalendar.tsx` (Por Closer).
+---
 
-`useAgendaMeetings` (useAgendaData.ts:158-298):
+## 1) A origem do dado
 
-- Tabela: `meeting_slots` + embed `meeting_slot_attendees` (+ `closers`, `crm_deals`, `crm_contacts`, `profiles`).
-- Coluna de data: `meeting_slots.scheduled_at` (`gte`/`lte` do range da tela).
-- `meeting_type = 'r1'` (default; a aba R1 nunca traz R2).
-- BU: `closerIds` vindo de `useClosersWithAvailability(bu)` → `closers.bu` (Agenda.tsx:137-144); inclui closers inativos que tenham reunião no período.
-- **Sem filtro de status, sem `is_partner` no SQL, sem dedup, sem cap.**
+Quem escreve em `hubla_transactions` (três gravadores ativos):
 
-Na tela (Agenda.tsx:159-233): esconde só slot cancelado **sem participante** (`status === 'canceled' && attendees.length === 0`); filtro de status é opcional e roda no nível do attendee; `is_partner` é excluído das buscas/contagens de lead.
+- `supabase/functions/hubla-webhook-handler/index.ts:3055` — `upsert(transactionData, { onConflict: 'hubla_id' })` para eventos `NewSale` (bloco em 3016-3057), mais os mesmos upserts em 3185 e 3398 para outros eventos. `installment_number`/`total_installments` vêm de `extractSmartInstallment(invoice)` (linha 144) e `count_in_dashboard` é `false` para ids `newsale-*` (fantasma antes do pagamento) ou `net_value <= 0`.
+- `supabase/functions/asaas-webhook-handler/index.ts:899-925` — grava as vendas do **MCF Pay** e do Asaas: `hubla_id = ${sourceLabel}_${paymentId}` com `sourceLabel = isHublaFormat ? 'mcfpay' : 'asaas'`, `sale_status: 'completed'`, `count_in_dashboard: true`, dedup por consulta prévia a `hubla_id` (linha 877). **É este gravador que produz as linhas de R$ 241,53 / R$ 482,09.**
+- `supabase/functions/kiwify-webhook-handler/index.ts` e `import-hubla-history` / `kiwify-backfill-*` (importações e reconciliações).
+- Lançamento manual pela tela: `src/hooks/useCreateCarrinhoTransaction.ts` (`hubla_id: manual-<timestamp>`, `source: 'manual'`) — usado só para parceria do R2 Carrinho.
 
-**Resposta direta:** a Lista mostra **uma linha por attendee** (`MeetingsList.tsx:128-171` faz um loop por attendee, pulando `is_partner`); Calendário e Por Closer mostram o slot com os attendees listados dentro. Não há agrupamento por deal em lugar nenhum.
+Regra literal de "é contrato" — está dentro de `caucoes_efetivas` (CTE `ctx`):
 
-## 2) Contagem literal da agenda × painel (01–30/09/2026)
+```sql
+upper(COALESCE(ht.product_code,'')) LIKE 'A000%'
+ OR upper(COALESCE(ht.product_name,'')) LIKE '%A000%'
+ OR upper(COALESCE(ht.product_name,'')) LIKE '%CONTRATO%'
+```
 
-| medida | contagem literal da agenda | painel hoje |
+Status aceitos como pago, no mesmo lugar (e repetidos em `useUnassignedContracts.ts:122`):
+
+```sql
+lower(COALESCE(ht.sale_status,'')) IN ('pago','paid','approved','completed')
+```
+
+Uma linha = um evento de pagamento. Para contrato hoje é 1 linha por venda (`installment_number = 1`, `total_installments = 1` em todas as amostras). O dedup que evita contar a mesma venda duas vezes **não é por parcela** — é por negócio, no `DISTINCT ON (COALESCE(msa.deal_id, msa.id))` da CTE `paid` de `caucoes_efetivas`, mais `min(tx_date)` na CTE `tx`. Para Outside existe um segundo dedup, por primeira compra: `useR1CloserMetrics.ts:525` chama `get_first_transaction_ids()` e descarta o que não é primeira compra do e-mail.
+
+## 2) `caucoes_efetivas(p_from, p_to, p_bu)` — leitura do corpo
+
+Corpo completo em `pg_get_functiondef` (129 linhas, `LANGUAGE sql STABLE SECURITY DEFINER`). Estrutura: `paid` → `enriched` → `ctx` → `tx` → SELECT final.
+
+- **Parte da agenda, usa a Hubla só como calendário.** O universo é `meeting_slot_attendees.contract_paid_at IS NOT NULL AND is_partner = false AND status <> 'cancelled'`, com janela larga de ±400 dias. A Hubla (CTE `ctx`) só serve para *achar a data real* do pagamento.
+- **Coluna de data:** `eff_date = COALESCE(t.tx_date, (contract_paid_at AT TIME ZONE 'America/Sao_Paulo')::date)`, e o filtro do período é `eff_date BETWEEN p_from AND p_to`. `fonte` = `'transacao'` quando veio da Hubla, `'manual'` quando caiu no fallback do `contract_paid_at`. O casamento agenda×Hubla é por `linked_deal_id`, senão e-mail, senão últimos 9 dígitos do telefone.
+- **Closer:** se o pagamento foi na própria R1 (`usa_slot = slot_meeting_type='r1' AND slot_closer_id IS NOT NULL`), vale o closer do slot; senão o closer da **última R1 não cancelada/reagendada com `scheduled_at <= contract_paid_at`** (`ORDER BY ms2.scheduled_at DESC LIMIT 1`). **SDR:** o `booked_by` do mesmo slot escolhido.
+- **Reembolso:** ela **devolve** `refunded_at` (bruto, para o ranking da TV); quem exclui é o hook, em `useR1CloserMetrics.ts:501-508` — a linha reembolsada não entra em `contrato_pago` e vira `reembolsos` + `reembolsos_valor`.
+- **Segment:** `NULLIF(UPPER(TRIM(cd.icp_segment)),'')` — segmento **atual** do `crm_deals`, não snapshot. `valor` = `crm_deals.value`.
+
+## 3) `manual_sale_attributions`
+
+Correção manual de **atribuição**, não lançamento de venda. Grava `src/components/closer/ManualSaleAttributionDialog.tsx:68-74` (`insert({ closer_id, ..., contract_paid_at })`). Entra na contagem em `useR1CloserMetrics.ts:687-698`, filtrando `business_unit = bu` e `contract_paid_at` no período, e é **somada** ao closer: `contrato_pago = contractsByCloser + manualByCloser` (linhas 720, 753, 820). É ignorada quando há filtro de segmento (não tem deal vinculado).
+
+## 4) O balde "não atribuído" (os 47)
+
+`src/hooks/useUnassignedContracts.ts`. Duas famílias:
+
+- Linhas de `caucoes_efetivas` **sem closer** → `caucao_sem_r1` (tem deal) ou `caucao_sem_deal` (linhas 90-101). Sem SDR mas com closer → só órfã na aba SDRs (`caucao_sem_sdr`).
+- `transacao_sem_reuniao` (linhas 116-188): transação de contrato paga no período que **não** tem `linked_attendee_id` entre as cauções do período, **não** tem `linked_deal_id` já atribuído, e cujo deal não tem nenhum `contract_paid_at` fora da janela. Note que aqui o predicado de "é contrato" é **mais frouxo** que o da RPC: não exige `net_value > 0`, não exclui `source asaas`, nem `event_type payment_received`. É por isso que entram as linhas de R$ 0,00 e as `mcfpay`.
+
+## 5) Como cada número é montado
+
+| onde aparece | o que soma | fonte (arquivo:linha) |
 |---|---|---|
-| R1 na agenda (linhas de attendee, não-sócio) | **519** | 518 |
-| realizadas (`completed`+`contract_paid`+`refunded`) | **299** | 299 |
-| no-show | **155** | 127 |
+| card CONTRATOS (152) | `filteredBySDR.contratos` + `unassignedSdr.total` | `ReunioesEquipe.tsx:657-673` |
+| Contrato Pago, aba Closers (111) | `caucoes_efetivas` com closer, líquido de reembolso, + atribuição manual | `useR1CloserMetrics.ts:497-510, 720` |
+| Contrato Pago, aba SDRs | mesma `caucoes_efetivas`, eixo `sdr_id` (`booked_by` da R1 escolhida) | `ReunioesEquipe.tsx:549-555` |
+| linha "Não atribuído" | linhas de `caucoes_efetivas` sem closer/SDR + transações órfãs | `useUnassignedContracts.ts:75-188` |
+| REEMBOLSOS (6 · R$ 5.638) | `refunded_at` das mesmas linhas, dedup por deal | `useR1CloserMetrics.ts:501-506`; card em `ReunioesEquipe.tsx:675` |
+| OUTSIDE (5) | RPC `outside_fora_do_funil` (contrato fora do MCF Pay e fora das ofertas CLS) | `useOutsideForaDoFunil.ts:27`; card em `ReunioesEquipe.tsx:656` |
 
-Universo cru por status (todas as linhas de attendee dos slots R1 do incorporador no período):
+**Por que 152 ≠ 111:** 111 são as cauções da agenda com closer identificável e líquidas de reembolso; 152 = 105 cauções no eixo SDR + 47 órfãs de `hubla_transactions` que o predicado frouxo do balde deixa entrar — e 41 dessas 47 têm reunião, só com o vínculo transação↔attendee quebrado.
 
-| status | linhas |
-|---|---|
-| completed | 190 |
-| no_show | 155 |
-| contract_paid | 109 |
-| invited | 58 |
-| rescheduled | 7 |
-| scheduled | 0 |
-| refunded | 0 |
-| cancelled / canceled | 0 |
-| **total** | **519** |
+## 6) A pergunta do valor
 
-Sócios (`is_partner = true`): 0 no período. Attendee sem `deal_id`: 0. Slots cancelados no período: 6 — todos **sem attendee** (a tela também os esconde), logo não afetam contagem nenhuma.
+Distribuição de `coalesce(net_value, product_price)` — contratos, 01–30/09/2026:
 
-## 3) Onde cada regra do painel morde
+| valor | qtd | soma |
+|---|---|---|
+| 482,09 | 86 | 41.459,74 |
+| 241,53 | 42 | 10.144,26 |
+| 0,00 | 7 | 0,00 |
+| 460,76 | 5 | 2.303,80 |
+| 30,06 | 5 | 150,30 |
+| 399,86 / 388,10 / 43,84 / 36,11 | 1 cada | 867,91 |
 
-- **cap 2 por (closer, deal)** — impacto **1 linha**. 519 → 518. Só 1 par tem 2 linhas no mesmo dia; nenhum par tem mais de 2 dias distintos.
-  - A linha: deal `16d1f506…` — **Sandra Mara de Alcântara - A010**, closer **Rodrigo dos Santos Martinho**, 10/09 12:30 `no_show` e 10/09 14:30 `completed`. Mesmo dia, mesmo closer → o painel conta 1.
-- **`else if` de no-show** — impacto **19**. 146 pares com no-show, dos quais 19 também têm reunião realizada → o painel não conta esses. (E antes disso, a dedup 1-por-par já leva 155 linhas → 146 pares.) Somando: 155 → 146 (dedup) → **127** (else if).
-- **filtro de status** — impacto **0**. O painel aceita `scheduled, invited, completed, no_show, contract_paid, refunded, rescheduled`; o universo do período só tem statuses dessa lista.
-- **Realizada** — impacto **0**: 299 linhas cruas = 299 pares (closer, deal) com realizada. Coincidência aritmética do mês, não garantia estrutural.
+Colunas que poderiam indicar parcela: `installment_number`, `total_installments`, `subtotal_cents`, `installment_fee_cents`, `payment_method`, `offer_id`/`offer_name`, `source`. Nas 5 amostras de R$ 241,53: `installment_number = 1`, `total_installments = 1`, `source = 'mcfpay'`, `event_type = 'invoice.payment_succeeded'`, `product_name = 'Contrato MCF'`, `product_price = 249`, `offer_name` = "Contrato - 249 - LIVE Launch" / "Contrato - 249 - Rodrigo". Não existe coluna de `order_id`/`subscription_id` preenchida nessas linhas.
 
-Reproduzi os três números do painel exatamente em SQL (518 / 299 / 127) usando a régua de `useR1CloserMetrics` (cap 2 por dias distintos, 1 realizada por par, `else if` no no-show).
+Recorrência: R$ 241,53 → 96 ocorrências, 95 clientes distintos, **0 clientes em mais de um mês**. Conclusão: venda única (caução de R$ 249 líquida de taxa), não assinatura nem parcelamento. R$ 482,09 é o mesmo padrão para a caução de R$ 497 (`A000 - Contrato`, ofertas CLS por closer).
 
-## 4) O que NÃO vem da Agenda R1
+`NÃO DETERMINADO`: o que são as 7 linhas de R$ 0,00 e as 5 de R$ 30,06 (bruto 497 com líquido 30,06 sugere taxa/estorno parcial). Para determinar, falta olhar o `raw_data` dessas transações e a regra de `net_value` da Hubla nesses eventos.
 
-| card / coluna | fonte |
-|---|---|
-| AGENDAMENTOS | Agenda R1 (`meeting_slot_attendees.booked_at`, eixo do ato de agendar) |
-| R1 AGENDADA | Agenda R1 (`scheduled_at`) |
-| R1 REALIZADA | Agenda R1 |
-| NO-SHOWS | Agenda R1 |
-| Pendentes | derivado da Agenda R1 (agendada − realizada − no-show) |
-| CONTRATOS | **não** — RPC `caucoes_efetivas` + `hubla_transactions` + `manual_sale_attributions` |
-| OUTSIDE | **não** — `hubla_transactions` (venda sem R1) |
-| REEMBOLSOS (nº e R$) | **não** — `caucoes_efetivas` (`refunded_at`, `valor`) |
-| TAXA CONVERSÃO | mista — numerador fora da agenda (contratos), denominador na agenda |
-| TAXA NO-SHOW | Agenda R1 |
-| Tabela Closers: R1 Agendada / Realizada / No-show | Agenda R1 |
-| Tabela Closers: R2 Agendada | **não** — `meeting_slots` com `meeting_type = 'r2'` (outra tela) |
-| Tabela Closers: Contrato Pago | **não** — `caucoes_efetivas` |
-| Tabela Closers: Outside / Reembolsos / Taxa Conv. | **não** (ou mista, como acima) |
-| Segmento A/B/C/s-ICP | `crm_deals.icp_segment` (valor atual, mutável) — não é campo da agenda |
+## Nenhuma alteração proposta
 
-Além dos dois que você já sabia, entram nessa lista: **OUTSIDE**, **REEMBOLSOS** (e o valor em R$), **TAXA CONVERSÃO** (numerador) e a **segmentação ICP**.
-
-## 5) Conclusão
-
-Se o painel passar a contar a agenda literalmente, **quase nada muda: R1 Agendada vai de 518 para 519 (+1, a linha da Sandra Mara), R1 Realizada continua 299, e No-shows sobe de 127 para 155 (+28) — sendo que 19 desses 28 são leads que deram no-show e depois foram atendidos no mesmo mês, e 9 são duas marcações de no-show do mesmo lead com o mesmo closer.** O painel já lê `meeting_slots` + `meeting_slot_attendees`, com o mesmo `meeting_type='r1'`, o mesmo recorte de BU por `closers.bu` e a mesma coluna de data; a única decisão de negócio real é se um lead que faltou e depois compareceu deve aparecer nas duas colunas (agenda literal) ou só na de realizada (painel hoje) — e é essa decisão, não a fonte de dados, que move a TAXA NO-SHOW entre 24,5% e 29,9%.
-
-`NÃO DETERMINADO`: se contar duas vezes o mesmo lead/closer no mesmo dia (o caso Sandra Mara) é o comportamento desejado, ou se essa segunda linha é erro operacional de marcação.
+Este documento é só a leitura pedida. Se aprovado, o próximo passo natural (e ainda não decidido) seria alinhar o predicado do balde "não atribuído" ao da RPC — mas isso mexe no card CONTRATOS e depende de decisão do dono.
