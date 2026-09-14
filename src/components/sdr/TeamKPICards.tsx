@@ -166,7 +166,7 @@ export function TeamKPICards({
       icon: XCircle,
       color: "text-red-500",
       bgColor: "bg-red-500/10",
-      tooltip: "No-shows ocorridos (cap de 1/lead antes de 28/04, cap de 2/lead a partir de 28/04). Fato consumado — não inclui futuro.",
+      tooltip: "No-shows ocorridos no período, na mesma régua da aba Closers: se o deal acabou sendo realizado, não conta como no-show. Total do período, independente de quem agendou.",
       bucket: "no_show" as KpiBucket,
       segLine: segLineFor('noShows', kpis.totalNoShows),
     },
