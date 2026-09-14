@@ -156,7 +156,7 @@ export function TeamKPICards({
       icon: CheckCircle,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
-      tooltip: "Reuniões efetivamente realizadas no período. Fato consumado — não inclui reuniões futuras.",
+      tooltip: "Reuniões efetivamente realizadas no período. Total do período: conta toda R1 da agenda, independente de quem agendou — bate com a linha Total da aba Closers.",
       bucket: "realizada" as KpiBucket,
       segLine: segLineFor('r1Realizada', kpis.totalRealizadas),
     },
