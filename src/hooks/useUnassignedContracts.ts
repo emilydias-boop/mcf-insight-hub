@@ -15,7 +15,10 @@ export interface UnassignedContractItem {
   reason?: string;
   /** Closer/SDR identificável no slot (sugestão de atribuição). */
   suggested?: string | null;
+  /** Transação Hubla/MCF Pay órfã (só nas linhas 'transacao_sem_reuniao'). */
+  transaction_id?: string | null;
 }
+
 
 export interface UnassignedContracts {
   total: number;
@@ -116,8 +119,8 @@ export function useUnassignedContracts(
       if (bu === 'incorporador') {
         const { data: txs } = await supabase
           .from('hubla_transactions')
-          .select('id, customer_name, product_name, product_code, sale_status, sale_date, linked_deal_id, linked_attendee_id')
-          .gte('sale_date', start)
+          .select('id, customer_name, product_name, product_code, sale_status, sale_date, net_value, product_price, linked_deal_id, linked_attendee_id')
+
           .lte('sale_date', end)
           .in('sale_status', ['pago', 'paid', 'approved', 'completed']);
 
