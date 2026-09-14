@@ -68,6 +68,10 @@ export interface R1CloserMetric {
   agendamentos: number;
   r1_realizada: number;
   noshow: number;
+  /** Linhas ainda sem desfecho na agenda (invited / rescheduled / scheduled).
+   *  Contado direto, não por subtração. */
+  pendentes: number;
+
   contrato_pago: number;
   outside: number;
   r2_agendada: number;
@@ -710,6 +714,8 @@ export function useR1CloserMetrics(
           agendamentos: agendamentosByCloser.get(closer.id) || 0,
           r1_realizada: 0,
           noshow: 0,
+          pendentes: 0,
+
           // caucoes_efetivas já exclui reembolsados (refunded_at) → não subtrair de novo
           contrato_pago: (contractsByCloser.get(closer.id) || 0) + (manualByCloser.get(closer.id) || 0),
           outside: outsideByCloser.get(closer.id) || 0,
@@ -742,6 +748,8 @@ export function useR1CloserMetrics(
           agendamentos: agendamentosByCloser.get(closerId) || 0,
           r1_realizada: 0,
           noshow: 0,
+          pendentes: 0,
+
           contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
           outside: outsideByCloser.get(closerId) || 0,
           r2_agendada: r2CountByCloser.get(closerId) || 0,
