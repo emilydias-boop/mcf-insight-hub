@@ -686,16 +686,43 @@ export function useR1CloserMetrics(
       // ========== MANUAL SALE ATTRIBUTIONS ==========
       const { data: manualSales } = await supabase
         .from('manual_sale_attributions' as any)
-        .select('closer_id')
+        .select('closer_id, deal_id')
         .eq('business_unit', bu)
         .gte('contract_paid_at', start)
         .lte('contract_paid_at', end);
 
       const manualByCloser = new Map<string, number>();
-      // Atribuições manuais não têm deal vinculado → ignoradas quando há filtro de segmento.
-      (segmentActive ? [] : (manualSales as any[] || [])).forEach((sale: any) => {
-        manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
-      });
+      const manualRows = (manualSales as any[]) || [];
+      if (!segmentActive) {
+        // Sem filtro de segmento: todas as atribuições manuais contam (o total
+        // do período não muda por causa do deal_id novo).
+        manualRows.forEach((sale: any) => {
+          manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
+        });
+      } else {
+        // Com filtro de segmento: apenas as atribuições que apontam para um
+        // negócio (deal_id) podem ser segmentadas, pelo icp_segment atual dele.
+        // As antigas, sem deal_id, seguem ignoradas exatamente como antes.
+        const manualDealIds = Array.from(
+          new Set(manualRows.map((r: any) => r.deal_id).filter(Boolean) as string[]),
+        );
+        const segByDeal = new Map<string, string>();
+        if (manualDealIds.length) {
+          const dealsSeg = await batchedIn<{ id: string; icp_segment: string | null }>(
+            (chunk) => supabase.from('crm_deals').select('id, icp_segment').in('id', chunk),
+            manualDealIds,
+          );
+          dealsSeg?.forEach((d) => {
+            if (d.icp_segment) segByDeal.set(d.id, String(d.icp_segment).toUpperCase());
+          });
+        }
+        manualRows.forEach((sale: any) => {
+          if (!sale.deal_id) return;
+          if (segByDeal.get(sale.deal_id) !== segment) return;
+          manualByCloser.set(sale.closer_id, (manualByCloser.get(sale.closer_id) || 0) + 1);
+        });
+      }
+
 
       // ========== REFUNDS ==========
       // Fonte única: caucoes_efetivas().refunded_at (gravado pelos webhooks
