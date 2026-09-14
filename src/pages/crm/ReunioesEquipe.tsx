@@ -718,9 +718,15 @@ export default function ReunioesEquipe() {
   // Os sub-buckets (futuras/vencidas/canceladas) continuam vindo do breakdown
   // local, mas o total exibido respeita a aritmética do RPC.
   const pendentesTotalRpc = useMemo(
-    () => filteredBySDR.reduce((sum, r) => sum + (r.pendentes || 0), 0),
-    [filteredBySDR],
+    () =>
+      closerAxisForTop
+        // Fecha a aritmética com o novo eixo do topo (agenda):
+        // Pendentes = R1 Agendada − Realizadas − No-Show.
+        ? Math.max(0, closerTopTotals.r1Agendada - closerTopTotals.r1Realizada - closerTopTotals.noShows)
+        : filteredBySDR.reduce((sum, r) => sum + (r.pendentes || 0), 0),
+    [filteredBySDR, closerAxisForTop, closerTopTotals],
   );
+
 
   // Reconcilia o breakdown: se o total local for menor que o do RPC, joga a
   // diferença em "vencidas" (cenário mais comum: reuniões antigas sem desfecho
