@@ -179,6 +179,11 @@ Deno.serve(async (req) => {
     bu?: string;
     start_date?: string;
     end_date?: string;
+    mes?: number;
+    ano?: number;
+    ini?: string;
+    fim?: string;
+    // Campos legados aceitos apenas para poder registrar a tentativa recusada.
     table?: string;
     filters?: Record<string, unknown>;
     select?: string;
@@ -190,15 +195,42 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
+  const clientName = req.headers.get("x-client-name") ?? "external-query";
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const ip = ipHeader.split(",")[0]?.trim() || null;
+
+  // ---- Lista branca: nada fora das ações liberadas passa daqui ----
+  const action = (body.action ?? "").toString().trim();
+  if (!ALLOWED_ACTIONS.has(action)) {
+    console.error(
+      "[external-query] recurso não liberado",
+      JSON.stringify({
+        client: clientName,
+        ip,
+        action: action || null,
+        table: body.table ?? null,
+        select: body.select ?? null,
+        filters: body.filters ?? null,
+        user_agent: req.headers.get("user-agent"),
+      }),
+    );
+    return json(
+      {
+        error: "Recurso não liberado",
+        detail:
+          "Somente as ações liberadas são atendidas. Consulta direta por nome de tabela foi desativada.",
+        allowed_actions: Array.from(ALLOWED_ACTIONS),
+      },
+      403,
+    );
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } },
   );
 
-  const clientName = req.headers.get("x-client-name") ?? "external-query";
-  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
-  const ip = ipHeader.split(",")[0]?.trim() || null;
 
   // ---- Action: get_bu_totals ----
   if (body.action === "get_bu_totals") {
