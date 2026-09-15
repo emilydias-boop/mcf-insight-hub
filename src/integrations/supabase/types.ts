@@ -17708,7 +17708,25 @@ export type Database = {
           versao: number
         }[]
       }
+      sdr_ia_agenda_livre: {
+        Args: { _bu?: string; _limite?: number }
+        Returns: {
+          closer_nome: string
+          quando: string
+          quando_br: string
+          slot_id: string
+          vagas: number
+        }[]
+      }
       sdr_ia_agendar: { Args: { _session_id: string }; Returns: string }
+      sdr_ia_deal_do_funil: {
+        Args: { _bu?: string; _phone_e164: string }
+        Returns: {
+          bu: string
+          deal_id: string
+          do_funil: boolean
+        }[]
+      }
       sdr_ia_gravar_qualificacao: {
         Args: { _deal_id: string; _qual: Json }
         Returns: string
