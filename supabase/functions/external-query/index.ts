@@ -254,9 +254,10 @@ Deno.serve(async (req) => {
       } catch (e) { console.error("audit_logs insert failed", e); }
       return json(totals);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return json({ error: msg }, 400);
+      console.error("[external-query] get_bu_totals falhou", e);
+      return json({ error: "Erro interno ao processar a consulta" }, 500);
     }
+
   }
 
   // ---- Action: get_metas_equipe_mensal ----
