@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
+import { resolveProductName } from "../_shared/resolveProductName.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -710,7 +711,7 @@ Deno.serve(async (req) => {
           .insert({
             hubla_id: kiwifyId,
             event_type: 'kiwify.purchase_approved',
-            product_name: productName,
+            product_name: await resolveProductName(supabase, productName),
             product_code: productCode,
             product_category: productCategory,
             product_price: grossValue,

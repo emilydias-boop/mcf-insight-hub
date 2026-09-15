@@ -11935,6 +11935,27 @@ export type Database = {
         }
         Relationships: []
       }
+      product_name_aliases: {
+        Row: {
+          alias: string
+          canonical_product_name: string
+          created_at: string
+          notes: string | null
+        }
+        Insert: {
+          alias: string
+          canonical_product_name: string
+          created_at?: string
+          notes?: string | null
+        }
+        Update: {
+          alias?: string
+          canonical_product_name?: string
+          created_at?: string
+          notes?: string | null
+        }
+        Relationships: []
+      }
       product_price_history: {
         Row: {
           changed_by: string | null
@@ -13255,8 +13276,12 @@ export type Database = {
           prompt_versao: number | null
           proxima_acao_em: string | null
           qualificacao: Json
+          rajada_ate: string | null
+          slots_ofertados: Json
           slots_tentativas: Json
           tentativa: number
+          ultima_oferta_br: string | null
+          ultima_oferta_em: string | null
         }
         Insert: {
           atualizada_em?: string
@@ -13272,8 +13297,12 @@ export type Database = {
           prompt_versao?: number | null
           proxima_acao_em?: string | null
           qualificacao?: Json
+          rajada_ate?: string | null
+          slots_ofertados?: Json
           slots_tentativas?: Json
           tentativa?: number
+          ultima_oferta_br?: string | null
+          ultima_oferta_em?: string | null
         }
         Update: {
           atualizada_em?: string
@@ -13289,8 +13318,12 @@ export type Database = {
           prompt_versao?: number | null
           proxima_acao_em?: string | null
           qualificacao?: Json
+          rajada_ate?: string | null
+          slots_ofertados?: Json
           slots_tentativas?: Json
           tentativa?: number
+          ultima_oferta_br?: string | null
+          ultima_oferta_em?: string | null
         }
         Relationships: [
           {
@@ -16483,6 +16516,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vw_produtos_nao_cadastrados: {
+        Row: {
+          maior_preco_bruto: number | null
+          primeira_venda: string | null
+          product_name: string | null
+          qtd_vendas: number | null
+          source: string | null
+          ultima_venda: string | null
+          valor_liquido: number | null
+        }
+        Relationships: []
       }
       wa_templates: {
         Row: {

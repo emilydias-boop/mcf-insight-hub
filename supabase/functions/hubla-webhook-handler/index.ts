@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
+import { resolveProductName } from "../_shared/resolveProductName.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -3017,7 +3018,7 @@ Deno.serve(async (req) => {
         const transactionData = {
           hubla_id: eventData.id || `newsale-${Date.now()}`,
           event_type: 'NewSale',
-          product_name: productName,
+          product_name: await resolveProductName(supabase, productName),
           product_code: eventData.productCode || null,
           product_price: productPrice,
           product_category: productCategory,
@@ -3145,7 +3146,7 @@ Deno.serve(async (req) => {
           const transactionData = {
             hubla_id: invoice?.id || `invoice-${Date.now()}`,
             event_type: 'invoice.payment_succeeded',
-            product_name: productName,
+            product_name: await resolveProductName(supabase, productName),
             product_code: null,
             product_price: grossValue,
             product_category: productCategory,
@@ -3358,7 +3359,7 @@ Deno.serve(async (req) => {
           const transactionData = {
             hubla_id: hublaId,
             event_type: 'invoice.payment_succeeded',
-            product_name: productName,
+            product_name: await resolveProductName(supabase, productName),
             product_code: productCode,
             product_price: isOffer ? itemPrice : grossValue,
             product_category: productCategory,
