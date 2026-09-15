@@ -13,26 +13,14 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// Whitelist of allowed public tables to prevent arbitrary access.
-// Extend as needed.
-const ALLOWED_TABLES = new Set<string>([
-  "hubla_transactions",
-  "crm_deals",
-  "crm_contacts",
-  "consortium_cards",
-  "consortium_payments",
-  "consortium_installments",
-  "consorcio_proposals",
-  "profiles",
-  "employees",
-  "billing_history",
-  "billing_installments",
-  "billing_subscriptions",
-  "transactions",
-  "a010_sales",
-  "sdr_month_payout",
-  "consorcio_closer_payout",
+// Lista branca fechada de ações. Não existe mais modo passa-através por nome
+// de tabela: qualquer outra coisa é recusada com 403 e registrada no log.
+const ALLOWED_ACTIONS = new Set<string>([
+  "get_metas_equipe_mensal",
+  "get_bu_totals",
+  "painel_incorporador_totais",
 ]);
+
 
 // ============================================================
 // Pricing logic — mirrored from src/lib/incorporadorPricing.ts
@@ -191,6 +179,11 @@ Deno.serve(async (req) => {
     bu?: string;
     start_date?: string;
     end_date?: string;
+    mes?: number;
+    ano?: number;
+    ini?: string;
+    fim?: string;
+    // Campos legados aceitos apenas para poder registrar a tentativa recusada.
     table?: string;
     filters?: Record<string, unknown>;
     select?: string;
@@ -202,15 +195,42 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
+  const clientName = req.headers.get("x-client-name") ?? "external-query";
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const ip = ipHeader.split(",")[0]?.trim() || null;
+
+  // ---- Lista branca: nada fora das ações liberadas passa daqui ----
+  const action = (body.action ?? "").toString().trim();
+  if (!ALLOWED_ACTIONS.has(action)) {
+    console.error(
+      "[external-query] recurso não liberado",
+      JSON.stringify({
+        client: clientName,
+        ip,
+        action: action || null,
+        table: body.table ?? null,
+        select: body.select ?? null,
+        filters: body.filters ?? null,
+        user_agent: req.headers.get("user-agent"),
+      }),
+    );
+    return json(
+      {
+        error: "Recurso não liberado",
+        detail:
+          "Somente as ações liberadas são atendidas. Consulta direta por nome de tabela foi desativada.",
+        allowed_actions: Array.from(ALLOWED_ACTIONS),
+      },
+      403,
+    );
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } },
   );
 
-  const clientName = req.headers.get("x-client-name") ?? "external-query";
-  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
-  const ip = ipHeader.split(",")[0]?.trim() || null;
 
   // ---- Action: get_bu_totals ----
   if (body.action === "get_bu_totals") {
@@ -234,9 +254,10 @@ Deno.serve(async (req) => {
       } catch (e) { console.error("audit_logs insert failed", e); }
       return json(totals);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return json({ error: msg }, 400);
+      console.error("[external-query] get_bu_totals falhou", e);
+      return json({ error: "Erro interno ao processar a consulta" }, 500);
     }
+
   }
 
   // ---- Action: get_metas_equipe_mensal ----
@@ -346,78 +367,51 @@ Deno.serve(async (req) => {
       } catch (e) { console.error("audit_logs insert failed", e); }
       return json(result);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return json({ error: msg }, 400);
+      console.error("[external-query] get_metas_equipe_mensal falhou", e);
+      return json({ error: "Erro interno ao processar a consulta" }, 500);
+    }
+
+  }
+
+  // ---- Action: painel_incorporador_totais ----
+  // Repassa exatamente o JSON da RPC public.painel_incorporador_totais.
+  if (action === "painel_incorporador_totais") {
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const hoje = new Date(Date.now() - 3 * 60 * 60 * 1000); // America/Sao_Paulo
+    const y = hoje.getUTCFullYear();
+    const m = hoje.getUTCMonth();
+    const p = (n: number) => String(n).padStart(2, "0");
+    const ultimo = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const ini = (body.ini ?? body.start_date ?? `${y}-${p(m + 1)}-01`).toString().trim();
+    const fim = (body.fim ?? body.end_date ?? `${y}-${p(m + 1)}-${p(ultimo)}`).toString().trim();
+    if (!DATE_RE.test(ini) || !DATE_RE.test(fim)) {
+      return json({ error: "Parâmetros 'ini'/'fim' devem estar no formato YYYY-MM-DD" }, 400);
+    }
+    if (ini > fim) return json({ error: "'ini' não pode ser maior que 'fim'" }, 400);
+
+    try {
+      const { data, error } = await supabase.rpc("painel_incorporador_totais", {
+        p_ini: ini,
+        p_fim: fim,
+      });
+      if (error) throw error;
+      try {
+        await supabase.from("audit_logs").insert({
+          action: "external_query_painel_incorporador_totais",
+          table_name: "meeting_slot_attendees",
+          new_data: { client: clientName, ini, fim },
+          ip_address: ip,
+          user_agent: req.headers.get("user-agent"),
+        });
+      } catch (e) { console.error("audit_logs insert failed", e); }
+      return json(data);
+    } catch (e) {
+      console.error("[external-query] painel_incorporador_totais falhou", e);
+      return json({ error: "Erro interno ao processar a consulta" }, 500);
     }
   }
 
-  const table = (body.table ?? "").toString().trim();
-  const select = typeof body.select === "string" && body.select.trim() ? body.select : "*";
-  const limit = Math.min(Math.max(Number(body.limit ?? 100), 1), 1000);
-  const filters = (body.filters ?? {}) as Record<string, unknown>;
-
-  if (!table) return json({ error: "Missing 'table'" }, 400);
-  if (!/^[a-z0-9_]+$/i.test(table)) return json({ error: "Invalid table name" }, 400);
-  if (!ALLOWED_TABLES.has(table)) {
-    return json({ error: `Table '${table}' is not allowed` }, 403);
-  }
-  if (!/^[a-z0-9_,\s\*\(\)\.:]+$/i.test(select)) {
-    return json({ error: "Invalid select expression" }, 400);
-  }
-
-  // Build query. Supports scalar equality, arrays (IN) and simple operator objects:
-  // { gte: x, lte: y, like: '%foo%', in: [1,2] }
-  let query = supabase.from(table).select(select).limit(limit);
-  for (const [col, val] of Object.entries(filters)) {
-    if (!/^[a-z0-9_]+$/i.test(col)) {
-      return json({ error: `Invalid filter column '${col}'` }, 400);
-    }
-    if (val === null) {
-      query = query.is(col, null);
-    } else if (Array.isArray(val)) {
-      query = query.in(col, val as never[]);
-    } else if (typeof val === "object") {
-      for (const [op, v] of Object.entries(val as Record<string, unknown>)) {
-        switch (op) {
-          case "eq": query = query.eq(col, v as never); break;
-          case "neq": query = query.neq(col, v as never); break;
-          case "gt": query = query.gt(col, v as never); break;
-          case "gte": query = query.gte(col, v as never); break;
-          case "lt": query = query.lt(col, v as never); break;
-          case "lte": query = query.lte(col, v as never); break;
-          case "like": query = query.like(col, String(v)); break;
-          case "ilike": query = query.ilike(col, String(v)); break;
-          case "in": query = query.in(col, v as never[]); break;
-          case "is": query = query.is(col, v as never); break;
-          default: return json({ error: `Unsupported operator '${op}'` }, 400);
-        }
-      }
-    } else {
-      query = query.eq(col, val as never);
-    }
-  }
-
-  const { data, error } = await query;
-
-  try {
-    await supabase.from("audit_logs").insert({
-      action: error ? "external_query_error" : "external_query",
-      table_name: table,
-      new_data: {
-        client: clientName,
-        select,
-        limit,
-        filters,
-        row_count: data?.length ?? 0,
-        error: error?.message ?? null,
-      },
-      ip_address: ip,
-      user_agent: req.headers.get("user-agent"),
-    });
-  } catch (e) {
-    console.error("audit_logs insert failed", e);
-  }
-
-  if (error) return json({ error: error.message }, 400);
-  return json({ data, count: data?.length ?? 0 });
+  // Ação liberada mas não implementada (não deve acontecer).
+  console.error("[external-query] ação liberada sem implementação", action);
+  return json({ error: "Recurso não liberado" }, 403);
 });
