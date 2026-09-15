@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useMeetingsForDate, useMoveAttendeeToMeeting, syncDealStageFromAgenda } from '@/hooks/useAgendaData';
-import { useClosers, useBookedSlots } from '@/hooks/useCloserScheduling';
+import { useClosers, useBookedSlots, assertCloserMatchesMeetingType } from '@/hooks/useCloserScheduling';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -78,7 +78,7 @@ export function MoveAttendeeModal({
   const canMovePast = (allRoles || []).some(r => r === 'admin' || r === 'manager' || r === 'coordenador') || role === 'admin';
   const isAdmin = canMovePast;
   
-  const { data: closers } = useClosers();
+  const { data: closers } = useClosers({ meetingType: 'r1' });
   const dayOfWeek = selectedDate ? selectedDate.getDay() : 0;
   const { data: daySlots } = useCloserDaySlots(dayOfWeek, 'r1');
   const { data: bookedSlots } = useBookedSlots(
@@ -160,12 +160,16 @@ export function MoveAttendeeModal({
 
       const scheduledAt = slot.datetime.toISOString();
 
+      // Closer destino precisa ter cadastro de R1 (esta tela é da Agenda R1)
+      await assertCloserMatchesMeetingType(slot.closerId, 'r1');
+
       // 1. Verificar se já existe um slot para este closer/horário
       const { data: existingSlot } = await supabase
         .from('meeting_slots')
         .select('id')
         .eq('closer_id', slot.closerId)
         .eq('scheduled_at', scheduledAt)
+        .eq('meeting_type', 'r1')
         .in('status', ['scheduled', 'rescheduled'])
         .maybeSingle();
 
@@ -181,10 +185,12 @@ export function MoveAttendeeModal({
             scheduled_at: scheduledAt,
             duration_minutes: slot.duration,
             status: 'scheduled',
+            meeting_type: 'r1',
             lead_type: 'A',
           })
           .select()
           .single();
+
 
         if (createError) throw createError;
         targetSlotId = newSlot.id;
@@ -214,8 +220,11 @@ export function MoveAttendeeModal({
             meeting_slot_id: targetSlotId,
             contact_id: originalAttendee.contact_id,
             deal_id: originalAttendee.deal_id,
-            status: shouldPreserveStatusNoShow ? currentAttendeeStatus : 'rescheduled',
+            // O registro NOVO (slot novo) fica ativo; o histórico de no-show
+            // permanece no registro original
+            status: shouldPreserveStatusNoShow ? currentAttendeeStatus : 'invited',
             is_reschedule: !shouldPreserveStatusNoShow,
+
             parent_attendee_id: attendee.id, // Vincula ao original no-show
             // Fallback: se o original não tinha booked_by, usar o usuário atual
             booked_by: originalAttendee.booked_by ?? currentUser?.id ?? null,
@@ -313,8 +322,11 @@ export function MoveAttendeeModal({
         .from('meeting_slot_attendees')
         .update({ 
           meeting_slot_id: targetSlotId,
-          status: shouldPreserveStatus ? currentAttendeeStatus : 'rescheduled',
+          // Registro único: ao apontar para o slot NOVO o status precisa ficar
+          // ATIVO, senão a reunião desaparece da agenda
+          status: shouldPreserveStatus ? currentAttendeeStatus : 'invited',
           is_reschedule: !shouldPreserveStatus,
+
           updated_at: new Date().toISOString()
         })
         .eq('id', attendee.id);

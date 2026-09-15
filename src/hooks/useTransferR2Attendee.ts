@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { assertCloserMatchesMeetingType } from './useCloserScheduling';
+
 
 interface TransferParams {
   attendeeId: string;
@@ -36,6 +38,10 @@ export function useTransferR2Attendee() {
       targetDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
       const targetDateTimeStr = targetDateTime.toISOString();
 
+      // Closer destino precisa ter cadastro de R2 (closers tem 1 linha por
+      // email+bu+meeting_type; gravar a linha de R1 aqui esconde a reunião)
+      await assertCloserMatchesMeetingType(targetCloserId, 'r2');
+
       // 2. Check if target slot already exists
       const { data: existingSlot } = await supabase
         .from('meeting_slots')
@@ -45,6 +51,7 @@ export function useTransferR2Attendee() {
         .eq('meeting_type', 'r2')
         .in('status', ['scheduled', 'rescheduled'])
         .maybeSingle();
+
 
       let targetSlotId = existingSlot?.id;
 
