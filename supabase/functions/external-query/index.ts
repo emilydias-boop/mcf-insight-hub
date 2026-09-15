@@ -13,26 +13,14 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// Whitelist of allowed public tables to prevent arbitrary access.
-// Extend as needed.
-const ALLOWED_TABLES = new Set<string>([
-  "hubla_transactions",
-  "crm_deals",
-  "crm_contacts",
-  "consortium_cards",
-  "consortium_payments",
-  "consortium_installments",
-  "consorcio_proposals",
-  "profiles",
-  "employees",
-  "billing_history",
-  "billing_installments",
-  "billing_subscriptions",
-  "transactions",
-  "a010_sales",
-  "sdr_month_payout",
-  "consorcio_closer_payout",
+// Lista branca fechada de ações. Não existe mais modo passa-através por nome
+// de tabela: qualquer outra coisa é recusada com 403 e registrada no log.
+const ALLOWED_ACTIONS = new Set<string>([
+  "get_metas_equipe_mensal",
+  "get_bu_totals",
+  "painel_incorporador_totais",
 ]);
+
 
 // ============================================================
 // Pricing logic — mirrored from src/lib/incorporadorPricing.ts
