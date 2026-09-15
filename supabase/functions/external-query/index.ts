@@ -371,73 +371,45 @@ Deno.serve(async (req) => {
     }
   }
 
-  const table = (body.table ?? "").toString().trim();
-  const select = typeof body.select === "string" && body.select.trim() ? body.select : "*";
-  const limit = Math.min(Math.max(Number(body.limit ?? 100), 1), 1000);
-  const filters = (body.filters ?? {}) as Record<string, unknown>;
-
-  if (!table) return json({ error: "Missing 'table'" }, 400);
-  if (!/^[a-z0-9_]+$/i.test(table)) return json({ error: "Invalid table name" }, 400);
-  if (!ALLOWED_TABLES.has(table)) {
-    return json({ error: `Table '${table}' is not allowed` }, 403);
-  }
-  if (!/^[a-z0-9_,\s\*\(\)\.:]+$/i.test(select)) {
-    return json({ error: "Invalid select expression" }, 400);
-  }
-
-  // Build query. Supports scalar equality, arrays (IN) and simple operator objects:
-  // { gte: x, lte: y, like: '%foo%', in: [1,2] }
-  let query = supabase.from(table).select(select).limit(limit);
-  for (const [col, val] of Object.entries(filters)) {
-    if (!/^[a-z0-9_]+$/i.test(col)) {
-      return json({ error: `Invalid filter column '${col}'` }, 400);
+  // ---- Action: painel_incorporador_totais ----
+  // Repassa exatamente o JSON da RPC public.painel_incorporador_totais.
+  if (action === "painel_incorporador_totais") {
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const hoje = new Date(Date.now() - 3 * 60 * 60 * 1000); // America/Sao_Paulo
+    const y = hoje.getUTCFullYear();
+    const m = hoje.getUTCMonth();
+    const p = (n: number) => String(n).padStart(2, "0");
+    const ultimo = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const ini = (body.ini ?? body.start_date ?? `${y}-${p(m + 1)}-01`).toString().trim();
+    const fim = (body.fim ?? body.end_date ?? `${y}-${p(m + 1)}-${p(ultimo)}`).toString().trim();
+    if (!DATE_RE.test(ini) || !DATE_RE.test(fim)) {
+      return json({ error: "Parâmetros 'ini'/'fim' devem estar no formato YYYY-MM-DD" }, 400);
     }
-    if (val === null) {
-      query = query.is(col, null);
-    } else if (Array.isArray(val)) {
-      query = query.in(col, val as never[]);
-    } else if (typeof val === "object") {
-      for (const [op, v] of Object.entries(val as Record<string, unknown>)) {
-        switch (op) {
-          case "eq": query = query.eq(col, v as never); break;
-          case "neq": query = query.neq(col, v as never); break;
-          case "gt": query = query.gt(col, v as never); break;
-          case "gte": query = query.gte(col, v as never); break;
-          case "lt": query = query.lt(col, v as never); break;
-          case "lte": query = query.lte(col, v as never); break;
-          case "like": query = query.like(col, String(v)); break;
-          case "ilike": query = query.ilike(col, String(v)); break;
-          case "in": query = query.in(col, v as never[]); break;
-          case "is": query = query.is(col, v as never); break;
-          default: return json({ error: `Unsupported operator '${op}'` }, 400);
-        }
-      }
-    } else {
-      query = query.eq(col, val as never);
+    if (ini > fim) return json({ error: "'ini' não pode ser maior que 'fim'" }, 400);
+
+    try {
+      const { data, error } = await supabase.rpc("painel_incorporador_totais", {
+        p_ini: ini,
+        p_fim: fim,
+      });
+      if (error) throw error;
+      try {
+        await supabase.from("audit_logs").insert({
+          action: "external_query_painel_incorporador_totais",
+          table_name: "meeting_slot_attendees",
+          new_data: { client: clientName, ini, fim },
+          ip_address: ip,
+          user_agent: req.headers.get("user-agent"),
+        });
+      } catch (e) { console.error("audit_logs insert failed", e); }
+      return json(data);
+    } catch (e) {
+      console.error("[external-query] painel_incorporador_totais falhou", e);
+      return json({ error: "Erro interno ao processar a consulta" }, 500);
     }
   }
 
-  const { data, error } = await query;
-
-  try {
-    await supabase.from("audit_logs").insert({
-      action: error ? "external_query_error" : "external_query",
-      table_name: table,
-      new_data: {
-        client: clientName,
-        select,
-        limit,
-        filters,
-        row_count: data?.length ?? 0,
-        error: error?.message ?? null,
-      },
-      ip_address: ip,
-      user_agent: req.headers.get("user-agent"),
-    });
-  } catch (e) {
-    console.error("audit_logs insert failed", e);
-  }
-
-  if (error) return json({ error: error.message }, 400);
-  return json({ data, count: data?.length ?? 0 });
+  // Ação liberada mas não implementada (não deve acontecer).
+  console.error("[external-query] ação liberada sem implementação", action);
+  return json({ error: "Recurso não liberado" }, 403);
 });
