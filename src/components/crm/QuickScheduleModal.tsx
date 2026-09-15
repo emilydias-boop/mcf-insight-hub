@@ -371,7 +371,8 @@ export function QuickScheduleModal({
   const { data: slotsCountByDate } = useAvailableSlotsCountByDate(
     selectedCloser,
     allowedDates,
-    detectedLeadType
+    // A configuração de disponibilidade (closer_availability) só tem A e B
+    detectedLeadType === 'B' ? 'B' : 'A'
   );
 
   // Handle selecting a deal from search results
