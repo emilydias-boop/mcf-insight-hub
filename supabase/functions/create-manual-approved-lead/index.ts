@@ -129,6 +129,31 @@ Deno.serve(async (req) => {
 
     // 4. Create meeting_slot (R2 manual)
     const meetingScheduledAt = scheduledAt || transaction.sale_date || new Date().toISOString();
+
+    // O closer precisa ter cadastro de R2 (closers tem 1 linha por email+bu+meeting_type).
+    // Gravar a linha de R1 num slot R2 esconde a reunião da agenda.
+    const { data: closerRow, error: closerRowError } = await supabase
+      .from('closers')
+      .select('id, name, bu, meeting_type')
+      .eq('id', closerId)
+      .maybeSingle();
+
+    if (closerRowError || !closerRow) {
+      return new Response(
+        JSON.stringify({ error: 'Closer não encontrado', details: closerRowError?.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if ((closerRow.meeting_type || 'r1') !== 'r2') {
+      return new Response(
+        JSON.stringify({
+          error: `${closerRow.name} não possui cadastro de closer R2 na BU ${closerRow.bu}. Cadastre em Configurações › Closers antes de continuar.`,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     
     const { data: meetingSlot, error: meetingError } = await supabase
       .from('meeting_slots')

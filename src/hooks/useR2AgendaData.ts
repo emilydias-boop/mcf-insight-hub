@@ -4,6 +4,8 @@ import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import { syncDealStageFromAgenda } from './useAgendaData';
 import { syncGoogleCalendar } from '@/lib/googleCalendarSync';
+import { assertCloserMatchesMeetingType } from './useCloserScheduling';
+
 
 // Re-export types from existing hooks
 export type { R2Meeting } from './useR2AgendaMeetings';
@@ -123,6 +125,10 @@ export function useRescheduleR2Meeting() {
 
         // 2. Find or create target slot for the new date/time
         const targetDateTime = newDate.toISOString();
+
+        // Closer destino precisa ter cadastro de R2
+        await assertCloserMatchesMeetingType(targetCloserId, 'r2');
+
         const { data: existingSlot } = await supabase
           .from('meeting_slots')
           .select('id')
@@ -152,6 +158,7 @@ export function useRescheduleR2Meeting() {
           targetSlotId = newSlot.id;
         }
 
+
         // Cria/atualiza o evento no Google Calendar do closer de destino
         syncGoogleCalendar(existingSlot?.id ? 'update' : 'create', targetSlotId);
 
@@ -173,8 +180,11 @@ export function useRescheduleR2Meeting() {
             r2_confirmation: originalAttendee.r2_confirmation,
             r2_observations: originalAttendee.r2_observations,
             notes: originalAttendee.notes,
-            status: 'rescheduled',
+            // Registro do slot NOVO fica ATIVO (o 'rescheduled' marca apenas o
+            // registro histórico do slot ANTIGO, logo abaixo)
+            status: 'invited',
             is_reschedule: true,
+
             parent_attendee_id: attendeeId,
             booked_at: new Date().toISOString(),
           });
@@ -320,8 +330,12 @@ export function useCreateR2Meeting() {
       r2Observations?: string;
       bookedBy?: string;
     }) => {
+      // Closer precisa ter cadastro de R2 antes de virar dono do slot
+      await assertCloserMatchesMeetingType(closerId, 'r2');
+
       const { data: slot, error: slotError } = await supabase
         .from('meeting_slots')
+
         .insert({
           closer_id: closerId,
           deal_id: dealId || null,

@@ -41,22 +41,88 @@ export interface AvailableSlot {
   duration: number;
 }
 
-// Fetch all active closers
-export function useClosers() {
+/**
+ * Closers ativos.
+ *
+ * Sem filtros mantém o comportamento histórico (todos os ativos, incluindo a
+ * mesma pessoa repetida por BU/tipo de reunião). Com `bu`/`meetingType` devolve
+ * apenas o cadastro válido para aquele contexto — obrigatório em qualquer tela
+ * que grave `meeting_slots.closer_id`, porque `closers` tem uma linha por
+ * (email, bu, meeting_type) e gravar a linha de R2 num slot de R1 faz a reunião
+ * desaparecer da agenda.
+ */
+export function useClosers(filters?: { bu?: string | null; meetingType?: 'r1' | 'r2' | null }) {
+  const bu = filters?.bu ?? null;
+  const meetingType = filters?.meetingType ?? null;
+
   return useQuery({
-    queryKey: ['closers'],
+    queryKey: ['closers', bu, meetingType],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('closers')
         .select('*')
-        .eq('is_active', true)
-        .order('name');
-      
+        .eq('is_active', true);
+
+      if (bu) query = query.eq('bu', bu);
+      if (meetingType) query = query.eq('meeting_type', meetingType);
+
+      const { data, error } = await query.order('name');
+
       if (error) throw error;
       return data as Closer[];
     },
   });
 }
+
+const MEETING_TYPE_LABEL: Record<string, string> = { r1: 'R1', r2: 'R2' };
+
+/**
+ * Garante que o closer destino tem cadastro do MESMO tipo de reunião do slot.
+ * Deve ser chamada ANTES de qualquer gravação de `meeting_slots.closer_id`.
+ * Lança erro (mensagem pronta para toast) quando incompatível.
+ */
+export async function assertCloserMatchesMeetingType(
+  closerId: string,
+  meetingType: string | null | undefined,
+): Promise<void> {
+  if (!closerId || !meetingType) return;
+
+  const { data: closer, error } = await supabase
+    .from('closers')
+    .select('id, name, bu, meeting_type')
+    .eq('id', closerId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!closer) throw new Error('Closer destino inválido');
+
+  const closerType = (closer as any).meeting_type as string | null;
+  if (!closerType) return; // cadastro legado sem tipo: não bloqueia
+
+  if (closerType !== meetingType) {
+    const label = MEETING_TYPE_LABEL[meetingType] || meetingType.toUpperCase();
+    const bu = (closer as any).bu || 'indefinida';
+    throw new Error(
+      `${(closer as any).name} não possui cadastro de closer ${label} na BU ${bu}. ` +
+        'Cadastre em Configurações › Closers antes de transferir.',
+    );
+  }
+}
+
+/** Variante que resolve o `meeting_type` a partir de um slot existente. */
+export async function assertCloserMatchesSlot(closerId: string, slotId: string): Promise<void> {
+  if (!closerId || !slotId) return;
+
+  const { data: slot, error } = await supabase
+    .from('meeting_slots')
+    .select('id, meeting_type')
+    .eq('id', slotId)
+    .maybeSingle();
+
+  if (error) throw error;
+  await assertCloserMatchesMeetingType(closerId, (slot as any)?.meeting_type ?? null);
+}
+
 
 // Fetch closer availability
 export function useCloserAvailability(closerId?: string) {
@@ -187,7 +253,10 @@ export function useBookMeeting() {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
-      
+
+      // Closer precisa ter cadastro do mesmo tipo da reunião criada (R1)
+      await assertCloserMatchesMeetingType(closerId, 'r1');
+
       // Create the meeting slot
       const { data: slot, error: slotError } = await supabase
         .from('meeting_slots')
@@ -200,7 +269,9 @@ export function useBookMeeting() {
           booked_by: user.id,
           notes,
           status: 'scheduled',
+          meeting_type: 'r1',
         })
+
         .select('*, closers(*)')
         .single();
       

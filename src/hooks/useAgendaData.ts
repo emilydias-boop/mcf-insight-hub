@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 import { syncGoogleCalendar } from '@/lib/googleCalendarSync';
+import { assertCloserMatchesSlot } from './useCloserScheduling';
+
 
 export interface MeetingAttendee {
   id: string;
@@ -1932,10 +1934,13 @@ export function useRescheduleMeeting() {
         scheduled_at: newDate.toISOString(),
         status: 'rescheduled',
       };
-      
+
       if (closerId) {
+        // Nunca gravar closer com meeting_type diferente do slot
+        await assertCloserMatchesSlot(closerId, meetingId);
         updateData.closer_id = closerId;
       }
+
 
       const { error } = await supabase
         .from('meeting_slots')
@@ -1970,9 +1975,10 @@ export function useRescheduleMeeting() {
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       toast.success('Reunião reagendada');
     },
-    onError: () => {
-      toast.error('Erro ao reagendar reunião');
+    onError: (e: any) => {
+      toast.error(e?.message || 'Erro ao reagendar reunião');
     },
+
   });
 }
 
@@ -2491,15 +2497,18 @@ export function useMoveAttendeeToMeeting() {
       const shouldPreserve = preserveStatus && 
         ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
 
-      // Move the main attendee and update status
+      // Move the main attendee and update status.
+      // Registro único: quem aponta para o slot NOVO fica ATIVO ('invited'),
+      // senão a reunião existe no banco e não aparece em nenhuma tela.
       const { error: mainError } = await supabase
         .from('meeting_slot_attendees')
         .update({ 
           meeting_slot_id: targetMeetingSlotId,
-          status: shouldPreserve ? currentAttendeeStatus : 'rescheduled',
+          status: shouldPreserve ? currentAttendeeStatus : 'invited',
           is_reschedule: !shouldPreserve,
           updated_at: new Date().toISOString()
         })
+
         .eq('id', attendeeId);
 
       if (mainError) throw mainError;
@@ -2553,9 +2562,10 @@ export function useMoveAttendeeToMeeting() {
       queryClient.invalidateQueries({ queryKey: ['sdr-metrics-v2'] });
       toast.success('Participante movido para outra reunião');
     },
-    onError: () => {
-      toast.error('Erro ao mover participante');
+    onError: (e: any) => {
+      toast.error(e?.message || 'Erro ao mover participante');
     },
+
   });
 }
 

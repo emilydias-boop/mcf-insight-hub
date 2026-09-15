@@ -26,9 +26,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useMeetingsForDate } from '@/hooks/useAgendaData';
-import { useClosers, useBookedSlots } from '@/hooks/useCloserScheduling';
+import { useClosers, useBookedSlots, assertCloserMatchesSlot, assertCloserMatchesMeetingType } from '@/hooks/useCloserScheduling';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
+
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -63,7 +64,33 @@ interface AvailableSlot {
 
 export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
-  const { data: closers } = useClosers();
+
+  // Contexto do slot: tipo de reunião (r1/r2) e BU do closer atual. `closers` tem
+  // uma linha por (email, bu, meeting_type) — sem esses dois filtros a lista
+  // mostraria a mesma pessoa repetida e poderia gravar o cadastro de R2 num slot
+  // de R1, fazendo a reunião desaparecer da agenda.
+  const { data: slotContext } = useQuery({
+    queryKey: ['move-meeting-slot-context', meeting?.id],
+    enabled: !!meeting?.id && open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meeting_slots')
+        .select('id, meeting_type, closer:closers(id, bu, meeting_type)')
+        .eq('id', meeting!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return {
+        meetingType: ((data as any)?.meeting_type ?? null) as 'r1' | 'r2' | null,
+        bu: ((data as any)?.closer?.bu ?? null) as string | null,
+      };
+    },
+  });
+
+  const slotMeetingType = slotContext?.meetingType ?? null;
+  const { data: closers } = useClosers({
+    bu: slotContext?.bu ?? null,
+    meetingType: slotMeetingType,
+  });
 
   // ----------- Tab: Swap Closer -----------
   const [newCloserId, setNewCloserId] = useState<string>('');
@@ -75,12 +102,16 @@ export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
       const targetCloser = closers?.find((c) => c.id === newCloserId);
       if (!targetCloser) throw new Error('Closer destino inválido');
 
+      // Nunca gravar closer_id com meeting_type diferente do slot
+      await assertCloserMatchesSlot(newCloserId, meeting.id);
+
       // Atualiza closer do slot
       const { error: updErr } = await supabase
         .from('meeting_slots')
         .update({ closer_id: newCloserId, updated_at: new Date().toISOString() })
         .eq('id', meeting.id);
       if (updErr) throw updErr;
+
 
       // Log para cada participante
       const { data: authData } = await supabase.auth.getUser();
@@ -134,7 +165,7 @@ export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
   const [moveReason, setMoveReason] = useState('');
 
   const dayOfWeek = selectedDate ? selectedDate.getDay() : 0;
-  const { data: daySlots } = useCloserDaySlots(dayOfWeek, 'r1');
+  const { data: daySlots } = useCloserDaySlots(dayOfWeek, slotMeetingType ?? 'r1');
   const { data: bookedSlots } = useBookedSlots(
     selectedDate || new Date(),
     selectedDate || new Date(),
@@ -204,7 +235,9 @@ export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
       }
 
       for (const a of attendees) {
-        // Atualiza o attendee preservando status original
+        // Atualiza o attendee preservando status original.
+        // Registro único: quem vai para o slot novo fica ATIVO ('invited'),
+        // senão a reunião existe no banco e não renderiza em lugar nenhum.
         const preserve = ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(
           a.status || '',
         );
@@ -212,12 +245,13 @@ export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
           .from('meeting_slot_attendees')
           .update({
             meeting_slot_id: targetSlotId,
-            status: preserve ? a.status : 'rescheduled',
+            status: preserve ? a.status : 'invited',
             is_reschedule: !preserve,
             updated_at: new Date().toISOString(),
           })
           .eq('id', a.id);
         if (updErr) throw updErr;
+
 
         await supabase.from('attendee_movement_logs').insert({
           attendee_id: a.id,
@@ -261,13 +295,24 @@ export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
 
   const handleMoveToSlot = async (slot: AvailableSlot) => {
     if (!meeting) return;
+    const targetMeetingType = slotMeetingType ?? 'r1';
     const scheduledAt = slot.datetime.toISOString();
+
+    // Closer destino precisa ter cadastro do mesmo tipo de reunião
+    try {
+      await assertCloserMatchesMeetingType(slot.closerId, targetMeetingType);
+    } catch (e: any) {
+      toast.error(e?.message || 'Closer destino incompatível com o tipo da reunião');
+      return;
+    }
+
     // Garante slot destino
     const { data: existing } = await supabase
       .from('meeting_slots')
       .select('id')
       .eq('closer_id', slot.closerId)
       .eq('scheduled_at', scheduledAt)
+      .eq('meeting_type', targetMeetingType)
       .in('status', ['scheduled', 'rescheduled'])
       .maybeSingle();
     let targetSlotId = existing?.id;
@@ -280,15 +325,17 @@ export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
           duration_minutes: slot.duration,
           status: 'scheduled',
           lead_type: 'A',
+          meeting_type: targetMeetingType,
         })
         .select('id')
         .single();
       if (error) {
-        toast.error('Erro ao criar slot destino');
+        toast.error(error.message || 'Erro ao criar slot destino');
         return;
       }
       targetSlotId = created.id;
     }
+
     moveAll.mutate({
       targetSlotId,
       targetCloserId: slot.closerId,
