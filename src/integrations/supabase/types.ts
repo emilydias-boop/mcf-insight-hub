@@ -7056,6 +7056,47 @@ export type Database = {
           },
         ]
       }
+      crm_deal_icp_historico: {
+        Row: {
+          alterado_em: string
+          alterado_por: string | null
+          contexto: string | null
+          deal_id: string
+          id: string
+          origem: string
+          segmento_anterior: string | null
+          segmento_novo: string | null
+        }
+        Insert: {
+          alterado_em?: string
+          alterado_por?: string | null
+          contexto?: string | null
+          deal_id: string
+          id?: string
+          origem?: string
+          segmento_anterior?: string | null
+          segmento_novo?: string | null
+        }
+        Update: {
+          alterado_em?: string
+          alterado_por?: string | null
+          contexto?: string | null
+          deal_id?: string
+          id?: string
+          origem?: string
+          segmento_anterior?: string | null
+          segmento_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_deal_icp_historico_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_deals: {
         Row: {
           archived_at: string | null
