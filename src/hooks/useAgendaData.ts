@@ -1454,7 +1454,7 @@ export function useCreateMeeting() {
       scheduledAt: Date;
       durationMinutes?: number;
       notes?: string;
-      leadType?: LeadType;
+      leadType?: 'A' | 'B' | 'C';
       sendNotification?: boolean;
       sdrEmail?: string;
       alreadyBuilds?: boolean | null;
@@ -1835,14 +1835,16 @@ export function useMarkAttendeeNotified() {
 export function useCheckSlotAvailability(
   closerId: string | undefined,
   scheduledAt: Date | undefined,
-  leadType: LeadType
+  // Mantido apenas por compatibilidade de assinatura: ocupação de horário não
+  // depende do segmento do lead (um horário ocupado por lead B está ocupado).
+  _leadType?: string | null
 ) {
   return useQuery({
-    queryKey: ['slot-availability', closerId, scheduledAt?.toISOString(), leadType],
+    queryKey: ['slot-availability', closerId, scheduledAt?.toISOString()],
     queryFn: async () => {
       if (!closerId || !scheduledAt) return null;
 
-      // Count existing attendees in meetings for this hour and lead type
+      // Count existing attendees in meetings for this hour (todo tipo de lead)
       const hourStart = new Date(scheduledAt);
       hourStart.setMinutes(0, 0, 0);
       const hourEnd = new Date(scheduledAt);
@@ -1853,7 +1855,6 @@ export function useCheckSlotAvailability(
         .from('meeting_slots')
         .select('id')
         .eq('closer_id', closerId)
-        .eq('lead_type', leadType)
         .gte('scheduled_at', hourStart.toISOString())
         .lte('scheduled_at', hourEnd.toISOString())
         .neq('status', 'canceled');
@@ -2614,6 +2615,8 @@ export function useMeetingsForDate(date: Date | null, includeCompleted: boolean 
 export function useAvailableSlotsCountByDate(
   closerId: string | undefined,
   dates: Date[],
+  // Ocupação não depende do segmento do lead; o parâmetro segue apenas para a
+  // configuração de disponibilidade (closer_availability), que é por tipo.
   leadType: 'A' | 'B' = 'A'
 ) {
   return useQuery({
@@ -2662,7 +2665,6 @@ export function useAvailableSlotsCountByDate(
           .from('meeting_slot_attendees')
           .select('*, meeting_slots!inner(*)', { count: 'exact', head: true })
           .eq('meeting_slots.closer_id', closerId)
-          .eq('meeting_slots.lead_type', leadType)
           .gte('meeting_slots.scheduled_at', dayStart.toISOString())
           .lte('meeting_slots.scheduled_at', dayEnd.toISOString())
           .neq('meeting_slots.status', 'canceled');
