@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
+import { resolveProductName, lookupProductAlias } from "../_shared/resolveProductName.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -817,7 +818,19 @@ Deno.serve(async (req) => {
       const product = hublaEvent?.product || {};
       
       paymentId = invoice?.id || `mcfpay_${Date.now()}`;
-      productName = product.name || invoice?.items?.[0]?.product?.name || 'Produto MCFPay';
+      productName = product.name || invoice?.items?.[0]?.product?.name || '';
+      if (!productName) {
+        // Sem nome no payload: tenta mapear pelo id do produto (mcfpay:<id>).
+        // Nunca cai em balde genérico quando existe id — cada produto
+        // desconhecido fica identificável no monitoramento.
+        const mcfProductId = hublaEvent?.products?.[0]?.id || product?.id || null;
+        if (mcfProductId) {
+          const mapped = await lookupProductAlias(supabase, `mcfpay:${mcfProductId}`, 'asaas-mcfpay');
+          productName = mapped || `MCF Pay - produto ${mcfProductId}`;
+        } else {
+          productName = 'Produto MCFPay';
+        }
+      }
       
       const subtotalCents = invoice?.amount?.subtotalCents || invoice?.amount?.totalCents || 0;
       grossValue = subtotalCents / 100;
@@ -900,7 +913,7 @@ Deno.serve(async (req) => {
     const transactionData = {
       hubla_id: hublaId,
       event_type: event,
-      product_name: productName,
+      product_name: await resolveProductName(supabase, productName),
       product_category: productCategory,
       net_value: netValue,
       product_price: grossValue,
