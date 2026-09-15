@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
         contact_id: contactId,
         origin_id: destino.origin_id,
         stage_id: stage.id,
-        data_source: "encaminhamento_gr",
+        data_source: "webhook",
         product_name: destino.label,
         custom_fields: {
           origem_externa: sourceApp,
