@@ -333,7 +333,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: CreateEventRequest = await req.json();
-    const { closerId, dealId, contactId, scheduledAt, durationMinutes = 60, leadType = "A", notes } = body;
+    const { closerId, dealId, contactId, scheduledAt, durationMinutes = 60, leadType, notes } = body;
 
     console.log("📅 Creating meeting:", { closerId, dealId, scheduledAt, leadType });
 
@@ -898,7 +898,7 @@ serve(async (req) => {
         // Create event with Google Meet
         const googleEvent = await createGoogleCalendarEvent(accessToken, closer.google_calendar_id, {
           summary: `Reunião - ${contactInfo.name || deal?.name || "Lead"}`,
-          description: `Lead Type: ${leadType}\n${notes || ""}\n\nAgendado via CRM`,
+          description: `Lead Type: ${leadType ?? "herdado do segmento"}\n${notes || ""}\n\nAgendado via CRM`,
           start: scheduledDate,
           end: endDate,
           attendees,
@@ -1017,13 +1017,13 @@ serve(async (req) => {
           contact_id: resolvedContactId || null,
           scheduled_at: scheduledAt,
           duration_minutes: durationMinutes,
-          lead_type: leadType,
+          lead_type: leadType ?? null,
           status: "scheduled",
           meeting_link: meetingLink,
           video_conference_link: videoConferenceLink,
           google_event_id: googleEventId,
           booked_by: bookedBy,
-          notes: notes || `Agendado via CRM\nLead Type: ${leadType}`,
+          notes: notes || `Agendado via CRM\nLead Type: ${leadType ?? "herdado do segmento"}`,
         })
         .select("id")
         .single();
@@ -1041,7 +1041,7 @@ serve(async (req) => {
     }
 
     // Normalize notes: use provided notes or generate default
-    const normalizedNotes = notes?.trim() || `Agendado via CRM\nLead Type: ${leadType}`;
+    const normalizedNotes = notes?.trim() || `Agendado via CRM\nLead Type: ${leadType ?? "herdado do segmento"}`;
 
     // Add attendee record with the same notes as the slot
     // Include attendee_name and attendee_phone even without contact_id for display purposes
