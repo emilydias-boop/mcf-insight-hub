@@ -324,7 +324,6 @@ export function MoveEntireMeetingModal({ meeting, open, onOpenChange }: Props) {
           scheduled_at: scheduledAt,
           duration_minutes: slot.duration,
           status: 'scheduled',
-          lead_type: 'A',
           meeting_type: targetMeetingType,
         })
         .select('id')

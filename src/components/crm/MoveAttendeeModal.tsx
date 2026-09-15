@@ -186,7 +186,6 @@ export function MoveAttendeeModal({
             duration_minutes: slot.duration,
             status: 'scheduled',
             meeting_type: 'r1',
-            lead_type: 'A',
           })
           .select()
           .single();
