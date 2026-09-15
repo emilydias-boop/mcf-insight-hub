@@ -291,3 +291,6 @@ verify_jwt = false
 
 [functions.funil-incorporador]
 verify_jwt = false
+
+[functions.crm-externo-encaminhamento]
+verify_jwt = false
