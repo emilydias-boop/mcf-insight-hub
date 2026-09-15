@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
-import { resolveProductName, lookupProductAlias } from "../_shared/resolveProductName.ts";
+import { resolveProductName } from "../_shared/resolveProductName.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
