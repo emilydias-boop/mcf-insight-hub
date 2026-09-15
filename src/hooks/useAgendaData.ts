@@ -1454,7 +1454,7 @@ export function useCreateMeeting() {
       scheduledAt: Date;
       durationMinutes?: number;
       notes?: string;
-      leadType?: LeadType;
+      leadType?: 'A' | 'B' | 'C';
       sendNotification?: boolean;
       sdrEmail?: string;
       alreadyBuilds?: boolean | null;
@@ -1837,7 +1837,7 @@ export function useCheckSlotAvailability(
   scheduledAt: Date | undefined,
   // Mantido apenas por compatibilidade de assinatura: ocupação de horário não
   // depende do segmento do lead (um horário ocupado por lead B está ocupado).
-  _leadType?: LeadType | null
+  _leadType?: string | null
 ) {
   return useQuery({
     queryKey: ['slot-availability', closerId, scheduledAt?.toISOString()],
