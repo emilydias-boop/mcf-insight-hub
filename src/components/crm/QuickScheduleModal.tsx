@@ -103,16 +103,13 @@ interface DealOption {
   rescheduleCount?: number;
 }
 
-type LeadType = 'A' | 'B';
+type LeadType = 'A' | 'B' | 'C';
 
-// Helper to detect lead type from tags
-function detectLeadType(tags?: string[]): LeadType {
-  if (!tags || tags.length === 0) return 'A';
-  const tagsLower = tags.map(t => t.toLowerCase());
-  if (tagsLower.some(t => t.includes('lead b') || t.includes('tipo b') || t === 'b')) {
-    return 'B';
-  }
-  return 'A';
+// A classificação do lead vem do segmento ICP do negócio (crm_deals.icp_segment).
+// Quando o negócio não tem segmento, fica nulo e o gatilho do banco decide.
+function normalizeIcpSegment(seg?: string | null): LeadType | null {
+  const v = (seg ?? '').trim().toUpperCase();
+  return v === 'A' || v === 'B' || v === 'C' ? (v as LeadType) : null;
 }
 
 // Mínimo de caracteres exigido na nota do agendamento. Evita que o usuário
@@ -287,9 +284,25 @@ export function QuickScheduleModal({
   const sendNotification = useSendMeetingNotification();
 
   // Detect lead type from selected deal
-  const detectedLeadType = useMemo(() => {
-    return detectLeadType(selectedDeal?.tags);
-  }, [selectedDeal?.tags]);
+  // Segmento ICP do negócio selecionado (fonte única da classificação)
+  const { data: dealIcpSegment } = useQuery({
+    queryKey: ['quick-schedule-deal-icp', selectedDeal?.id],
+    enabled: !!selectedDeal?.id && open,
+    staleTime: 60000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('crm_deals')
+        .select('icp_segment')
+        .eq('id', selectedDeal!.id)
+        .maybeSingle();
+      return (data as any)?.icp_segment ?? null;
+    },
+  });
+
+  const detectedLeadType = useMemo(
+    () => normalizeIcpSegment(dealIcpSegment),
+    [dealIcpSegment]
+  );
 
   // Detect if booking is retroactive (meeting date is in the past)
   const isRetroactiveBooking = useMemo(() => {
@@ -453,7 +466,7 @@ export function QuickScheduleModal({
       contactId: selectedDeal.contact?.id,
       scheduledAt,
       notes: finalNotes,
-      leadType: detectedLeadType,
+      leadType: detectedLeadType ?? undefined,
       sendNotification: autoSendWhatsApp,
       sdrEmail: selectedSdr || undefined,
       alreadyBuilds,
@@ -917,14 +930,18 @@ export function QuickScheduleModal({
                   variant="outline" 
                   className={cn(
                     "font-semibold",
-                    detectedLeadType === 'A' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
+                    detectedLeadType === 'A'
+                      ? 'border-blue-500 text-blue-600'
+                      : detectedLeadType
+                        ? 'border-purple-500 text-purple-600'
+                        : 'border-muted-foreground text-muted-foreground'
                   )}
                 >
                   <Tag className="h-3 w-3 mr-1" />
-                  Lead {detectedLeadType}
+                  {detectedLeadType ? `Lead ${detectedLeadType}` : 'Sem classificação'}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  Detectado automaticamente pelas tags
+                  Classificação do negócio (ICP)
                 </span>
               </div>
             )}
@@ -1258,7 +1275,7 @@ export function QuickScheduleModal({
             )}>
               <div className="flex items-center justify-between">
                 <span>
-                  Lead {detectedLeadType} às {selectedTime}
+                  {detectedLeadType ? `Lead ${detectedLeadType}` : 'Lead sem classificação'} às {selectedTime}
                 </span>
                 <span className="font-medium">
                   {slotAvailability.currentCount}/{slotAvailability.maxLeads ?? 4} leads
