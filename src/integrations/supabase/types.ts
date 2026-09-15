@@ -7235,6 +7235,114 @@ export type Database = {
           },
         ]
       }
+      crm_externo_encaminhamentos: {
+        Row: {
+          anamnese: Json
+          area: string
+          callback_url: string | null
+          cliente_documento: string | null
+          cliente_email: string | null
+          cliente_endereco: Json
+          cliente_nome: string
+          cliente_perfil: Json
+          cliente_telefone: string | null
+          contact_id: string | null
+          created_at: string
+          deal_id: string | null
+          external_id: string
+          faixa_classificacao: string | null
+          gerente_email: string | null
+          gerente_nome: string | null
+          historico: Json
+          id: string
+          motivo: string
+          payload_original: Json
+          recebido_em: string
+          responsavel_nome: string | null
+          responsavel_profile_id: string | null
+          score: number | null
+          source_app: string
+          status: string
+          status_atualizado_em: string
+          updated_at: string
+        }
+        Insert: {
+          anamnese?: Json
+          area: string
+          callback_url?: string | null
+          cliente_documento?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: Json
+          cliente_nome: string
+          cliente_perfil?: Json
+          cliente_telefone?: string | null
+          contact_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          external_id: string
+          faixa_classificacao?: string | null
+          gerente_email?: string | null
+          gerente_nome?: string | null
+          historico?: Json
+          id?: string
+          motivo: string
+          payload_original?: Json
+          recebido_em?: string
+          responsavel_nome?: string | null
+          responsavel_profile_id?: string | null
+          score?: number | null
+          source_app?: string
+          status?: string
+          status_atualizado_em?: string
+          updated_at?: string
+        }
+        Update: {
+          anamnese?: Json
+          area?: string
+          callback_url?: string | null
+          cliente_documento?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: Json
+          cliente_nome?: string
+          cliente_perfil?: Json
+          cliente_telefone?: string | null
+          contact_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          external_id?: string
+          faixa_classificacao?: string | null
+          gerente_email?: string | null
+          gerente_nome?: string | null
+          historico?: Json
+          id?: string
+          motivo?: string
+          payload_original?: Json
+          recebido_em?: string
+          responsavel_nome?: string | null
+          responsavel_profile_id?: string | null
+          score?: number | null
+          source_app?: string
+          status?: string
+          status_atualizado_em?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_externo_encaminhamentos_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_externo_encaminhamentos_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_groups: {
         Row: {
           clint_id: string
