@@ -603,13 +603,17 @@ export default function ReunioesEquipe() {
       r1Agendada: sumCloser(rows, 'r1_agendada'),
       r1Realizada: sumCloser(rows, 'r1_realizada'),
       noShows: sumCloser(rows, 'noshow'),
+      contratos: sumCloser(rows, 'contrato_pago'),
     });
     return { a: build(closerMetricsA), b: build(closerMetricsB), c: build(closerMetricsC) };
   }, [closerMetricsA, closerMetricsB, closerMetricsC]);
 
   // Totais por segmento para os KPI cards.
-  // Contratos passam a vir do MESMO eixo da tabela de SDRs (régua caucoes_efetivas
-  // por SDR da última R1), para o card e a tabela nunca divergirem.
+  // Contratos passam a vir do MESMO eixo da tabela de Closers (16/09/2026: último
+  // card que ainda contava em eixo diferente da tabela; R1 agendada/realizada/
+  // no-show já tinham sido unificados). A quebra soma o bloco "Não atribuído",
+  // para que A + B + C + s/ICP feche com o total do card e "s/ICP" volte a
+  // significar "negócio sem classificação preenchida", não resíduo aritmético.
   const segmentTotals = useMemo(() => {
     const sumSdr = (map: Map<string, any>) => {
       const acc = { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 };
