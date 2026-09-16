@@ -12,10 +12,25 @@ export const useUsers = () => {
         .order("full_name");
 
       if (error) throw error;
-      return data as UserSummary[];
+
+      // A view não expõe o último login: buscamos em profiles para sinalizar
+      // quem nunca acessou o sistema.
+      const { data: logins } = await supabase
+        .from("profiles")
+        .select("id, last_login_at");
+
+      const loginMap = new Map(
+        (logins || []).map((p: any) => [p.id, p.last_login_at as string | null])
+      );
+
+      return (data || []).map((u: any) => ({
+        ...u,
+        last_login_at: loginMap.get(u.user_id) ?? null,
+      })) as UserSummary[];
     },
   });
 };
+
 
 export const useUserDetails = (userId: string | null) => {
   return useQuery({

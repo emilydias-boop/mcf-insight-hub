@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const CORPORATE_EMAIL_DOMAIN = "minhacasafinanciada.com";
+
 interface CreateUserRequest {
   email: string;
   full_name: string;
@@ -12,7 +14,10 @@ interface CreateUserRequest {
   squad?: string | null;
   cargo_id?: string;
   employee_id?: string;
+  /** Só true quando o admin confirmou explicitamente usar outro domínio. */
+  allow_external_domain?: boolean;
 }
+
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -63,7 +68,18 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const { email, full_name, role, squad, cargo_id, employee_id }: CreateUserRequest = await req.json();
+    const {
+      email: rawEmail,
+      full_name,
+      role,
+      squad,
+      cargo_id,
+      employee_id,
+      allow_external_domain,
+    }: CreateUserRequest = await req.json();
+
+    // Normalização obrigatória: trim + lowercase antes de validar e antes de criar
+    const email = String(rawEmail || "").trim().toLowerCase();
 
     // Validate required fields
     if (!email || !full_name || !role) {
@@ -81,6 +97,17 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Regra de domínio corporativo: outro domínio só com confirmação explícita
+    if (!email.endsWith(`@${CORPORATE_EMAIL_DOMAIN}`) && !allow_external_domain) {
+      return new Response(
+        JSON.stringify({
+          error: `O email de acesso deve terminar em @${CORPORATE_EMAIL_DOMAIN}. Para usar outro domínio, confirme a opção "usar email de outro domínio".`,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
 
     console.log(`Creating user: ${email} with role: ${role}`);
 
@@ -304,17 +331,42 @@ Deno.serve(async (req) => {
       console.error("Error sending reset email:", resetError);
     }
 
-    console.log(`User ${email} created successfully`);
+    // Link de definição de senha para o gestor copiar (o SMTP padrão é pouco
+    // confiável, então o acesso não pode depender só do e-mail).
+    // Gerado por último para ser o token válido. Nunca é persistido nem logado.
+    let accessLink: string | null = null;
+    let accessLinkError: string | null = null;
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo: "https://mcf-insight-hub.lovable.app/reset-password" },
+    });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      accessLinkError = linkError?.message || "Não foi possível gerar o link de acesso";
+      console.error("Error generating access link:", accessLinkError);
+    } else {
+      accessLink = linkData.properties.action_link;
+    }
+
+    console.log(`User ${email} created successfully (email sent: ${!resetError})`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         user_id: newUser.user.id,
-        message: "Usuário criado com sucesso. Um email foi enviado para definir a senha.",
+        email,
+        message: resetError
+          ? "Usuário criado, mas o email de acesso NÃO foi enviado."
+          : "Usuário criado com sucesso. Um email foi enviado para definir a senha.",
         reset_link_sent: !resetError,
+        reset_error_message: resetError?.message || null,
+        access_link: accessLink,
+        access_link_error: accessLinkError,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
 
   } catch (error) {
     console.error("Unexpected error:", error);

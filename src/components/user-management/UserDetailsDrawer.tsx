@@ -39,7 +39,9 @@ import {
   useDeleteUser,
   useAddUserRole,
   useRemoveUserRole,
+  useGenerateAccessLink,
 } from "@/hooks/useUserMutations";
+
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -292,6 +294,30 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     await navigator.clipboard.writeText(tempPasswordResult);
     toast.success("Senha copiada!");
   };
+
+  // Link de definição de senha para enviar ao usuário (não é persistido em lugar algum)
+  const generateAccessLink = useGenerateAccessLink();
+  const [accessLink, setAccessLink] = useState<string | null>(null);
+  const [showAccessLink, setShowAccessLink] = useState(false);
+
+  const handleGenerateAccessLink = async () => {
+    if (!userDetails?.email) return;
+    try {
+      const result = await generateAccessLink.mutateAsync({ email: userDetails.email });
+      setAccessLink(result.reset_link);
+      setShowAccessLink(true);
+    } catch {
+      // Toast tratado na mutation
+    }
+  };
+
+  const handleCopyAccessLink = async () => {
+    if (!accessLink) return;
+    await navigator.clipboard.writeText(accessLink);
+    toast.success("Link copiado!");
+  };
+
+
 
   const handlePermissionsUpdate = () => {
     if (!userId) return;
@@ -736,6 +762,49 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
+
+                {/* Link de acesso (definição de senha) — alternativa ao e-mail */}
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={handleGenerateAccessLink}
+                  disabled={generateAccessLink.isPending || !userDetails?.email}
+                >
+                  {generateAccessLink.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Link2 className="h-4 w-4 mr-2" />
+                  )}
+                  Gerar link de acesso
+                </Button>
+
+                <AlertDialog open={showAccessLink} onOpenChange={setShowAccessLink}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Link de acesso gerado</AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-3">
+                          <p>
+                            Envie este link para <strong>{userDetails?.email}</strong> definir a
+                            senha. Ele é sensível, aparece só agora e não fica salvo em nenhum lugar.
+                          </p>
+                          <div className="font-mono text-xs p-3 rounded-md bg-muted text-foreground select-all break-all max-h-32 overflow-auto">
+                            {accessLink}
+                          </div>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <Button variant="outline" onClick={handleCopyAccessLink}>
+                        Copiar link
+                      </Button>
+                      <AlertDialogAction onClick={() => { setShowAccessLink(false); setAccessLink(null); }}>
+                        Fechar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
                 <Button 
                   variant="outline" 
                   className="w-full justify-start"
