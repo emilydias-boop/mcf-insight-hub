@@ -37,7 +37,10 @@ import { toast } from "sonner";
 
 const createUserSchema = z.object({
   full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  email: z.string().min(1, "Informe o e-mail de acesso"),
+  email: z
+    .string()
+    .min(1, "Informe o e-mail de acesso")
+    .email("E-mail inválido"),
   cargo_id: z.string().min(1, "Selecione um cargo"),
   role: z.string().min(1, "Selecione um role"),
   squad: z.string().optional(),
@@ -201,8 +204,8 @@ export function CreateUserDialog() {
             <DialogHeader>
               <DialogTitle>Adicionar Novo Usuário</DialogTitle>
               <DialogDescription>
-                O e-mail informado é o login do colaborador. Ele receberá um e-mail para
-                definir a senha — e você também poderá copiar o link de acesso no final.
+                O e-mail informado é o login do colaborador. Nenhum e-mail é enviado: no
+                final você copia o link de definição de senha e envia a ele.
               </DialogDescription>
             </DialogHeader>
 
@@ -448,20 +451,20 @@ export function CreateUserDialog() {
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {createdResult.reset_link_sent ? (
+                {createdResult.access_link ? (
                   <CheckCircle2 className="h-5 w-5 text-primary" />
                 ) : (
                   <AlertTriangle className="h-5 w-5 text-amber-500" />
                 )}
-                {createdResult.reset_link_sent
-                  ? "Usuário criado"
-                  : "Usuário criado, mas o e-mail NÃO foi enviado"}
+                {createdResult.access_link
+                  ? "Usuário criado — copie o link antes de fechar"
+                  : "Usuário criado, mas o link de acesso NÃO foi gerado"}
               </DialogTitle>
               <DialogDescription>
-                {createdResult.reset_link_sent
-                  ? "Copie o link abaixo e envie ao colaborador — o envio de e-mail é pouco confiável hoje."
-                  : createdResult.reset_error_message ||
-                    "Falha no envio do e-mail de acesso. Envie o link abaixo ao colaborador."}
+                {createdResult.access_link
+                  ? "Nenhum e-mail foi enviado. Este link é a única via de acesso: copie e envie ao colaborador agora."
+                  : createdResult.access_link_error ||
+                    "Não foi possível gerar o link de acesso. Use \"Gerar link de acesso\" na ficha do usuário."}
               </DialogDescription>
             </DialogHeader>
 
@@ -483,7 +486,7 @@ export function CreateUserDialog() {
                   </Button>
                   <p className="text-xs text-muted-foreground">
                     Este link é sensível e aparece só agora — não fica salvo em nenhum lugar.
-                    Ele substitui o link do e-mail; use este.
+                    Nenhum e-mail foi enviado ao colaborador.
                   </p>
                 </div>
               ) : (

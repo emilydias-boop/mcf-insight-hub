@@ -322,18 +322,10 @@ Deno.serve(async (req) => {
       console.error("Error updating profile name:", nameUpdateError);
     }
 
-    // Send password reset email so user can set their password
-    const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://mcf-insight-hub.lovable.app/reset-password",
-    });
-
-    if (resetError) {
-      console.error("Error sending reset email:", resetError);
-    }
-
-    // Link de definição de senha para o gestor copiar (o SMTP padrão é pouco
-    // confiável, então o acesso não pode depender só do e-mail).
-    // Gerado por último para ser o token válido. Nunca é persistido nem logado.
+    // Via ÚNICA de acesso: link de recovery gerado aqui e devolvido ao admin.
+    // Não disparamos `resetPasswordForEmail` no mesmo fluxo — o segundo token
+    // invalidaria o primeiro e o link enviado por e-mail nasceria morto.
+    // O link nunca é persistido nem logado.
     let accessLink: string | null = null;
     let accessLinkError: string | null = null;
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -349,18 +341,18 @@ Deno.serve(async (req) => {
       accessLink = linkData.properties.action_link;
     }
 
-    console.log(`User ${email} created successfully (email sent: ${!resetError})`);
+    console.log(`User ${email} created successfully (access link generated: ${!!accessLink})`);
 
     return new Response(
       JSON.stringify({
         success: true,
         user_id: newUser.user.id,
         email,
-        message: resetError
-          ? "Usuário criado, mas o email de acesso NÃO foi enviado."
-          : "Usuário criado com sucesso. Um email foi enviado para definir a senha.",
-        reset_link_sent: !resetError,
-        reset_error_message: resetError?.message || null,
+        // Nenhum e-mail é enviado por este fluxo
+        email_sent: false,
+        message: accessLink
+          ? "Usuário criado. Copie o link de acesso e envie ao colaborador — nenhum e-mail foi enviado."
+          : "Usuário criado, mas o link de acesso NÃO pôde ser gerado.",
         access_link: accessLink,
         access_link_error: accessLinkError,
       }),

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { RoleGuard } from "@/components/auth/RoleGuard";
-import { useUsers } from "@/hooks/useUsers";
+import { useUsers, useLastSignIns } from "@/hooks/useUsers";
 import { UserStatsCards } from "@/components/user-management/UserStatsCards";
 import { UserDetailsDrawer } from "@/components/user-management/UserDetailsDrawer";
 import { CreateUserDialog } from "@/components/user-management/CreateUserDialog";
@@ -16,22 +16,29 @@ import { cn } from "@/lib/utils";
 
 export default function GerenciamentoUsuarios() {
   const { data: users = [], isLoading } = useUsers();
+  // Fonte de verdade do último acesso (auth.users). Sem ela, o alarme "nunca
+  // logou" não é confiável e por isso não é exibido nem filtrável.
+  const { data: signInMap, isSuccess: signInDataReady } = useLastSignIns();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const neverLoggedIn = (user: { user_id: string; last_login_at?: string | null }) => {
+    if (!signInDataReady) return false;
+    return !(signInMap?.get(user.user_id) || user.last_login_at);
+  };
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    const neverLoggedIn = !user.last_login_at;
     const matchesStatus =
       statusFilter === "all" ||
       (statusFilter === "active" && user.is_active) ||
       (statusFilter === "inactive" && !user.is_active) ||
-      (statusFilter === "never_login" && neverLoggedIn);
+      (statusFilter === "never_login" && neverLoggedIn(user));
     return matchesSearch && matchesRole && matchesStatus;
   });
 
@@ -90,7 +97,9 @@ export default function GerenciamentoUsuarios() {
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="active">Ativos</SelectItem>
                     <SelectItem value="inactive">Inativos</SelectItem>
-                    <SelectItem value="never_login">Nunca logaram</SelectItem>
+                    {signInDataReady && (
+                      <SelectItem value="never_login">Nunca logaram</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -133,7 +142,7 @@ export default function GerenciamentoUsuarios() {
                               <Badge variant={user.is_active ? "default" : "secondary"}>
                                 {user.is_active ? "Ativo" : "Inativo"}
                               </Badge>
-                              {!user.last_login_at && (
+                              {neverLoggedIn(user) && (
                                 <Badge
                                   variant="outline"
                                   className="text-xs bg-amber-500/15 text-amber-500 border-amber-500/30"
