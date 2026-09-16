@@ -628,15 +628,19 @@ export default function ReunioesEquipe() {
       });
       return acc;
     };
-    // Reuniões seguem o eixo do topo (agenda); contratos continuam no eixo SDR.
-    const merge = (sdr: any, closer: any) =>
-      closerAxisForTop ? { ...closer, contratos: sdr.contratos } : sdr;
+    // Sem filtro de SDR: reuniões E contratos no eixo da agenda/closer, com os
+    // contratos não atribuídos somados no segmento a que pertencem.
+    // Com um SDR selecionado: tudo permanece no eixo de atribuição por SDR.
+    const merge = (sdr: any, closer: any, unassignedSeg: number) =>
+      closerAxisForTop
+        ? { ...closer, contratos: (closer.contratos || 0) + unassignedSeg }
+        : sdr;
     return {
-      a: merge(sumSdr(sdrSegmentAMap), closerSegTotals.a),
-      b: merge(sumSdr(sdrSegmentBMap), closerSegTotals.b),
-      c: merge(sumSdr(sdrSegmentCMap), closerSegTotals.c),
+      a: merge(sumSdr(sdrSegmentAMap), closerSegTotals.a, unassignedCloser.a),
+      b: merge(sumSdr(sdrSegmentBMap), closerSegTotals.b, unassignedCloser.b),
+      c: merge(sumSdr(sdrSegmentCMap), closerSegTotals.c, unassignedCloser.c),
     };
-  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR, closerAxisForTop, closerSegTotals]);
+  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR, closerAxisForTop, closerSegTotals, unassignedCloser]);
 
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
