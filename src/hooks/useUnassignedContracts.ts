@@ -160,7 +160,7 @@ export function useUnassignedContracts(
         }
 
         // Segmento dos deals órfãos (quando existirem)
-        const segByDeal = new Map<string, 'A' | 'B' | null>();
+        const segByDeal = new Map<string, 'A' | 'B' | 'C' | null>();
         if (orphanDealIds.length > 0) {
           const { data: deals } = await supabase
             .from('crm_deals')
@@ -168,7 +168,7 @@ export function useUnassignedContracts(
             .in('id', Array.from(new Set(orphanDealIds)));
           (deals || []).forEach((d: any) => {
             const s = (d.icp_segment || '').toUpperCase();
-            segByDeal.set(d.id, s === 'A' || s === 'B' ? (s as 'A' | 'B') : null);
+            segByDeal.set(d.id, segOf(s));
           });
         }
 
