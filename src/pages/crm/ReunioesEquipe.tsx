@@ -664,12 +664,17 @@ export default function ReunioesEquipe() {
     // fora dos links CLS de closer). É a lista completa do período: não soma
     // com o cálculo antigo de "pagou antes da R1".
     const outsideCount = outsideForaDoFunil?.length ?? 0;
-    // CONTRATOS — UM ÚNICO NÚMERO (decisão do dono):
-    // fonte canônica = régua caucoes_efetivas no eixo SDR (mesma da tabela),
-    // somando a distribuição por SDR exibida na tabela + a linha "Não atribuído".
-    // Assim card == total da tabela, incluindo segmento C e os não atribuídos.
-    const totalContratosSdr = filteredBySDR.reduce((s, r) => s + (r.contratos || 0), 0);
-    const totalContratosCard = totalContratosSdr + (unassignedSdr.total || 0);
+    // CONTRATOS — UM ÚNICO NÚMERO (decisão do dono, 16/09/2026):
+    // sem filtro de SDR o card usa o MESMO eixo da tabela de Closers
+    // (contrato_pago por closer + linha "Não atribuído"). Era o último card que
+    // ainda contava no eixo SDR, o que fazia a soma da tabela divergir do card
+    // sempre que a R1 tinha sido agendada por alguém fora da lista de SDRs
+    // válidos do squad. Com um SDR selecionado, mantém-se o eixo SDR.
+    const totalContratosSdrAxis =
+      filteredBySDR.reduce((s, r) => s + (r.contratos || 0), 0) + (unassignedSdr.total || 0);
+    const totalContratosCloserAxis =
+      (contractsFromClosers.contratoPago || 0) + (unassignedCloser.total || 0);
+    const totalContratosCard = closerAxisForTop ? totalContratosCloserAxis : totalContratosSdrAxis;
     return {
       ...teamKPIs,
       sdrCount: filteredBySDR.length,
