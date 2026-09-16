@@ -97,7 +97,9 @@ export default function GerenciamentoUsuarios() {
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="active">Ativos</SelectItem>
                     <SelectItem value="inactive">Inativos</SelectItem>
-                    <SelectItem value="never_login">Nunca logaram</SelectItem>
+                    {signInDataReady && (
+                      <SelectItem value="never_login">Nunca logaram</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -140,7 +142,7 @@ export default function GerenciamentoUsuarios() {
                               <Badge variant={user.is_active ? "default" : "secondary"}>
                                 {user.is_active ? "Ativo" : "Inativo"}
                               </Badge>
-                              {!user.last_login_at && (
+                              {neverLoggedIn(user) && (
                                 <Badge
                                   variant="outline"
                                   className="text-xs bg-amber-500/15 text-amber-500 border-amber-500/30"
