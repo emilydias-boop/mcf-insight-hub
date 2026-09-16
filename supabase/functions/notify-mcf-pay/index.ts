@@ -57,6 +57,30 @@ async function resolveCodesForDeal(dealId: string) {
   // disparo futuro (retry, sweep, vínculo manual) reusa exatamente esse valor,
   // em vez de recalcular e potencialmente divergir entre disparos concorrentes.
   if (!closer_code || !sdr_code) {
+    // PRIMEIRA fonte de resolução: RPC que já resolve SDR/Closer a partir do
+    // attendee da R1/R2 (fonte mais confiável). Só roda quando ainda não há
+    // snapshot travado para o campo em questão.
+    try {
+      const { data: rpc, error: rpcErr } = await supabase.rpc("get_mcf_pay_codes_for_deal", { p_deal_id: dealId });
+      if (!rpcErr) {
+        const attrib = (Array.isArray(rpc) ? rpc[0] : rpc) as
+          | { sdr_code?: string | null; closer_code?: string | null }
+          | null;
+        if (attrib) {
+          if (!sdr_code && attrib.sdr_code) {
+            sdr_code = attrib.sdr_code;
+            tried.push("rpc_attendee_sdr");
+          }
+          if (!closer_code && attrib.closer_code) {
+            closer_code = attrib.closer_code;
+            tried.push("rpc_attendee_closer");
+          }
+        }
+      }
+    } catch {
+      // Falha na RPC não quebra o disparo — segue para as fontes seguintes.
+    }
+
     const emails = new Set<string>();
     if (deal.r2_closer_email) emails.add(deal.r2_closer_email.toLowerCase());
     if (deal.r1_closer_email) emails.add(deal.r1_closer_email.toLowerCase());
@@ -86,18 +110,21 @@ async function resolveCodesForDeal(dealId: string) {
       sdr_code = profilesByEmail.get(deal.original_sdr_email.toLowerCase())?.mcf_pay_sdr_code || null;
     }
 
-    // Último recurso: dono atual do deal. Marcado como "risky" nos logs porque
-    // owner_profile_id pode ter mudado (transferência de carteira) depois do
-    // fechamento original, criditando a venda para quem não fechou.
-    if ((!closer_code || !sdr_code) && deal.owner_profile_id) {
+    // Último recurso: dono atual do deal. Esse fallback vale APENAS para
+    // closer_code, nunca para sdr_code. A razão: desde que passamos a
+    // transferir a titularidade do deal para o Nicola quando o contrato é
+    // pago, usar o dono atual como SDR credita o Nicola (S008) no lugar do
+    // SDR que agendou a R1. Como sdr_code alimenta comissão, é preferível a
+    // venda sair SEM sdr_code a sair com o SDR errado. Se nenhuma fonte
+    // resolver o SDR, o valor fica nulo e o log registra `tried`.
+    if (!closer_code && deal.owner_profile_id) {
       tried.push("owner_fallback_risky");
       const { data: owner } = await supabase
         .from("profiles")
-        .select("mcf_pay_closer_code, mcf_pay_sdr_code")
+        .select("mcf_pay_closer_code")
         .eq("id", deal.owner_profile_id)
         .maybeSingle();
       if (!closer_code) closer_code = (owner?.mcf_pay_closer_code as string) || null;
-      if (!sdr_code) sdr_code = (owner?.mcf_pay_sdr_code as string) || null;
     }
 
     // Trava o snapshot em custom_fields — só grava os campos que acabaram de ser
