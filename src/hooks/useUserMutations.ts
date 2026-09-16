@@ -47,8 +47,8 @@ export interface CreateUserResult {
   user_id: string;
   email: string;
   message?: string;
-  reset_link_sent: boolean;
-  reset_error_message?: string | null;
+  /** Este fluxo não envia e-mail: o acesso é o link copiável. */
+  email_sent?: boolean;
   access_link?: string | null;
   access_link_error?: string | null;
 }
@@ -83,16 +83,18 @@ export const useCreateUser = () => {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      if (result?.reset_link_sent) {
+      if (result?.access_link) {
+        // Nenhum e-mail é enviado: a mensagem tem que dizer exatamente isso
         toast({
-          title: "Usuário criado com sucesso",
-          description: "Um email foi enviado para o usuário definir sua senha.",
+          title: "Usuário criado — copie o link de acesso",
+          description:
+            "Nenhum e-mail foi enviado. Copie o link de definição de senha antes de fechar a janela e envie ao colaborador.",
         });
       } else {
         // Nunca reportar sucesso quando o acesso não foi entregue
         toast({
-          title: "Usuário criado, mas o email de acesso NÃO foi enviado",
-          description: `${result?.reset_error_message || "Falha no envio do email."} Copie o link de acesso mostrado na tela e envie ao colaborador.`,
+          title: "Usuário criado, mas o link de acesso NÃO foi gerado",
+          description: `${result?.access_link_error || "Falha ao gerar o link."} Use "Gerar link de acesso" na ficha do usuário.`,
           variant: "destructive",
         });
       }
