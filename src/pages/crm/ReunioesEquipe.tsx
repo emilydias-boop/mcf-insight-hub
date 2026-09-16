@@ -686,6 +686,8 @@ export default function ReunioesEquipe() {
       // Universo único: contratos pagos do período no funil, atribuídos a SDR
       // ou não (os sem SDR aparecem na linha "Não atribuído" da tabela).
       totalContratos: totalContratosCard,
+      /** Total no eixo SDR — usado só pelo rodapé da tabela de SDRs. */
+      totalContratosSdrAxis,
       totalOutside: outsideCount,
       totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
@@ -695,7 +697,7 @@ export default function ReunioesEquipe() {
         ? (totalContratosCard / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, outsideForaDoFunil, closerAxisForTop, closerTopTotals]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, unassignedCloser, outsideForaDoFunil, closerAxisForTop, closerTopTotals]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
