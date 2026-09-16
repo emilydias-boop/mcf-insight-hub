@@ -2,6 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AppRole, PermissionLevel, ResourceType, AccessStatus } from "@/types/user-management";
+import { normalizeEmail } from "@/lib/corporateEmail";
+import { extractFunctionErrorMessage } from "@/lib/functionError";
+
 
 // ===== MUTATION: Criar novo usuário via Edge Function =====
 // ===== MUTATION: Excluir usuário via Edge Function =====
@@ -39,6 +42,17 @@ export const useDeleteUser = () => {
 };
 
 // ===== MUTATION: Criar novo usuário via Edge Function =====
+export interface CreateUserResult {
+  success: boolean;
+  user_id: string;
+  email: string;
+  message?: string;
+  reset_link_sent: boolean;
+  reset_error_message?: string | null;
+  access_link?: string | null;
+  access_link_error?: string | null;
+}
+
 export const useCreateUser = () => {
   const queryClient = useQueryClient();
 
@@ -49,29 +63,39 @@ export const useCreateUser = () => {
       role: string;
       squad?: string | null;
       cargo_id?: string;
+      allow_external_domain?: boolean;
     }) => {
       const { data: result, error } = await supabase.functions.invoke("create-user", {
-        body: data,
+        // Normalização final antes de enviar
+        body: { ...data, email: normalizeEmail(data.email) },
       });
 
       if (error) {
-        throw new Error(error.message || "Erro ao criar usuário");
+        // Lê o corpo da resposta para não perder a mensagem real da função
+        throw new Error(await extractFunctionErrorMessage(error, "Erro ao criar usuário"));
       }
 
       if (result?.error) {
         throw new Error(result.error);
       }
 
-      return result;
+      return result as CreateUserResult;
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast({ 
-        title: "Usuário criado com sucesso",
-        description: result?.reset_link_sent 
-          ? "Um email foi enviado para o usuário definir sua senha."
-          : "O usuário pode usar 'Esqueci a senha' para definir sua senha.",
-      });
+      if (result?.reset_link_sent) {
+        toast({
+          title: "Usuário criado com sucesso",
+          description: "Um email foi enviado para o usuário definir sua senha.",
+        });
+      } else {
+        // Nunca reportar sucesso quando o acesso não foi entregue
+        toast({
+          title: "Usuário criado, mas o email de acesso NÃO foi enviado",
+          description: `${result?.reset_error_message || "Falha no envio do email."} Copie o link de acesso mostrado na tela e envie ao colaborador.`,
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({ 
@@ -82,6 +106,34 @@ export const useCreateUser = () => {
     },
   });
 };
+
+// ===== Gerar link de acesso (definição de senha) para usuário existente =====
+// O link é sensível: só volta na resposta imediata, não é persistido nem logado.
+export const useGenerateAccessLink = () => {
+  return useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      const { data: result, error } = await supabase.functions.invoke("admin-send-reset", {
+        body: { email: normalizeEmail(email) },
+      });
+
+      if (error) {
+        throw new Error(await extractFunctionErrorMessage(error, "Erro ao gerar link de acesso"));
+      }
+      if (result?.error) throw new Error(result.error);
+      if (!result?.reset_link) throw new Error("Link não foi retornado");
+
+      return result as { success: boolean; reset_link: string };
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao gerar link de acesso",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+};
+
 
 export const useUpdateUserRole = () => {
   const queryClient = useQueryClient();

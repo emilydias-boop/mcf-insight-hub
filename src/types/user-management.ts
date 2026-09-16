@@ -27,7 +27,10 @@ export interface UserSummary {
   fixed_salary: number | null;
   ote: number | null;
   commission_rate: number | null;
+  /** Vem de profiles.last_login_at — nulo significa que nunca acessou. */
+  last_login_at?: string | null;
 }
+
 
 export interface UserDetails {
   id: string;

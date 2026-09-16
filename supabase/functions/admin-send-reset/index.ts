@@ -40,18 +40,21 @@ Deno.serve(async (req) => {
     const callerId = claimsData.claims.sub;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Um admin pode ter mais de um papel — checar a lista, não um único registro
     const { data: roleData } = await supabaseAdmin
       .from("user_roles")
       .select("role")
-      .eq("user_id", callerId)
-      .single();
+      .eq("user_id", callerId);
 
-    if (roleData?.role !== "admin") {
+    const isAdmin = (roleData || []).some((r: { role: string }) => r.role === "admin");
+
+    if (!isAdmin) {
       return new Response(JSON.stringify({ error: "Apenas admins podem gerar links de reset" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const { email } = await req.json();
 

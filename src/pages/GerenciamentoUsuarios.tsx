@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Eye, Loader2 } from "lucide-react";
+import { Search, Eye, Loader2, AlertTriangle } from "lucide-react";
 import { ROLE_LABELS } from "@/types/user-management";
 import { cn } from "@/lib/utils";
 
@@ -26,12 +26,15 @@ export default function GerenciamentoUsuarios() {
       user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    const neverLoggedIn = !user.last_login_at;
     const matchesStatus =
       statusFilter === "all" ||
       (statusFilter === "active" && user.is_active) ||
-      (statusFilter === "inactive" && !user.is_active);
+      (statusFilter === "inactive" && !user.is_active) ||
+      (statusFilter === "never_login" && neverLoggedIn);
     return matchesSearch && matchesRole && matchesStatus;
   });
+
 
   return (
     <RoleGuard allowedRoles={["admin"]}>
@@ -87,6 +90,7 @@ export default function GerenciamentoUsuarios() {
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="active">Ativos</SelectItem>
                     <SelectItem value="inactive">Inativos</SelectItem>
+                    <SelectItem value="never_login">Nunca logaram</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -125,9 +129,20 @@ export default function GerenciamentoUsuarios() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={user.is_active ? "default" : "secondary"}>
-                              {user.is_active ? "Ativo" : "Inativo"}
-                            </Badge>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={user.is_active ? "default" : "secondary"}>
+                                {user.is_active ? "Ativo" : "Inativo"}
+                              </Badge>
+                              {!user.last_login_at && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs bg-amber-500/15 text-amber-500 border-amber-500/30"
+                                >
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Nunca logou
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <Button

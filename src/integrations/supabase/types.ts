@@ -546,6 +546,13 @@ export type Database = {
             referencedRelation: "hubla_transactions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ar_titulos_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_linhas_marcadas_como_eco"
+            referencedColumns: ["id"]
+          },
         ]
       }
       areas_catalogo: {
@@ -3160,6 +3167,13 @@ export type Database = {
             columns: ["hubla_transaction_id"]
             isOneToOne: false
             referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
         ]
@@ -6504,6 +6518,13 @@ export type Database = {
             referencedRelation: "hubla_transactions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "contract_post_sale_tracking_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "vw_linhas_marcadas_como_eco"
+            referencedColumns: ["id"]
+          },
         ]
       }
       contract_video_control: {
@@ -9299,6 +9320,7 @@ export type Database = {
           customer_email: string | null
           customer_name: string | null
           customer_phone: string | null
+          dedupe_reason: string | null
           event_type: string
           excluded_from_cart: boolean | null
           gross_override: number | null
@@ -9341,6 +9363,7 @@ export type Database = {
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          dedupe_reason?: string | null
           event_type: string
           excluded_from_cart?: boolean | null
           gross_override?: number | null
@@ -9383,6 +9406,7 @@ export type Database = {
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          dedupe_reason?: string | null
           event_type?: string
           excluded_from_cart?: boolean | null
           gross_override?: number | null
@@ -12452,6 +12476,13 @@ export type Database = {
             referencedRelation: "hubla_transactions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "r2_vendas_extras_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_linhas_marcadas_como_eco"
+            referencedColumns: ["id"]
+          },
         ]
       }
       regua_faixas: {
@@ -13517,6 +13548,13 @@ export type Database = {
             columns: ["hubla_transaction_id"]
             isOneToOne: false
             referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_intermediacoes_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
           {
@@ -16557,6 +16595,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vw_linhas_marcadas_como_eco: {
+        Row: {
+          customer_email: string | null
+          dedupe_reason: string | null
+          id: string | null
+          net_value: number | null
+          product_price: number | null
+          produto: string | null
+          sale_date: string | null
+          source: string | null
+          tem_contraparte_a001_a009: boolean | null
+        }
+        Insert: {
+          customer_email?: string | null
+          dedupe_reason?: string | null
+          id?: string | null
+          net_value?: number | null
+          product_price?: number | null
+          produto?: never
+          sale_date?: string | null
+          source?: string | null
+          tem_contraparte_a001_a009?: never
+        }
+        Update: {
+          customer_email?: string | null
+          dedupe_reason?: string | null
+          id?: string | null
+          net_value?: number | null
+          product_price?: number | null
+          produto?: never
+          sale_date?: string | null
+          source?: string | null
+          tem_contraparte_a001_a009?: never
+        }
+        Relationships: []
       }
       vw_produtos_nao_cadastrados: {
         Row: {
