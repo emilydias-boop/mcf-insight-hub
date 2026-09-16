@@ -73,9 +73,11 @@ export function useUnassignedContracts(
       if (error) throw error;
 
       const rows = ((caucoes as any[]) || []);
-      const segOf = (s: any): 'A' | 'B' | null => {
+      // Segmento C também é reconhecido: sem isso, um contrato não atribuído de
+      // lead C caía silenciosamente no resíduo "sem ICP".
+      const segOf = (s: any): 'A' | 'B' | 'C' | null => {
         const v = String(s || '').toUpperCase();
-        return v === 'A' || v === 'B' ? (v as 'A' | 'B') : null;
+        return v === 'A' || v === 'B' || v === 'C' ? (v as 'A' | 'B' | 'C') : null;
       };
 
       const items: UnassignedContractItem[] = [];
@@ -195,17 +197,19 @@ export function useUnassignedContracts(
         });
       }
 
-      const count = (list: UnassignedContractItem[], seg: 'A' | 'B' | null) =>
+      const count = (list: UnassignedContractItem[], seg: 'A' | 'B' | 'C' | null) =>
         list.filter((i) => i.segment === seg).length;
 
       return {
         total: items.length,
         a: count(items, 'A'),
         b: count(items, 'B'),
+        c: count(items, 'C'),
         unknown: count(items, null),
         sdrTotal: sdrItems.length,
         sdrA: count(sdrItems, 'A'),
         sdrB: count(sdrItems, 'B'),
+        sdrC: count(sdrItems, 'C'),
         items,
         sdrItems,
       };
