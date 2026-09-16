@@ -419,6 +419,7 @@ export default function ReunioesEquipe() {
       total: unassignedContracts?.total ?? 0,
       a: unassignedContracts?.a ?? 0,
       b: unassignedContracts?.b ?? 0,
+      c: unassignedContracts?.c ?? 0,
     }),
     [unassignedContracts],
   );
@@ -427,6 +428,7 @@ export default function ReunioesEquipe() {
       total: unassignedContracts?.sdrTotal ?? 0,
       a: unassignedContracts?.sdrA ?? 0,
       b: unassignedContracts?.sdrB ?? 0,
+      c: unassignedContracts?.sdrC ?? 0,
     }),
     [unassignedContracts],
   );
