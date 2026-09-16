@@ -5,7 +5,7 @@ import { startOfDay, endOfDay, format, addHours } from "date-fns";
 export interface UnassignedContractItem {
   deal_id: string | null;
   source: 'caucao_sem_deal' | 'caucao_sem_r1' | 'caucao_sem_sdr' | 'transacao_sem_reuniao';
-  segment: 'A' | 'B' | null;
+  segment: 'A' | 'B' | 'C' | null;
   reference: string;
   /** Data do pagamento da caução/contrato (ISO). */
   paid_at?: string | null;
@@ -23,18 +23,22 @@ export interface UnassignedContracts {
   total: number;
   a: number;
   b: number;
+  /** Segmento C — contado explicitamente para não cair no resíduo "sem ICP". */
+  c: number;
   unknown: number;
   /** Órfãos que nem os SDRs conseguem atribuir (inclui R1 sem booked_by). */
   sdrTotal: number;
   sdrA: number;
   sdrB: number;
+  sdrC: number;
   items: UnassignedContractItem[];
   /** Mesma lista, na ótica da aba SDRs. */
   sdrItems: UnassignedContractItem[];
 }
 
 const EMPTY: UnassignedContracts = {
-  total: 0, a: 0, b: 0, unknown: 0, sdrTotal: 0, sdrA: 0, sdrB: 0, items: [], sdrItems: [],
+  total: 0, a: 0, b: 0, c: 0, unknown: 0, sdrTotal: 0, sdrA: 0, sdrB: 0, sdrC: 0,
+  items: [], sdrItems: [],
 };
 
 /**
