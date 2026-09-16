@@ -31,6 +31,27 @@ export const useUsers = () => {
   });
 };
 
+/**
+ * Último acesso REAL: `auth.users.last_sign_in_at`, lido por edge function
+ * admin-only (o client não acessa o schema auth). `profiles.last_login_at`
+ * fica só como fallback — sozinho ele marcava como "nunca logou" gente que já
+ * havia entrado. Enquanto esta query não tiver sucesso, o badge não aparece.
+ */
+export const useLastSignIns = () => {
+  return useQuery({
+    queryKey: ["last-sign-ins"],
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("admin-user-signins");
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const rows = ((data as any)?.users || []) as { id: string; last_sign_in_at: string | null }[];
+      return new Map(rows.map((u) => [u.id, u.last_sign_in_at]));
+    },
+  });
+};
+
 
 export const useUserDetails = (userId: string | null) => {
   return useQuery({
