@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { RoleGuard } from "@/components/auth/RoleGuard";
-import { useUsers } from "@/hooks/useUsers";
+import { useUsers, useLastSignIns } from "@/hooks/useUsers";
 import { UserStatsCards } from "@/components/user-management/UserStatsCards";
 import { UserDetailsDrawer } from "@/components/user-management/UserDetailsDrawer";
 import { CreateUserDialog } from "@/components/user-management/CreateUserDialog";
