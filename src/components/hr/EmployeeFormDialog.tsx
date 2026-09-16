@@ -50,15 +50,18 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
   const [createSystemUser, setCreateSystemUser] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
-  // E-mail de acesso: sugestão automática, validação de domínio e confirmação
+  /**
+   * E-mail de ACESSO (login) — separado do e-mail pessoal.
+   * Não é gravado em `employees`; ele vai para a edge function `create-user`,
+   * que cria o `auth.users` + `profiles.email` (o vínculo é `employees.user_id`).
+   */
+  const [emailAcesso, setEmailAcesso] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [allowExternalDomain, setAllowExternalDomain] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [confirmStep, setConfirmStep] = useState(false);
   const [accessResult, setAccessResult] = useState<{
     email: string;
-    reset_link_sent: boolean;
-    reset_error_message?: string | null;
     access_link?: string | null;
     access_link_error?: string | null;
   } | null>(null);
@@ -86,9 +89,9 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
     } else {
       setFormData(BLANK_FORM);
     }
+    setEmailAcesso('');
     setDuplicateWarning(null);
-    // Em edição o e-mail já existe: não sobrescrever com a sugestão.
-    setEmailTouched(!!employee);
+    setEmailTouched(false);
     setAllowExternalDomain(false);
     setEmailError(null);
     setConfirmStep(false);
@@ -103,28 +106,31 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
   // Preenche o e-mail de login pelo nome até o RH editar manualmente
   useEffect(() => {
     if (isEditing || emailTouched) return;
-    setFormData((prev) => ({ ...prev, email_pessoal: suggestedEmail }));
+    setEmailAcesso(suggestedEmail);
   }, [suggestedEmail, emailTouched, isEditing]);
 
   const mismatchWarning = emailTouched
-    ? buildEmailMismatchWarning(formData.nome_completo, formData.email_pessoal)
+    ? buildEmailMismatchWarning(formData.nome_completo, emailAcesso)
     : null;
 
-
-
+  /**
+   * A regra de domínio corporativo vale SÓ para o e-mail de acesso na criação.
+   * E-mail pessoal (gmail/hotmail) e modo edição nunca são validados por domínio.
+   */
   const emailIsRequired = !isEditing && createSystemUser;
 
   const handleSubmit = async () => {
     if (!formData.nome_completo.trim()) return;
 
-    // Validação real do e-mail de acesso (mesma regra do cadastro de usuários)
-    if (emailIsRequired || (isEditing && formData.email_pessoal.trim())) {
-      const check = validateAccessEmail(formData.email_pessoal, { allowExternalDomain });
+    if (emailIsRequired) {
+      const check = validateAccessEmail(emailAcesso, { allowExternalDomain });
       if (!check.valid) {
         setEmailError(check.error || 'E-mail inválido');
         setConfirmStep(false);
         return;
       }
+      setEmailError(null);
+    } else {
       setEmailError(null);
     }
 
@@ -134,15 +140,17 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
       return;
     }
 
+    const acessoNorm = normalizeEmail(emailAcesso);
+    const pessoalNorm = normalizeEmail(formData.email_pessoal);
+
     // Guard defensivo (só no modo criação): se já existe um colaborador ativo
-    // com o mesmo e-mail, avisa e não insere. Segundo clique confirma e segue.
-    const emailNorm = normalizeEmail(formData.email_pessoal);
-    if (!isEditing && emailNorm && !duplicateWarning) {
+    // com o mesmo e-mail pessoal, avisa e não insere. Segundo clique confirma.
+    if (!isEditing && pessoalNorm && !duplicateWarning) {
       const { data: existing } = await supabase
         .from('employees')
         .select('id, nome_completo, cargo')
         .eq('status', 'ativo')
-        .ilike('email_pessoal', emailNorm)
+        .ilike('email_pessoal', pessoalNorm)
         .limit(1)
         .maybeSingle();
       if (existing) {
@@ -157,7 +165,7 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
     try {
       if (isEditing && employee) {
         // Modo edição: atualiza o registro existente, não cria nada.
-        await updateEmployee.mutateAsync({ id: employee.id, data: { ...formData, email_pessoal: emailNorm } });
+        await updateEmployee.mutateAsync({ id: employee.id, data: { ...formData, email_pessoal: pessoalNorm } });
       } else {
         // Modo criação
         let roleSistema: string | null = null;
@@ -172,9 +180,9 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
           area = (cargo as any)?.area || null;
         }
 
-        const created = await createEmployee.mutateAsync({ ...formData, email_pessoal: emailNorm });
+        const created = await createEmployee.mutateAsync({ ...formData, email_pessoal: pessoalNorm });
 
-        if (createSystemUser && roleSistema && emailNorm) {
+        if (createSystemUser && roleSistema && acessoNorm) {
           const squadGuess = (() => {
             const a = (area || '').toLowerCase();
             if (a.includes('consórcio') || a.includes('consorcio')) return 'consorcio';
@@ -186,7 +194,7 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
           })();
           const { data: fnData, error: fnError } = await supabase.functions.invoke('create-user', {
             body: {
-              email: emailNorm,
+              email: acessoNorm,
               full_name: formData.nome_completo.trim(),
               role: roleSistema,
               squad: squadGuess,
@@ -201,18 +209,16 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
               ? String(fnData.error)
               : await extractFunctionErrorMessage(fnError, 'Falha ao criar o usuário');
             toast.error('Colaborador criado, mas o login NÃO foi criado: ' + realMessage);
-          } else if (fnData?.reset_link_sent === false) {
-            toast.error('Usuário criado, mas o email de acesso NÃO foi enviado. Copie o link de acesso e envie ao colaborador.');
+          } else if (fnData?.access_link) {
+            toast.success('Login criado. Copie o link de acesso antes de fechar e envie ao colaborador.');
           } else {
-            toast.success('Usuário do sistema criado e e-mail de senha enviado');
+            toast.error('Login criado, mas o link de acesso NÃO pôde ser gerado. Use "Gerar link de acesso" na tela de usuários.');
           }
 
           if (fnData?.user_id) {
             // Mantém o diálogo aberto para o gestor copiar o link de acesso
             setAccessResult({
-              email: fnData.email || emailNorm,
-              reset_link_sent: !!fnData.reset_link_sent,
-              reset_error_message: fnData.reset_error_message,
+              email: fnData.email || acessoNorm,
               access_link: fnData.access_link,
               access_link_error: fnData.access_link_error,
             });
@@ -223,6 +229,7 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
         }
 
         setFormData(BLANK_FORM);
+        setEmailAcesso('');
       }
 
       setDuplicateWarning(null);
@@ -241,26 +248,27 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
 
   const handleCloseAfterCreate = () => {
     setFormData(BLANK_FORM);
+    setEmailAcesso('');
     setAccessResult(null);
     setEmailTouched(false);
     onOpenChange(false);
   };
 
-  // Resultado da criação do login: link de acesso copiável (o e-mail é pouco confiável)
+  // Resultado da criação do login: link de acesso copiável (única via de acesso)
   if (accessResult) {
     return (
       <Dialog open={open} onOpenChange={(o) => { if (!o) handleCloseAfterCreate(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {accessResult.reset_link_sent ? (
+              {accessResult.access_link ? (
                 <CheckCircle2 className="h-5 w-5 text-primary" />
               ) : (
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
               )}
-              {accessResult.reset_link_sent
-                ? 'Colaborador e login criados'
-                : 'Login criado, mas o e-mail de acesso NÃO foi enviado'}
+              {accessResult.access_link
+                ? 'Colaborador e login criados — copie o link agora'
+                : 'Login criado, mas o link de acesso NÃO foi gerado'}
             </DialogTitle>
           </DialogHeader>
 
@@ -269,12 +277,6 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
               <p className="text-xs text-muted-foreground mb-1">Login</p>
               <p className="font-mono text-sm break-all">{accessResult.email}</p>
             </div>
-
-            {!accessResult.reset_link_sent && accessResult.reset_error_message && (
-              <Alert variant="destructive">
-                <AlertDescription className="text-xs">{accessResult.reset_error_message}</AlertDescription>
-              </Alert>
-            )}
 
             {accessResult.access_link ? (
               <div className="space-y-2">
@@ -287,7 +289,8 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
                   Copiar link
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Link sensível: aparece só agora e não fica salvo em nenhum lugar. Envie ao colaborador.
+                  Nenhum e-mail foi enviado: este link é a via de acesso. Ele aparece só agora,
+                  não fica salvo em nenhum lugar — copie e envie ao colaborador antes de fechar.
                 </p>
               </div>
             ) : (
@@ -404,6 +407,20 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
             </div>
           </div>
 
+          {/* E-mail pessoal: sempre disponível, opcional e sem regra de domínio */}
+          <div>
+            <Label>E-mail pessoal (opcional)</Label>
+            <Input
+              type="email"
+              value={formData.email_pessoal}
+              onChange={(e) => setFormData({ ...formData, email_pessoal: e.target.value })}
+              placeholder="usuario@gmail.com"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Contato pessoal do colaborador. Não é usado para login e não precisa ser do domínio da empresa.
+            </p>
+          </div>
+
           {!isEditing && (
             <>
               <Separator />
@@ -420,15 +437,15 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
                 {createSystemUser && (
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <Label>E-mail de login *</Label>
-                      {emailTouched && suggestedEmail && suggestedEmail !== normalizeEmail(formData.email_pessoal) && (
+                      <Label>E-mail de acesso (login) *</Label>
+                      {emailTouched && suggestedEmail && suggestedEmail !== normalizeEmail(emailAcesso) && (
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           className="h-6 px-2 text-xs"
                           onClick={() => {
-                            setFormData({ ...formData, email_pessoal: suggestedEmail });
+                            setEmailAcesso(suggestedEmail);
                             setEmailTouched(false);
                             setEmailError(null);
                             setConfirmStep(false);
@@ -441,10 +458,9 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
                     </div>
                     <Input
                       type="email"
-                      value={formData.email_pessoal}
+                      value={emailAcesso}
                       onChange={(e) => {
-                        setFormData({ ...formData, email_pessoal: e.target.value });
-                        setDuplicateWarning(null);
+                        setEmailAcesso(e.target.value);
                         setEmailTouched(true);
                         setEmailError(null);
                         setConfirmStep(false);
@@ -461,7 +477,6 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
                         {mismatchWarning}
                       </p>
                     )}
-                    {emailError && <p className="text-sm text-destructive mt-1">{emailError}</p>}
                     <div className="flex items-center gap-2 mt-2">
                       <Checkbox
                         id="hr_allow_external"
@@ -481,19 +496,14 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
               </div>
             </>
           )}
-
-          {isEditing && (
-            <div>
-              <Label>E-mail pessoal</Label>
-              <Input
-                type="email"
-                value={formData.email_pessoal}
-                onChange={(e) => setFormData({ ...formData, email_pessoal: e.target.value })}
-                placeholder="usuario@minhacasafinanciada.com"
-              />
-            </div>
-          )}
         </div>
+
+        {/* Erro de validação sempre tem onde aparecer — nunca um submit silencioso */}
+        {emailError && (
+          <Alert variant="destructive">
+            <AlertDescription>{emailError}</AlertDescription>
+          </Alert>
+        )}
 
         {duplicateWarning && (
           <Alert variant="destructive">
@@ -515,7 +525,7 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
             <div>
               <p className="text-xs text-muted-foreground">E-mail de acesso (login)</p>
               <p className="font-mono text-base font-semibold break-all">
-                {normalizeEmail(formData.email_pessoal)}
+                {normalizeEmail(emailAcesso)}
               </p>
             </div>
             {mismatchWarning && (
@@ -541,7 +551,7 @@ export default function EmployeeFormDialog({ open, onOpenChange, employee }: Emp
               submitting ||
               createEmployee.isPending ||
               updateEmployee.isPending ||
-              (!isEditing && createSystemUser && !formData.email_pessoal.trim())
+              (emailIsRequired && !emailAcesso.trim())
             }
           >
             {isEditing ? 'Salvar Alterações' : confirmStep ? 'Confirmar e cadastrar' : emailIsRequired ? 'Revisar e cadastrar' : 'Cadastrar'}
