@@ -9323,6 +9323,7 @@ export type Database = {
           dedupe_reason: string | null
           event_type: string
           excluded_from_cart: boolean | null
+          gateway_sale_id: string | null
           gross_override: number | null
           hubla_id: string
           id: string
@@ -9366,6 +9367,7 @@ export type Database = {
           dedupe_reason?: string | null
           event_type: string
           excluded_from_cart?: boolean | null
+          gateway_sale_id?: string | null
           gross_override?: number | null
           hubla_id: string
           id?: string
@@ -9409,6 +9411,7 @@ export type Database = {
           dedupe_reason?: string | null
           event_type?: string
           excluded_from_cart?: boolean | null
+          gateway_sale_id?: string | null
           gross_override?: number | null
           hubla_id?: string
           id?: string
@@ -16536,6 +16539,24 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_cliente_consolidado: {
+        Row: {
+          cliente_cpf: string | null
+          cliente_email: string | null
+          cliente_nome: string | null
+          cliente_telefone: string | null
+          gateways: string[] | null
+          historico_compras: Json | null
+          primeira_compra: string | null
+          qtd_produtos: number | null
+          tem_reembolso: boolean | null
+          total_bruto_produtos: number | null
+          total_liquido_pago: number | null
+          total_pagamentos: number | null
+          ultima_compra: string | null
+        }
+        Relationships: []
+      }
       vw_closer_reuniao_avaliada: {
         Row: {
           aderencia_pct: number | null
@@ -16641,6 +16662,26 @@ export type Database = {
           source: string | null
           ultima_venda: string | null
           valor_liquido: number | null
+        }
+        Relationships: []
+      }
+      vw_venda_por_produto: {
+        Row: {
+          bruto_produto: number | null
+          cliente_cpf: string | null
+          cliente_email: string | null
+          cliente_nome: string | null
+          cliente_telefone: string | null
+          dias_entre_pagamentos: number | null
+          gateway: string | null
+          liquido_pago: number | null
+          pagamentos: number | null
+          parcelas_contratadas: number | null
+          primeiro_pagamento: string | null
+          produto: string | null
+          qtd_pedidos_no_gateway: number | null
+          tem_reembolso: boolean | null
+          ultimo_pagamento: string | null
         }
         Relationships: []
       }
