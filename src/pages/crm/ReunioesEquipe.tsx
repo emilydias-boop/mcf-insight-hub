@@ -1082,7 +1082,9 @@ export default function ReunioesEquipe() {
                 r1Agendada: enrichedKPIs.totalR1Agendada,
                 r1Realizada: enrichedKPIs.totalRealizadas,
                 noShows: enrichedKPIs.totalNoShows,
-                contratos: enrichedKPIs.totalContratos,
+                // Rodapé da tabela de SDRs continua no eixo SDR (soma das linhas
+                // exibidas + "Não atribuído"); só o card do topo mudou de eixo.
+                contratos: enrichedKPIs.totalContratosSdrAxis,
               }}
               segmentAMap={sdrSegmentAMap}
               segmentBMap={sdrSegmentBMap}
