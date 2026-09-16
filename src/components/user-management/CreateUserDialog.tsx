@@ -37,7 +37,10 @@ import { toast } from "sonner";
 
 const createUserSchema = z.object({
   full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  email: z.string().min(1, "Informe o e-mail de acesso"),
+  email: z
+    .string()
+    .min(1, "Informe o e-mail de acesso")
+    .email("E-mail inválido"),
   cargo_id: z.string().min(1, "Selecione um cargo"),
   role: z.string().min(1, "Selecione um role"),
   squad: z.string().optional(),
@@ -201,8 +204,8 @@ export function CreateUserDialog() {
             <DialogHeader>
               <DialogTitle>Adicionar Novo Usuário</DialogTitle>
               <DialogDescription>
-                O e-mail informado é o login do colaborador. Ele receberá um e-mail para
-                definir a senha — e você também poderá copiar o link de acesso no final.
+                O e-mail informado é o login do colaborador. Nenhum e-mail é enviado: no
+                final você copia o link de definição de senha e envia a ele.
               </DialogDescription>
             </DialogHeader>
 
