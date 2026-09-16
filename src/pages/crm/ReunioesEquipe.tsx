@@ -419,6 +419,7 @@ export default function ReunioesEquipe() {
       total: unassignedContracts?.total ?? 0,
       a: unassignedContracts?.a ?? 0,
       b: unassignedContracts?.b ?? 0,
+      c: unassignedContracts?.c ?? 0,
     }),
     [unassignedContracts],
   );
@@ -427,6 +428,7 @@ export default function ReunioesEquipe() {
       total: unassignedContracts?.sdrTotal ?? 0,
       a: unassignedContracts?.sdrA ?? 0,
       b: unassignedContracts?.sdrB ?? 0,
+      c: unassignedContracts?.sdrC ?? 0,
     }),
     [unassignedContracts],
   );
@@ -601,13 +603,17 @@ export default function ReunioesEquipe() {
       r1Agendada: sumCloser(rows, 'r1_agendada'),
       r1Realizada: sumCloser(rows, 'r1_realizada'),
       noShows: sumCloser(rows, 'noshow'),
+      contratos: sumCloser(rows, 'contrato_pago'),
     });
     return { a: build(closerMetricsA), b: build(closerMetricsB), c: build(closerMetricsC) };
   }, [closerMetricsA, closerMetricsB, closerMetricsC]);
 
   // Totais por segmento para os KPI cards.
-  // Contratos passam a vir do MESMO eixo da tabela de SDRs (régua caucoes_efetivas
-  // por SDR da última R1), para o card e a tabela nunca divergirem.
+  // Contratos passam a vir do MESMO eixo da tabela de Closers (16/09/2026: último
+  // card que ainda contava em eixo diferente da tabela; R1 agendada/realizada/
+  // no-show já tinham sido unificados). A quebra soma o bloco "Não atribuído",
+  // para que A + B + C + s/ICP feche com o total do card e "s/ICP" volte a
+  // significar "negócio sem classificação preenchida", não resíduo aritmético.
   const segmentTotals = useMemo(() => {
     const sumSdr = (map: Map<string, any>) => {
       const acc = { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 };
@@ -622,15 +628,19 @@ export default function ReunioesEquipe() {
       });
       return acc;
     };
-    // Reuniões seguem o eixo do topo (agenda); contratos continuam no eixo SDR.
-    const merge = (sdr: any, closer: any) =>
-      closerAxisForTop ? { ...closer, contratos: sdr.contratos } : sdr;
+    // Sem filtro de SDR: reuniões E contratos no eixo da agenda/closer, com os
+    // contratos não atribuídos somados no segmento a que pertencem.
+    // Com um SDR selecionado: tudo permanece no eixo de atribuição por SDR.
+    const merge = (sdr: any, closer: any, unassignedSeg: number) =>
+      closerAxisForTop
+        ? { ...closer, contratos: (closer.contratos || 0) + unassignedSeg }
+        : sdr;
     return {
-      a: merge(sumSdr(sdrSegmentAMap), closerSegTotals.a),
-      b: merge(sumSdr(sdrSegmentBMap), closerSegTotals.b),
-      c: merge(sumSdr(sdrSegmentCMap), closerSegTotals.c),
+      a: merge(sumSdr(sdrSegmentAMap), closerSegTotals.a, unassignedCloser.a),
+      b: merge(sumSdr(sdrSegmentBMap), closerSegTotals.b, unassignedCloser.b),
+      c: merge(sumSdr(sdrSegmentCMap), closerSegTotals.c, unassignedCloser.c),
     };
-  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR, closerAxisForTop, closerSegTotals]);
+  }, [sdrSegmentAMap, sdrSegmentBMap, sdrSegmentCMap, filteredBySDR, closerAxisForTop, closerSegTotals, unassignedCloser]);
 
 
   // Enrich teamKPIs: somado a partir de filteredBySDR (mesmo array exibido na
@@ -654,12 +664,17 @@ export default function ReunioesEquipe() {
     // fora dos links CLS de closer). É a lista completa do período: não soma
     // com o cálculo antigo de "pagou antes da R1".
     const outsideCount = outsideForaDoFunil?.length ?? 0;
-    // CONTRATOS — UM ÚNICO NÚMERO (decisão do dono):
-    // fonte canônica = régua caucoes_efetivas no eixo SDR (mesma da tabela),
-    // somando a distribuição por SDR exibida na tabela + a linha "Não atribuído".
-    // Assim card == total da tabela, incluindo segmento C e os não atribuídos.
-    const totalContratosSdr = filteredBySDR.reduce((s, r) => s + (r.contratos || 0), 0);
-    const totalContratosCard = totalContratosSdr + (unassignedSdr.total || 0);
+    // CONTRATOS — UM ÚNICO NÚMERO (decisão do dono, 16/09/2026):
+    // sem filtro de SDR o card usa o MESMO eixo da tabela de Closers
+    // (contrato_pago por closer + linha "Não atribuído"). Era o último card que
+    // ainda contava no eixo SDR, o que fazia a soma da tabela divergir do card
+    // sempre que a R1 tinha sido agendada por alguém fora da lista de SDRs
+    // válidos do squad. Com um SDR selecionado, mantém-se o eixo SDR.
+    const totalContratosSdrAxis =
+      filteredBySDR.reduce((s, r) => s + (r.contratos || 0), 0) + (unassignedSdr.total || 0);
+    const totalContratosCloserAxis =
+      (contractsFromClosers.contratoPago || 0) + (unassignedCloser.total || 0);
+    const totalContratosCard = closerAxisForTop ? totalContratosCloserAxis : totalContratosSdrAxis;
     return {
       ...teamKPIs,
       sdrCount: filteredBySDR.length,
@@ -671,6 +686,8 @@ export default function ReunioesEquipe() {
       // Universo único: contratos pagos do período no funil, atribuídos a SDR
       // ou não (os sem SDR aparecem na linha "Não atribuído" da tabela).
       totalContratos: totalContratosCard,
+      /** Total no eixo SDR — usado só pelo rodapé da tabela de SDRs. */
+      totalContratosSdrAxis,
       totalOutside: outsideCount,
       totalReembolsos: contractsFromClosers.reembolsos,
       taxaNoShow: totalR1Agendada > 0
@@ -680,7 +697,7 @@ export default function ReunioesEquipe() {
         ? (totalContratosCard / totalRealizadas) * 100
         : 0,
     };
-  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, outsideForaDoFunil, closerAxisForTop, closerTopTotals]);
+  }, [teamKPIs, contractsFromClosers, filteredBySDR, unassignedSdr, unassignedCloser, outsideForaDoFunil, closerAxisForTop, closerTopTotals]);
 
   // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
   // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
@@ -1065,7 +1082,9 @@ export default function ReunioesEquipe() {
                 r1Agendada: enrichedKPIs.totalR1Agendada,
                 r1Realizada: enrichedKPIs.totalRealizadas,
                 noShows: enrichedKPIs.totalNoShows,
-                contratos: enrichedKPIs.totalContratos,
+                // Rodapé da tabela de SDRs continua no eixo SDR (soma das linhas
+                // exibidas + "Não atribuído"); só o card do topo mudou de eixo.
+                contratos: enrichedKPIs.totalContratosSdrAxis,
               }}
               segmentAMap={sdrSegmentAMap}
               segmentBMap={sdrSegmentBMap}

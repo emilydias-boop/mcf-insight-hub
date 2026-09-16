@@ -5,7 +5,7 @@ import { startOfDay, endOfDay, format, addHours } from "date-fns";
 export interface UnassignedContractItem {
   deal_id: string | null;
   source: 'caucao_sem_deal' | 'caucao_sem_r1' | 'caucao_sem_sdr' | 'transacao_sem_reuniao';
-  segment: 'A' | 'B' | null;
+  segment: 'A' | 'B' | 'C' | null;
   reference: string;
   /** Data do pagamento da caução/contrato (ISO). */
   paid_at?: string | null;
@@ -23,18 +23,22 @@ export interface UnassignedContracts {
   total: number;
   a: number;
   b: number;
+  /** Segmento C — contado explicitamente para não cair no resíduo "sem ICP". */
+  c: number;
   unknown: number;
   /** Órfãos que nem os SDRs conseguem atribuir (inclui R1 sem booked_by). */
   sdrTotal: number;
   sdrA: number;
   sdrB: number;
+  sdrC: number;
   items: UnassignedContractItem[];
   /** Mesma lista, na ótica da aba SDRs. */
   sdrItems: UnassignedContractItem[];
 }
 
 const EMPTY: UnassignedContracts = {
-  total: 0, a: 0, b: 0, unknown: 0, sdrTotal: 0, sdrA: 0, sdrB: 0, items: [], sdrItems: [],
+  total: 0, a: 0, b: 0, c: 0, unknown: 0, sdrTotal: 0, sdrA: 0, sdrB: 0, sdrC: 0,
+  items: [], sdrItems: [],
 };
 
 /**
@@ -69,9 +73,11 @@ export function useUnassignedContracts(
       if (error) throw error;
 
       const rows = ((caucoes as any[]) || []);
-      const segOf = (s: any): 'A' | 'B' | null => {
+      // Segmento C também é reconhecido: sem isso, um contrato não atribuído de
+      // lead C caía silenciosamente no resíduo "sem ICP".
+      const segOf = (s: any): 'A' | 'B' | 'C' | null => {
         const v = String(s || '').toUpperCase();
-        return v === 'A' || v === 'B' ? (v as 'A' | 'B') : null;
+        return v === 'A' || v === 'B' || v === 'C' ? (v as 'A' | 'B' | 'C') : null;
       };
 
       const items: UnassignedContractItem[] = [];
@@ -154,7 +160,7 @@ export function useUnassignedContracts(
         }
 
         // Segmento dos deals órfãos (quando existirem)
-        const segByDeal = new Map<string, 'A' | 'B' | null>();
+        const segByDeal = new Map<string, 'A' | 'B' | 'C' | null>();
         if (orphanDealIds.length > 0) {
           const { data: deals } = await supabase
             .from('crm_deals')
@@ -162,7 +168,7 @@ export function useUnassignedContracts(
             .in('id', Array.from(new Set(orphanDealIds)));
           (deals || []).forEach((d: any) => {
             const s = (d.icp_segment || '').toUpperCase();
-            segByDeal.set(d.id, s === 'A' || s === 'B' ? (s as 'A' | 'B') : null);
+            segByDeal.set(d.id, segOf(s));
           });
         }
 
@@ -191,17 +197,19 @@ export function useUnassignedContracts(
         });
       }
 
-      const count = (list: UnassignedContractItem[], seg: 'A' | 'B' | null) =>
+      const count = (list: UnassignedContractItem[], seg: 'A' | 'B' | 'C' | null) =>
         list.filter((i) => i.segment === seg).length;
 
       return {
         total: items.length,
         a: count(items, 'A'),
         b: count(items, 'B'),
+        c: count(items, 'C'),
         unknown: count(items, null),
         sdrTotal: sdrItems.length,
         sdrA: count(sdrItems, 'A'),
         sdrB: count(sdrItems, 'B'),
+        sdrC: count(sdrItems, 'C'),
         items,
         sdrItems,
       };
