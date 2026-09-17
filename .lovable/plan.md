@@ -1,131 +1,137 @@
-# Auditoria — WhatsApp no lançamento de venda do Consórcio
+# Levantamento — o que sai daqui para o Make e o que falta para a mensagem
 
-Levantamento somente leitura. Nada foi alterado, religado, publicado ou disparado.
-
----
-
-## Resposta curta às três perguntas do dono
-
-1. **Nunca existiu WhatsApp no lançamento de venda do Consórcio.** O que existe, ativo até hoje, é um **e-mail** de boas-vindas ao cliente ("Boas-vindas Carta Cadastrada"), disparado no cadastro da carta — 275 envios, o último em 14/09/2026. Não há registro de nenhum envio de WhatsApp por esse evento, nem migração que tenha desligado algo. Não foi decisão nem quebra: foi configurado como e-mail desde 22/07/2026.
-2. **Sim, ele mesmo consegue mudar a mensagem**, em Administração → Automações → aba Fluxos (`/admin/automacoes`, só perfil admin). O canal do fluxo pode ser e-mail, WhatsApp ou os dois, sem depender de programação.
-3. **O dado hoje está bom para disparar.** Nas vendas lançadas nos últimos 60 dias, nenhuma nasceu sem crédito. A tela "R$ 0" que ele mandou não corresponde a nenhuma venda lançada nesse período (detalhe abaixo).
+Somente leitura. Nada foi alterado, publicado ou disparado. **Nenhuma requisição de teste foi enviada ao Make** — os dados abaixo vêm do histórico gravado no banco (`bu_webhook_logs`, 217 envios entre 30/07 e 14/09/2026, todos com resposta OK).
 
 ---
 
-## 1) A automação que existia
+## Achado principal, antes de tudo
 
-### Fluxo "Boas-vindas Carta Cadastrada" — ATIVO, canal e-mail
-- **Onde vive:** registro na tabela `automation_flows` (id `920ec993…`), criado em 22/07/2026, última edição em 24/08/2026. `is_active = true`, `channel = 'email'`, evento `consorcio_carta_cadastrada`.
-- **O que dispara:** `src/hooks/useConsorcioPendingRegistrations.ts:611-627` — ao criar o cadastro pendente da carta, chama a função `automation-event-dispatcher` com esse evento.
-- **Para quem:** **cliente** (e-mail do cadastro), não grupo interno.
-- **Texto atual:** "Olá, {{nome}}! É com grande satisfação que confirmamos oficialmente a aquisição da sua Carta de Consórcio… Antony será o responsável por cuidar da sua carta de ponta a ponta… WhatsApp +55 11 94028-4344 / antony.nicolas@minhacasafinanciada.com".
-- **Histórico de envio:** 275 e-mails, de 14/07/2026 a 14/09/2026, todos `sent`. **Zero envios de WhatsApp** com esse evento.
+**O gatilho está falhando, não o cenário do Make.** Nas 61 vendas lançadas nos últimos 60 dias, **todas** geraram cadastro de carta — mas **só 33 chegaram ao Make. 28 (46%) nunca saíram daqui.** E não é falta de dado: nas 28, nome, contato e crédito estavam todos preenchidos.
 
-### Fluxo "Boas-vindas R2 (Contrato Pago)" — ATIVO, canal WhatsApp (não é consórcio)
-- Registro `a108e63e…`, evento `attendee_contract_paid`, template Meta aprovado `Boas-Vindas Agendamento de R2` (Twilio SID `HX1d8b01…`).
-- Disparado pelo gatilho de banco `trg_notify_attendee_contract_paid` em `meeting_slot_attendees`, que **filtra BU = incorporador**. Consórcio nunca entra.
-- Sem registros em `automation_logs` para esse fluxo — não há prova de envio por esse caminho.
+| Semana | Vendas | Chegaram ao Make | Não chegaram |
+|---|---|---|---|
+| 20/07 | 13 | 0 | 13 |
+| 27/07 | 8 | 1 | 7 |
+| 10/08 | 2 | 2 | 0 |
+| 17/08 | 2 | 2 | 0 |
+| 24/08 | 13 | 13 | 0 |
+| 31/08 | 11 | 10 | 1 |
+| 07/09 | 7 | 3 | **4** |
+| 14/09 | 5 | 2 | **3** |
 
-### Webhook Make.com (`consorcio.carta.cadastrada`) — ATIVO, caixa-preta
-- `src/lib/consorcioCartaWebhook.ts` → função `consorcio-carta-cadastrada-webhook`, que posta o payload da carta numa URL fixa do Make (`hook.us1.make.com/pk492b4dfi…`). Idempotente por `webhook_carta_cadastrada_enviado_em`.
-- **Este é o único candidato plausível à "automação que existia e parou":** o cenário do Make está fora do sistema, e nada aqui prova se ele manda ou mandava WhatsApp. `NÃO DETERMINADO` — só o painel do Make responde. É o que falta olhar.
-
-### Webhook de saída por gatilho de banco — ATIVO
-- `trg_enqueue_outbound_consorcio_webhook` em `consortium_cards` enfileira `consorcio.venda.criada/atualizada/cancelada` em `outbound_webhook_queue`, despachado a cada minuto. Repasse HTTP genérico para URLs cadastradas — não envia WhatsApp por si.
-
-### Foi desligada por decisão ou por quebra?
-**Nem uma nem outra.** Não há migração que desative gatilho ou regra de WhatsApp de consórcio; os `DROP TRIGGER` encontrados são recriações idempotentes. Não há código comentado. Não existe nenhum ponto no código que envie WhatsApp no lançamento da venda.
+As de julho se explicam: o registro de log só existe a partir de 30/07. **As de setembro não.** Nos dias 08, 09, 15 e 16/09 há cadastros completos com a marca de envio vazia e nenhum log — o disparo simplesmente não aconteceu, enquanto no dia 10/09 sete cadastros seguidos saíram normalmente. Ou seja: **a sensação de "parou" do dono é real, e a causa está do nosso lado, não no Make.** A causa exata é `NÃO DETERMINADO` — o padrão sugere caminhos de cadastro que não chamam o disparo (cadastro feito por outra tela, fora do modal de lançamento) ou falha silenciosa na chamada, que é engolida por um `catch`. Para fechar isso falta olhar os registros da função no período.
 
 ---
 
-## 2) Infraestrutura de WhatsApp viva hoje
+## 1) O payload de hoje
 
-- **Provedor único: Twilio** (API oficial WhatsApp). Não há Z-API, Evolution nem Meta Cloud direto.
-- **Quem envia de fato:**
-  - `twilio-whatsapp-send` — envio programático, usado pelas automações.
-  - `twilio-wa-send` — atendimento 1:1 do inbox, com teto diário por usuário.
-  - `send-boleto-whatsapp` — boleto avulso do consórcio (cobrança, não venda).
-  - `wa-broadcast-dispatch` — disparo em massa, roda a cada minuto por agendamento.
-- **Números remetentes** (`wa_senders`, 2 ativos): `+55 11 5192-0293` (MCF Capital Comercial, massa + 1:1) e `+55 11 5217-0395` (SDR IA).
-- **`wa_broadcasts`:** motor de disparo em massa. 51 campanhas, 5.455 destinatários, última em 16/09/2026 — **em uso**. Escrito pelas telas de broadcast (`src/components/checkin/broadcast/*`, `BulkBroadcastDialog`). Sem nenhuma ligação com venda de consórcio.
-- **`automation-event-dispatcher`:** recebe um evento, procura fluxos ativos em `automation_flows` com aquele `trigger_event`, monta nome/e-mail/telefone do cliente e envia — e-mail pela `brevo-send`, WhatsApp pela `twilio-whatsapp-send`. Idempotente por colunas de "enviado em". Hoje só entende dois eventos: `consorcio_carta_cadastrada` e `attendee_contract_paid`.
-- **`automation_routing_rules`** (a tabela com coluna `bu`): **existe no banco e está VAZIA — zero regras.** Nenhuma função e nenhuma tela leem essa tabela. É estrutura abandonada; **não é** onde as automações vivem.
-- **Tela para editar regras e textos: SIM.** `/admin/automacoes` (só admin) → aba **Fluxos** cria/edita o fluxo, escolhe o evento (`consorcio_carta_cadastrada` já está na lista), o canal (e-mail / WhatsApp / ambos), o assunto e o corpo com variáveis `{{nome}}`, `{{telefone}}`, `{{grupo}}`, `{{cota}}`. Aba **Templates** edita os templates Meta aprovados.
-- **Destinatário:** sempre resolvido do dado (telefone do cadastro/contato). Não há número fixo em secret para automação, e não há cadastro de destinatário interno.
-- **Grupo de WhatsApp: NÃO há suporte.** Todo o envio é para número individual via Twilio, que não envia para grupos. Um aviso "no grupo interno" exigiria caminho novo (provedor diferente) ou um número individual de destino.
+Envio real mais recente (14/09/2026, cliente Liliane Pontes). Objeto inteiro, como sai:
 
----
+```json
+{
+  "event": "consorcio.carta.cadastrada",
+  "occurred_at": "2026-09-14T22:44:45.358Z",
+  "lead": { "nome_completo": "Liliane Pontes da Silva", "email": "lipontes@hotmail.com",
+            "telefone": "(12) 98888-1550", "cpf": "367.894.158-31", "tipo_pessoa": "pf",
+            "razao_social": null, "cnpj": null },
+  "carta": { "card_id": null, "valor_credito": 120000, "tipo_produto": "parcelinha",
+             "produto_codigo": null, "categoria": null, "grupo": null, "cota": null,
+             "prazo_meses": 240, "data_contratacao": null, "dia_vencimento": null,
+             "condicao_pagamento": "50", "inclui_seguro": false,
+             "empresa_paga_parcelas": "sim", "tipo_contrato": "normal",
+             "parcelas_pagas_empresa": 2, "inicio_segunda_parcela": null,
+             "vendedor_name": "Cleiton Anacleto Lima", "origem": null, "origem_detalhe": null,
+             "origem_lead": null, "e_transferencia": false, "transferido_de": null,
+             "valor_comissao": null,
+             "observacoes": "Foi combinado da MCF pagar a 1° e a 2° Parcela" },
+  "proposta": { "id": "171e84ac-…", "status": "aceita", "deal_id": "6787d6b4-…",
+                "qtd_cartas": 1, "valor_credito": 120000, "prazo_meses": 240,
+                "tipo_produto": "parcelinha", "aceite_at": "2026-09-14T22:44:43.553+00:00",
+                "aceite_date": "2026-09-14", "proposal_date": "2026-09-14",
+                "created_by": "16828627-…", "aceite_by": "16828627-…",
+                "proposal_details": "Foi combinado da MCF pagar a 1° e a 2° Parcela",
+                "origem_lead": null, "consortium_card_id": null, "carta_excluida": false, "…": null },
+  "registration": { "id": "3ed8c78a-…", "status": "aguardando_abertura", "aceite_date": "2026-09-14" },
 
-## 3) O ponto de disparo — botão "Lançar Venda"
+  "registration_id": "3ed8c78a-…", "card_id": null, "proposal_id": "171e84ac-…",
+  "nome_completo": "Liliane Pontes da Silva", "email": "lipontes@hotmail.com",
+  "telefone": "(12) 98888-1550", "cpf": "367.894.158-31", "cnpj": null, "tipo_pessoa": "pf",
+  "valor_credito": 120000, "grupo": null, "cota": null, "produto": "parcelinha",
+  "prazo_meses": 240, "vendedor": "Cleiton Anacleto Lima", "origem_lead": null
+}
+```
 
-- **Componente:** `src/components/consorcio/ProposalModal.tsx` (aberto na aba do funil R1 do Consórcio).
-- **Grava, em sequência:**
-  1. `useEnviarProposta` (`src/hooks/useConsorcioPostMeeting.ts:709+`) → `consorcio_proposals` (crédito total = soma das cartas, prazo/produto da carta principal, origem do lead) + `consorcio_proposal_cartas` (uma linha por carta: crédito, prazo, produto, categoria, condição, objetivo, parcela 1ª–12ª, demais, `parcelas_mcf`).
-  2. `useCreatePendingRegistration` → `consorcio_pending_registrations`, um por carta (só se o bloco cadastral opcional for preenchido).
-- **Gatilhos de banco reagindo a proposta/carta:** apenas auditoria e consistência (`trg_audit_consorcio_proposals`, `tg_sync_proposal_cartas_agregado`, `tg_validate_proposal_carta`, `trg_consorcio_stage_cota`). **Nenhum** dispara mensagem.
+Quem monta: `src/lib/consorcioCartaWebhook.ts` (checa a marca de envio, chama a função, marca depois do sucesso, nunca levanta erro) e `supabase/functions/consorcio-carta-cadastrada-webhook/index.ts` (lê o cadastro, a proposta e o card, monta o objeto com prioridade cadastro → proposta → card, barra envio se faltar nome, contato ou crédito, posta no Make e grava o log).
 
-### Os sete dados que o dono quer
+### Item por item, para a mensagem que o dono quer
 
-| Dado | De onde sairia | Disponível no lançamento? |
+| Dado da mensagem | Vai hoje? | De onde |
 |---|---|---|
-| Nome do lead | `contactName` do modal (contato do CRM); se o bloco cadastral for preenchido, `nome_completo`/`razao_social` | **Sim** |
-| Crédito total | `consorcio_proposals.valor_credito` = soma das cartas | **Sim** |
-| Quantas cartas | `consorcio_proposals.qtd_cartas` / linhas em `consorcio_proposal_cartas` | **Sim** |
-| Valor de cada carta | `consorcio_proposal_cartas.valor_credito` | **Sim** |
-| Quantas parcelas a MCF paga | `consorcio_proposal_cartas.parcelas_mcf` (marcação do closer) | **Sim, quando marcado** — 25 de 117 cartas dos últimos 60 dias ficaram sem marcação |
-| Nome do closer | `vendedor_name` (texto passado ao modal) + `created_by` (usuário logado) | **Sim**, com a ressalva de que é texto livre e não distingue papel |
-| Nome do SDR | **Não é gravado neste fluxo.** Precisaria vir de fora: do agendador da R1 do negócio no CRM (mesma hierarquia usada nas métricas: quem agendou > dono do pipeline > dono do negócio) | **Não no instante do lançamento** — exige uma consulta extra ao negócio/reunião |
+| Nome do cliente | **Vai** | `nome_completo` |
+| Crédito Total (soma de todas as cartas) | **Não vai** | O que vai é o crédito **daquela carta** (`valor_credito`). O total da venda está em `proposta.valor_credito`, que **coincide** com o da carta quando é uma só — em venda de 2+ cartas, o campo de topo mostra só uma parte |
+| Quantidade de cartas | **Vai** | `proposta.qtd_cartas` (aninhado; não está no topo) |
+| Valor de cada carta | **Não vai** | Cada chamada traz uma carta. Não existe lista das cartas da venda |
+| Parcelas que a MCF paga | **Vai** | `carta.parcelas_pagas_empresa` (2, no exemplo) e `carta.empresa_paga_parcelas` ("sim") |
+| Nome do closer | **Vai** | `vendedor` (texto do lançamento) |
+| Nome do SDR | **Não vai** | Não existe nenhum campo de SDR no objeto |
 
-Sobre o SDR: sim, a origem correta no consórcio é o agendador da R1, e ela existe no banco — mas não está no que o "Lançar Venda" grava. É o único dos sete que exige um passo a mais.
+Resumo: **4 de 7 já vão.** Faltam crédito total, lista de cartas e SDR. Com o payload de hoje, o cenário no Make **não consegue** montar a mensagem completa — e nas vendas de mais de uma carta ele montaria uma mensagem por carta, cada uma com um pedaço do crédito.
 
 ---
 
-## 4) O caso da venda incompleta — medição
+## 2) O momento do disparo
 
-Janela: 18/07/2026 a 17/09/2026, propostas não excluídas.
+- **Uma chamada por carta cadastrada, não por venda.** Nas 38 vendas com aceite nos últimos 60 dias, 94 cartas geraram 95 cadastros e **19 dessas vendas têm mais de um cadastro**. Venda de 3 cartas = 3 chamadas ao Make. Houve uma venda com **10 chamadas** registradas (reenvios).
+- **A distância entre lançar a venda e cadastrar a carta é praticamente zero.** Mediana: instantâneo (os dois acontecem no mesmo clique, o cadastro é gravado fração de segundo antes do aceite). Pior caso: 1 segundo. Não existe atraso a considerar.
+- **O cadastro não é opcional na prática.** Das 61 vendas lançadas nos últimos 60 dias, **61 geraram cadastro pendente — nenhuma ficou sem.** O bloco é opcional no formulário, mas o time preenche sempre.
 
-| Situação | Total | Sem crédito | % |
-|---|---|---|---|
-| Vendas lançadas (`aceita`) | 61 | **0** | **0%** |
-| Propostas ainda pendentes | 14 | 13 | 93% |
-| Recusadas | 4 | 0 | 0% |
+Conclusão: o "cadastro da carta" e o "lançamento da venda" são o **mesmo instante**. Mudar o momento do disparo não resolve nada. O problema real é (a) o disparo que falha em quase metade dos casos e (b) o payload incompleto e por carta em vez de por venda.
 
-Nas **117 cartas** dessas 61 vendas lançadas: **nenhuma sem crédito**, nenhuma sem prazo, **24 sem a parcela 1ª–12ª** (20,5%) e 25 sem a marcação de parcelas MCF.
+---
 
-E as 24 sem parcela estão todas no passado:
+## 3) Desenho para um disparo por venda, com o payload completo
 
-| Semana | Vendas | Cartas | Cartas sem parcela |
-|---|---|---|---|
-| 20/07 | 13 | 13 | 13 |
-| 27/07 | 8 | 8 | 8 |
-| 10/08 | 2 | 2 | 2 |
-| 17/08 | 2 | 5 | 1 |
-| 24/08 | 13 | 41 | 0 |
-| 31/08 | 11 | 27 | 0 |
-| 07/09 | 7 | 16 | 0 |
-| 14/09 | 5 | 5 | 0 |
+O que precisaria existir:
 
-**Desde 24/08, 89 cartas seguidas com parcela preenchida.**
+- **Um evento novo por venda, não por carta** — `consorcio.venda.lancada` —, disparado uma única vez ao aceitar a proposta, com a proposta como chave.
+- **Uma nova função de envio** (ou um caminho separado na atual) que leia a proposta, **todas** as cartas dela, e monte: nome do cliente, crédito total (da própria proposta, não somado à mão), lista com valor de cada carta, parcelas que a MCF paga por carta, nome do closer e nome do SDR.
+- **Disparo no servidor, não no navegador.** Hoje a chamada sai da tela: se o closer fecha o modal, perde conexão ou a chamada falha, ninguém reenvia — é exatamente o perfil das 28 vendas que não chegaram. Um gatilho de banco enfileirando o evento (a mesma fila que já existe para os webhooks de saída, com repetição automática a cada minuto) elimina essa classe de falha.
+- **Onde entraria:** no aceite da proposta, sem tocar em nada do que já grava a venda, e sem mexer no webhook atual — ele continua servindo o cenário de cadastro do Make.
 
-**Conclusão:** o risco de mandar "Crédito Total: R$ 0" no lançamento é **zero nos últimos 60 dias** de vendas lançadas. A mensagem pode disparar no lançamento sem esperar o cadastro completar. Vale apenas uma guarda simples: não disparar se o crédito total vier zerado.
+### O SDR
 
-**Sobre a tela "1 carta · R$ 0" que ele mandou:** `NÃO DETERMINADO`. Nenhuma venda lançada nos últimos 60 dias tem crédito zero, então aquilo não é uma venda gravada — é muito provavelmente o próprio modal ainda em preenchimento (rascunho antes de salvar) ou uma proposta em status `pendente`, que é onde os 13 sem crédito estão. Para fechar isso eu precisaria da data/nome do cliente da tela.
+Consulta: da proposta pega-se o negócio (`deal_id`); do negócio, os participantes de reunião; de cada participante, quem agendou (`booked_by`); daí o nome no cadastro de usuários — usando o agendamento mais antigo, que é a R1.
+
+**Medição: das 61 vendas, 60 resolvem o nome do SDR — 98,4%.** Apenas 1 ficaria em branco. O campo é confiável.
+
+### Risco de disparo duplicado
+
+- **Venda editada depois:** com trava por venda, não reenvia. Sem trava, cada salvamento vira mensagem nova.
+- **Carta adicionada depois do lançamento:** hoje geraria uma chamada nova (uma mensagem a mais, com crédito parcial). Num evento por venda, precisaria de decisão explícita: ignorar, ou mandar uma segunda mensagem de complemento.
+- **Reenvio manual:** o caminho atual aceita forçar reenvio ignorando a trava. É o que explica a venda com 10 chamadas.
+
+---
+
+## 4) Idempotência
+
+- **Hoje:** a marca `webhook_carta_cadastrada_enviado_em` fica **no cadastro da carta**. Protege por carta, não por venda — por isso uma venda de 3 cartas manda 3 mensagens e cada uma é considerada legítima.
+- **Editar a venda depois:** **não reenvia**, porque a marca já está gravada — a menos que alguém use o reenvio forçado, que ignora a marca de propósito.
+- **Trava equivalente para um disparo por venda:** a marca teria que ficar **na proposta**, gravada pelo servidor no mesmo passo do envio (não pelo navegador depois, como hoje — se a tela cair entre o envio e a marcação, o próximo envio duplica). Com a fila de webhooks de saída, essa garantia já vem de fábrica.
 
 ---
 
 ## O que falta olhar
 
-- **Painel do Make.com** (cenário do webhook `consorcio.carta.cadastrada`): é o único lugar onde pode ter existido um WhatsApp que "parou". Fora do sistema — precisa do acesso do dono.
-- **Data/cliente da tela do "R$ 0"** para identificar o registro exato.
-- **Se o destino é grupo interno:** hoje não há como. Precisa decisão sobre número individual ou provedor novo.
+- **Registros da função `consorcio-carta-cadastrada-webhook` nos dias 08, 09, 15 e 16/09** para nomear a causa exata das vendas que não saíram. `NÃO DETERMINADO` até lá.
+- **Painel do Make:** confirmar se o cenário monta mensagem e para onde manda (grupo, número, e-mail). Fora do sistema.
 
 ---
 
-## Decisões que preciso do dono antes de propor implementação
+## Decisões que preciso antes de propor implementação
 
-1. **Cliente ou time?** A automação de hoje fala com o cliente por e-mail. O pedido parece ser um aviso interno de venda. São coisas diferentes.
-2. **Se for interno: grupo ou número?** Grupo não é possível com o que existe. Número individual é.
-3. **Incluir o SDR?** Se sim, o lançamento precisa buscar o agendador da R1 — trabalho a mais, mas viável.
-4. **Disparo no lançamento** (com guarda de crédito zero) **ou só quando o cadastro estiver completo?** A medição diz que o lançamento já é seguro.
+1. **Consertar o disparo atual** (46% de perda) é prioridade sobre qualquer campo novo — confirma?
+2. **Uma mensagem por venda** (com a lista de cartas) em vez de uma por carta — é isso que o dono quer?
+3. **Mensagem montada no Make** (mandamos o dado completo) **ou aqui** (mandamos o texto pronto)? A segunda dá controle sobre o formato exato; a primeira deixa o dono editando lá.
+4. **Carta adicionada depois do lançamento:** silêncio ou segunda mensagem?
 
 Nada será alterado até essas respostas.
