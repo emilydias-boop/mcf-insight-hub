@@ -166,6 +166,7 @@ const menuItems: MenuItem[] = [
       { title: "Movimentações por Estágio", url: "/crm/movimentacoes" },
       { title: "Fechamento Equipe", url: "/fechamento-sdr?bu=incorporador" },
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
+      { title: "Clientes", url: "/clientes" },
       { title: "CRM", url: "/crm" },
       { title: "Funil e Ciclo de Vendas", url: "/bu-incorporador/funil-ciclo-vendas" },
       { title: "Relatórios", url: "/bu-incorporador/relatorios" },

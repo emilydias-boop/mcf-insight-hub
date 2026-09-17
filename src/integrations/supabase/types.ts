@@ -553,6 +553,13 @@ export type Database = {
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ar_titulos_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendas_painel"
+            referencedColumns: ["id"]
+          },
         ]
       }
       areas_catalogo: {
@@ -3174,6 +3181,13 @@ export type Database = {
             columns: ["hubla_transaction_id"]
             isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendas_painel"
             referencedColumns: ["id"]
           },
         ]
@@ -6523,6 +6537,13 @@ export type Database = {
             columns: ["transaction_id"]
             isOneToOne: true
             referencedRelation: "vw_linhas_marcadas_como_eco"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_post_sale_tracking_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "vw_vendas_painel"
             referencedColumns: ["id"]
           },
         ]
@@ -12486,6 +12507,13 @@ export type Database = {
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "r2_vendas_extras_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendas_painel"
+            referencedColumns: ["id"]
+          },
         ]
       }
       regua_faixas: {
@@ -13558,6 +13586,13 @@ export type Database = {
             columns: ["hubla_transaction_id"]
             isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_intermediacoes_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendas_painel"
             referencedColumns: ["id"]
           },
           {
@@ -16684,6 +16719,40 @@ export type Database = {
           ultimo_pagamento: string | null
         }
         Relationships: []
+      }
+      vw_vendas_painel: {
+        Row: {
+          customer_document: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          email_norm: string | null
+          gateway_sale_id: string | null
+          gross_override: number | null
+          hubla_id: string | null
+          id: string | null
+          installment_number: number | null
+          linked_attendee_id: string | null
+          net_value: number | null
+          product_category: string | null
+          product_name: string | null
+          product_price: number | null
+          reference_price: number | null
+          sale_date: string | null
+          sale_origin: string | null
+          sale_status: string | null
+          source: string | null
+          total_installments: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubla_transactions_linked_attendee_id_fkey"
+            columns: ["linked_attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wa_templates: {
         Row: {
