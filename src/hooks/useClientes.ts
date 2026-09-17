@@ -36,6 +36,7 @@ export interface ClienteConsolidado {
   total_bruto_produtos: number | null;
   tem_reembolso: boolean | null;
   gateways: string[] | null;
+  qtd_gateways: number | null;
   historico_compras: HistoricoCompraItem[] | null;
 }
 
@@ -55,7 +56,7 @@ export interface VendaPorProduto {
 }
 
 const COLUNAS_LISTA =
-  'cliente_email,cliente_nome,cliente_telefone,cliente_cpf,qtd_produtos,total_pagamentos,primeira_compra,ultima_compra,total_liquido_pago,total_bruto_produtos,tem_reembolso,gateways,historico_compras';
+  'cliente_email,cliente_nome,cliente_telefone,cliente_cpf,qtd_produtos,total_pagamentos,primeira_compra,ultima_compra,total_liquido_pago,total_bruto_produtos,tem_reembolso,gateways,qtd_gateways,historico_compras';
 
 /** Escapa o termo para uso dentro de `or(...)` do PostgREST. */
 const sanitizar = (termo: string) => termo.replace(/[,()%]/g, ' ').trim();
@@ -92,14 +93,12 @@ export function useClientesLista(opts: {
         query = query.or(partes.join(','));
       }
       if (semCpf) query = query.is('cliente_cpf', null);
+      if (multiGateway) query = query.gt('qtd_gateways', 1);
 
       const { data, error } = await query;
       if (error) throw error;
 
-      let rows = (data || []) as unknown as ClienteConsolidado[];
-      // `array_length(gateways,1) > 1` não é expressável no PostgREST: filtra o
-      // recorte já paginado (o filtro é auxiliar, não altera a contagem oficial).
-      if (multiGateway) rows = rows.filter((r) => (r.gateways?.length ?? 0) > 1);
+      const rows = (data || []) as unknown as ClienteConsolidado[];
 
       return { rows, recebidas: (data || []).length, pagina: pageParam as number };
     },
