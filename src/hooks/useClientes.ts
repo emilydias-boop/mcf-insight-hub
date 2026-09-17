@@ -56,7 +56,7 @@ export interface VendaPorProduto {
 }
 
 const COLUNAS_LISTA =
-  'cliente_email,cliente_nome,cliente_telefone,cliente_cpf,qtd_produtos,total_pagamentos,primeira_compra,ultima_compra,total_liquido_pago,total_bruto_produtos,tem_reembolso,gateways,historico_compras';
+  'cliente_email,cliente_nome,cliente_telefone,cliente_cpf,qtd_produtos,total_pagamentos,primeira_compra,ultima_compra,total_liquido_pago,total_bruto_produtos,tem_reembolso,gateways,qtd_gateways,historico_compras';
 
 /** Escapa o termo para uso dentro de `or(...)` do PostgREST. */
 const sanitizar = (termo: string) => termo.replace(/[,()%]/g, ' ').trim();
