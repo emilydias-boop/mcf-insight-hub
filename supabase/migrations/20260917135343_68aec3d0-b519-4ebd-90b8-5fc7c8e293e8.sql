@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.enqueue_consorcio_venda_webhook() FROM PUBLIC, anon, authenticated;
