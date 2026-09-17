@@ -1753,6 +1753,36 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_liquido_x100_nov2025: {
+        Row: {
+          corrigido_em: string
+          hubla_id: string | null
+          id: string
+          net_value_antigo: number | null
+          net_value_novo: number | null
+          product_name: string | null
+          sale_date: string | null
+        }
+        Insert: {
+          corrigido_em?: string
+          hubla_id?: string | null
+          id: string
+          net_value_antigo?: number | null
+          net_value_novo?: number | null
+          product_name?: string | null
+          sale_date?: string | null
+        }
+        Update: {
+          corrigido_em?: string
+          hubla_id?: string | null
+          id?: string
+          net_value_antigo?: number | null
+          net_value_novo?: number | null
+          product_name?: string | null
+          sale_date?: string | null
+        }
+        Relationships: []
+      }
       bi_public_tokens: {
         Row: {
           active: boolean
@@ -12136,6 +12166,24 @@ export type Database = {
             referencedColumns: ["product_configuration_id"]
           },
         ]
+      }
+      produtos_descontinuados: {
+        Row: {
+          descontinuado_em: string
+          observacao: string | null
+          product_name: string
+        }
+        Insert: {
+          descontinuado_em?: string
+          observacao?: string | null
+          product_name: string
+        }
+        Update: {
+          descontinuado_em?: string
+          observacao?: string | null
+          product_name?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
