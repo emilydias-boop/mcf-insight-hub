@@ -304,6 +304,7 @@ const App = () => (
               
               {/* BU Incorporador */}
               <Route path="bu-incorporador/transacoes" element={<ResourceGuard resource="crm"><TransacoesIncorp /></ResourceGuard>} />
+              <Route path="clientes" element={<ResourceGuard resource="crm"><Clientes /></ResourceGuard>} />
               <Route path="bu-incorporador/relatorios" element={<ResourceGuard resource="relatorios"><IncorporadorRelatorios /></ResourceGuard>} />
               <Route path="bu-incorporador/funil-ciclo-vendas" element={<ResourceGuard resource="crm"><IncorporadorFunilCiclo /></ResourceGuard>} />
               <Route path="bu-incorporador/bi-comercial" element={<ResourceGuard resource="crm"><BIComercial /></ResourceGuard>} />
