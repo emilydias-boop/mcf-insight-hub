@@ -5659,6 +5659,47 @@ export type Database = {
           },
         ]
       }
+      consorcio_venda_webhook_queue: {
+        Row: {
+          created_at: string
+          id: string
+          payload: Json | null
+          sent_at: string | null
+          status: string
+          tentativas: number
+          ultimo_erro: string | null
+          venda_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          sent_at?: string | null
+          status?: string
+          tentativas?: number
+          ultimo_erro?: string | null
+          venda_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          sent_at?: string | null
+          status?: string
+          tentativas?: number
+          ultimo_erro?: string | null
+          venda_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_venda_webhook_queue_venda_id_fkey"
+            columns: ["venda_id"]
+            isOneToOne: true
+            referencedRelation: "consorcio_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_vendedor_options: {
         Row: {
           created_at: string | null

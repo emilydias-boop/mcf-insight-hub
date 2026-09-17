@@ -294,3 +294,6 @@ verify_jwt = false
 
 [functions.crm-externo-encaminhamento]
 verify_jwt = false
+
+[functions.consorcio-venda-webhook-dispatcher]
+verify_jwt = false

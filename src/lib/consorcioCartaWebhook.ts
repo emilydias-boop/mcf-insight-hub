@@ -1,13 +1,19 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Dispara o webhook `consorcio-carta-cadastrada-webhook` (Make) para uma carta
- * que acabou de entrar em "Concluídas - Operacional".
+ * Enfileira o aviso de venda de consórcio.
  *
- * - Idempotente por padrão: verifica `webhook_carta_cadastrada_enviado_em` no
- *   cadastro pendente antes de enviar. Se `force=true`, ignora a flag.
- * - Fire-and-forget: nunca lança exceções para o chamador — apenas loga.
- * - Marca a flag após sucesso.
+ * O disparo HTTP para o Make NÃO acontece mais no navegador: a tela apenas
+ * garante que exista UMA linha em `consorcio_venda_webhook_queue` para a venda,
+ * e a edge function `consorcio-venda-webhook-dispatcher` (agendada) faz o envio
+ * com retry. Isso elimina a perda silenciosa quando a aba fecha ou a chamada
+ * falha — 46% das vendas nunca chegavam ao Make por esse motivo.
+ *
+ * O enfileiramento normal é feito pelo gatilho de banco
+ * `trg_enqueue_consorcio_venda_webhook` no aceite da proposta; esta função é a
+ * rede de segurança para os caminhos que ainda a chamam.
+ *
+ * Granularidade: UMA linha por VENDA (proposta), não por carta.
  */
 export async function dispatchCartaCadastradaWebhook(params: {
   cardId?: string | null;
@@ -15,80 +21,41 @@ export async function dispatchCartaCadastradaWebhook(params: {
   proposalId?: string | null;
   force?: boolean;
 }): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
-  const { cardId = null, registrationId = null, proposalId = null, force = false } = params;
+  const { cardId = null, registrationId = null, proposalId = null } = params;
   try {
-    let effectiveRegId = registrationId;
+    let vendaId = proposalId;
 
-    // Resolve pending registration via card_id ou proposal_id se não fornecido
-    if (!effectiveRegId && cardId) {
-      const { data: reg } = await supabase
+    if (!vendaId && registrationId) {
+      const { data } = await supabase
         .from('consorcio_pending_registrations')
-        .select('id, webhook_carta_cadastrada_enviado_em')
+        .select('proposal_id')
+        .eq('id', registrationId)
+        .maybeSingle();
+      vendaId = (data as { proposal_id?: string | null } | null)?.proposal_id ?? null;
+    }
+    if (!vendaId && cardId) {
+      const { data } = await supabase
+        .from('consorcio_pending_registrations')
+        .select('proposal_id')
         .eq('consortium_card_id', cardId)
         .maybeSingle();
-      if (reg) {
-        effectiveRegId = reg.id;
-        if (!force && (reg as any).webhook_carta_cadastrada_enviado_em) {
-          return { sent: false, skipped: true };
-        }
-      }
+      vendaId = (data as { proposal_id?: string | null } | null)?.proposal_id ?? null;
     }
-    if (!effectiveRegId && proposalId) {
-      const { data: reg } = await supabase
-        .from('consorcio_pending_registrations')
-        .select('id, webhook_carta_cadastrada_enviado_em')
-        .eq('proposal_id', proposalId)
-        .maybeSingle();
-      if (reg) {
-        effectiveRegId = reg.id;
-        if (!force && (reg as any).webhook_carta_cadastrada_enviado_em) {
-          return { sent: false, skipped: true };
-        }
-      }
-    }
-    if (effectiveRegId && !force) {
-      const { data: reg } = await supabase
-        .from('consorcio_pending_registrations')
-        .select('webhook_carta_cadastrada_enviado_em')
-        .eq('id', effectiveRegId)
-        .maybeSingle();
-      if ((reg as any)?.webhook_carta_cadastrada_enviado_em) {
-        return { sent: false, skipped: true };
-      }
-    }
+    if (!vendaId) return { sent: false, skipped: true, error: 'venda não identificada' };
 
-    const { data, error } = await supabase.functions.invoke(
-      'consorcio-carta-cadastrada-webhook',
-      {
-        body: {
-          card_id: cardId,
-          registration_id: effectiveRegId,
-          proposal_id: proposalId,
-        },
-      },
-    );
-    if (error) {
-      console.warn('[carta-cadastrada-webhook] invoke error', error);
+    // Unique em venda_id: repetir o insert não cria segunda mensagem.
+    const { error } = await supabase
+      .from('consorcio_venda_webhook_queue')
+      .insert({ venda_id: vendaId } as never);
+
+    // 23505 = já enfileirada; é o resultado esperado, não erro.
+    if (error && (error as { code?: string }).code !== '23505') {
+      console.warn('[consorcio-venda-webhook] falha ao enfileirar', error);
       return { sent: false, error: error.message };
     }
-    if ((data as any)?.skipped) {
-      console.warn('[carta-cadastrada-webhook] skipped', (data as any)?.reason);
-      return { sent: false, skipped: true, error: (data as any)?.reason };
-    }
-    const ok = (data as any)?.success === true;
-    if (!ok) {
-      console.warn('[carta-cadastrada-webhook] envio não confirmado pelo Make', data);
-      return { sent: false, error: `status ${(data as any)?.status ?? 'desconhecido'}` };
-    }
-    if (ok && effectiveRegId) {
-      await supabase
-        .from('consorcio_pending_registrations')
-        .update({ webhook_carta_cadastrada_enviado_em: new Date().toISOString() } as any)
-        .eq('id', effectiveRegId);
-    }
-    return { sent: ok };
-  } catch (e: any) {
-    console.warn('[carta-cadastrada-webhook] unexpected error', e);
-    return { sent: false, error: e?.message ?? String(e) };
+    return { sent: false, skipped: true };
+  } catch (e) {
+    console.warn('[consorcio-venda-webhook] erro inesperado', e);
+    return { sent: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
