@@ -411,27 +411,11 @@ export function groupTransactionsByPurchase(
     }
   });
 
-  // Segunda passagem: recalcular totais para grupos com orderBumps
-  // O main da Hubla tem net = soma de todos os offers, então somar main + offers duplica
+  // Segunda passagem: apenas ordenação.
+  // A linha "carrinho" da Hubla (pai cujo líquido = soma dos offers) já é excluída
+  // no banco pela view vw_vendas_painel / coluna is_hubla_cart_row, então somar
+  // todas as linhas do grupo na primeira passagem já dá o total correto.
   groups.forEach(group => {
-    if (group.orderBumps.length > 0) {
-      // Recalcular totalNet usando apenas os offers (exclui o main que é o "carrinho total")
-      group.totalNet = group.orderBumps.reduce((sum, tx) => sum + (tx.net_value || 0), 0);
-
-      // Recalcular totalGross: tenta usar apenas offers, mas se zerado, usa todos
-      // Isso evita descartar bruto válido do item principal em grupos mistos
-      const grossOffersOnly = group.orderBumps.reduce((sum, tx) => {
-        const isFirst = globalFirstIds.has(tx.id);
-        return sum + getDeduplicatedGross(tx, isFirst);
-      }, 0);
-
-      if (grossOffersOnly > 0) {
-        group.totalGross = grossOffersOnly;
-      }
-      // Se grossOffersOnly === 0, mantém o totalGross já calculado na primeira passagem
-      // (que inclui o bruto do item principal)
-    }
-
     // Ordena allTransactions: principal primeiro, depois bumps
     group.allTransactions.sort((a, b) => {
       const aIsBump = a.hubla_id?.includes('-offer-') ? 1 : 0;

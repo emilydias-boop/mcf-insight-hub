@@ -9391,6 +9391,7 @@ export type Database = {
           id: string
           installment_fee_cents: number | null
           installment_number: number | null
+          is_hubla_cart_row: boolean
           is_offer: boolean | null
           linked_at: string | null
           linked_attendee_id: string | null
@@ -9435,6 +9436,7 @@ export type Database = {
           id?: string
           installment_fee_cents?: number | null
           installment_number?: number | null
+          is_hubla_cart_row?: boolean
           is_offer?: boolean | null
           linked_at?: string | null
           linked_attendee_id?: string | null
@@ -9479,6 +9481,7 @@ export type Database = {
           id?: string
           installment_fee_cents?: number | null
           installment_number?: number | null
+          is_hubla_cart_row?: boolean
           is_offer?: boolean | null
           linked_at?: string | null
           linked_attendee_id?: string | null
@@ -12124,6 +12127,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_configurations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_price_history_product_config_id_fkey"
+            columns: ["product_config_id"]
+            isOneToOne: false
+            referencedRelation: "vw_produtos_cadastrados_sem_bu"
+            referencedColumns: ["product_configuration_id"]
           },
         ]
       }
@@ -16730,6 +16740,22 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_produtos_cadastrados_sem_bu: {
+        Row: {
+          clientes: number | null
+          gateways: string | null
+          is_active: boolean | null
+          liquido: number | null
+          preco_medio_cobrado: number | null
+          primeira_venda: string | null
+          product_configuration_id: string | null
+          product_name: string | null
+          reference_price: number | null
+          ultima_venda: string | null
+          vendas: number | null
+        }
+        Relationships: []
+      }
       vw_produtos_nao_cadastrados: {
         Row: {
           maior_preco_bruto: number | null
@@ -18010,6 +18036,10 @@ export type Database = {
           p_deal_id: string
           p_new_anchor_at: string
         }
+        Returns: undefined
+      }
+      recalc_hubla_cart_row: {
+        Args: { p_parent_hubla_id: string }
         Returns: undefined
       }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
