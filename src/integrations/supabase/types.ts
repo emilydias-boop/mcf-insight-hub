@@ -16583,6 +16583,7 @@ export type Database = {
           gateways: string[] | null
           historico_compras: Json | null
           primeira_compra: string | null
+          qtd_gateways: number | null
           qtd_produtos: number | null
           tem_reembolso: boolean | null
           total_bruto_produtos: number | null
