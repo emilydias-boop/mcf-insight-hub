@@ -165,9 +165,8 @@ const menuItems: MenuItem[] = [
       { title: "Painel Comercial", url: "/crm/reunioes-equipe" },
       { title: "Movimentações por Estágio", url: "/crm/movimentacoes" },
       { title: "Fechamento Equipe", url: "/fechamento-sdr?bu=incorporador" },
-      { title: "Vendas", url: "/bu-incorporador/transacoes" },
-      { title: "Clientes", url: "/clientes" },
-      { title: "CRM", url: "/crm" },
+       { title: "Vendas", url: "/bu-incorporador/transacoes" },
+       { title: "CRM", url: "/crm" },
       { title: "Funil e Ciclo de Vendas", url: "/bu-incorporador/funil-ciclo-vendas" },
       { title: "Relatórios", url: "/bu-incorporador/relatorios" },
       // Removido em 2026-06-24 a pedido — funcionalidade não utilizada na BU Incorporador.
