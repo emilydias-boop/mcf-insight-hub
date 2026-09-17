@@ -36,6 +36,7 @@ export interface ClienteConsolidado {
   total_bruto_produtos: number | null;
   tem_reembolso: boolean | null;
   gateways: string[] | null;
+  qtd_gateways: number | null;
   historico_compras: HistoricoCompraItem[] | null;
 }
 
