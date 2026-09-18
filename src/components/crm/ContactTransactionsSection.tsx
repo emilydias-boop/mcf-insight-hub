@@ -37,10 +37,12 @@ export function ContactTransactionsSection({ email }: ContactTransactionsSection
         <span className="text-sm font-semibold flex-1 text-left">
           Compras / Transações ({transactions.length})
         </span>
-        <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs">
-          <DollarSign className="h-3 w-3 mr-0.5" />
-          R$ {totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </Badge>
+        {totalInvested > 0 && (
+          <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs">
+            <DollarSign className="h-3 w-3 mr-0.5" />
+            {formatCurrency(totalInvested)}
+          </Badge>
+        )}
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-1.5">
         {transactions.map((tx) => (
