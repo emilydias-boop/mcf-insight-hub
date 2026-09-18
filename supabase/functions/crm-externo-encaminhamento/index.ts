@@ -213,6 +213,8 @@ Deno.serve(async (req) => {
       return json({ erro: "area_invalida", areas_suportadas: Object.keys(AREAS) }, 400);
     }
 
+    const anamneseV2 = extrairAnamneseV2(body);
+
     // ---------- Idempotência: mesmo encaminhamento não duplica negócio ----------
     const { data: existente } = await supabase
       .from("crm_externo_encaminhamentos")
@@ -222,9 +224,33 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existente) {
+      // Reenvio: não cria segundo cartão, apenas atualiza os dados de anamnese.
+      if (temAnamnese(anamneseV2)) {
+        const { error: updErr } = await supabase
+          .from("crm_externo_encaminhamentos")
+          .update({ ...colunasAnamnese(anamneseV2), payload_original: body })
+          .eq("id", existente.id);
+        if (updErr) console.error("[crm-externo] update anamnese enc:", updErr.message);
+
+        if (existente.deal_id) {
+          const { data: dealAtual } = await supabase
+            .from("crm_deals")
+            .select("custom_fields")
+            .eq("id", existente.deal_id)
+            .maybeSingle();
+          const atuais = (dealAtual?.custom_fields ?? {}) as Record<string, unknown>;
+          const { error: dealUpdErr } = await supabase
+            .from("crm_deals")
+            .update({ custom_fields: { ...atuais, anamnese_v2: anamneseV2 } })
+            .eq("id", existente.deal_id);
+          if (dealUpdErr) console.error("[crm-externo] update anamnese deal:", dealUpdErr.message);
+        }
+      }
+
       return json({
         ok: true,
         duplicado: true,
+        anamnese_atualizada: temAnamnese(anamneseV2),
         encaminhamento_id: existente.id,
         negocio_id: existente.deal_id,
         status: existente.status,
@@ -232,6 +258,7 @@ Deno.serve(async (req) => {
         rota: AREAS[existente.area]?.rota ?? destino.rota,
       });
     }
+
 
     const email = String(cliente.email ?? "").trim().toLowerCase() || null;
     const telefone = String(cliente.telefone ?? cliente.phone ?? "").trim() || null;
