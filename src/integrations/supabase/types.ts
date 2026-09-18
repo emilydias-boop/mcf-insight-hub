@@ -7392,6 +7392,13 @@ export type Database = {
       crm_externo_encaminhamentos: {
         Row: {
           anamnese: Json
+          anamnese_atualizada_em: string | null
+          anamnese_estruturada: Json | null
+          anamnese_html: string | null
+          anamnese_pdf_url: string | null
+          anamnese_preenchida: boolean | null
+          anamnese_preenchida_em: string | null
+          anamnese_resumo: string | null
           area: string
           callback_url: string | null
           cliente_documento: string | null
@@ -7422,6 +7429,13 @@ export type Database = {
         }
         Insert: {
           anamnese?: Json
+          anamnese_atualizada_em?: string | null
+          anamnese_estruturada?: Json | null
+          anamnese_html?: string | null
+          anamnese_pdf_url?: string | null
+          anamnese_preenchida?: boolean | null
+          anamnese_preenchida_em?: string | null
+          anamnese_resumo?: string | null
           area: string
           callback_url?: string | null
           cliente_documento?: string | null
@@ -7452,6 +7466,13 @@ export type Database = {
         }
         Update: {
           anamnese?: Json
+          anamnese_atualizada_em?: string | null
+          anamnese_estruturada?: Json | null
+          anamnese_html?: string | null
+          anamnese_pdf_url?: string | null
+          anamnese_preenchida?: boolean | null
+          anamnese_preenchida_em?: string | null
+          anamnese_resumo?: string | null
           area?: string
           callback_url?: string | null
           cliente_documento?: string | null

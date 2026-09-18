@@ -38,6 +38,8 @@ import { useMyContactsCapabilities } from "@/hooks/useMyContactsCapabilities";
 import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
 import { cn } from "@/lib/utils";
 import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelector";
+import { AnamneseExternaButton, getAnamneseV2 } from "./AnamneseExternaButton";
+
 
 const NEXT_ACTION_ICONS: Record<string, React.ReactNode> = {
   ligar: <Phone className="h-2.5 w-2.5" />,
@@ -174,6 +176,8 @@ export const DealKanbanCard = ({
 
   const priority = getPriorityInfo();
   const isRescheduled = (deal.custom_fields as Record<string, unknown>)?.is_rescheduled === true;
+  const anamneseExterna = getAnamneseV2(deal);
+
 
   const handleCall = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -357,6 +361,11 @@ export const DealKanbanCard = ({
               Reembolso
             </Badge>
           )}
+          {/* Anamnese vinda do encaminhamento externo (ENCAMINHADO GR) */}
+          {anamneseExterna && (
+            <AnamneseExternaButton anamnese={anamneseExterna} clienteNome={deal.name} />
+          )}
+
           {isRescheduled && (
             <Badge 
               variant="outline" 
