@@ -306,7 +306,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 </TabsContent>
                 
                 <TabsContent value="produtos" className="mt-3 border rounded-lg min-h-[300px]">
-                  <DealProdutosAdquiridosTab dealId={deal.id} />
+                  <DealProdutosAdquiridosTab dealId={deal.id} email={contact?.email} />
                 </TabsContent>
               </Tabs>
               
