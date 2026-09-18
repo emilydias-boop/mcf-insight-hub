@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Undo2, CheckCircle2, Clock, XCircle, ShieldAlert, ShieldCheck, HelpCircle, Download, Filter } from 'lucide-react';
-import { loadXLSX } from '@/lib/lazyExport';
+import { loadXLSX, downloadWorkbook } from '@/lib/lazyExport';
 import { toast } from 'sonner';
 import { useArTitulos } from '@/hooks/useAReceber';
 import {
@@ -378,8 +378,8 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Reembolsos');
-      XLSX.writeFile(wb, `reembolsos-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
-      toast.success('Exportação gerada.');
+      await downloadWorkbook(XLSX, wb, `reembolsos-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`);
+      toast.success('Arquivo gerado. Verifique os downloads do navegador.');
     } catch (e: any) {
       toast.error(e?.message || 'Erro ao exportar.');
     } finally {
