@@ -413,6 +413,8 @@ export const DealKanbanCard = ({
               </Badge>
             ))}
           <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0" />
+          {/* Quanto esse lead já comprou (líquido, todas as BUs) */}
+          <LeadTotalCompradoBadge totais={totaisCliente} />
           {outsideInfo?.isOutside && (
             <Tooltip>
               <TooltipTrigger asChild>
