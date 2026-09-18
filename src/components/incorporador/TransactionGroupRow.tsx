@@ -373,15 +373,15 @@ export function groupTransactionsByPurchase(
 ): TransactionGroup[] {
   const groups = new Map<string, TransactionGroup>();
 
+  // PRIMEIRA PASSAGEM — apenas coletar
   transactions.forEach(tx => {
     // Remove sufixo -offer-X para agrupar
     const baseId = tx.hubla_id?.replace(/-offer-\d+$/, '') || tx.id;
-    const isOrderBump = tx.hubla_id?.includes('-offer-');
 
     if (!groups.has(baseId)) {
       groups.set(baseId, {
         id: baseId,
-        main: tx, // Será substituído se encontrar o principal
+        main: tx, // placeholder, definido na segunda passagem
         orderBumps: [],
         allTransactions: [],
         totalGross: 0,
@@ -392,36 +392,28 @@ export function groupTransactionsByPurchase(
 
     const group = groups.get(baseId)!;
     group.allTransactions.push(tx);
-
-    if (isOrderBump) {
-      group.orderBumps.push(tx);
-    } else {
-      // É o produto principal
-      group.main = tx;
-    }
-
-    // Soma bruto e líquido
-    const isFirst = globalFirstIds.has(tx.id);
-    group.totalGross += getDeduplicatedGross(tx, isFirst);
     group.totalNet += tx.net_value || 0;
-
-    // Marca grupo como "primeiro" se o produto principal for primeiro
-    if (!isOrderBump && isFirst) {
-      group.isFirst = true;
-    }
+    group.totalGross += getDeduplicatedGross(tx, globalFirstIds.has(tx.id));
   });
 
-  // Segunda passagem: apenas ordenação.
-  // A linha "carrinho" da Hubla (pai cujo líquido = soma dos offers) já é excluída
-  // no banco pela view vw_vendas_painel / coluna is_hubla_cart_row, então somar
-  // todas as linhas do grupo na primeira passagem já dá o total correto.
+  // SEGUNDA PASSAGEM — eleger o principal e derivar o resto.
+  // A linha "carrinho" da Hubla já não vem do banco, então muitos grupos
+  // chegam sem nenhuma linha não-offer: o principal precisa ser eleito.
   groups.forEach(group => {
-    // Ordena allTransactions: principal primeiro, depois bumps
-    group.allTransactions.sort((a, b) => {
+    const sorted = [...group.allTransactions].sort((a, b) => {
       const aIsBump = a.hubla_id?.includes('-offer-') ? 1 : 0;
       const bIsBump = b.hubla_id?.includes('-offer-') ? 1 : 0;
-      return aIsBump - bIsBump;
+      if (aIsBump !== bIsBump) return aIsBump - bIsBump;
+      const brutoA = getDeduplicatedGross(a, globalFirstIds.has(a.id));
+      const brutoB = getDeduplicatedGross(b, globalFirstIds.has(b.id));
+      if (brutoA !== brutoB) return brutoB - brutoA;
+      return (b.net_value || 0) - (a.net_value || 0);
     });
+
+    group.main = sorted[0];
+    group.orderBumps = sorted.slice(1);
+    group.isFirst = globalFirstIds.has(group.main.id);
+    group.allTransactions = sorted;
   });
 
   return Array.from(groups.values());
