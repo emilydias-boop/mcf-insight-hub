@@ -6,6 +6,13 @@ import {
   MIN_ANSWER_LENGTH,
 } from '@/components/crm/qualification/QualificationQuestions';
 
+/**
+ * BUs isentas de qualificação obrigatória antes de agendar a R1.
+ * Apenas BU - Incorporador MCF exige qualificação (ligação com resumo IA ou
+ * questionário via WhatsApp/ligação externa). Demais BUs listadas aqui
+ * podem agendar R1 sem qualificação prévia.
+ */
+export const BU_SEM_QUALIFICACAO_OBRIGATORIA = ['consorcio', 'solar'] as const;
 
 export type QualificationSource = 'ai_call_summary' | 'whatsapp' | 'call' | null;
 
@@ -18,11 +25,13 @@ export interface QualificationStatus {
 /**
  * Considera o lead qualificado se houver:
  * - uma atividade `ai_call_summary` (resumo da IA da ligação), OU
- * - uma `qualification_note` válida (canal whatsapp com print + respostas).
+ * - uma `qualification_note` válida (canal whatsapp/call com respostas).
  */
 export function useQualificationStatus(dealId?: string) {
   const { activeBU } = useBUContext();
-  const bypassForBU = activeBU === 'consorcio';
+  const bypassForBU =
+    activeBU != null &&
+    (BU_SEM_QUALIFICACAO_OBRIGATORIA as readonly string[]).includes(activeBU);
   return useQuery<QualificationStatus>({
     queryKey: ['qualification-status', dealId, bypassForBU ? 'bypass' : 'check'],
     enabled: !!dealId,
@@ -31,14 +40,14 @@ export function useQualificationStatus(dealId?: string) {
         return { isQualified: false, source: null, reason: 'sem deal' };
       }
 
-      // BU - Consórcio: qualificação obrigatória não se aplica.
+      // BUs isentas (ex.: Consórcio, Solar): qualificação obrigatória não se aplica.
       // Apenas BU - Incorporador MCF exige qualificação (ligação com resumo IA
-      // ou questionário WhatsApp) antes de agendar a R1.
+      // ou questionário via WhatsApp/ligação externa) antes de agendar a R1.
       if (bypassForBU) {
         return {
           isQualified: true,
           source: null,
-          reason: 'BU - Consórcio: qualificação não exigida',
+          reason: `BU - ${activeBU}: qualificação não exigida`,
         };
       }
 

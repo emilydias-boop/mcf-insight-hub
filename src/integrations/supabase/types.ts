@@ -17488,6 +17488,20 @@ export type Database = {
           tags: string[]
         }[]
       }
+      get_compras_do_cliente: {
+        Args: { p_email: string }
+        Returns: {
+          bruto: number
+          bu: string
+          gateway: string
+          liquido: number
+          parcela: number
+          produto: string
+          reembolsado: boolean
+          sale_date: string
+          total_parcelas: number
+        }[]
+      }
       get_consorcio_commission_summary: {
         Args: { p_card_ids: string[] }
         Returns: {
