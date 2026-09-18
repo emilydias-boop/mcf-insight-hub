@@ -1,5 +1,7 @@
 import { useCustomerTransactions } from '@/hooks/useCustomerTransactions';
 import { useCustomerJourney } from '@/hooks/useCustomerJourney';
+import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
+import { formatCurrency } from '@/lib/formatters';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -16,6 +18,7 @@ export function ContactTransactionsSection({ email }: ContactTransactionsSection
   const [isOpen, setIsOpen] = useState(true);
   const { data: transactions, isLoading } = useCustomerTransactions(email);
   const { data: journey } = useCustomerJourney(email);
+  const { data: totais } = useTotalCliente(email);
 
   if (isLoading) {
     return <Skeleton className="h-20 w-full" />;
@@ -23,7 +26,8 @@ export function ContactTransactionsSection({ email }: ContactTransactionsSection
 
   if (!transactions || transactions.length === 0) return null;
 
-  const totalInvested = journey?.totalInvested || transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
+  // Total sempre da fonte única (RPC). Sem compra/erro → não exibe valor.
+  const totalInvested = totais?.total_liquido_pago ?? journey?.totalInvested ?? 0;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -33,10 +37,12 @@ export function ContactTransactionsSection({ email }: ContactTransactionsSection
         <span className="text-sm font-semibold flex-1 text-left">
           Compras / Transações ({transactions.length})
         </span>
-        <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs">
-          <DollarSign className="h-3 w-3 mr-0.5" />
-          R$ {totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-        </Badge>
+        {totalInvested > 0 && (
+          <Badge variant="secondary" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs">
+            <DollarSign className="h-3 w-3 mr-0.5" />
+            {formatCurrency(totalInvested)}
+          </Badge>
+        )}
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-1.5">
         {transactions.map((tx) => (

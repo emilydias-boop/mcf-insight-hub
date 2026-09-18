@@ -1760,6 +1760,45 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_liquido_juros_carrinho: {
+        Row: {
+          corrigido_em: string
+          customer_name: string | null
+          hubla_id: string | null
+          id: string
+          net_value_antigo: number | null
+          net_value_novo: number | null
+          papel: string | null
+          parent_hubla_id: string | null
+          product_name: string | null
+          sale_date: string | null
+        }
+        Insert: {
+          corrigido_em?: string
+          customer_name?: string | null
+          hubla_id?: string | null
+          id: string
+          net_value_antigo?: number | null
+          net_value_novo?: number | null
+          papel?: string | null
+          parent_hubla_id?: string | null
+          product_name?: string | null
+          sale_date?: string | null
+        }
+        Update: {
+          corrigido_em?: string
+          customer_name?: string | null
+          hubla_id?: string | null
+          id?: string
+          net_value_antigo?: number | null
+          net_value_novo?: number | null
+          papel?: string | null
+          parent_hubla_id?: string | null
+          product_name?: string | null
+          sale_date?: string | null
+        }
+        Relationships: []
+      }
       backup_liquido_juros_parcelamento: {
         Row: {
           corrigido_em: string
@@ -16771,15 +16810,15 @@ export type Database = {
           cliente_email: string | null
           cliente_nome: string | null
           cliente_telefone: string | null
-          gateways: string[] | null
           historico_compras: Json | null
           primeira_compra: string | null
+          qtd_bus: number | null
           qtd_gateways: number | null
+          qtd_linhas_produto: number | null
           qtd_produtos: number | null
           tem_reembolso: boolean | null
           total_bruto_produtos: number | null
           total_liquido_pago: number | null
-          total_pagamentos: number | null
           ultima_compra: string | null
         }
         Relationships: []
@@ -16911,6 +16950,7 @@ export type Database = {
       vw_venda_por_produto: {
         Row: {
           bruto_produto: number | null
+          bu: string | null
           cliente_cpf: string | null
           cliente_email: string | null
           cliente_nome: string | null
@@ -17997,6 +18037,19 @@ export type Database = {
         }[]
       }
       get_team_dashboard_public: { Args: { _token: string }; Returns: Json }
+      get_totais_por_cliente: {
+        Args: { p_emails: string[] }
+        Returns: {
+          cliente_email: string
+          primeira_compra: string
+          produtos: string[]
+          qtd_pagamentos: number
+          qtd_produtos: number
+          tem_reembolso: boolean
+          total_liquido_pago: number
+          ultima_compra: string
+        }[]
+      }
       get_tv_consorcio_public: { Args: { _token: string }; Returns: Json }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_incorporador_public: { Args: { _token: string }; Returns: Json }

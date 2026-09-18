@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchTotaisPorCliente, normalizarEmail } from './useTotaisPorCliente';
 
 export interface CustomerTransaction {
   id: string;
@@ -59,10 +60,15 @@ export const useCustomerJourney = (email: string | null) => {
 
       const transactions = data as CustomerTransaction[];
       
-      // Calculate total invested (sum of net_value for first installments only)
-      const totalInvested = transactions
-        .filter(t => (t.installment_number || 1) === 1)
-        .reduce((sum, t) => sum + (t.net_value || 0), 0);
+      // Total investido: fonte única `get_totais_por_cliente` (não recalcular aqui).
+      // Se a RPC falhar, mostramos 0 — sem fallback somando a tabela.
+      let totalInvested = 0;
+      try {
+        const totais = await fetchTotaisPorCliente([email]);
+        totalInvested = totais.get(normalizarEmail(email))?.total_liquido_pago ?? 0;
+      } catch {
+        totalInvested = 0;
+      }
 
       // Find milestone dates
       let firstA010Date: string | null = null;

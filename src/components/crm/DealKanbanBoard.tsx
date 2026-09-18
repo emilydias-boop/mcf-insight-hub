@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { CopyLeadsFormatDialog, buildCopyLeadData, CopyLeadData } from './CopyLeadsFormatDialog';
+import { useTotaisPorCliente, normalizarEmail } from '@/hooks/useTotaisPorCliente';
 
 interface Deal {
   id: string;
@@ -144,6 +145,13 @@ export const DealKanbanBoard = ({
     return map;
   }, [deals]);
   const { data: activitySummaries } = useBatchDealActivitySummary(dealIds, stageIdsMap);
+
+  // Total já comprado (líquido, todas as BUs) — UMA chamada em lote para o board inteiro.
+  const boardEmails = useMemo(
+    () => deals.map((d: any) => d.crm_contacts?.email as string | undefined),
+    [deals],
+  );
+  const { data: totaisPorCliente } = useTotaisPorCliente(boardEmails);
   
   // Memoize deals por estágio COM ordenação aplicada
   const dealsByStage = useMemo(() => {
@@ -391,6 +399,9 @@ export const DealKanbanBoard = ({
                                       onSelect={onSelectionChange}
                                       salesChannel={salesChannel}
                                       outsideInfo={outsideMap?.get(deal.id)}
+                                      totaisCliente={
+                                        email ? totaisPorCliente?.get(normalizarEmail(email)) : undefined
+                                      }
                                     />
                                   )}
                                 </Draggable>

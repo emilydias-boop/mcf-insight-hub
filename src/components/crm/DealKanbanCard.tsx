@@ -39,6 +39,8 @@ import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
 import { cn } from "@/lib/utils";
 import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelector";
 import { AnamneseExternaButton, getAnamneseV2 } from "./AnamneseExternaButton";
+import { LeadTotalCompradoBadge } from "./LeadTotalCompradoBadge";
+import type { TotaisCliente } from "@/hooks/useTotaisPorCliente";
 
 
 const NEXT_ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -85,6 +87,7 @@ interface DealKanbanCardProps {
   onSelect?: (dealId: string, selected: boolean) => void;
   salesChannel?: SalesChannel;
   outsideInfo?: { isOutside: boolean; productName: string | null };
+  totaisCliente?: TotaisCliente | null;
 }
 
 export const DealKanbanCard = ({ 
@@ -98,6 +101,7 @@ export const DealKanbanCard = ({
   onSelect,
   salesChannel = 'live',
   outsideInfo,
+  totaisCliente,
 }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
   const { data: dialer } = useDialerEngine();
@@ -409,6 +413,8 @@ export const DealKanbanCard = ({
               </Badge>
             ))}
           <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0" />
+          {/* Quanto esse lead já comprou (líquido, todas as BUs) */}
+          <LeadTotalCompradoBadge totais={totaisCliente} />
           {outsideInfo?.isOutside && (
             <Tooltip>
               <TooltipTrigger asChild>

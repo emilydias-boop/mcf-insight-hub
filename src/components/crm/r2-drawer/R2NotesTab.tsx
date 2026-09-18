@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils';
 import { R2AttendeeExtended } from '@/types/r2Agenda';
 import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
 import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
+import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
+import { formatCurrency } from '@/lib/formatters';
 import { useAddAttendeeNote } from '@/hooks/useAttendeeNotes';
 
 interface R2NotesTabProps {
@@ -44,6 +46,8 @@ export function R2NotesTab({ attendee }: R2NotesTabProps) {
   const contactPhone = attendee?.deal?.contact?.phone;
   const { data: leadNotes } = useLeadNotes(attendee?.deal_id, attendee?.id);
   const { data: purchaseHistory } = useLeadPurchaseHistory(contactEmail, contactPhone);
+  // Total investido vem da fonte única (RPC), igual ao Kanban e à ficha.
+  const { data: totaisCliente } = useTotalCliente(contactEmail);
   const addNote = useAddAttendeeNote();
 
   const handleAddNote = () => {
@@ -162,6 +166,11 @@ export function R2NotesTab({ attendee }: R2NotesTabProps) {
               🛒 Histórico de Compras
             </span>
             <div className="flex items-center gap-2">
+              {(totaisCliente?.total_liquido_pago ?? 0) > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {formatCurrency(totaisCliente!.total_liquido_pago)}
+                </Badge>
+              )}
               <Badge variant="outline">{purchaseHistory?.length || 0}</Badge>
               <ChevronDown className={cn("h-4 w-4 transition-transform", showPurchases && "rotate-180")} />
             </div>
