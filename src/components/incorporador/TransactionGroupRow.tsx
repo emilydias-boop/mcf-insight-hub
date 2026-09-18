@@ -10,7 +10,7 @@ import { TableCell, TableRow } from '@/components/ui/table';
 
 import { HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice, normalizeProductKey } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
 export interface TransactionGroup {
   id: string; // baseId (hubla_id sem -offer-X)
@@ -210,43 +210,18 @@ export function TransactionGroupRow({
   const ExpandedRows = () => (
     <>
       {(() => {
-        // Pré-computa brutos e identifica: raiz da fatura, família principal, offer-vencedor da família principal.
+        // Badge "Principal" vai exatamente em group.main; todas as outras são "Bump".
+        // Nenhuma linha é escondida.
         const rows = group.allTransactions.map(tx => ({
           tx,
-          isOrderBump: !!tx.hubla_id?.includes('-offer-'),
           bruto: getIndividualGross(tx),
           isFirst: globalFirstIds.has(tx.id),
         }));
 
-        const rootRow = rows.find(r => !r.isOrderBump);
-        const anyOfferPositive = rows.some(r => r.isOrderBump && r.bruto > 0);
-        // Ocultar raiz quando está (dup) e algum sibling offer tem bruto > 0
-        const hideRoot = !!rootRow && rootRow.bruto === 0 && anyOfferPositive;
-
-        // Família do produto principal da fatura (usa a raiz; se não houver, usa 1º offer)
-        const mainFamily = normalizeProductKey(
-          (rootRow?.tx.product_name ?? rows[0]?.tx.product_name) || null
-        );
-
-        // Offer vencedor (maior bruto > 0) dentro da família principal → não é "Bump" real
-        let mainOfferId: string | null = null;
-        let mainOfferBruto = -1;
-        for (const r of rows) {
-          if (!r.isOrderBump) continue;
-          if (r.bruto <= 0) continue;
-          if (normalizeProductKey(r.tx.product_name) !== mainFamily) continue;
-          if (r.bruto > mainOfferBruto) {
-            mainOfferBruto = r.bruto;
-            mainOfferId = r.tx.id;
-          }
-        }
-
-        const visible = rows.filter(r => !(hideRoot && r === rootRow));
-
-        return visible.map((r, index) => {
-        const { tx, isOrderBump, bruto, isFirst } = r;
-        const isLast = index === visible.length - 1;
-        const isMainProduct = !isOrderBump || tx.id === mainOfferId;
+        return rows.map((r, index) => {
+        const { tx, bruto, isFirst } = r;
+        const isLast = index === rows.length - 1;
+        const isMainProduct = tx.id === group.main.id;
 
         return (
           <TableRow 
@@ -373,15 +348,15 @@ export function groupTransactionsByPurchase(
 ): TransactionGroup[] {
   const groups = new Map<string, TransactionGroup>();
 
+  // PRIMEIRA PASSAGEM — apenas coletar
   transactions.forEach(tx => {
     // Remove sufixo -offer-X para agrupar
     const baseId = tx.hubla_id?.replace(/-offer-\d+$/, '') || tx.id;
-    const isOrderBump = tx.hubla_id?.includes('-offer-');
 
     if (!groups.has(baseId)) {
       groups.set(baseId, {
         id: baseId,
-        main: tx, // Será substituído se encontrar o principal
+        main: tx, // placeholder, definido na segunda passagem
         orderBumps: [],
         allTransactions: [],
         totalGross: 0,
@@ -392,36 +367,28 @@ export function groupTransactionsByPurchase(
 
     const group = groups.get(baseId)!;
     group.allTransactions.push(tx);
-
-    if (isOrderBump) {
-      group.orderBumps.push(tx);
-    } else {
-      // É o produto principal
-      group.main = tx;
-    }
-
-    // Soma bruto e líquido
-    const isFirst = globalFirstIds.has(tx.id);
-    group.totalGross += getDeduplicatedGross(tx, isFirst);
     group.totalNet += tx.net_value || 0;
-
-    // Marca grupo como "primeiro" se o produto principal for primeiro
-    if (!isOrderBump && isFirst) {
-      group.isFirst = true;
-    }
+    group.totalGross += getDeduplicatedGross(tx, globalFirstIds.has(tx.id));
   });
 
-  // Segunda passagem: apenas ordenação.
-  // A linha "carrinho" da Hubla (pai cujo líquido = soma dos offers) já é excluída
-  // no banco pela view vw_vendas_painel / coluna is_hubla_cart_row, então somar
-  // todas as linhas do grupo na primeira passagem já dá o total correto.
+  // SEGUNDA PASSAGEM — eleger o principal e derivar o resto.
+  // A linha "carrinho" da Hubla já não vem do banco, então muitos grupos
+  // chegam sem nenhuma linha não-offer: o principal precisa ser eleito.
   groups.forEach(group => {
-    // Ordena allTransactions: principal primeiro, depois bumps
-    group.allTransactions.sort((a, b) => {
+    const sorted = [...group.allTransactions].sort((a, b) => {
       const aIsBump = a.hubla_id?.includes('-offer-') ? 1 : 0;
       const bIsBump = b.hubla_id?.includes('-offer-') ? 1 : 0;
-      return aIsBump - bIsBump;
+      if (aIsBump !== bIsBump) return aIsBump - bIsBump;
+      const brutoA = getDeduplicatedGross(a, globalFirstIds.has(a.id));
+      const brutoB = getDeduplicatedGross(b, globalFirstIds.has(b.id));
+      if (brutoA !== brutoB) return brutoB - brutoA;
+      return (b.net_value || 0) - (a.net_value || 0);
     });
+
+    group.main = sorted[0];
+    group.orderBumps = sorted.slice(1);
+    group.isFirst = globalFirstIds.has(group.main.id);
+    group.allTransactions = sorted;
   });
 
   return Array.from(groups.values());
