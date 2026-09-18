@@ -193,8 +193,9 @@ function extractProductTotalPrice(event: any): number {
 }
 
 // CORREÇÃO: Extrair valores corretos do invoice
-// Bruto = subtotalCents (sem juros de parcelamento)
-// Líquido = sellerTotalCents - installmentFeeCents
+// Bruto = subtotalCents (valor do produto, sem juros de parcelamento)
+// Líquido = receivers[seller].totalCents (o que a Hubla deposita, JÁ inclui
+//           os juros de parcelamento pagos pelo comprador e já desconta as taxas)
 function extractCorrectValues(invoice: any): {
   subtotalCents: number;
   installmentFeeCents: number;
@@ -214,8 +215,8 @@ function extractCorrectValues(invoice: any): {
   // Bruto = subtotal em centavos convertido para reais
   const grossValue = subtotalCents / 100;
   
-  // Líquido = seller total - juros de parcelamento (convertido para reais)
-  const netValue = (sellerTotalCents - installmentFeeCents) / 100;
+  // Líquido = seller total (o que a Hubla deposita na conta), convertido para reais
+  const netValue = sellerTotalCents / 100;
   
   return {
     subtotalCents,
