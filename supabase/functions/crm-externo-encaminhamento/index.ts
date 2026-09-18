@@ -51,6 +51,99 @@ function resumoHistorico(historico: any[]): string {
     .join("\n");
 }
 
+// ---------- Anamnese (formato novo, aditivo) ----------
+type AnamneseV2 = {
+  preenchida: boolean | null;
+  pdf_url: string | null;
+  estruturada: { secoes: any[] } | null;
+  resumo: string | null;
+  html: string | null;
+  preenchida_em: string | null;
+  atualizada_em: string | null;
+};
+
+function texto(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v : null;
+}
+
+function dataIso(v: unknown): string | null {
+  const s = texto(v);
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+// Nunca lança: payload malformado apenas resulta em campos nulos.
+function extrairAnamneseV2(body: any): AnamneseV2 {
+  try {
+    const estruturadaRaw = body?.anamnese_estruturada;
+    let estruturada: { secoes: any[] } | null = null;
+    if (estruturadaRaw && typeof estruturadaRaw === "object" && !Array.isArray(estruturadaRaw)) {
+      const secoes = Array.isArray((estruturadaRaw as any).secoes)
+        ? (estruturadaRaw as any).secoes
+        : [];
+      estruturada = { secoes };
+    } else if (Array.isArray(estruturadaRaw)) {
+      estruturada = { secoes: estruturadaRaw };
+    }
+
+    const preenchidaRaw = body?.anamnese_preenchida;
+    const preenchida =
+      typeof preenchidaRaw === "boolean"
+        ? preenchidaRaw
+        : preenchidaRaw === "true"
+        ? true
+        : preenchidaRaw === "false"
+        ? false
+        : null;
+
+    return {
+      preenchida,
+      pdf_url: texto(body?.anamnese_pdf_url),
+      estruturada,
+      resumo: texto(body?.anamnese_resumo),
+      html: texto(body?.anamnese_html),
+      preenchida_em: dataIso(body?.anamnese_preenchida_em),
+      atualizada_em: dataIso(body?.anamnese_atualizada_em),
+    };
+  } catch (e) {
+    console.error("[crm-externo] anamnese_v2:", (e as Error).message);
+    return {
+      preenchida: null,
+      pdf_url: null,
+      estruturada: null,
+      resumo: null,
+      html: null,
+      preenchida_em: null,
+      atualizada_em: null,
+    };
+  }
+}
+
+function colunasAnamnese(a: AnamneseV2) {
+  return {
+    anamnese_preenchida: a.preenchida,
+    anamnese_pdf_url: a.pdf_url,
+    anamnese_estruturada: a.estruturada,
+    anamnese_resumo: a.resumo,
+    anamnese_html: a.html,
+    anamnese_preenchida_em: a.preenchida_em,
+    anamnese_atualizada_em: a.atualizada_em,
+  };
+}
+
+function temAnamnese(a: AnamneseV2) {
+  return (
+    a.preenchida !== null ||
+    !!a.pdf_url ||
+    !!a.estruturada ||
+    !!a.resumo ||
+    !!a.html
+  );
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
