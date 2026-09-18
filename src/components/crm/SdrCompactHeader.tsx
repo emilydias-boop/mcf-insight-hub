@@ -1,6 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Package, ShoppingBag, Tv, DollarSign, ClipboardList } from 'lucide-react';
 import { useA010Journey } from '@/hooks/useA010Journey';
+import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
+import { formatCurrency } from '@/lib/formatters';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 
 
@@ -11,6 +13,7 @@ interface SdrCompactHeaderProps {
 
 export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
   const { data: a010Data } = useA010Journey(contact?.email, contact?.phone);
+  const { data: totaisCliente } = useTotalCliente(contact?.email);
   
   const customFields = deal?.custom_fields as Record<string, any> | null;
   const originName = deal?.crm_origins?.name || customFields?.origem || 'Não informada';
@@ -72,10 +75,10 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
           )}
         </Badge>
         
-        {/* Detalhes de compras A010 (só se tiver comprado) */}
-        {isA010 && a010Data && (
+        {/* Total real comprado (todas as BUs / gateways) - fonte única no banco */}
+        {totaisCliente && totaisCliente.qtd_pagamentos > 0 && (
           <Badge variant="outline" className="text-xs border-primary/50 text-primary bg-primary/5">
-            {a010Data.purchaseCount} compra{a010Data.purchaseCount > 1 ? 's' : ''} • R$ {a010Data.totalPaid.toLocaleString('pt-BR')}
+            {totaisCliente.qtd_pagamentos} compra{totaisCliente.qtd_pagamentos > 1 ? 's' : ''} • {formatCurrency(totaisCliente.total_liquido_pago)}
           </Badge>
         )}
         
