@@ -10,7 +10,7 @@ import { TableCell, TableRow } from '@/components/ui/table';
 
 import { HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice, normalizeProductKey } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
 export interface TransactionGroup {
   id: string; // baseId (hubla_id sem -offer-X)
