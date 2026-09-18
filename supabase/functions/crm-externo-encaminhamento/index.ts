@@ -363,6 +363,8 @@ Deno.serve(async (req) => {
           endereco,
           perfil,
           anamnese,
+          anamnese_v2: anamneseV2,
+
           score,
           faixa_classificacao: faixa,
           gerente_nome: gerente.nome ?? gerente.name ?? null,
@@ -390,6 +392,8 @@ Deno.serve(async (req) => {
         cliente_perfil: perfil,
         historico,
         anamnese,
+        ...colunasAnamnese(anamneseV2),
+
         score: typeof score === "number" ? score : null,
         faixa_classificacao: faixa,
         gerente_nome: gerente.nome ?? gerente.name ?? null,
