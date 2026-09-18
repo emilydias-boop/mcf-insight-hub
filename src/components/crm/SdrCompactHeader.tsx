@@ -1,6 +1,8 @@
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Package, ShoppingBag, Tv, DollarSign, ClipboardList } from 'lucide-react';
 import { useA010Journey } from '@/hooks/useA010Journey';
+import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
+import { formatCurrency } from '@/lib/formatters';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 
 
@@ -11,6 +13,7 @@ interface SdrCompactHeaderProps {
 
 export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
   const { data: a010Data } = useA010Journey(contact?.email, contact?.phone);
+  const { data: totaisCliente } = useTotalCliente(contact?.email);
   
   const customFields = deal?.custom_fields as Record<string, any> | null;
   const originName = deal?.crm_origins?.name || customFields?.origem || 'Não informada';
