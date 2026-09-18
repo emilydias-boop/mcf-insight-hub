@@ -210,43 +210,18 @@ export function TransactionGroupRow({
   const ExpandedRows = () => (
     <>
       {(() => {
-        // Pré-computa brutos e identifica: raiz da fatura, família principal, offer-vencedor da família principal.
+        // Badge "Principal" vai exatamente em group.main; todas as outras são "Bump".
+        // Nenhuma linha é escondida.
         const rows = group.allTransactions.map(tx => ({
           tx,
-          isOrderBump: !!tx.hubla_id?.includes('-offer-'),
           bruto: getIndividualGross(tx),
           isFirst: globalFirstIds.has(tx.id),
         }));
 
-        const rootRow = rows.find(r => !r.isOrderBump);
-        const anyOfferPositive = rows.some(r => r.isOrderBump && r.bruto > 0);
-        // Ocultar raiz quando está (dup) e algum sibling offer tem bruto > 0
-        const hideRoot = !!rootRow && rootRow.bruto === 0 && anyOfferPositive;
-
-        // Família do produto principal da fatura (usa a raiz; se não houver, usa 1º offer)
-        const mainFamily = normalizeProductKey(
-          (rootRow?.tx.product_name ?? rows[0]?.tx.product_name) || null
-        );
-
-        // Offer vencedor (maior bruto > 0) dentro da família principal → não é "Bump" real
-        let mainOfferId: string | null = null;
-        let mainOfferBruto = -1;
-        for (const r of rows) {
-          if (!r.isOrderBump) continue;
-          if (r.bruto <= 0) continue;
-          if (normalizeProductKey(r.tx.product_name) !== mainFamily) continue;
-          if (r.bruto > mainOfferBruto) {
-            mainOfferBruto = r.bruto;
-            mainOfferId = r.tx.id;
-          }
-        }
-
-        const visible = rows.filter(r => !(hideRoot && r === rootRow));
-
-        return visible.map((r, index) => {
-        const { tx, isOrderBump, bruto, isFirst } = r;
-        const isLast = index === visible.length - 1;
-        const isMainProduct = !isOrderBump || tx.id === mainOfferId;
+        return rows.map((r, index) => {
+        const { tx, bruto, isFirst } = r;
+        const isLast = index === rows.length - 1;
+        const isMainProduct = tx.id === group.main.id;
 
         return (
           <TableRow 
