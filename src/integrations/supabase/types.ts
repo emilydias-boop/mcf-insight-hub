@@ -1865,6 +1865,36 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_nome_produto_normalizado: {
+        Row: {
+          corrigido_em: string
+          hubla_id: string | null
+          id: string
+          nome_antigo: string | null
+          nome_novo: string | null
+          sale_date: string | null
+          source: string | null
+        }
+        Insert: {
+          corrigido_em?: string
+          hubla_id?: string | null
+          id: string
+          nome_antigo?: string | null
+          nome_novo?: string | null
+          sale_date?: string | null
+          source?: string | null
+        }
+        Update: {
+          corrigido_em?: string
+          hubla_id?: string | null
+          id?: string
+          nome_antigo?: string | null
+          nome_novo?: string | null
+          sale_date?: string | null
+          source?: string | null
+        }
+        Relationships: []
+      }
       bi_public_tokens: {
         Row: {
           active: boolean
@@ -16986,6 +17016,7 @@ export type Database = {
           product_name: string | null
           product_price: number | null
           produto_cadastrado: boolean | null
+          produto_canonico: string | null
           reference_price: number | null
           sale_date: string | null
           sale_origin: string | null
