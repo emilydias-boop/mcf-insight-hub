@@ -407,17 +407,18 @@ export default function Agenda() {
             <Download className="h-4 w-4" />
           </Button>
           {!isCloser && (
-            <>
-              <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')} size="sm" className="hidden sm:flex">
-                <BarChart3 className="h-4 w-4 sm:mr-2" />
-                <span className="hidden md:inline">Métricas</span>
-              </Button>
-              <Button variant="outline" onClick={() => setConfigOpen(true)} size="sm" className="hidden sm:flex">
-                <Settings className="h-4 w-4 sm:mr-2" />
-                <span className="hidden md:inline">Configurar</span>
-              </Button>
-            </>
+            <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')} size="sm" className="hidden sm:flex">
+              <BarChart3 className="h-4 w-4 sm:mr-2" />
+              <span className="hidden md:inline">Métricas</span>
+            </Button>
           )}
+          {podeConfigurarAgenda && (
+            <Button variant="outline" onClick={abrirConfigAgenda} size="sm" className="hidden sm:flex">
+              <Settings className="h-4 w-4 sm:mr-2" />
+              <span className="hidden md:inline">Configurar</span>
+            </Button>
+          )}
+
           <Button onClick={() => setQuickScheduleOpen(true)} size="sm" className="flex-1 sm:flex-none">
             <Plus className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Agendar</span>
