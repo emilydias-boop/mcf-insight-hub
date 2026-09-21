@@ -68,6 +68,7 @@ export function R2MeetingDetailDrawer({
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [attendeeToTransfer, setAttendeeToTransfer] = useState<R2AttendeeExtended | null>(null);
+  const [vincularVendaOpen, setVincularVendaOpen] = useState(false);
   const [editingPhone, setEditingPhone] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
   const [saveTrigger, setSaveTrigger] = useState(0);
@@ -78,11 +79,9 @@ export function R2MeetingDetailDrawer({
   const isSdr = role === 'sdr';
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
   const { canManageAgenda, canCancelMeeting } = useMyAgendaCapabilities();
+  const canLinkContract = useMyAgendaCapabilities().canLinkContract;
   const canManage = canManageAgenda || !isSdr;
   const canCancel = canCancelMeeting || !isSdr;
-  
-  // Debug log - remove after testing
-  console.log('[R2Drawer] role:', role, '| canTransfer:', canTransfer);
   
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
