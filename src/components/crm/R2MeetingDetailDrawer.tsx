@@ -143,6 +143,14 @@ export function R2MeetingDetailDrawer({
     }))
   );
 
+  // Vendas vinculadas ao participante selecionado — chamado ANTES do early-return
+  // para manter a ordem de hooks estável entre renders.
+  const activeAttendeeId = meeting?.attendees?.find(a => a.id === selectedAttendeeId)?.id
+    || meeting?.attendees?.[0]?.id
+    || null;
+  const { data: vendasVinculadas = [] } = useVendasDoParticipante(activeAttendeeId);
+  const desvincular = useDesvincularVenda();
+
   if (!meeting) return null;
 
   const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
