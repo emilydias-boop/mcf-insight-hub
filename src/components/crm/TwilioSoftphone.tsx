@@ -190,7 +190,6 @@ export function TwilioSoftphone() {
     failed: 'Falhou'
   };
 
-  // (isInCall already declared above)
 
   // Calculate position style
   const positionStyle: React.CSSProperties = position 
