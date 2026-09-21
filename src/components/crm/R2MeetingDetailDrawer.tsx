@@ -78,8 +78,7 @@ export function R2MeetingDetailDrawer({
   const { role } = useAuth();
   const isSdr = role === 'sdr';
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
-  const { canManageAgenda, canCancelMeeting } = useMyAgendaCapabilities();
-  const canLinkContract = useMyAgendaCapabilities().canLinkContract;
+  const { canManageAgenda, canCancelMeeting, canLinkContract } = useMyAgendaCapabilities();
   const canManage = canManageAgenda || !isSdr;
   const canCancel = canCancelMeeting || !isSdr;
   
