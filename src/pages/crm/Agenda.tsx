@@ -166,20 +166,24 @@ export default function Agenda() {
     return closers;
   }, [closers, isCloser, myCloser?.id]);
 
-  // Modal de configuração: liderança vê todos; closer só o próprio cadastro (fail-closed).
+  // Closer puro = papel closer sem sdr e sem liderança. Só ele fica restrito ao próprio cadastro.
+  const isCloserPuro = isCloserOnly && !isLideranca;
+
+  // Modal de configuração: closer puro só o próprio cadastro (fail-closed); todos os demais (SDR,
+  // liderança, papéis mistos) veem a lista completa.
   const closersParaConfig = useMemo(() => {
-    if (isLideranca) return closers;
+    if (!isCloserPuro) return closers;
     if (!myCloser?.id) return [];
     return closers.filter(c => c.id === myCloser.id);
-  }, [closers, isLideranca, myCloser?.id]);
+  }, [closers, isCloserPuro, myCloser?.id]);
 
   const abrirConfigAgenda = useCallback(() => {
-    if (!isLideranca && !myCloser?.id) {
+    if (isCloserPuro && !myCloser?.id) {
       toast.error('Seu cadastro de closer não foi encontrado nesta área. Peça à liderança para vincular.');
       return;
     }
     setConfigOpen(true);
-  }, [isLideranca, myCloser?.id]);
+  }, [isCloserPuro, myCloser?.id]);
 
 
 

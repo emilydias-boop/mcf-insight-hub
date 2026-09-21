@@ -240,20 +240,29 @@ export default function AgendaR2() {
     return closers.filter((c) => c.id === closerFilter);
   }, [closers, closerFilter, isR2Closer, myR2Closer?.id]);
 
-  // Modal "Closers": liderança vê todos; closer só o próprio cadastro (fail-closed).
+  // Closer puro = papel closer sem sdr e sem liderança (mesma expressão de isR2Closer, sem exigir vínculo).
+  const isCloserPuro =
+    role === 'closer' &&
+    !allRoles.includes('sdr') &&
+    !allRoles.includes('admin') &&
+    !allRoles.includes('manager') &&
+    !allRoles.includes('coordenador');
+
+  // Modal "Closers": closer puro só o próprio cadastro (fail-closed); SDR, liderança e papéis
+  // mistos veem a lista completa.
   const closersParaConfig = useMemo(() => {
-    if (isLideranca) return allClosers;
+    if (!isCloserPuro) return allClosers;
     if (!myR2Closer?.id) return [];
     return allClosers.filter((c) => c.id === myR2Closer.id);
-  }, [allClosers, isLideranca, myR2Closer?.id]);
+  }, [allClosers, isCloserPuro, myR2Closer?.id]);
 
   const abrirConfigAgenda = useCallback(() => {
-    if (!isLideranca && !myR2Closer?.id) {
+    if (isCloserPuro && !myR2Closer?.id) {
       toast.error('Seu cadastro de closer não foi encontrado nesta área. Peça à liderança para vincular.');
       return;
     }
     setAvailabilityConfigOpen(true);
-  }, [isLideranca, myR2Closer?.id]);
+  }, [isCloserPuro, myR2Closer?.id]);
 
 
 
