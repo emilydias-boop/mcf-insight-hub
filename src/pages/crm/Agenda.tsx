@@ -64,7 +64,7 @@ export default function Agenda() {
   // Configuração de agenda: liderança sempre; demais só com a capacidade individual.
   // "Métricas" segue restrito a não-closer (não é liberado por can_manage_agenda).
   const { canManageAgenda } = useMyAgendaCapabilities();
-  const isLideranca = ['admin', 'manager', 'coordenador'].some(r => allRoles.includes(r));
+  const isLideranca = ['admin', 'manager', 'coordenador'].some(r => (allRoles as string[]).includes(r));
   const podeConfigurarAgenda = isLideranca || !isCloser || canManageAgenda;
 
   
