@@ -283,6 +283,11 @@ export function EmbraconImportDialog() {
                 <FileSpreadsheet className="h-4 w-4" />
                 Prévia — {preview.validas.length} cota(s) válida(s)
               </div>
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600">
+                Esta importação substitui a fotografia anterior. Cotas que não estiverem nesta
+                planilha deixam de contar como canceladas/inadimplentes. As importações anteriores
+                continuam guardadas no histórico, apenas não entram no cálculo.
+              </p>
               <div className="flex flex-wrap gap-2 text-xs">
                 <Badge variant="destructive">{preview.canceladas} canceladas</Badge>
                 <Badge variant="secondary">{preview.inadimplentes} inadimplentes</Badge>
