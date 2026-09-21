@@ -68,11 +68,12 @@ function SeloAConfirmar({ motivo }: { motivo: string }) {
 export function IndicesClassTab() {
   const mesAtual = `${format(new Date(), 'yyyy-MM')}-01`;
   const [mes, setMes] = useState(mesAtual);
+  const [fonte, setFonte] = useState<FonteIndice>('mcf');
   const [simulados, setSimulados] = useState<Record<string, { tipo: 'reativar' | 'pagar'; valor: number }>>({});
   const [oficial, setOficial] = useState({ numerador: '', denominador: '' });
   const [novaProducao, setNovaProducao] = useState({ mes: mesAtual, valor: '' });
 
-  const { data: rows = [], isLoading } = useEmbraconIndices(mes);
+  const { data: rows = [], isLoading } = useEmbraconIndices(mes, fonte);
   const { data: config } = useEmbraconConfig();
   const { data: producao = [] } = useEmbraconProducao();
   const salvarProducao = useSalvarProducao();
@@ -83,6 +84,12 @@ export function IndicesClassTab() {
   const linha126 = rows.find((r) => r.indice === '12-6' && r.mes_apuracao.slice(0, 7) === mes.slice(0, 7));
   const linha82 = rows.find((r) => r.indice === '8-2' && r.mes_apuracao.slice(0, 7) === mes.slice(0, 7));
   const temImportacao = rows[0]?.tem_importacao ?? false;
+  /**
+   * Na fonte MCF Gestão os números saem das próprias cotas: não existe bloqueio por
+   * falta de importação. O aviso e o "—" só valem para a fonte Power BI sem lote.
+   */
+  const semDados = fonte === 'power_bi' && !temImportacao;
+  const temDados = !semDados;
 
   const { data: canceladas = [] } = useCotasImportadasJanela(
     linha126?.janela_inicio,
