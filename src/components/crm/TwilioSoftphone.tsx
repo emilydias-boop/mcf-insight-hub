@@ -133,14 +133,25 @@ export function TwilioSoftphone() {
     }
   };
 
-  // Don't render if device is not initialized
-  if (deviceStatus === 'disconnected') {
-    return null;
+  // `isInCall` precisa ser calculado antes do early-return abaixo.
+  const isInCall = callStatus !== 'idle' && callStatus !== 'completed' && callStatus !== 'failed';
+
+  // O softphone só aparece quando serve para alguma coisa: durante a chamada
+  // (desligar, mudo, cronômetro, formulário) ou quando deu erro de conexão
+  // (para expor o botão "Reconectar"). Parado e disponível, ele só ocupa tela.
+  if (!isInCall && deviceStatus !== 'error') {
+    return (
+      <PostCallModal
+        open={showPostCallModal}
+        onClose={() => setShowPostCallModal(false)}
+        callId={completedCallId}
+        onSave={() => setCompletedCallId(null)}
+      />
+    );
   }
 
   // Hide floating softphone if drawer is open AND the call is for the same deal
   // (controls are shown inline in the drawer instead)
-  const isInCall = callStatus !== 'idle' && callStatus !== 'completed' && callStatus !== 'failed';
   const shouldHideForDrawer = isDrawerOpen && isInCall && currentCallDealId === drawerDealId;
   
   if (shouldHideForDrawer) {
@@ -179,7 +190,6 @@ export function TwilioSoftphone() {
     failed: 'Falhou'
   };
 
-  // (isInCall already declared above)
 
   // Calculate position style
   const positionStyle: React.CSSProperties = position 
