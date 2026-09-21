@@ -24,6 +24,7 @@ import {
   useRegistrarSnapshot,
   useEmbraconSnapshots,
   IndiceClassRow,
+  FonteIndice,
 } from '@/hooks/useEmbraconClass';
 
 /**
@@ -68,11 +69,12 @@ function SeloAConfirmar({ motivo }: { motivo: string }) {
 export function IndicesClassTab() {
   const mesAtual = `${format(new Date(), 'yyyy-MM')}-01`;
   const [mes, setMes] = useState(mesAtual);
+  const [fonte, setFonte] = useState<FonteIndice>('mcf');
   const [simulados, setSimulados] = useState<Record<string, { tipo: 'reativar' | 'pagar'; valor: number }>>({});
   const [oficial, setOficial] = useState({ numerador: '', denominador: '' });
   const [novaProducao, setNovaProducao] = useState({ mes: mesAtual, valor: '' });
 
-  const { data: rows = [], isLoading } = useEmbraconIndices(mes);
+  const { data: rows = [], isLoading } = useEmbraconIndices(mes, fonte);
   const { data: config } = useEmbraconConfig();
   const { data: producao = [] } = useEmbraconProducao();
   const salvarProducao = useSalvarProducao();
@@ -83,6 +85,12 @@ export function IndicesClassTab() {
   const linha126 = rows.find((r) => r.indice === '12-6' && r.mes_apuracao.slice(0, 7) === mes.slice(0, 7));
   const linha82 = rows.find((r) => r.indice === '8-2' && r.mes_apuracao.slice(0, 7) === mes.slice(0, 7));
   const temImportacao = rows[0]?.tem_importacao ?? false;
+  /**
+   * Na fonte MCF Gestão os números saem das próprias cotas: não existe bloqueio por
+   * falta de importação. O aviso e o "—" só valem para a fonte Power BI sem lote.
+   */
+  const semDados = fonte === 'power_bi' && !temImportacao;
+  const temDados = !semDados;
 
   const { data: canceladas = [] } = useCotasImportadasJanela(
     linha126?.janela_inicio,
@@ -160,6 +168,15 @@ export function IndicesClassTab() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={fonte} onValueChange={(v) => setFonte(v as FonteIndice)}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mcf">Fonte: MCF Gestão</SelectItem>
+              <SelectItem value="power_bi">Fonte: Power BI importado</SelectItem>
+            </SelectContent>
+          </Select>
           {janelaInicio && janelaFim && (
             <span className="text-xs text-muted-foreground">
               Janela 12-6: {mesLabel(janelaInicio)} → {mesLabel(janelaFim)}
@@ -194,12 +211,26 @@ export function IndicesClassTab() {
         </div>
       </div>
 
-      {!temImportacao && (
+      {semDados && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
           <span>
-            Sem importação do Power BI — os números de cancelamento e inadimplência não são
-            calculados por suposição. Importe a planilha para ver os índices.
+            Sem importação do Power BI — nesta fonte os números de cancelamento e inadimplência
+            não são calculados por suposição. Importe a planilha ou use a fonte MCF Gestão.
+          </span>
+        </div>
+      )}
+
+      {fonte === 'mcf' && (
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+          <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+          <span>
+            Numerador e produção saem das cotas e parcelas do próprio MCF Gestão, só cotas
+            contratadas (reserva não efetivada fica fora das duas pontas). Cancelada = status
+            "cancelado" na ficha da cota; se a cota voltar para "ativo", ela sai do numerador no
+            cálculo seguinte. O percentual sobre a produção oficial da planilha aparece ao lado
+            para conferência — de abr a set/2025 o sistema tem cerca de metade do volume da
+            planilha, então esse segundo percentual fica inflado nas janelas antigas.
           </span>
         </div>
       )}
@@ -213,13 +244,18 @@ export function IndicesClassTab() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 pb-3 space-y-1">
-            <p className="text-lg font-bold">{temImportacao ? pct(linha126?.indice_valor) : '—'}</p>
+            <p className="text-lg font-bold">{temDados ? pct(linha126?.indice_valor) : '—'}</p>
             <p className="text-[11px] text-muted-foreground">
               meta {pct(config?.meta ?? 0.25)}
-              {temImportacao && linha126?.indice_valor != null && (
+              {temDados && linha126?.indice_valor != null && (
                 <> · {((linha126.indice_valor - (config?.meta ?? 0.25)) * 100).toFixed(1)} p.p.</>
               )}
             </p>
+            {fonte === 'mcf' && temDados && (
+              <p className="text-[11px] text-muted-foreground">
+                s/ produção oficial: {pct(linha126?.indice_valor_oficial)}
+              </p>
+            )}
             {temSimulacao && sim126 && (
               <p className="text-[11px] text-emerald-500">simulado {pct(sim126.valor)}</p>
             )}
@@ -234,12 +270,17 @@ export function IndicesClassTab() {
           </CardHeader>
           <CardContent className="px-3 pb-3 space-y-1">
             <div className="flex items-center gap-1.5">
-              <p className="text-lg font-bold">{temImportacao ? pct(linha82?.indice_valor) : '—'}</p>
+              <p className="text-lg font-bold">{temDados ? pct(linha82?.indice_valor) : '—'}</p>
               <SeloAConfirmar motivo="A janela e a fórmula do 8-2 ainda não foram confirmadas com a Embracon. O denominador oficial do Power BI (R$ 164,70 mi em set/26) não bate com a série de produção — lance o oficial no snapshot para comparar." />
             </div>
             <p className="text-[11px] text-muted-foreground">
               {linha82 && `${mesLabel(linha82.janela_inicio)} → ${mesLabel(linha82.janela_fim)}`}
             </p>
+            {fonte === 'mcf' && temDados && (
+              <p className="text-[11px] text-muted-foreground">
+                s/ produção oficial: {pct(linha82?.indice_valor_oficial)}
+              </p>
+            )}
             {temSimulacao && sim82 && <p className="text-[11px] text-emerald-500">simulado {pct(sim82.valor)}</p>}
           </CardContent>
         </Card>
@@ -249,9 +290,13 @@ export function IndicesClassTab() {
             <CardTitle className="text-xs font-medium text-muted-foreground">Produção da janela</CardTitle>
           </CardHeader>
           <CardContent className="px-3 pb-3 space-y-1">
-            <p className="text-lg font-bold">{formatCurrency(linha126?.denominador ?? 0)}</p>
+            <p className="text-lg font-bold">
+              {formatCurrency((fonte === 'mcf' ? linha126?.denominador_mcf : linha126?.denominador) ?? 0)}
+            </p>
             <p className="text-[11px] text-muted-foreground">
-              MCF Gestão: {formatCurrency(linha126?.denominador_mcf ?? 0)}
+              {fonte === 'mcf'
+                ? `oficial (planilha): ${formatCurrency(linha126?.denominador ?? 0)}`
+                : `MCF Gestão: ${formatCurrency(linha126?.denominador_mcf ?? 0)}`}
             </p>
           </CardContent>
         </Card>
@@ -264,14 +309,14 @@ export function IndicesClassTab() {
           </CardHeader>
           <CardContent className="px-3 pb-3 space-y-1">
             <p className="text-lg font-bold">
-              {temImportacao && linha126 && linha126.falta_para_meta > 0
+              {temDados && linha126 && linha126.falta_para_meta > 0
                 ? formatCurrency(linha126.falta_para_meta)
-                : temImportacao
+                : temDados
                   ? 'meta atingida'
                   : '—'}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              {temImportacao && linha126 ? `≈ ${linha126.cotas_para_meta} cota(s)` : 'sem importação'}
+              {temDados && linha126 ? `≈ ${linha126.cotas_para_meta} cota(s)` : 'sem importação'}
             </p>
           </CardContent>
         </Card>
@@ -322,13 +367,13 @@ export function IndicesClassTab() {
                     {mesLabel(r.janela_inicio)} → {mesLabel(r.janela_fim)}
                   </td>
                   <td className="py-1.5 text-right">{formatCurrency(r.denominador)}</td>
-                  <td className="py-1.5 text-right">{temImportacao ? formatCurrency(r.numerador) : '—'}</td>
+                  <td className="py-1.5 text-right">{temDados ? formatCurrency(r.numerador) : '—'}</td>
                   <td
                     className={`py-1.5 text-right font-medium ${
-                      temImportacao && r.indice_valor != null && r.indice_valor > r.meta ? 'text-destructive' : ''
+                      temDados && r.indice_valor != null && r.indice_valor > r.meta ? 'text-destructive' : ''
                     }`}
                   >
-                    {temImportacao ? pct(r.indice_valor) : '—'}
+                    {temDados ? pct(r.indice_valor) : '—'}
                   </td>
                   <td className="py-1.5 text-right text-muted-foreground">{pct(r.meta)}</td>
                 </tr>
@@ -344,7 +389,7 @@ export function IndicesClassTab() {
           <CardTitle className="text-sm">Canceladas da janela por mês de produção</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          {!temImportacao ? (
+          {semDados ? (
             <p className="text-xs text-muted-foreground">Sem importação do Power BI.</p>
           ) : (
             <table className="w-full text-xs">
