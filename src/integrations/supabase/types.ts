@@ -17499,15 +17499,18 @@ export type Database = {
         Returns: Json
       }
       embracon_indices_class: {
-        Args: { p_mes: string }
+        Args: { p_fonte?: string; p_mes: string }
         Returns: {
           breakdown: Json
           cotas_para_meta: number
           denominador: number
           denominador_mcf: number
           falta_para_meta: number
+          fonte: string
           indice: string
           indice_valor: number
+          indice_valor_mcf: number
+          indice_valor_oficial: number
           janela_fim: string
           janela_inicio: string
           mes_apuracao: string
