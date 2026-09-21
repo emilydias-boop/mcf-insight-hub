@@ -121,6 +121,12 @@ export default function AgendaR2() {
   // Verifica se usuário é closer R2 puro (não tem outras roles privilegiadas)
   const isR2Closer = !!myR2Closer?.id && role === 'closer' && !allRoles.includes('sdr') && !allRoles.includes('admin') && !allRoles.includes('manager') && !allRoles.includes('coordenador');
 
+  // Configuração de agenda: liderança sempre; closer só com a capacidade individual.
+  const { canManageAgenda } = useMyAgendaCapabilities();
+  const isLideranca = ['admin', 'manager', 'coordenador'].some((r) => allRoles.includes(r));
+  const podeConfigurarAgenda = isLideranca || !isR2Closer || canManageAgenda;
+
+
   // Handle URL param changes
   useEffect(() => {
     if (urlTab === 'noshows') {
