@@ -32,9 +32,23 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
         <h2 className="text-lg font-bold text-foreground truncate flex-1">
           {deal.name}
         </h2>
-        <span className="text-lg font-bold text-primary whitespace-nowrap">
-          R$ {((deal.value && deal.value > 0) ? deal.value : (a010Data?.totalPaid || 0)).toLocaleString('pt-BR')}
-        </span>
+        <div className="flex flex-col items-end shrink-0">
+          {totaisCliente && totaisCliente.total_liquido_pago > 0 ? (
+            <>
+              <span className="text-lg font-bold text-primary whitespace-nowrap">
+                {formatCurrency(totaisCliente.total_liquido_pago)}
+              </span>
+              <span className="text-[10px] text-muted-foreground">já pagou</span>
+            </>
+          ) : (
+            <>
+              <span className="text-lg font-bold text-muted-foreground whitespace-nowrap">
+                R$ {((deal.value && deal.value > 0) ? deal.value : 0).toLocaleString('pt-BR')}
+              </span>
+              <span className="text-[10px] text-muted-foreground">valor do negócio</span>
+            </>
+          )}
+        </div>
       </div>
       
       {/* Linha 2: Badge do estágio */}
