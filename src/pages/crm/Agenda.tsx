@@ -752,7 +752,7 @@ export default function Agenda() {
       <CloserAvailabilityConfig
         open={configOpen}
         onOpenChange={setConfigOpen}
-        closers={closers}
+        closers={closersParaConfig}
         isLoading={closersLoading}
       />
 
