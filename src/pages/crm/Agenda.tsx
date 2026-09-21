@@ -30,6 +30,9 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
+import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
+import { toast } from 'sonner';
+
 
 const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
   scheduled: ['invited', 'scheduled'],
