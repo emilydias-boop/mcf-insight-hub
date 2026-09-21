@@ -76,6 +76,9 @@ import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { R2AgendaKPICards } from "@/components/crm/R2AgendaKPICards";
+import { useMyAgendaCapabilities } from "@/hooks/useMyAgendaCapabilities";
+import { toast } from "sonner";
+
 
 type ViewMode = "day" | "week" | "month";
 
