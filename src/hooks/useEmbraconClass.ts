@@ -56,6 +56,9 @@ export function useEmbraconIndices(mes: string) {
     queryFn: async (): Promise<IndiceClassRow[]> => {
       const { data, error } = await db.rpc('embracon_indices_class', { p_mes: mes });
       if (error) throw error;
+      // Sem importação a RPC devolve numerador e índice NULL (nunca zero). `indice_valor`
+      // é mantido null para a tela mostrar "Sem importação do Power BI"; os demais campos
+      // são coagidos a 0 só para aritmética segura e nunca são exibidos sem `tem_importacao`.
       return (data || []).map((r: any) => ({
         ...r,
         denominador: Number(r.denominador) || 0,
