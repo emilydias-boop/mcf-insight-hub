@@ -302,16 +302,6 @@ export const DealKanbanCard = ({
   const maxAttempts = activitySummary?.maxAttempts || 5;
   const displayPhone = contactPhone || extractPhoneFromDeal(deal, contact);
 
-  // Formatar valor: evitar "R$ 0k" para valores pequenos
-  const formatDealValue = (value: number | null | undefined) => {
-    if (!value || value <= 0) return null;
-    if (value < 1000) return `R$ ${value.toLocaleString('pt-BR')}`;
-    if (value < 10000) return `R$ ${(value / 1000).toFixed(1).replace('.', ',')}k`;
-    return `R$ ${Math.round(value / 1000)}k`;
-  };
-
-  const formattedValue = formatDealValue(deal.value);
-
   return (
     <TooltipProvider>
       <Tooltip delayDuration={400}>
@@ -536,11 +526,8 @@ export const DealKanbanCard = ({
             <Mail className="h-3.5 w-3.5 text-muted-foreground/40" />
           </div>
 
-          {/* Lado direito: Valor + Tentativas + Tempo */}
+          {/* Lado direito: Tentativas + Tempo */}
           <div className="flex items-center gap-2 text-muted-foreground">
-            <span className={`font-semibold ${formattedValue ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-              {formattedValue || 'R$ -'}
-            </span>
             <span className={`flex items-center gap-0.5 ${activitySummary?.attemptsExhausted ? "text-destructive" : ""}`}>
               <Phone className="h-2.5 w-2.5" />
               {totalCalls}/{maxAttempts}
