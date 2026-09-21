@@ -1760,6 +1760,33 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_effective_from_a001_a009: {
+        Row: {
+          effective_from: string | null
+          id: string | null
+          new_price: number | null
+          old_price: number | null
+          product_config_id: string | null
+          snapshot_em: string | null
+        }
+        Insert: {
+          effective_from?: string | null
+          id?: string | null
+          new_price?: number | null
+          old_price?: number | null
+          product_config_id?: string | null
+          snapshot_em?: string | null
+        }
+        Update: {
+          effective_from?: string | null
+          id?: string | null
+          new_price?: number | null
+          old_price?: number | null
+          product_config_id?: string | null
+          snapshot_em?: string | null
+        }
+        Relationships: []
+      }
       backup_liquido_juros_carrinho: {
         Row: {
           corrigido_em: string
