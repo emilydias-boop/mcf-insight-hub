@@ -3,7 +3,8 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, CheckCircle, XCircle, 
-  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save, Ban, DollarSign
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save, Ban, DollarSign,
+  Link2, Unlink
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -15,6 +16,9 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/lib/formatters';
+import { VincularVendaR2Dialog } from './VincularVendaR2Dialog';
+import { useVendasDoParticipante, useDesvincularVenda } from '@/hooks/useVincularVendaR2';
 import { toast } from 'sonner';
 import { R2MeetingRow, R2StatusOption, R2ThermometerOption, R2AttendeeExtended } from '@/types/r2Agenda';
 import { useRemoveR2Attendee, useCancelR2Meeting, useRestoreR2Meeting, useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
