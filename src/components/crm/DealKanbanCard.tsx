@@ -536,11 +536,8 @@ export const DealKanbanCard = ({
             <Mail className="h-3.5 w-3.5 text-muted-foreground/40" />
           </div>
 
-          {/* Lado direito: Valor + Tentativas + Tempo */}
+          {/* Lado direito: Tentativas + Tempo */}
           <div className="flex items-center gap-2 text-muted-foreground">
-            <span className={`font-semibold ${formattedValue ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-              {formattedValue || 'R$ -'}
-            </span>
             <span className={`flex items-center gap-0.5 ${activitySummary?.attemptsExhausted ? "text-destructive" : ""}`}>
               <Phone className="h-2.5 w-2.5" />
               {totalCalls}/{maxAttempts}
