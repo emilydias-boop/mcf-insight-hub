@@ -57,6 +57,13 @@ export default function Agenda() {
   const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
   // Em modo apoio, deixa de cair no branch "Minha Agenda" restrito
   const isCloser = isCloserOnly && !isR1SupportActive;
+
+  // Configuração de agenda: liderança sempre; demais só com a capacidade individual.
+  // "Métricas" segue restrito a não-closer (não é liberado por can_manage_agenda).
+  const { canManageAgenda } = useMyAgendaCapabilities();
+  const isLideranca = ['admin', 'manager', 'coordenador'].some(r => allRoles.includes(r));
+  const podeConfigurarAgenda = isLideranca || !isCloser || canManageAgenda;
+
   
   useMeetingReminders(); // Automatic 15-min reminders
   const [selectedDate, setSelectedDate] = useState(new Date());
