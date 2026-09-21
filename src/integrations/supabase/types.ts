@@ -17223,6 +17223,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      can_self_manage_agenda: { Args: never; Returns: boolean }
       caucoes_efetivas: {
         Args: { p_bu?: string; p_from: string; p_to: string }
         Returns: {
@@ -18159,6 +18160,7 @@ export type Database = {
       is_closer_do_usuario: { Args: { _closer_id: string }; Returns: boolean }
       is_fechamento_leader: { Args: never; Returns: boolean }
       is_month_locked: { Args: { _ano_mes: string }; Returns: boolean }
+      is_my_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_my_employee_folder: { Args: { _folder: string }; Returns: boolean }
       is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
