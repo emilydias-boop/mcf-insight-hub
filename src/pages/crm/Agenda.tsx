@@ -163,6 +163,23 @@ export default function Agenda() {
     return closers;
   }, [closers, isCloser, myCloser?.id]);
 
+  // Modal de configuração: liderança vê todos; closer só o próprio cadastro (fail-closed).
+  const closersParaConfig = useMemo(() => {
+    if (isLideranca) return closers;
+    if (!myCloser?.id) return [];
+    return closers.filter(c => c.id === myCloser.id);
+  }, [closers, isLideranca, myCloser?.id]);
+
+  const abrirConfigAgenda = useCallback(() => {
+    if (!isLideranca && !myCloser?.id) {
+      toast.error('Seu cadastro de closer não foi encontrado nesta área. Peça à liderança para vincular.');
+      return;
+    }
+    setConfigOpen(true);
+  }, [isLideranca, myCloser?.id]);
+
+
+
   const filteredMeetings = useMemo(() => {
     // Fail-closed: closer sem vínculo não vê nenhuma reunião
     if (isCloser && !myCloser?.id) {
