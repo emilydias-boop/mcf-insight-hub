@@ -15,7 +15,8 @@ import { BoletoReviewDialog } from '@/components/consorcio/pagamentos/BoletoRevi
 import { useBoletosReview } from '@/hooks/useConsorcioBoletos';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, User, Building2 } from 'lucide-react';
+import { AlertTriangle, User, Building2, Gauge } from 'lucide-react';
+import { IndicesClassTab } from '@/components/consorcio/pagamentos/class/IndicesClassTab';
 
 // 12 meses futuros + mês atual + 11 anteriores (futuro/mais recente primeiro)
 const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => {
@@ -86,12 +87,19 @@ export default function ConsorcioPagamentosPage() {
             <Building2 className="h-4 w-4" />
             Empresa
           </TabsTrigger>
+          <TabsTrigger value="class" className="gap-1.5">
+            <Gauge className="h-4 w-4" />
+            Índices Class
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="cliente">
           <ConsorcioPagamentosTab selectedMonth={monthRange} tipoFilter="cliente" />
         </TabsContent>
         <TabsContent value="empresa">
           <ConsorcioPagamentosTab selectedMonth={monthRange} tipoFilter="empresa" />
+        </TabsContent>
+        <TabsContent value="class">
+          <IndicesClassTab />
         </TabsContent>
       </Tabs>
 

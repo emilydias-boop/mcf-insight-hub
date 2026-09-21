@@ -8350,6 +8350,147 @@ export type Database = {
         }
         Relationships: []
       }
+      embracon_class_config: {
+        Row: {
+          atualizado_em: string
+          bonus_pct: number
+          id: boolean
+          janela_126_fim: number
+          janela_126_inicio: number
+          janela_82_fim: number
+          janela_82_inicio: number
+          meta: number
+        }
+        Insert: {
+          atualizado_em?: string
+          bonus_pct?: number
+          id?: boolean
+          janela_126_fim?: number
+          janela_126_inicio?: number
+          janela_82_fim?: number
+          janela_82_inicio?: number
+          meta?: number
+        }
+        Update: {
+          atualizado_em?: string
+          bonus_pct?: number
+          id?: boolean
+          janela_126_fim?: number
+          janela_126_inicio?: number
+          janela_82_fim?: number
+          janela_82_inicio?: number
+          meta?: number
+        }
+        Relationships: []
+      }
+      embracon_cota_status_import: {
+        Row: {
+          contrato: string | null
+          cota: string
+          data_referencia: string
+          fonte: string
+          grupo: string
+          id: string
+          importado_em: string
+          importado_por: string | null
+          mes_producao: string | null
+          parcelas_vencidas: number | null
+          plano: string | null
+          status: string
+          valor_bem: number | null
+        }
+        Insert: {
+          contrato?: string | null
+          cota: string
+          data_referencia: string
+          fonte?: string
+          grupo: string
+          id?: string
+          importado_em?: string
+          importado_por?: string | null
+          mes_producao?: string | null
+          parcelas_vencidas?: number | null
+          plano?: string | null
+          status: string
+          valor_bem?: number | null
+        }
+        Update: {
+          contrato?: string | null
+          cota?: string
+          data_referencia?: string
+          fonte?: string
+          grupo?: string
+          id?: string
+          importado_em?: string
+          importado_por?: string | null
+          mes_producao?: string | null
+          parcelas_vencidas?: number | null
+          plano?: string | null
+          status?: string
+          valor_bem?: number | null
+        }
+        Relationships: []
+      }
+      embracon_indices_snapshot: {
+        Row: {
+          denominador: number | null
+          fonte: string
+          id: string
+          indice: string
+          mes_apuracao: string
+          numerador: number | null
+          qtd_cotas: number | null
+          registrado_em: string
+          registrado_por: string | null
+          valor: number | null
+        }
+        Insert: {
+          denominador?: number | null
+          fonte: string
+          id?: string
+          indice: string
+          mes_apuracao: string
+          numerador?: number | null
+          qtd_cotas?: number | null
+          registrado_em?: string
+          registrado_por?: string | null
+          valor?: number | null
+        }
+        Update: {
+          denominador?: number | null
+          fonte?: string
+          id?: string
+          indice?: string
+          mes_apuracao?: string
+          numerador?: number | null
+          qtd_cotas?: number | null
+          registrado_em?: string
+          registrado_por?: string | null
+          valor?: number | null
+        }
+        Relationships: []
+      }
+      embracon_producao_mensal: {
+        Row: {
+          atualizado_em: string
+          fonte: string
+          mes: string
+          valor: number
+        }
+        Insert: {
+          atualizado_em?: string
+          fonte?: string
+          mes: string
+          valor: number
+        }
+        Update: {
+          atualizado_em?: string
+          fonte?: string
+          mes?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       employee_cargo_history: {
         Row: {
           cargo_catalogo_id: string | null
@@ -17338,6 +17479,10 @@ export type Database = {
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
+      desvincular_venda_do_participante: {
+        Args: { p_transaction_id: string }
+        Returns: Json
+      }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
       discador_opcoes_filtro: { Args: { _bu: string }; Returns: Json }
       discador_publico: {
@@ -17352,6 +17497,27 @@ export type Database = {
           _tipo_data?: string
         }
         Returns: Json
+      }
+      embracon_indices_class: {
+        Args: { p_mes: string }
+        Returns: {
+          breakdown: Json
+          cotas_para_meta: number
+          denominador: number
+          denominador_mcf: number
+          falta_para_meta: number
+          indice: string
+          indice_valor: number
+          janela_fim: string
+          janela_inicio: string
+          mes_apuracao: string
+          meta: number
+          numerador: number
+          numerador_canceladas: number
+          numerador_inadimplentes: number
+          qtd_cotas: number
+          tem_importacao: boolean
+        }[]
       }
       evaluate_sdr_reschedule: {
         Args: { _bu: string; _deal_id: string; _meeting_type?: string }
@@ -18133,6 +18299,45 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      get_vendas_do_participante: {
+        Args: { p_attendee_id: string }
+        Returns: {
+          bruto: number
+          comprador_email: string
+          comprador_nome: string
+          gateway: string
+          id: string
+          liquido: number
+          metodo: string
+          produto: string
+          sale_date: string
+          vinculada_em: string
+          vinculada_por: string
+        }[]
+      }
+      get_vendas_sem_vinculo: {
+        Args: { p_attendee_id: string; p_busca?: string; p_limit?: number }
+        Returns: {
+          bruto: number
+          comprador_cpf: string
+          comprador_email: string
+          comprador_nome: string
+          comprador_telefone: string
+          eh_parceria: boolean
+          gateway: string
+          id: string
+          liquido: number
+          match_cpf: boolean
+          match_email: boolean
+          match_nome: boolean
+          match_telefone: boolean
+          parcela: number
+          produto: string
+          sale_date: string
+          score: number
+          total_parcelas: number
+        }[]
+      }
       has_agenda_capability: {
         Args: { _capability: string; _user_id: string }
         Returns: boolean
@@ -18604,6 +18809,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      vincular_venda_ao_participante: {
+        Args: { p_attendee_id: string; p_transaction_id: string }
+        Returns: Json
       }
       wa_abrir_conversa: { Args: { _deal_id: string }; Returns: string }
       wa_broadcast_bus_disponiveis: {
