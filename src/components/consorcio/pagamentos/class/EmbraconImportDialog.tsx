@@ -169,6 +169,8 @@ export function EmbraconImportDialog() {
         cota: c,
         contrato: mapa.contrato ? String(row[mapa.contrato] ?? '').trim() || null : null,
         valor_bem: numeroBR(row[mapa.valor_bem]),
+        // `primeiroDiaDoMes` normaliza o mês de produção sempre para o dia 1, para a
+        // janela da tela e a do cálculo usarem exatamente o mesmo critério.
         mes_producao: mes,
         status,
         parcelas_vencidas: mapa.parcelas_vencidas ? (numeroBR(row[mapa.parcelas_vencidas]) ?? null) : null,
