@@ -3,7 +3,8 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, CheckCircle, XCircle, 
-  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save, Ban, DollarSign
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil, Edit2, Check, X, Save, Ban, DollarSign,
+  Link2, Unlink
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -15,6 +16,9 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/lib/formatters';
+import { VincularVendaR2Dialog } from './VincularVendaR2Dialog';
+import { useVendasDoParticipante, useDesvincularVenda } from '@/hooks/useVincularVendaR2';
 import { toast } from 'sonner';
 import { R2MeetingRow, R2StatusOption, R2ThermometerOption, R2AttendeeExtended } from '@/types/r2Agenda';
 import { useRemoveR2Attendee, useCancelR2Meeting, useRestoreR2Meeting, useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
@@ -64,6 +68,7 @@ export function R2MeetingDetailDrawer({
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [attendeeToTransfer, setAttendeeToTransfer] = useState<R2AttendeeExtended | null>(null);
+  const [vincularVendaOpen, setVincularVendaOpen] = useState(false);
   const [editingPhone, setEditingPhone] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
   const [saveTrigger, setSaveTrigger] = useState(0);
@@ -73,12 +78,9 @@ export function R2MeetingDetailDrawer({
   const { role } = useAuth();
   const isSdr = role === 'sdr';
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
-  const { canManageAgenda, canCancelMeeting } = useMyAgendaCapabilities();
+  const { canManageAgenda, canCancelMeeting, canLinkContract } = useMyAgendaCapabilities();
   const canManage = canManageAgenda || !isSdr;
   const canCancel = canCancelMeeting || !isSdr;
-  
-  // Debug log - remove after testing
-  console.log('[R2Drawer] role:', role, '| canTransfer:', canTransfer);
   
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
@@ -140,6 +142,14 @@ export function R2MeetingDetailDrawer({
       meetingDate: meeting?.scheduled_at || '',
     }))
   );
+
+  // Vendas vinculadas ao participante selecionado — chamado ANTES do early-return
+  // para manter a ordem de hooks estável entre renders.
+  const activeAttendeeId = meeting?.attendees?.find(a => a.id === selectedAttendeeId)?.id
+    || meeting?.attendees?.[0]?.id
+    || null;
+  const { data: vendasVinculadas = [] } = useVendasDoParticipante(activeAttendeeId);
+  const desvincular = useDesvincularVenda();
 
   if (!meeting) return null;
 
@@ -605,6 +615,53 @@ export function R2MeetingDetailDrawer({
               </div>
             </div>
 
+            {/* Vendas vinculadas ao participante */}
+            {vendasVinculadas.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Link2 className="h-3 w-3" />
+                  Vendas vinculadas ({vendasVinculadas.length})
+                </div>
+                <div className="space-y-2">
+                  {vendasVinculadas.map((v) => (
+                    <div key={v.id} className="rounded-lg border bg-muted/20 p-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{v.produto}</div>
+                          <div className="flex items-baseline gap-2 mt-0.5">
+                            <span className="font-bold">{formatCurrency(v.liquido)}</span>
+                            <span className="text-[10px] text-muted-foreground">líquido</span>
+                            <span className="text-[11px] text-muted-foreground">· bruto {formatCurrency(v.bruto)}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                            {v.gateway} · {format(parseISO(v.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                            {v.comprador_nome ? ` · pago por ${v.comprador_nome}` : ''}
+                          </div>
+                          {v.vinculada_por && (
+                            <div className="text-[10px] text-muted-foreground">
+                              vinculado por {v.vinculada_por}
+                            </div>
+                          )}
+                        </div>
+                        {canLinkContract && (
+                          <Button variant="ghost" size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                            title="Desvincular"
+                            onClick={() => {
+                              if (confirm('Desvincular esta venda do participante? A etapa do Kanban NÃO volta sozinha.')) {
+                                desvincular.mutate(v.id);
+                              }
+                            }}>
+                            <Unlink className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Perfil do Lead (Anamnese) */}
             <LeadProfileSection contactId={contactId} />
 
@@ -636,6 +693,16 @@ export function R2MeetingDetailDrawer({
 
         {/* Footer Actions */}
         <div className="border-t p-4 space-y-2">
+          {canLinkContract && attendee && (
+            <Button
+              variant="outline"
+              className="w-full text-emerald-600 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+              onClick={() => setVincularVendaOpen(true)}
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              Vincular venda
+            </Button>
+          )}
           <Button 
             className="w-full"
             onClick={() => {
@@ -738,6 +805,16 @@ export function R2MeetingDetailDrawer({
           meeting={meeting}
           buFilter="incorporador"
           onSuccess={() => onOpenChange(false)}
+        />
+      )}
+
+      {/* Vincular Venda Modal */}
+      {attendee && (
+        <VincularVendaR2Dialog
+          open={vincularVendaOpen}
+          onOpenChange={setVincularVendaOpen}
+          attendeeId={attendee.id}
+          attendeeName={attendee.name || attendee.deal?.contact?.name || 'este lead'}
         />
       )}
     </Sheet>
