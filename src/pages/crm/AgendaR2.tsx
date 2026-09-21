@@ -492,7 +492,7 @@ export default function AgendaR2() {
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          {/* Mostrar botões de config apenas para não-closers */}
+          {/* Status/Tags e Marcações seguem restritos a não-closers */}
           {!isR2Closer && (
             <>
               <Button variant="outline" size="sm" onClick={() => setStatusConfigOpen(true)}>
@@ -503,12 +503,15 @@ export default function AgendaR2() {
                 <Sliders className="h-4 w-4 mr-2" />
                 Marcações
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
-                <Settings className="h-4 w-4 mr-2" />
-                Closers
-              </Button>
             </>
           )}
+          {podeConfigurarAgenda && (
+            <Button variant="outline" size="sm" onClick={abrirConfigAgenda}>
+              <Settings className="h-4 w-4 mr-2" />
+              Closers
+            </Button>
+          )}
+
           <Button variant="outline" size="sm" onClick={() => handleExportList()}>
             <Download className="h-4 w-4 mr-2" />
             Exportar Lista
