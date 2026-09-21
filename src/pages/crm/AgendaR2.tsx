@@ -76,6 +76,9 @@ import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActiveBU } from "@/hooks/useActiveBU";
 import { R2AgendaKPICards } from "@/components/crm/R2AgendaKPICards";
+import { useMyAgendaCapabilities } from "@/hooks/useMyAgendaCapabilities";
+import { toast } from "sonner";
+
 
 type ViewMode = "day" | "week" | "month";
 
@@ -120,6 +123,12 @@ export default function AgendaR2() {
   
   // Verifica se usuário é closer R2 puro (não tem outras roles privilegiadas)
   const isR2Closer = !!myR2Closer?.id && role === 'closer' && !allRoles.includes('sdr') && !allRoles.includes('admin') && !allRoles.includes('manager') && !allRoles.includes('coordenador');
+
+  // Configuração de agenda: liderança sempre; closer só com a capacidade individual.
+  const { canManageAgenda } = useMyAgendaCapabilities();
+  const isLideranca = ['admin', 'manager', 'coordenador'].some((r) => (allRoles as string[]).includes(r));
+  const podeConfigurarAgenda = isLideranca || !isR2Closer || canManageAgenda;
+
 
   // Handle URL param changes
   useEffect(() => {
@@ -230,6 +239,23 @@ export default function AgendaR2() {
     if (closerFilter === "all") return closers;
     return closers.filter((c) => c.id === closerFilter);
   }, [closers, closerFilter, isR2Closer, myR2Closer?.id]);
+
+  // Modal "Closers": liderança vê todos; closer só o próprio cadastro (fail-closed).
+  const closersParaConfig = useMemo(() => {
+    if (isLideranca) return allClosers;
+    if (!myR2Closer?.id) return [];
+    return allClosers.filter((c) => c.id === myR2Closer.id);
+  }, [allClosers, isLideranca, myR2Closer?.id]);
+
+  const abrirConfigAgenda = useCallback(() => {
+    if (!isLideranca && !myR2Closer?.id) {
+      toast.error('Seu cadastro de closer não foi encontrado nesta área. Peça à liderança para vincular.');
+      return;
+    }
+    setAvailabilityConfigOpen(true);
+  }, [isLideranca, myR2Closer?.id]);
+
+
 
   // Convert R2Meeting to MeetingSlot for AgendaCalendar compatibility
   const meetingsAsMeetingSlots: MeetingSlot[] = useMemo(() => {
@@ -492,7 +518,7 @@ export default function AgendaR2() {
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          {/* Mostrar botões de config apenas para não-closers */}
+          {/* Status/Tags e Marcações seguem restritos a não-closers */}
           {!isR2Closer && (
             <>
               <Button variant="outline" size="sm" onClick={() => setStatusConfigOpen(true)}>
@@ -503,12 +529,15 @@ export default function AgendaR2() {
                 <Sliders className="h-4 w-4 mr-2" />
                 Marcações
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
-                <Settings className="h-4 w-4 mr-2" />
-                Closers
-              </Button>
             </>
           )}
+          {podeConfigurarAgenda && (
+            <Button variant="outline" size="sm" onClick={abrirConfigAgenda}>
+              <Settings className="h-4 w-4 mr-2" />
+              Closers
+            </Button>
+          )}
+
           <Button variant="outline" size="sm" onClick={() => handleExportList()}>
             <Download className="h-4 w-4 mr-2" />
             Exportar Lista
@@ -932,7 +961,7 @@ export default function AgendaR2() {
       <R2CloserAvailabilityConfig
         open={availabilityConfigOpen}
         onOpenChange={handleAvailabilityConfigClose}
-        closers={allClosers}
+        closers={closersParaConfig}
         isLoading={isLoadingAllClosers}
       />
 

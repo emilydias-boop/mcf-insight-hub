@@ -30,6 +30,9 @@ import { useActiveBU } from '@/hooks/useActiveBU';
 import { useIsR1SupportActive } from '@/hooks/useIsR1SupportActive';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
+import { useMyAgendaCapabilities } from '@/hooks/useMyAgendaCapabilities';
+import { toast } from 'sonner';
+
 
 const ATTENDEE_STATUS_FILTERS: Record<string, string[]> = {
   scheduled: ['invited', 'scheduled'],
@@ -57,6 +60,13 @@ export default function Agenda() {
   const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
   // Em modo apoio, deixa de cair no branch "Minha Agenda" restrito
   const isCloser = isCloserOnly && !isR1SupportActive;
+
+  // Configuração de agenda: liderança sempre; demais só com a capacidade individual.
+  // "Métricas" segue restrito a não-closer (não é liberado por can_manage_agenda).
+  const { canManageAgenda } = useMyAgendaCapabilities();
+  const isLideranca = ['admin', 'manager', 'coordenador'].some(r => (allRoles as string[]).includes(r));
+  const podeConfigurarAgenda = isLideranca || !isCloser || canManageAgenda;
+
   
   useMeetingReminders(); // Automatic 15-min reminders
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -155,6 +165,23 @@ export default function Agenda() {
     }
     return closers;
   }, [closers, isCloser, myCloser?.id]);
+
+  // Modal de configuração: liderança vê todos; closer só o próprio cadastro (fail-closed).
+  const closersParaConfig = useMemo(() => {
+    if (isLideranca) return closers;
+    if (!myCloser?.id) return [];
+    return closers.filter(c => c.id === myCloser.id);
+  }, [closers, isLideranca, myCloser?.id]);
+
+  const abrirConfigAgenda = useCallback(() => {
+    if (!isLideranca && !myCloser?.id) {
+      toast.error('Seu cadastro de closer não foi encontrado nesta área. Peça à liderança para vincular.');
+      return;
+    }
+    setConfigOpen(true);
+  }, [isLideranca, myCloser?.id]);
+
+
 
   const filteredMeetings = useMemo(() => {
     // Fail-closed: closer sem vínculo não vê nenhuma reunião
@@ -407,17 +434,18 @@ export default function Agenda() {
             <Download className="h-4 w-4" />
           </Button>
           {!isCloser && (
-            <>
-              <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')} size="sm" className="hidden sm:flex">
-                <BarChart3 className="h-4 w-4 sm:mr-2" />
-                <span className="hidden md:inline">Métricas</span>
-              </Button>
-              <Button variant="outline" onClick={() => setConfigOpen(true)} size="sm" className="hidden sm:flex">
-                <Settings className="h-4 w-4 sm:mr-2" />
-                <span className="hidden md:inline">Configurar</span>
-              </Button>
-            </>
+            <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')} size="sm" className="hidden sm:flex">
+              <BarChart3 className="h-4 w-4 sm:mr-2" />
+              <span className="hidden md:inline">Métricas</span>
+            </Button>
           )}
+          {podeConfigurarAgenda && (
+            <Button variant="outline" onClick={abrirConfigAgenda} size="sm" className="hidden sm:flex">
+              <Settings className="h-4 w-4 sm:mr-2" />
+              <span className="hidden md:inline">Configurar</span>
+            </Button>
+          )}
+
           <Button onClick={() => setQuickScheduleOpen(true)} size="sm" className="flex-1 sm:flex-none">
             <Plus className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Agendar</span>
@@ -751,7 +779,7 @@ export default function Agenda() {
       <CloserAvailabilityConfig
         open={configOpen}
         onOpenChange={setConfigOpen}
-        closers={closers}
+        closers={closersParaConfig}
         isLoading={closersLoading}
       />
 
