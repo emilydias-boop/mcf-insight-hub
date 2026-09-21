@@ -17525,11 +17525,13 @@ export type Database = {
           bruto: number
           bu: string
           gateway: string
+          id: string
           liquido: number
           parcela: number
           produto: string
           reembolsado: boolean
           sale_date: string
+          status: string
           total_parcelas: number
         }[]
       }
