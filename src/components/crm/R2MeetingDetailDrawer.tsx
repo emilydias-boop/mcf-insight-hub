@@ -615,6 +615,53 @@ export function R2MeetingDetailDrawer({
               </div>
             </div>
 
+            {/* Vendas vinculadas ao participante */}
+            {vendasVinculadas.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Link2 className="h-3 w-3" />
+                  Vendas vinculadas ({vendasVinculadas.length})
+                </div>
+                <div className="space-y-2">
+                  {vendasVinculadas.map((v) => (
+                    <div key={v.id} className="rounded-lg border bg-muted/20 p-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{v.produto}</div>
+                          <div className="flex items-baseline gap-2 mt-0.5">
+                            <span className="font-bold">{formatCurrency(v.liquido)}</span>
+                            <span className="text-[10px] text-muted-foreground">líquido</span>
+                            <span className="text-[11px] text-muted-foreground">· bruto {formatCurrency(v.bruto)}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                            {v.gateway} · {format(parseISO(v.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                            {v.comprador_nome ? ` · pago por ${v.comprador_nome}` : ''}
+                          </div>
+                          {v.vinculada_por && (
+                            <div className="text-[10px] text-muted-foreground">
+                              vinculado por {v.vinculada_por}
+                            </div>
+                          )}
+                        </div>
+                        {canLinkContract && (
+                          <Button variant="ghost" size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                            title="Desvincular"
+                            onClick={() => {
+                              if (confirm('Desvincular esta venda do participante? A etapa do Kanban NÃO volta sozinha.')) {
+                                desvincular.mutate(v.id);
+                              }
+                            }}>
+                            <Unlink className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Perfil do Lead (Anamnese) */}
             <LeadProfileSection contactId={contactId} />
 
