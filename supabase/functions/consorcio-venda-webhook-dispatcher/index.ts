@@ -15,7 +15,9 @@ const MAKE_WEBHOOK_URL = "https://hook.us1.make.com/pk492b4dfi83s1u4k566i98mg34k
  * mandar aviso de venda de semanas atrás para o grupo comercial é inaceitável.
  * A fila nascer vazia não basta como garantia — a data abaixo é a garantia.
  */
-const DEPLOY_CUTOFF_ISO = "2026-09-17T17:00:00.000Z"; // 14:00 America/Sao_Paulo
+// Corte movido para o instante da liberação do envio (21/09/2026 15:37 America/Sao_Paulo).
+// O gatilho do banco vem enfileirando vendas desde 17/09: nenhuma dessas linhas pode sair.
+const DEPLOY_CUTOFF_ISO = "2026-09-21T18:37:28.000Z";
 
 const MAX_TENTATIVAS = 5;
 const BATCH_SIZE = 10;
