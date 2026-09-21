@@ -154,25 +154,42 @@ export interface CotaImportada {
   fonte: string;
 }
 
-/** Última importação de cada cota com mês de produção dentro da janela. */
+/**
+ * Cotas do LOTE mais recente (maior data_referencia) com mês de produção dentro
+ * da janela. O relatório do Power BI lista só as canceladas/inadimplentes do
+ * momento: cota reativada desaparece do relatório seguinte. Por isso o lote mais
+ * recente é tratado como fotografia completa — cota ausente nele não conta.
+ * O filtro de status é aplicado DEPOIS de fixar o lote e deduplicar, nunca antes.
+ */
 export function useCotasImportadasJanela(inicio?: string, fim?: string, status?: CotaImportada['status'][]) {
   return useQuery({
     queryKey: ['embracon-cotas-janela', inicio, fim, status?.join(',')],
     enabled: !!inicio && !!fim,
     queryFn: async (): Promise<CotaImportada[]> => {
-      const rows = await fetchAllPages<any>((from, to) => {
-        let q = db
+      // 1) fixa o lote mais recente
+      const { data: ultimo, error: erroLote } = await db
+        .from('embracon_cota_status_import')
+        .select('data_referencia')
+        .order('data_referencia', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (erroLote) throw erroLote;
+      const lote = ultimo?.data_referencia as string | undefined;
+      if (!lote) return [];
+
+      // 2) só as linhas desse lote, dentro da janela — sem filtrar status ainda
+      const rows = await fetchAllPages<any>((from, to) =>
+        db
           .from('embracon_cota_status_import')
           .select('id, data_referencia, grupo, cota, contrato, valor_bem, mes_producao, status, parcelas_vencidas, plano, fonte')
+          .eq('data_referencia', lote)
           .gte('mes_producao', inicio!)
           .lte('mes_producao', fim!)
-          .order('data_referencia', { ascending: false })
-          .order('importado_em', { ascending: false });
-        if (status?.length) q = q.in('status', status);
-        return q.range(from, to);
-      });
+          .order('importado_em', { ascending: false })
+          .range(from, to),
+      );
 
-      // Dedupe: vale a importação mais recente de cada grupo-cota.
+      // 3) dedupe por grupo-cota dentro do lote
       const vistos = new Set<string>();
       const out: CotaImportada[] = [];
       for (const r of rows || []) {
@@ -181,7 +198,10 @@ export function useCotasImportadasJanela(inicio?: string, fim?: string, status?:
         vistos.add(chave);
         out.push({ ...r, valor_bem: Number(r.valor_bem) || 0 });
       }
-      return out.sort((a, b) => b.valor_bem - a.valor_bem);
+
+      // 4) só agora o filtro de status
+      const filtradas = status?.length ? out.filter((c) => status.includes(c.status)) : out;
+      return filtradas.sort((a, b) => b.valor_bem - a.valor_bem);
     },
   });
 }
