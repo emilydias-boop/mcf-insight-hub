@@ -70,7 +70,7 @@ export const DealProdutosAdquiridosTab = ({ dealId, email }: Props) => {
 
         {totais && totais.qtd_pagamentos > 0 && (
           <p className="text-xs text-muted-foreground">
-            {totais.qtd_produtos} produto{totais.qtd_produtos > 1 ? 's' : ''} •{' '}
+            {totais.qtd_produtos} produto{totais.qtd_produtos > 1 ? 's' : ''} • líquido{' '}
             <span className="font-semibold text-foreground">{formatCurrency(totais.total_liquido_pago)}</span>
           </p>
         )}
@@ -109,7 +109,12 @@ export const DealProdutosAdquiridosTab = ({ dealId, email }: Props) => {
                     )}
                   </div>
                 </div>
-                <span className="text-sm font-medium whitespace-nowrap">{formatCurrency(c.liquido)}</span>
+                <div className="flex flex-col items-end">
+                  <span className="text-sm font-medium whitespace-nowrap">{formatCurrency(c.liquido)}</span>
+                  {c.bruto ? (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">bruto {formatCurrency(c.bruto)}</span>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
