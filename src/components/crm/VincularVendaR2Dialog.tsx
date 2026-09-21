@@ -7,7 +7,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
@@ -39,8 +38,8 @@ export function VincularVendaR2Dialog({ open, onOpenChange, attendeeId, attendee
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) setBusca(''); onOpenChange(o); }}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5 text-primary" />
             Vincular venda
@@ -53,7 +52,7 @@ export function VincularVendaR2Dialog({ open, onOpenChange, attendeeId, attendee
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome, email, telefone, CPF ou produto..."
@@ -70,7 +69,7 @@ export function VincularVendaR2Dialog({ open, onOpenChange, attendeeId, attendee
           )}
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 max-h-[55vh] -mx-6 px-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-6 px-6">
           <div className="space-y-2 py-2 pb-4">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
@@ -153,7 +152,7 @@ export function VincularVendaR2Dialog({ open, onOpenChange, attendeeId, attendee
               })
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
