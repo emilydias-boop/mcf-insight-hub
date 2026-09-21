@@ -693,6 +693,16 @@ export function R2MeetingDetailDrawer({
 
         {/* Footer Actions */}
         <div className="border-t p-4 space-y-2">
+          {canLinkContract && attendee && (
+            <Button
+              variant="outline"
+              className="w-full text-emerald-600 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+              onClick={() => setVincularVendaOpen(true)}
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              Vincular venda
+            </Button>
+          )}
           <Button 
             className="w-full"
             onClick={() => {
