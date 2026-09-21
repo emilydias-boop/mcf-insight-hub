@@ -807,6 +807,16 @@ export function R2MeetingDetailDrawer({
           onSuccess={() => onOpenChange(false)}
         />
       )}
+
+      {/* Vincular Venda Modal */}
+      {attendee && (
+        <VincularVendaR2Dialog
+          open={vincularVendaOpen}
+          onOpenChange={setVincularVendaOpen}
+          attendeeId={attendee.id}
+          attendeeName={attendee.name || attendee.deal?.contact?.name || 'este lead'}
+        />
+      )}
     </Sheet>
   );
 }
