@@ -117,14 +117,9 @@ export function useLeadFullTimeline({
               .order('created_at', { ascending: false })
               .limit(50),
 
-        // 4. Transactions by email
+        // 4. Transactions by email — fonte única: RPC get_compras_do_cliente
         contactEmail
-          ? supabase
-              .from('hubla_transactions')
-              .select('id, product_name, product_price, net_value, sale_date, sale_status, source, installment_number, total_installments')
-              .eq('customer_email', contactEmail)
-              .order('sale_date', { ascending: false })
-              .limit(50)
+          ? supabase.rpc('get_compras_do_cliente' as any, { p_email: contactEmail.trim().toLowerCase() })
           : Promise.resolve({ data: [], error: null }),
 
         // 5. Attendee notes - ALL deals
@@ -437,28 +432,27 @@ export function useLeadFullTimeline({
         }
       }
 
-      // Process transactions
+      // Process transactions — já em REAIS, sem dividir por 100
       if (transactionsRes.data) {
-        for (const tx of transactionsRes.data) {
-          const price = tx.product_price ? `R$ ${(tx.product_price / 100).toFixed(2)}` : '';
-          const parcela = tx.installment_number && tx.total_installments
-            ? ` (${tx.installment_number}/${tx.total_installments})`
-            : '';
+        for (const c of transactionsRes.data as any[]) {
+          const parcela = c.parcela && c.total_parcelas ? ` (${c.parcela}/${c.total_parcelas})` : '';
           events.push({
-            id: tx.id,
+            id: c.id,
             type: 'purchase',
-            title: `Compra: ${tx.product_name || 'Produto'}${parcela}`,
-            description: `${price} via ${tx.source || 'desconhecido'} - ${tx.sale_status || ''}`,
-            date: tx.sale_date || '',
+            title: `Compra: ${c.produto || 'Produto'}${parcela}`,
+            description: null,
+            date: c.sale_date || '',
             author: null,
             metadata: {
-              product_name: tx.product_name,
-              product_price: tx.product_price,
-              net_value: tx.net_value,
-              sale_status: tx.sale_status,
-              source: tx.source,
-              installment_number: tx.installment_number,
-              total_installments: tx.total_installments,
+              produto: c.produto,
+              bu: c.bu,
+              gateway: c.gateway,
+              bruto: Number(c.bruto) || 0,
+              liquido: Number(c.liquido) || 0,
+              status: c.status,
+              reembolsado: !!c.reembolsado,
+              parcela: c.parcela,
+              total_parcelas: c.total_parcelas,
             },
           });
         }

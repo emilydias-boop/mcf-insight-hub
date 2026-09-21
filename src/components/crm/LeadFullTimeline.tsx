@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatCurrency } from '@/lib/formatters';
 import {
   ArrowRightLeft,
   Phone,
@@ -177,14 +178,24 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
 
   if (event.type === 'purchase') {
     return (
-      <div className="flex flex-wrap gap-1.5">
-        {meta.sale_status && <Badge variant="outline" className="text-[10px]">{meta.sale_status}</Badge>}
-        {meta.source && <Badge variant="outline" className="text-[10px]">{meta.source}</Badge>}
-        {meta.net_value != null && (
-          <Badge variant="outline" className="text-[10px]">
-            Líq: R$ {(meta.net_value / 100).toFixed(2)}
-          </Badge>
-        )}
+      <div className="space-y-1.5">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-bold text-foreground">{formatCurrency(meta.liquido || 0)}</span>
+          <span className="text-[10px] text-muted-foreground">líquido</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground">
+          bruto {formatCurrency(meta.bruto || 0)}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {meta.status && <Badge variant="outline" className="text-[10px]">{meta.status}</Badge>}
+          {meta.gateway && <Badge variant="outline" className="text-[10px]">{meta.gateway}</Badge>}
+          {meta.bu && <Badge variant="outline" className="text-[10px]">{meta.bu}</Badge>}
+          {meta.reembolsado && (
+            <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-700 dark:text-rose-400">
+              reembolsado
+            </Badge>
+          )}
+        </div>
       </div>
     );
   }

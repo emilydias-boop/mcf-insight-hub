@@ -8,6 +8,7 @@ import { normalizarEmail } from './useTotaisPorCliente';
  * `hubla_transactions` direto e nada é recalculado no front.
  */
 export interface CompraCliente {
+  id: string;
   produto: string;
   bu: string | null;
   gateway: string | null;
@@ -17,6 +18,7 @@ export interface CompraCliente {
   parcela: number | null;
   total_parcelas: number | null;
   reembolsado: boolean;
+  status: string | null;
 }
 
 export function useComprasDoCliente(email?: string | null) {
@@ -33,6 +35,7 @@ export function useComprasDoCliente(email?: string | null) {
       if (error) throw error;
 
       return ((data || []) as any[]).map((row) => ({
+        id: row.id,
         produto: row.produto || 'Produto',
         bu: row.bu ?? null,
         gateway: row.gateway ?? null,
@@ -42,6 +45,7 @@ export function useComprasDoCliente(email?: string | null) {
         parcela: row.parcela ?? null,
         total_parcelas: row.total_parcelas ?? null,
         reembolsado: !!row.reembolsado,
+        status: row.status ?? null,
       }));
     },
   });
