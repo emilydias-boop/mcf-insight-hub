@@ -24,6 +24,16 @@ export interface BreakdownMes {
   credito_inadimplentes: number;
 }
 
+/**
+ * Fonte do numerador:
+ *  - 'mcf': cotas e parcelas do próprio MCF Gestão (padrão da tela). Cancelada =
+ *    cota contratada com status 'cancelado'; inadimplente = cota não cancelada
+ *    com pelo menos uma parcela vencida e não paga. Reserva não efetivada fica
+ *    fora das duas pontas.
+ *  - 'power_bi': lote mais recente importado da planilha. Vira conferência.
+ */
+export type FonteIndice = 'mcf' | 'power_bi';
+
 export interface IndiceClassRow {
   mes_apuracao: string;
   indice: IndiceClass;
@@ -34,7 +44,13 @@ export interface IndiceClassRow {
   numerador: number;
   numerador_canceladas: number;
   numerador_inadimplentes: number;
+  /** Índice principal da fonte escolhida (base consistente). */
   indice_valor: number | null;
+  /** Numerador ÷ produção do próprio sistema. */
+  indice_valor_mcf: number | null;
+  /** Numerador ÷ produção oficial da planilha (conferência). */
+  indice_valor_oficial: number | null;
+  fonte: FonteIndice;
   qtd_cotas: number;
   meta: number;
   falta_para_meta: number;
@@ -50,15 +66,15 @@ export function normalizarGrupoCota(grupo: string, cota: string): string {
   return `${g}-${c}`;
 }
 
-export function useEmbraconIndices(mes: string) {
+export function useEmbraconIndices(mes: string, fonte: FonteIndice = 'mcf') {
   return useQuery({
-    queryKey: ['embracon-indices', mes],
+    queryKey: ['embracon-indices', mes, fonte],
     queryFn: async (): Promise<IndiceClassRow[]> => {
-      const { data, error } = await db.rpc('embracon_indices_class', { p_mes: mes });
+      const { data, error } = await db.rpc('embracon_indices_class', { p_mes: mes, p_fonte: fonte });
       if (error) throw error;
-      // Sem importação a RPC devolve numerador e índice NULL (nunca zero). `indice_valor`
-      // é mantido null para a tela mostrar "Sem importação do Power BI"; os demais campos
-      // são coagidos a 0 só para aritmética segura e nunca são exibidos sem `tem_importacao`.
+      // Na fonte Power BI sem importação a RPC devolve numerador e índice NULL (nunca
+      // zero): `indice_valor` fica null para a tela mostrar "Sem importação do Power BI".
+      // Os demais campos são coagidos a 0 só para aritmética segura.
       return (data || []).map((r: any) => ({
         ...r,
         denominador: Number(r.denominador) || 0,
@@ -67,6 +83,9 @@ export function useEmbraconIndices(mes: string) {
         numerador_canceladas: Number(r.numerador_canceladas) || 0,
         numerador_inadimplentes: Number(r.numerador_inadimplentes) || 0,
         indice_valor: r.indice_valor === null ? null : Number(r.indice_valor),
+        indice_valor_mcf: r.indice_valor_mcf === null ? null : Number(r.indice_valor_mcf),
+        indice_valor_oficial: r.indice_valor_oficial === null ? null : Number(r.indice_valor_oficial),
+        fonte: (r.fonte || fonte) as FonteIndice,
         meta: Number(r.meta) || 0,
         falta_para_meta: Number(r.falta_para_meta) || 0,
         breakdown: (r.breakdown || []) as BreakdownMes[],
