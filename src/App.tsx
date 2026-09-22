@@ -308,7 +308,8 @@ const App = () => (
               <Route path="bu-incorporador/transacoes" element={<ResourceGuard resource="crm"><TransacoesIncorp /></ResourceGuard>} />
               <Route path="clientes" element={<ResourceGuard resource="crm"><Clientes /></ResourceGuard>} />
               <Route path="bu-incorporador/relatorios" element={<ResourceGuard resource="relatorios"><IncorporadorRelatorios /></ResourceGuard>} />
-              <Route path="bu-incorporador/funil-ciclo-vendas" element={<ResourceGuard resource="crm"><IncorporadorFunilCiclo /></ResourceGuard>} />
+              {/* [REMOVIDO 2026-09-22] Tela "Funil e Ciclo de Vendas" desativada — preservado para rollback. */}
+              {/* <Route path="bu-incorporador/funil-ciclo-vendas" element={<ResourceGuard resource="crm"><IncorporadorFunilCiclo /></ResourceGuard>} /> */}
               <Route path="bu-incorporador/bi-comercial" element={<ResourceGuard resource="crm"><BIComercial /></ResourceGuard>} />
               
               <Route path="playbook" element={<MeuPlaybook />} />
