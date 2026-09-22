@@ -163,7 +163,8 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "BI Comercial", url: "/bu-incorporador/bi-comercial" },
       { title: "Painel Comercial", url: "/crm/reunioes-equipe" },
-      { title: "Movimentações por Estágio", url: "/crm/movimentacoes" },
+      // [REMOVIDO 2026-09-22] Tela "Movimentações por Estágio" desativada — preservado para rollback.
+      // { title: "Movimentações por Estágio", url: "/crm/movimentacoes" },
       { title: "Fechamento Equipe", url: "/fechamento-sdr?bu=incorporador" },
        { title: "Vendas", url: "/bu-incorporador/transacoes" },
        { title: "CRM", url: "/crm" },

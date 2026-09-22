@@ -111,7 +111,8 @@ const ReunioesEquipe = lazy(() => import("./pages/crm/ReunioesEquipe"));
 const SdrMeetingsDetailPage = lazy(() => import("./pages/crm/SdrMeetingsDetailPage"));
 const CloserMeetingsDetailPage = lazy(() => import("./pages/crm/CloserMeetingsDetailPage"));
 const MeuPainelComercialRedirect = lazy(() => import("./pages/crm/MeuPainelComercialRedirect"));
-const MovimentacoesEstagio = lazy(() => import("./pages/crm/MovimentacoesEstagio"));
+// [REMOVIDO 2026-09-22] Tela "Movimentações por Estágio" desativada — preservado para rollback.
+// const MovimentacoesEstagio = lazy(() => import("./pages/crm/MovimentacoesEstagio"));
 const Webhooks = lazy(() => import("./pages/crm/Webhooks"));
 const WebhookAnalytics = lazy(() => import("./pages/crm/WebhookAnalytics"));
 const KiwifyReconcile = lazy(() => import("./pages/crm/KiwifyReconcile"));
@@ -333,7 +334,8 @@ const App = () => (
               <Route path="crm/meu-painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuPainelComercialRedirect /></RoleGuard>} />
               <Route path="crm/reunioes-equipe/:sdrEmail" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer_sombra']}><SdrMeetingsDetailPage /></RoleGuard>} />
               <Route path="crm/reunioes-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'closer']}><CloserMeetingsDetailPage /></RoleGuard>} />
-              <Route path="crm/movimentacoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><MovimentacoesEstagio /></RoleGuard>} />
+              {/* [REMOVIDO 2026-09-22] Tela "Movimentações por Estágio" desativada — preservado para rollback. */}
+              {/* <Route path="crm/movimentacoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><MovimentacoesEstagio /></RoleGuard>} /> */}
               <Route path="crm/configurar-closers" element={<ResourceGuard resource="configuracoes"><ConfigurarClosers /></ResourceGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
