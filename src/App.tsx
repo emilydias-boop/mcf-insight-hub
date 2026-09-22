@@ -94,7 +94,8 @@ const MeuPlaybook = lazy(() => import("./pages/playbook/MeuPlaybook"));
 const TransacoesIncorp = lazy(() => import("./pages/bu-incorporador/TransacoesIncorp"));
 const Clientes = lazy(() => import("./pages/Clientes"));
 const IncorporadorRelatorios = lazy(() => import("./pages/bu-incorporador/Relatorios"));
-const IncorporadorFunilCiclo = lazy(() => import("./pages/bu-incorporador/FunilCicloVendas"));
+// [REMOVIDO 2026-09-22] Tela "Funil e Ciclo de Vendas" desativada — preservado para rollback.
+// const IncorporadorFunilCiclo = lazy(() => import("./pages/bu-incorporador/FunilCicloVendas"));
 const RHColaboradores = lazy(() => import("./pages/rh/Colaboradores"));
 const ColaboradorProfile = lazy(() => import("./pages/rh/ColaboradorProfile"));
 const ConfiguracoesRH = lazy(() => import("./pages/rh/Configuracoes"));
