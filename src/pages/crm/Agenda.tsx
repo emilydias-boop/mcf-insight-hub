@@ -146,12 +146,13 @@ export default function Agenda() {
   // Extrair IDs dos closers da BU para filtrar reuniões
   const closerIds = useMemo(() => closers.map(c => c.id), [closers]);
   
-  // Passar closerIds para filtrar apenas reuniões dos closers desta BU
+  // Fail-closed por BU: se a BU ativa não tem closer cadastrado, não busca reunião nenhuma
+  // (antes caía em `undefined` = sem filtro = reuniões de todas as BUs). Sentinela = uuid nulo.
   const { data: meetings = [], isLoading: meetingsLoading, refetch } = useAgendaMeetings(
     rangeStart, 
     rangeEnd, 
     'r1',
-    closerIds.length > 0 ? closerIds : undefined
+    closerIds.length > 0 ? closerIds : ['00000000-0000-0000-0000-000000000000']
   );
 
   // Fail-closed: se é closer mas não tem vínculo, não mostra nada
