@@ -121,13 +121,28 @@ export function useUnassignedContracts(
       });
 
       // Transações A000/Contrato pagas no período sem attendee pago correspondente.
+      //
+      // Régua: o MCF Pay grava a transação SEM linked_deal_id/linked_attendee_id
+      // (o cron link-mcfpay-contracts só preenche a cada 6h), então casar só por
+      // esses vínculos contava a mesma venda duas vezes — uma na caução e outra
+      // como "órfã". O casamento por e-mail/telefone aqui espelha a RPC
+      // caucoes_efetivas; parcelas recorrentes são excluídas via
+      // get_first_transaction_ids (mesma RPC usada em useR1CloserMetrics).
       if (bu === 'incorporador') {
         const { data: txs } = await supabase
           .from('hubla_transactions')
-          .select('id, customer_name, product_name, product_code, sale_status, sale_date, net_value, product_price, linked_deal_id, linked_attendee_id')
+          .select('id, customer_name, customer_email, customer_phone, product_name, product_code, sale_status, sale_date, net_value, product_price, source, event_type, linked_deal_id, linked_attendee_id')
           .gte('sale_date', start)
           .lte('sale_date', end)
-          .in('sale_status', ['pago', 'paid', 'approved', 'completed']);
+          .in('sale_status', ['pago', 'paid', 'approved', 'completed'])
+          .gt('net_value', 0);
+
+        // Só a primeira transação de cada cliente (exclui parcelas recorrentes
+        // mensais, ex.: Hubla R$ 38,13 todo dia 23 de contratos de fev/mar).
+        const { data: firstIdsRows } = await supabase.rpc('get_first_transaction_ids' as any);
+        const firstTransactionIds = new Set<string>(
+          (firstIdsRows as any[] | null || []).map((r: any) => r.id as string),
+        );
 
         const paidAttendeeIds = new Set(rows.map((r: any) => r.attendee_id));
         const isContrato = (t: any) => {
@@ -136,11 +151,62 @@ export function useUnassignedContracts(
           return code.startsWith('A000') || name.includes('A000') || name.includes('CONTRATO');
         };
 
+        // Sets de e-mail/telefone das cauções do período (mesmos campos que a
+        // RPC usa no casamento) para descontar transações já contadas como caução.
+        const caucaoDealIds = Array.from(
+          new Set(rows.map((r: any) => r.deal_id).filter(Boolean) as string[]),
+        );
+        const caucaoEmails = new Set<string>();
+        const caucaoPhones = new Set<string>();
+        if (caucaoDealIds.length > 0) {
+          const { data: caucaoDeals } = await supabase
+            .from('crm_deals')
+            .select('id, contact_id, custom_fields')
+            .in('id', caucaoDealIds);
+          const contactIds = Array.from(
+            new Set((caucaoDeals || []).map((d: any) => d.contact_id).filter(Boolean) as string[]),
+          );
+          const contactsById = new Map<string, { email: string | null; phone: string | null }>();
+          if (contactIds.length > 0) {
+            const { data: caucaoContacts } = await supabase
+              .from('crm_contacts')
+              .select('id, email, phone')
+              .in('id', contactIds);
+            (caucaoContacts || []).forEach((c: any) => {
+              contactsById.set(c.id, { email: c.email, phone: c.phone });
+            });
+          }
+          (caucaoDeals || []).forEach((d: any) => {
+            const contact = d.contact_id ? contactsById.get(d.contact_id) : null;
+            const email = (contact?.email || (d.custom_fields as any)?.email || '')
+              .trim()
+              .toLowerCase();
+            if (email) caucaoEmails.add(email);
+            const phoneRaw = contact?.phone || (d.custom_fields as any)?.telefone || '';
+            const phone9 = phoneRaw.replace(/\D/g, '').slice(-9);
+            if (phone9) caucaoPhones.add(phone9);
+          });
+        }
+
         const orphanDealIds: string[] = [];
         const orphanTxs = (txs || []).filter((t: any) => {
           if (!isContrato(t)) return false;
+          // Filtros espelhando caucoes_efetivas (COALESCE → null vira '').
+          const evt = (t.event_type || '').toLowerCase();
+          if (evt.includes('refund')) return false;
+          if (evt.includes('payment_received') || evt.includes('payment.received')) return false;
+          const src = (t.source || '').toLowerCase();
+          if (src.includes('asaas')) return false;
+          // Exclui parcelas recorrentes: só a primeira transação do cliente.
+          if (!firstTransactionIds.has(t.id)) return false;
+          // Vínculos diretos já cobertos por caução.
           if (t.linked_attendee_id && paidAttendeeIds.has(t.linked_attendee_id)) return false;
           if (t.linked_deal_id && attributedDeals.has(t.linked_deal_id)) return false;
+          // Casamento por e-mail/telefone — mesma venda já entrou como caução.
+          const email = (t.customer_email || '').trim().toLowerCase();
+          if (email && caucaoEmails.has(email)) return false;
+          const phone9 = (t.customer_phone || '').replace(/\D/g, '').slice(-9);
+          if (phone9 && caucaoPhones.has(phone9)) return false;
           if (t.linked_deal_id) orphanDealIds.push(t.linked_deal_id);
           return true;
         });
@@ -172,12 +238,21 @@ export function useUnassignedContracts(
           });
         }
 
+        // Dedupe final: por deal (com vínculo) e por e-mail normalizado (sem
+        // vínculo — mesmo cliente com duas transações no período conta uma vez).
         const seenDeal = new Set<string>();
+        const seenEmail = new Set<string>();
         orphanTxs.forEach((t: any) => {
           if (t.linked_deal_id) {
             if (coveredDeals.has(t.linked_deal_id)) return;
             if (seenDeal.has(t.linked_deal_id)) return;
             seenDeal.add(t.linked_deal_id);
+          } else {
+            const email = (t.customer_email || '').trim().toLowerCase();
+            if (email) {
+              if (seenEmail.has(email)) return;
+              seenEmail.add(email);
+            }
           }
           const item: UnassignedContractItem = {
             deal_id: t.linked_deal_id ?? null,
