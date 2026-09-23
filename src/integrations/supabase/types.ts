@@ -17282,10 +17282,47 @@ export type Database = {
     }
     Functions: {
       _actor_name: { Args: { _uid: string }; Returns: string }
+      _assert_stage_admin: { Args: never; Returns: undefined }
       _card_id_for_subscription: { Args: { _sub: string }; Returns: string }
       _percentual_comissao: {
         Args: { numero_parcela: number; tipo_produto: string }
         Returns: number
+      }
+      admin_deactivate_crm_stage: {
+        Args: {
+          p_motivo?: string
+          p_move_to_stage_id?: string
+          p_stage_id: string
+        }
+        Returns: Json
+      }
+      admin_delete_crm_stage: { Args: { p_stage_id: string }; Returns: Json }
+      admin_reactivate_crm_stage: {
+        Args: { p_stage_id: string }
+        Returns: Json
+      }
+      admin_reorder_crm_stages: {
+        Args: { p_origin_id: string; p_stage_ids: string[] }
+        Returns: Json
+      }
+      admin_stage_overview: {
+        Args: { p_origin_id: string }
+        Returns: {
+          automacoes: number
+          color: string
+          deals_arquivados: number
+          deals_ativos: number
+          id: string
+          is_active: boolean
+          is_won_stage: boolean
+          pode_excluir: boolean
+          regras_replicacao: number
+          stage_name: string
+          stage_order: number
+          tem_espelho_local: boolean
+          ultimo_movimento: string
+          webhooks: number
+        }[]
       }
       agendador_ajuste_info: { Args: { p_attendee_id: string }; Returns: Json }
       apply_no_show_approval_effects: {
