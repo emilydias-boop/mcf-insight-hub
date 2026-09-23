@@ -54,7 +54,14 @@ import {
   EyeOff,
   RotateCcw,
 } from 'lucide-react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+  DraggableProvidedDraggableProps,
+  DraggableProvidedDragHandleProps,
+} from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import { useStageAdmin, StageOverviewRow } from '@/hooks/useStageAdmin';
 
@@ -219,8 +226,8 @@ const OriginStagesEditor = ({ originId }: { originId: string }) => {
 
   const renderRow = (stage: StageOverviewRow, index: number, dragProps?: {
     innerRef: (el: HTMLElement | null) => void;
-    draggableProps: Record<string, unknown>;
-    dragHandleProps: Record<string, unknown> | null;
+    draggableProps: DraggableProvidedDraggableProps;
+    dragHandleProps: DraggableProvidedDragHandleProps | null;
     isDragging: boolean;
   }) => (
     <div
