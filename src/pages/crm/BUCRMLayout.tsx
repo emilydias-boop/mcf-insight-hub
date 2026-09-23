@@ -37,7 +37,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
   ],
   credito: [
     'visao-geral', 'contatos', 'negocios',
-    'agenda', 'meu-historico', 'meus-no-shows', 'configuracoes'
+    'agenda', 'discador', 'meu-historico', 'meus-no-shows', 'configuracoes'
   ],
   projetos: [
     'visao-geral', 'contatos', 'negocios',

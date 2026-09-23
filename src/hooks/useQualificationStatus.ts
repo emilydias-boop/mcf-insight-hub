@@ -12,7 +12,7 @@ import {
  * questionário via WhatsApp/ligação externa). Demais BUs listadas aqui
  * podem agendar R1 sem qualificação prévia.
  */
-export const BU_SEM_QUALIFICACAO_OBRIGATORIA = ['consorcio', 'solar'] as const;
+export const BU_SEM_QUALIFICACAO_OBRIGATORIA = ['consorcio', 'solar', 'credito'] as const;
 
 export type QualificationSource = 'ai_call_summary' | 'whatsapp' | 'call' | null;
 
