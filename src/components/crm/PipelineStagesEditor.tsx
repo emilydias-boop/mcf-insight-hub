@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -12,10 +13,57 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Plus, GripVertical, Trash2, Pencil, Check, X, Download, Cloud } from 'lucide-react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import {
+  Plus,
+  GripVertical,
+  Trash2,
+  Pencil,
+  Check,
+  X,
+  MoreHorizontal,
+  ChevronDown,
+  Zap,
+  Copy,
+  EyeOff,
+  RotateCcw,
+} from 'lucide-react';
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+  DraggableProvidedDraggableProps,
+  DraggableProvidedDragHandleProps,
+} from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
+import { useStageAdmin, StageOverviewRow } from '@/hooks/useStageAdmin';
 
 interface PipelineStagesEditorProps {
   targetType: 'origin' | 'group';
@@ -43,91 +91,552 @@ const stageColors = [
   { value: '#14b8a6', label: 'Teal' },
 ];
 
-export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEditorProps) => {
+const ColorSelect = ({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) => (
+  <Select value={value} onValueChange={onChange}>
+    <SelectTrigger className={className}>
+      <div className="w-4 h-4 rounded" style={{ backgroundColor: value }} />
+    </SelectTrigger>
+    <SelectContent>
+      {stageColors.map((color) => (
+        <SelectItem key={color.value} value={color.value}>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: color.value }} />
+            {color.label}
+          </div>
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+);
+
+// ---------------------------------------------------------------------------
+// Etapas de origem (pipeline) — fonte única: crm_stages
+// ---------------------------------------------------------------------------
+
+const motivoBloqueioExclusao = (stage: StageOverviewRow): string => {
+  const motivos: string[] = [];
+  const total = stage.deals_ativos + stage.deals_arquivados;
+  if (total > 0) motivos.push(`tem ${total} negócios`);
+  if (stage.automacoes > 0) motivos.push(`${stage.automacoes} automações`);
+  if (stage.regras_replicacao > 0) motivos.push(`${stage.regras_replicacao} regras de replicação`);
+  if (stage.webhooks > 0) motivos.push(`${stage.webhooks} webhooks`);
+  if (stage.is_won_stage) motivos.push('é etapa de ganho');
+  return motivos.length > 0
+    ? `Não pode ser excluída: ${motivos.join(' / ')}. Use Desativar.`
+    : 'Exclusão bloqueada pelo sistema. Use Desativar.';
+};
+
+const OriginStagesEditor = ({ originId }: { originId: string }) => {
+  const {
+    overview,
+    podeAdministrar,
+    createStage,
+    updateStage,
+    deactivateStage,
+    reactivateStage,
+    deleteStage,
+    reorderStages,
+  } = useStageAdmin(originId);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', color: '#6b7280' });
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newStage, setNewStage] = useState({ name: '', color: '#6b7280' });
+  const [deactivating, setDeactivating] = useState<StageOverviewRow | null>(null);
+  const [moveToStageId, setMoveToStageId] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [deleting, setDeleting] = useState<StageOverviewRow | null>(null);
+  const [showInativas, setShowInativas] = useState(false);
+
+  const rows = overview.data || [];
+  const ativas = useMemo(
+    () => rows.filter((s) => s.is_active).sort((a, b) => a.stage_order - b.stage_order),
+    [rows]
+  );
+  const inativas = useMemo(
+    () => rows.filter((s) => !s.is_active).sort((a, b) => a.stage_order - b.stage_order),
+    [rows]
+  );
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination || !podeAdministrar) return;
+    const items = Array.from(ativas);
+    const [moved] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, moved);
+    reorderStages.mutate(items.map((s) => s.id));
+  };
+
+  const saveEdit = (stage: StageOverviewRow) => {
+    if (!editForm.name.trim()) {
+      toast.error('Nome da etapa é obrigatório');
+      return;
+    }
+    updateStage.mutate(
+      {
+        id: stage.id,
+        stage_name: editForm.name.trim(),
+        color: editForm.color,
+        temEspelhoLocal: stage.tem_espelho_local,
+      },
+      { onSuccess: () => setEditingId(null) }
+    );
+  };
+
+  const confirmarDesativacao = () => {
+    if (!deactivating) return;
+    if (deactivating.deals_ativos > 0 && !moveToStageId) {
+      toast.error('Escolha a etapa de destino dos negócios');
+      return;
+    }
+    deactivateStage.mutate(
+      {
+        stageId: deactivating.id,
+        moveToStageId: deactivating.deals_ativos > 0 ? moveToStageId : undefined,
+        motivo: motivo.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setDeactivating(null);
+          setMoveToStageId('');
+          setMotivo('');
+        },
+      }
+    );
+  };
+
+  if (overview.isLoading) {
+    return <p className="text-sm text-muted-foreground">Carregando etapas...</p>;
+  }
+
+  if (overview.isError) {
+    return (
+      <p className="text-sm text-destructive">
+        Não foi possível carregar as etapas desta pipeline.
+      </p>
+    );
+  }
+
+  const renderRow = (stage: StageOverviewRow, index: number, dragProps?: {
+    innerRef: (el: HTMLElement | null) => void;
+    draggableProps: DraggableProvidedDraggableProps;
+    dragHandleProps: DraggableProvidedDragHandleProps | null;
+    isDragging: boolean;
+  }) => (
+    <div
+      ref={dragProps?.innerRef}
+      {...(dragProps?.draggableProps || {})}
+      className={cn(
+        'flex items-center gap-3 p-3 border rounded-lg bg-background',
+        dragProps?.isDragging && 'shadow-lg',
+        !stage.is_active && 'opacity-60'
+      )}
+    >
+      {dragProps ? (
+        <div {...(dragProps.dragHandleProps || {})} className="cursor-grab">
+          <GripVertical className="h-5 w-5 text-muted-foreground" />
+        </div>
+      ) : (
+        <span className="text-xs text-muted-foreground w-5 text-center">{index + 1}</span>
+      )}
+
+      <div
+        className="w-4 h-4 rounded flex-shrink-0"
+        style={{ backgroundColor: stage.color || '#6b7280' }}
+      />
+
+      {editingId === stage.id ? (
+        <>
+          <Input
+            value={editForm.name}
+            onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+            className="flex-1 h-8"
+          />
+          <ColorSelect
+            value={editForm.color}
+            onChange={(v) => setEditForm((p) => ({ ...p, color: v }))}
+            className="w-24 h-8"
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={() => saveEdit(stage)}
+            disabled={updateStage.isPending}
+          >
+            <Check className="h-4 w-4 text-green-600" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingId(null)}>
+            <X className="h-4 w-4 text-destructive" />
+          </Button>
+        </>
+      ) : (
+        <>
+          <span className="flex-1 font-medium">{stage.stage_name}</span>
+
+          <Badge variant="secondary" className="text-xs">
+            {stage.deals_ativos} cards
+          </Badge>
+          {stage.is_won_stage && <Badge className="bg-green-600 text-xs">Ganho</Badge>}
+          {stage.automacoes > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Zap className="h-3.5 w-3.5 text-amber-500" />
+              </TooltipTrigger>
+              <TooltipContent>{stage.automacoes} automações</TooltipContent>
+            </Tooltip>
+          )}
+          {stage.regras_replicacao > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Copy className="h-3.5 w-3.5 text-blue-500" />
+              </TooltipTrigger>
+              <TooltipContent>{stage.regras_replicacao} regras de replicação</TooltipContent>
+            </Tooltip>
+          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-8 w-8" disabled={!podeAdministrar}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditingId(stage.id);
+                  setEditForm({ name: stage.stage_name, color: stage.color || '#6b7280' });
+                }}
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar nome/cor
+              </DropdownMenuItem>
+
+              {stage.is_active ? (
+                stage.is_won_stage ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <DropdownMenuItem disabled>
+                          <EyeOff className="h-4 w-4 mr-2" />
+                          Desativar
+                        </DropdownMenuItem>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Etapa de ganho não pode ser desativada</TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setDeactivating(stage);
+                      setMoveToStageId('');
+                      setMotivo('');
+                    }}
+                  >
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Desativar
+                  </DropdownMenuItem>
+                )
+              ) : (
+                <DropdownMenuItem onClick={() => reactivateStage.mutate(stage.id)}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reativar
+                </DropdownMenuItem>
+              )}
+
+              {stage.pode_excluir ? (
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleting(stage)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir permanentemente
+                </DropdownMenuItem>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <DropdownMenuItem disabled>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir permanentemente
+                      </DropdownMenuItem>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{motivoBloqueioExclusao(stage)}</TooltipContent>
+                </Tooltip>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <TooltipProvider>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium">Etapas do Kanban</h3>
+            <p className="text-sm text-muted-foreground">
+              Arraste para reordenar. As etapas são as mesmas usadas pelo restante do sistema.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setShowNewForm(true)}
+            disabled={showNewForm || !podeAdministrar}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Nova Etapa
+          </Button>
+        </div>
+
+        {showNewForm && (
+          <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Nome</Label>
+                <Input
+                  value={newStage.name}
+                  onChange={(e) => setNewStage((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Nome da etapa"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Cor</Label>
+                <ColorSelect
+                  value={newStage.color}
+                  onChange={(v) => setNewStage((p) => ({ ...p, color: v }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={createStage.isPending}
+                onClick={() => {
+                  if (!newStage.name.trim()) {
+                    toast.error('Nome da etapa é obrigatório');
+                    return;
+                  }
+                  const nextOrder =
+                    rows.length > 0 ? Math.max(...rows.map((s) => s.stage_order ?? 0)) + 1 : 0;
+                  createStage.mutate(
+                    { stage_name: newStage.name.trim(), color: newStage.color, nextOrder },
+                    {
+                      onSuccess: () => {
+                        setShowNewForm(false);
+                        setNewStage({ name: '', color: '#6b7280' });
+                      },
+                    }
+                  );
+                }}
+              >
+                {createStage.isPending ? 'Salvando...' : 'Criar'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setShowNewForm(false);
+                  setNewStage({ name: '', color: '#6b7280' });
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {ativas.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground border rounded-lg">
+            <p>Nenhuma etapa ativa nesta pipeline.</p>
+          </div>
+        ) : (
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="stages">
+              {(provided) => (
+                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                  {ativas.map((stage, index) => (
+                    <Draggable
+                      key={stage.id}
+                      draggableId={stage.id}
+                      index={index}
+                      isDragDisabled={!podeAdministrar || editingId === stage.id}
+                    >
+                      {(dp, snapshot) =>
+                        renderRow(stage, index, {
+                          innerRef: dp.innerRef,
+                          draggableProps: dp.draggableProps,
+                          dragHandleProps: dp.dragHandleProps,
+                          isDragging: snapshot.isDragging,
+                        })
+                      }
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        )}
+
+        {inativas.length > 0 && (
+          <Collapsible open={showInativas} onOpenChange={setShowInativas}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="text-muted-foreground">
+                <ChevronDown
+                  className={cn('h-4 w-4 mr-1 transition-transform', showInativas && 'rotate-180')}
+                />
+                Etapas desativadas ({inativas.length})
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-2 pt-2">
+              {inativas.map((stage, index) => renderRow(stage, index))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Diálogo de desativação */}
+        <Dialog
+          open={!!deactivating}
+          onOpenChange={(open) => {
+            if (!open) setDeactivating(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Desativar etapa</DialogTitle>
+              <DialogDescription>
+                {deactivating?.deals_ativos
+                  ? `A etapa "${deactivating.stage_name}" tem ${deactivating.deals_ativos} negócios ativos. Escolha para onde eles vão.`
+                  : `A etapa "${deactivating?.stage_name}" sai do kanban, mas o histórico é preservado.`}
+              </DialogDescription>
+            </DialogHeader>
+
+            {!!deactivating?.deals_ativos && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Mover os {deactivating.deals_ativos} negócios para…</Label>
+                  <Select value={moveToStageId} onValueChange={setMoveToStageId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Escolha a etapa de destino" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ativas
+                        .filter((s) => s.id !== deactivating.id)
+                        .map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.stage_name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Motivo (opcional)</Label>
+                  <Textarea
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder="Por que esta etapa está sendo desativada?"
+                    rows={2}
+                  />
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeactivating(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={confirmarDesativacao} disabled={deactivateStage.isPending}>
+                {deactivateStage.isPending ? 'Desativando...' : 'Desativar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Confirmação de exclusão permanente */}
+        <AlertDialog
+          open={!!deleting}
+          onOpenChange={(open) => {
+            if (!open) setDeleting(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir "{deleting?.stage_name}" permanentemente?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (deleting) {
+                    deleteStage.mutate(deleting.id, { onSuccess: () => setDeleting(null) });
+                  }
+                }}
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </TooltipProvider>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Grupos: mantém a listagem local existente (grupos não têm origin única)
+// ---------------------------------------------------------------------------
+
+const GroupStagesEditor = ({ targetId }: { targetId: string }) => {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ name: string; color: string; stage_type: StageType }>({ 
-    name: '', 
-    color: '', 
-    stage_type: 'normal' 
+  const [editForm, setEditForm] = useState<{ name: string; color: string; stage_type: StageType }>({
+    name: '',
+    color: '',
+    stage_type: 'normal',
   });
-  const [newStage, setNewStage] = useState<{ name: string; color: string; stage_type: StageType }>({ 
-    name: '', 
-    color: '#6b7280', 
-    stage_type: 'normal' 
+  const [newStage, setNewStage] = useState<{ name: string; color: string; stage_type: StageType }>({
+    name: '',
+    color: '#6b7280',
+    stage_type: 'normal',
   });
   const [showNewForm, setShowNewForm] = useState(false);
 
-  // Fetch local stages
   const { data: stages = [], isLoading } = useQuery({
-    queryKey: ['local-pipeline-stages', targetType, targetId],
+    queryKey: ['local-pipeline-stages', 'group', targetId],
     queryFn: async () => {
-      const column = targetType === 'origin' ? 'origin_id' : 'group_id';
       const { data, error } = await supabase
         .from('local_pipeline_stages')
         .select('*')
-        .eq(column, targetId)
+        .eq('group_id', targetId)
         .order('stage_order');
       if (error) throw error;
       return data as LocalStage[];
     },
   });
 
-  // Fallback: fetch crm_stages when local stages are empty
-  const { data: crmStages = [], isLoading: crmLoading } = useQuery({
-    queryKey: ['crm-stages-fallback', targetType, targetId],
-    queryFn: async () => {
-      if (targetType !== 'origin') return [];
-      const { data, error } = await supabase
-        .from('crm_stages')
-        .select('id, clint_id, stage_name, color, stage_order, is_active')
-        .eq('origin_id', targetId)
-        .eq('is_active', true)
-        .order('stage_order');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !isLoading && stages.length === 0,
-  });
-
-  // Import crm_stages to local_pipeline_stages
-  const importMutation = useMutation({
-    mutationFn: async () => {
-      if (crmStages.length === 0) throw new Error('Nenhuma etapa para importar');
-      const importData = crmStages.map(s => ({
-        id: s.id,
-        name: s.stage_name,
-        color: s.color || '#6b7280',
-        stage_order: s.stage_order ?? 0,
-        origin_id: targetId,
-        stage_type: 'normal' as const,
-      }));
-      const { error } = await supabase
-        .from('local_pipeline_stages')
-        .upsert(importData, { onConflict: 'id' });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success('Etapas importadas para edição local!');
-      queryClient.invalidateQueries({ queryKey: ['local-pipeline-stages'] });
-      queryClient.invalidateQueries({ queryKey: ['crm-stages-fallback'] });
-    },
-    onError: (error) => {
-      toast.error('Erro ao importar: ' + (error as Error).message);
-    },
-  });
-
-  // Create stage mutation
   const createMutation = useMutation({
     mutationFn: async (stage: Omit<LocalStage, 'id' | 'stage_order'>) => {
-      const maxOrder = stages.length > 0 ? Math.max(...stages.map(s => s.stage_order)) : -1;
-      const column = targetType === 'origin' ? 'origin_id' : 'group_id';
-      
-      // 1. Criar em local_pipeline_stages
+      const maxOrder = stages.length > 0 ? Math.max(...stages.map((s) => s.stage_order)) : -1;
       const { data: createdStage, error } = await supabase
         .from('local_pipeline_stages')
         .insert({
-          [column]: targetId,
+          group_id: targetId,
           name: stage.name,
           color: stage.color,
           stage_type: stage.stage_type,
@@ -136,15 +645,12 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
         .select('id')
         .single();
       if (error) throw error;
-      
-      // 2. Espelhar em crm_stages via Edge Function (bypassa RLS)
+
       if (createdStage) {
-        const { data: mirrorResult, error: mirrorError } = await supabase.functions.invoke('ensure-crm-stage-mirror', {
+        const { error: mirrorError } = await supabase.functions.invoke('ensure-crm-stage-mirror', {
           body: { stage_id: createdStage.id },
         });
         if (mirrorError) {
-          // Fatal: deletar o local stage se não conseguiu espelhar
-          console.error('[PipelineStagesEditor] Erro FATAL ao espelhar via edge function:', mirrorError.message);
           await supabase.from('local_pipeline_stages').delete().eq('id', createdStage.id);
           throw new Error(`Erro ao sincronizar etapa: ${mirrorError.message}`);
         }
@@ -157,33 +663,24 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       setShowNewForm(false);
       setNewStage({ name: '', color: '#6b7280', stage_type: 'normal' });
     },
-    onError: (error) => {
-      toast.error('Erro ao criar etapa: ' + (error as Error).message);
-    },
+    onError: (error) => toast.error('Erro ao criar etapa: ' + (error as Error).message),
   });
 
-  // Update stage mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<LocalStage> & { id: string }) => {
-      // 1. Atualizar em local_pipeline_stages
-      const { error } = await supabase
-        .from('local_pipeline_stages')
-        .update(updates)
-        .eq('id', id);
+      const { error } = await supabase.from('local_pipeline_stages').update(updates).eq('id', id);
       if (error) throw error;
 
-      // 2. Espelhar em crm_stages (não-fatal)
-      const crmUpdates: any = {};
+      const crmUpdates: Record<string, unknown> = {};
       if (updates.name) crmUpdates.stage_name = updates.name;
       if (updates.color) crmUpdates.color = updates.color;
-      if (updates.stage_type) crmUpdates.stage_type = updates.stage_type;
       if (Object.keys(crmUpdates).length > 0) {
         const { error: mirrorError } = await supabase
           .from('crm_stages')
           .update(crmUpdates)
           .eq('id', id);
         if (mirrorError) {
-          console.warn('[PipelineStagesEditor] Erro ao espelhar update em crm_stages:', mirrorError.message);
+          console.warn('[PipelineStagesEditor] Falha ao espelhar update:', mirrorError.message);
         }
       }
     },
@@ -193,28 +690,19 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       queryClient.invalidateQueries({ queryKey: ['crm-stages'] });
       setEditingId(null);
     },
-    onError: (error) => {
-      toast.error('Erro ao atualizar: ' + (error as Error).message);
-    },
+    onError: (error) => toast.error('Erro ao atualizar: ' + (error as Error).message),
   });
 
-  // Delete stage mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      // 1. Deletar de local_pipeline_stages
-      const { error } = await supabase
-        .from('local_pipeline_stages')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from('local_pipeline_stages').delete().eq('id', id);
       if (error) throw error;
-
-      // 2. Marcar como is_active = false em crm_stages (não-fatal, preserva FK)
       const { error: mirrorError } = await supabase
         .from('crm_stages')
         .update({ is_active: false })
         .eq('id', id);
       if (mirrorError) {
-        console.warn('[PipelineStagesEditor] Erro ao desativar em crm_stages:', mirrorError.message);
+        console.warn('[PipelineStagesEditor] Falha ao desativar espelho:', mirrorError.message);
       }
     },
     onSuccess: () => {
@@ -222,34 +710,24 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       queryClient.invalidateQueries({ queryKey: ['local-pipeline-stages'] });
       queryClient.invalidateQueries({ queryKey: ['crm-stages'] });
     },
-    onError: (error) => {
-      toast.error('Erro ao remover: ' + (error as Error).message);
-    },
+    onError: (error) => toast.error('Erro ao remover: ' + (error as Error).message),
   });
 
-  // Reorder mutation
   const reorderMutation = useMutation({
     mutationFn: async (orderedIds: string[]) => {
-      const updates = orderedIds.map((id, index) => ({
-        id,
-        stage_order: index,
-      }));
-
-      for (const update of updates) {
-        // 1. Atualizar em local_pipeline_stages
+      for (let index = 0; index < orderedIds.length; index++) {
+        const id = orderedIds[index];
         const { error } = await supabase
           .from('local_pipeline_stages')
-          .update({ stage_order: update.stage_order })
-          .eq('id', update.id);
+          .update({ stage_order: index })
+          .eq('id', id);
         if (error) throw error;
-
-        // 2. Espelhar ordem em crm_stages (não-fatal)
         const { error: mirrorError } = await supabase
           .from('crm_stages')
-          .update({ stage_order: update.stage_order })
-          .eq('id', update.id);
+          .update({ stage_order: index })
+          .eq('id', id);
         if (mirrorError) {
-          console.warn('[PipelineStagesEditor] Erro ao espelhar reorder em crm_stages:', mirrorError.message);
+          console.warn('[PipelineStagesEditor] Falha ao espelhar ordem:', mirrorError.message);
         }
       }
     },
@@ -257,52 +735,24 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       queryClient.invalidateQueries({ queryKey: ['local-pipeline-stages'] });
       queryClient.invalidateQueries({ queryKey: ['crm-stages'] });
     },
-    onError: (error) => {
-      toast.error('Erro ao reordenar: ' + (error as Error).message);
-    },
+    onError: (error) => toast.error('Erro ao reordenar: ' + (error as Error).message),
   });
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-
     const items = Array.from(stages);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    reorderMutation.mutate(items.map(s => s.id));
-  };
-
-  const startEditing = (stage: LocalStage) => {
-    setEditingId(stage.id);
-    setEditForm({ name: stage.name, color: stage.color, stage_type: stage.stage_type });
-  };
-
-  const saveEdit = () => {
-    if (editingId) {
-      updateMutation.mutate({ id: editingId, ...editForm });
-    }
-  };
-
-  const handleCreateStage = () => {
-    if (!newStage.name.trim()) {
-      toast.error('Nome da etapa é obrigatório');
-      return;
-    }
-    createMutation.mutate(newStage);
+    const [moved] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, moved);
+    reorderMutation.mutate(items.map((s) => s.id));
   };
 
   const getStageTypeBadge = (type: string) => {
-    switch (type) {
-      case 'won':
-        return <Badge className="bg-green-600">Ganho</Badge>;
-      case 'lost':
-        return <Badge variant="destructive">Perdido</Badge>;
-      default:
-        return null;
-    }
+    if (type === 'won') return <Badge className="bg-green-600">Ganho</Badge>;
+    if (type === 'lost') return <Badge variant="destructive">Perdido</Badge>;
+    return null;
   };
 
-  if (isLoading || crmLoading) {
+  if (isLoading) {
     return <p className="text-sm text-muted-foreground">Carregando etapas...</p>;
   }
 
@@ -311,21 +761,14 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-medium">Etapas do Kanban</h3>
-          <p className="text-sm text-muted-foreground">
-            Arraste para reordenar. Clique para editar.
-          </p>
+          <p className="text-sm text-muted-foreground">Arraste para reordenar. Clique para editar.</p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setShowNewForm(true)}
-          disabled={showNewForm}
-        >
+        <Button size="sm" onClick={() => setShowNewForm(true)} disabled={showNewForm}>
           <Plus className="h-4 w-4 mr-1" />
           Nova Etapa
         </Button>
       </div>
 
-      {/* New stage form */}
       {showNewForm && (
         <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
           <div className="grid grid-cols-3 gap-3">
@@ -333,39 +776,22 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
               <Label>Nome</Label>
               <Input
                 value={newStage.name}
-                onChange={(e) => setNewStage(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => setNewStage((p) => ({ ...p, name: e.target.value }))}
                 placeholder="Nome da etapa"
               />
             </div>
             <div className="space-y-1">
               <Label>Cor</Label>
-              <Select
+              <ColorSelect
                 value={newStage.color}
-                onValueChange={(v) => setNewStage(prev => ({ ...prev, color: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {stageColors.map(color => (
-                    <SelectItem key={color.value} value={color.value}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-4 h-4 rounded"
-                          style={{ backgroundColor: color.value }}
-                        />
-                        {color.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setNewStage((p) => ({ ...p, color: v }))}
+              />
             </div>
             <div className="space-y-1">
               <Label>Tipo</Label>
               <Select
                 value={newStage.stage_type}
-                onValueChange={(v) => setNewStage(prev => ({ ...prev, stage_type: v as StageType }))}
+                onValueChange={(v) => setNewStage((p) => ({ ...p, stage_type: v as StageType }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -379,7 +805,17 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
             </div>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" onClick={handleCreateStage} disabled={createMutation.isPending}>
+            <Button
+              size="sm"
+              disabled={createMutation.isPending}
+              onClick={() => {
+                if (!newStage.name.trim()) {
+                  toast.error('Nome da etapa é obrigatório');
+                  return;
+                }
+                createMutation.mutate(newStage);
+              }}
+            >
               {createMutation.isPending ? 'Salvando...' : 'Criar'}
             </Button>
             <Button
@@ -396,41 +832,7 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
         </div>
       )}
 
-      {/* Stages list */}
-      {stages.length === 0 && crmStages.length > 0 ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border">
-            <Cloud className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground flex-1">
-              {crmStages.length} etapas sincronizadas do Clint CRM (somente leitura)
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => importMutation.mutate()}
-              disabled={importMutation.isPending}
-            >
-              <Download className="h-4 w-4 mr-1" />
-              {importMutation.isPending ? 'Importando...' : 'Importar para edição'}
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {crmStages.map((stage, index) => (
-              <div
-                key={stage.id}
-                className="flex items-center gap-3 p-3 border rounded-lg bg-background opacity-80"
-              >
-                <span className="text-xs text-muted-foreground w-5 text-center">{index + 1}</span>
-                <div
-                  className="w-4 h-4 rounded flex-shrink-0"
-                  style={{ backgroundColor: stage.color || '#6b7280' }}
-                />
-                <span className="flex-1 font-medium">{stage.stage_name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : stages.length === 0 ? (
+      {stages.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground border rounded-lg">
           <p>Nenhuma etapa local configurada.</p>
           <p className="text-sm">As etapas padrão do sistema serão usadas.</p>
@@ -442,58 +844,39 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
               <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
                 {stages.map((stage, index) => (
                   <Draggable key={stage.id} draggableId={stage.id} index={index}>
-                    {(provided, snapshot) => (
+                    {(dp, snapshot) => (
                       <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
+                        ref={dp.innerRef}
+                        {...dp.draggableProps}
                         className={cn(
                           'flex items-center gap-3 p-3 border rounded-lg bg-background',
                           snapshot.isDragging && 'shadow-lg'
                         )}
                       >
-                        <div {...provided.dragHandleProps} className="cursor-grab">
+                        <div {...dp.dragHandleProps} className="cursor-grab">
                           <GripVertical className="h-5 w-5 text-muted-foreground" />
                         </div>
-
                         <div
                           className="w-4 h-4 rounded flex-shrink-0"
                           style={{ backgroundColor: stage.color }}
                         />
-
                         {editingId === stage.id ? (
                           <>
                             <Input
                               value={editForm.name}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                              onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
                               className="flex-1 h-8"
                             />
-                            <Select
+                            <ColorSelect
                               value={editForm.color}
-                              onValueChange={(v) => setEditForm(prev => ({ ...prev, color: v }))}
-                            >
-                              <SelectTrigger className="w-24 h-8">
-                                <div
-                                  className="w-4 h-4 rounded"
-                                  style={{ backgroundColor: editForm.color }}
-                                />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {stageColors.map(color => (
-                                  <SelectItem key={color.value} value={color.value}>
-                                    <div className="flex items-center gap-2">
-                                      <div
-                                        className="w-4 h-4 rounded"
-                                        style={{ backgroundColor: color.value }}
-                                      />
-                                      {color.label}
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              onChange={(v) => setEditForm((p) => ({ ...p, color: v }))}
+                              className="w-24 h-8"
+                            />
                             <Select
                               value={editForm.stage_type}
-                              onValueChange={(v) => setEditForm(prev => ({ ...prev, stage_type: v as StageType }))}
+                              onValueChange={(v) =>
+                                setEditForm((p) => ({ ...p, stage_type: v as StageType }))
+                              }
                             >
                               <SelectTrigger className="w-24 h-8">
                                 <SelectValue />
@@ -504,10 +887,22 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
                                 <SelectItem value="lost">Perdido</SelectItem>
                               </SelectContent>
                             </Select>
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={saveEdit}>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() =>
+                                editingId && updateMutation.mutate({ id: editingId, ...editForm })
+                              }
+                            >
                               <Check className="h-4 w-4 text-green-600" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingId(null)}>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => setEditingId(null)}
+                            >
                               <X className="h-4 w-4 text-destructive" />
                             </Button>
                           </>
@@ -519,7 +914,14 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
                               size="icon"
                               variant="ghost"
                               className="h-8 w-8"
-                              onClick={() => startEditing(stage)}
+                              onClick={() => {
+                                setEditingId(stage.id);
+                                setEditForm({
+                                  name: stage.name,
+                                  color: stage.color,
+                                  stage_type: stage.stage_type,
+                                });
+                              }}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -545,4 +947,11 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
       )}
     </div>
   );
+};
+
+export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEditorProps) => {
+  if (targetType === 'origin') {
+    return <OriginStagesEditor originId={targetId} />;
+  }
+  return <GroupStagesEditor targetId={targetId} />;
 };
