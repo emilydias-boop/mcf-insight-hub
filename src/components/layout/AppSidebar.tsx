@@ -205,6 +205,17 @@ const menuItems: MenuItem[] = [
     ],
   },
 
+  // BU - CRÉDITO IMOBILIÁRIO (criada 2026-09-23)
+  {
+    title: "BU - Crédito Imobiliário",
+    icon: Building2,
+    requiredRoles: ["admin", "manager", "coordenador"],
+    items: [
+      { title: "Painel Comercial", url: "/credito/painel-comercial" },
+      { title: "CRM", url: "/credito/crm" },
+    ],
+  },
+
   // {
   //   title: "BU - Marketing",
   //   icon: Megaphone,
@@ -308,6 +319,16 @@ const menuItems: MenuItem[] = [
     requiredBU: ["incorporador"],
   },
 
+  // Painel Comercial de Crédito (SDRs, Closers e Closer Sombra da BU Crédito)
+  {
+    title: "Painel Comercial",
+    url: "/credito/painel-comercial",
+    icon: BarChart3,
+    resource: "crm",
+    requiredRoles: ["sdr", "closer", "closer_sombra"],
+    requiredBU: ["credito"],
+  },
+
   // ===== CONFIGURAÇÕES =====
 
   {
@@ -364,11 +385,12 @@ const BU_CRM_BASE_PATH: Partial<Record<BusinessUnit, string>> = {
   consorcio: '/consorcio/crm',
   marketing: '/bu-marketing',
   solar: '/solar/crm',
+  credito: '/credito/crm',
 };
 
 // Helper para resolver o base path do CRM baseado nas BUs do usuário
 const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
-  const buPriority: BusinessUnit[] = ['consorcio', 'solar', 'marketing'];
+  const buPriority: BusinessUnit[] = ['consorcio', 'solar', 'credito', 'marketing'];
   
   for (const bu of buPriority) {
     if (userBUs.includes(bu)) {
@@ -411,8 +433,9 @@ export function AppSidebar() {
     incorporador: 'Inside',
     consorcio: 'Consórcio',
     solar: 'Solar',
+    credito: 'Crédito',
   };
-  const crmBUs = (['incorporador', 'consorcio', 'solar'] as BusinessUnit[]).filter(bu => myBUs.includes(bu));
+  const crmBUs = (['incorporador', 'consorcio', 'solar', 'credito'] as BusinessUnit[]).filter(bu => myBUs.includes(bu));
   const isSdrAndCloser = (allRoles as string[]).includes('sdr') && (allRoles as string[]).includes('closer');
   const shouldSplitInsideAndConsorcio = isSdrAndCloser && hasBU(myBUs, 'incorporador') && hasBU(myBUs, 'consorcio');
   
