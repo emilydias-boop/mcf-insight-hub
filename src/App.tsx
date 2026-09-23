@@ -279,6 +279,18 @@ const App = () => (
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
 
+              {/* BU Crédito Imobiliário — criada 2026-09-23. Pipeline resolvida via bu_origin_mapping (bu='credito'). */}
+              <Route path="credito/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="credito" basePath="/credito/crm" /></ResourceGuard>}>
+                <Route index element={<CRMOverview />} />
+                <Route path="contatos" element={<Contatos />} />
+                <Route path="negocios" element={<Negocios />} />
+                <Route path="agenda" element={<Agenda />} />
+                <Route path="discador" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><Discador /></RoleGuard>} />
+                <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
+                <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
+                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
+              </Route>
+
               {/* <Route path="bu-marketing" element={<ResourceGuard resource="dashboard"><MarketingDashboard /></ResourceGuard>} /> */}
               {/* <Route path="bu-marketing/campanhas" element={<ResourceGuard resource="dashboard"><CampanhasDashboard /></ResourceGuard>} /> */}
               {/* <Route path="bu-marketing/aquisicao-a010" element={<ResourceGuard resource="dashboard"><A010AcquisitionDashboard /></ResourceGuard>} /> */}
