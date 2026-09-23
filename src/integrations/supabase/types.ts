@@ -7253,6 +7253,85 @@ export type Database = {
           },
         ]
       }
+      credito_vendas: {
+        Row: {
+          banco: string
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          closer_id: string | null
+          comprovante_path: string | null
+          contact_id: string | null
+          created_at: string
+          data_assinatura: string
+          deal_id: string
+          id: string
+          modalidade: string
+          observacoes: string | null
+          registrado_por: string | null
+          status: string
+          updated_at: string
+          valor_credito: number
+        }
+        Insert: {
+          banco: string
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          closer_id?: string | null
+          comprovante_path?: string | null
+          contact_id?: string | null
+          created_at?: string
+          data_assinatura: string
+          deal_id: string
+          id?: string
+          modalidade: string
+          observacoes?: string | null
+          registrado_por?: string | null
+          status?: string
+          updated_at?: string
+          valor_credito: number
+        }
+        Update: {
+          banco?: string
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          closer_id?: string | null
+          comprovante_path?: string | null
+          contact_id?: string | null
+          created_at?: string
+          data_assinatura?: string
+          deal_id?: string
+          id?: string
+          modalidade?: string
+          observacoes?: string | null
+          registrado_por?: string | null
+          status?: string
+          updated_at?: string
+          valor_credito?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credito_vendas_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credito_vendas_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credito_vendas_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_contacts: {
         Row: {
           clint_id: string
@@ -18563,6 +18642,10 @@ export type Database = {
           source: string
           transaction_id: string
         }[]
+      }
+      painel_comercial_credito: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
       }
       painel_incorporador_totais: {
         Args: { p_fim: string; p_ini: string }
