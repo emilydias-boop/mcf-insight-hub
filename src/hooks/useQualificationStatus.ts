@@ -45,9 +45,10 @@ export function useQualificationStatus(dealId?: string) {
         return { isQualified: false, source: null, reason: 'sem deal' };
       }
 
-      // BUs isentas (ex.: Consórcio, Solar): qualificação obrigatória não se aplica.
-      // Apenas BU - Incorporador MCF exige qualificação (ligação com resumo IA
-      // ou questionário via WhatsApp/ligação externa) antes de agendar a R1.
+      // BUs isentas (Consórcio, Solar): qualificação obrigatória não se aplica.
+      // Fora dessa lista, BU - Incorporador MCF exige qualificação padrão
+      // (ligação com resumo IA ou questionário via WhatsApp/ligação externa)
+      // antes de agendar a R1, e BU Crédito Imobiliário exige a sua própria.
       if (bypassForBU) {
         return {
           isQualified: true,
