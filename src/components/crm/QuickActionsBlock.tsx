@@ -465,6 +465,18 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <LossReasonDialog
+        open={showLossReasonDialog}
+        onOpenChange={setShowLossReasonDialog}
+        dealCount={1}
+        dealName={deal?.name}
+        onConfirm={async (motivo, justificativa) => {
+          await registrarMotivoSemInteresse([deal.id], motivo, justificativa);
+          setShowLossReasonDialog(false);
+          await executeMoveStage();
+        }}
+      />
     </>
   );
 };
