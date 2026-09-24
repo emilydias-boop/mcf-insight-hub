@@ -216,6 +216,14 @@ const menuItems: MenuItem[] = [
     ],
   },
 
+  // ACADEMIA MCF (criada 2026-09-24) — visível para todos; o conteúdo depende do cadastro na Academia
+  {
+    title: "Academia MCF",
+    url: "/academia",
+    icon: BookOpen,
+  },
+
+
   // {
   //   title: "BU - Marketing",
   //   icon: Megaphone,
