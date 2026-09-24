@@ -98,6 +98,16 @@ export const DealFilters = ({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
   const [isLossReasonPopoverOpen, setIsLossReasonPopoverOpen] = useState(false);
+  const { all: lossReasonOptions } = useLossReasons();
+
+  // Alterna um motivo no filtro de "Sem Interesse" (multi-seleção)
+  const toggleLossReason = (value: string) => {
+    const current = filters.lossReasons ?? [];
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    onChange({ ...filters, lossReasons: next });
+  };
   const [localMinAttempts, setLocalMinAttempts] = useState('');
   const [localMaxAttempts, setLocalMaxAttempts] = useState('');
   
