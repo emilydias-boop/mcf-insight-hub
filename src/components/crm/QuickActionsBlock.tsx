@@ -35,6 +35,8 @@ import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { MoveToPipelineModal } from './MoveToPipelineModal';
 import { RefundModal } from './RefundModal';
 import { useQualificationStatus } from '@/hooks/useQualificationStatus';
+import { LossReasonDialog } from './LossReasonDialog';
+import { isSemInteresseStageName, registrarMotivoSemInteresse } from '@/lib/lossReasons';
 import {
   Tooltip,
   TooltipContent,
@@ -68,6 +70,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showLossReasonDialog, setShowLossReasonDialog] = useState(false);
 
   const { data: qualStatus } = useQualificationStatus(deal?.id);
   const isQualified = qualStatus?.isQualified ?? false;
@@ -199,12 +202,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
     }
   };
   
-  const handleMoveStage = async () => {
-    if (!selectedStageId) {
-      toast.error('Selecione um estágio');
-      return;
-    }
-    
+  const executeMoveStage = async () => {
     try {
       await updateDeal.mutateAsync({
         id: deal.id,
@@ -217,6 +215,22 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
     } catch (error) {
       // Error handled by hook
     }
+  };
+
+  const handleMoveStage = async () => {
+    if (!selectedStageId) {
+      toast.error('Selecione um estágio');
+      return;
+    }
+
+    const targetStage = stages?.find((s: any) => s.id === selectedStageId);
+    const currentStage = stages?.find((s: any) => s.id === deal?.stage_id);
+    if (isSemInteresseStageName(targetStage?.stage_name) && !isSemInteresseStageName(currentStage?.stage_name)) {
+      setShowLossReasonDialog(true);
+      return;
+    }
+
+    await executeMoveStage();
   };
   
   const handleDelete = async () => {
