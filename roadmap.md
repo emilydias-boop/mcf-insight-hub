@@ -1,14 +1,7 @@
 # Roadmap
 
-- [x] Auditoria somente-leitura: ponte 69 x 44 do card "R1 Realizada" (BU Incorporador, set/2026) — diagnóstico registrado em `.lovable/plan.md`.
-- [x] Criar edge function `webhook-quiz-mapa` (recebe leads de consultoriamcf.com/quiz-mapa e grava `qualification_answers` no caminho do gatilho de segmento).
-- [x] Remover renderização do card "Metas da Equipe" do Painel Comercial do Incorporador (`src/pages/crm/ReunioesEquipe.tsx`), preservando componente, hook e tabelas de metas.
-- [x] Ajustar `public.relatorio_diario_bu(date)`: remover linhas `bu='solar'` (15 linhas), ticket consórcio = efetivado/clientes, e nova coluna `agregacao` ('aditivo' | 'nao_somavel').
-- [ ] Painel Comercial (/crm/reunioes-equipe): cards mostram A·B·C·Sem ICP; Contratos unificado no eixo SDR + Não atribuído; predicado de realizada (`completed`/`contract_paid`/`refunded`) replicado na edge function `ote-consorcio-metrics`. Taxa de conversão (bruta × líquida) segue pendente de decisão do dono.
-- [x] Painel Comercial: acrescentar C e s/ICP na tabela de Closers, preservando A/B/Total e garantindo fechamento por linha e no Total.
-- [x] Painel Comercial: Agenda R1 como verdade contada literalmente (sem cap 2/deal, sem else-if de no-show, pendentes contados direto) em useR1CloserMetrics — vale para cards do topo e aba Closers.
-- [x] Painel Comercial: atribuição manual de contrato órfão no modal "Contratos não atribuídos" — RPC de leitura `sugerir_vinculo_contrato`, coluna Sugestão com força/critério, escolha de candidato em caso ambíguo, coluna Valor corrigida e rastro em `audit_logs` (`contrato_vinculo_atribuido`). Só preenche vínculo nulo, nunca sobrescreve.
-- [x] Agenda/reuniões — Bug 1: troca/gravação de `meeting_slots.closer_id` valida `closers.meeting_type` vs `meeting_slots.meeting_type` (6 pontos + trigger de proteção `trg_validate_slot_closer_meeting_type`); Bug 2 (Opção A): reagendamento mantém registro único com status ativo (`invited`) e `is_reschedule = true`, gatilho de mesmo dia deixa de forçar `rescheduled`.
-- [ ] Aviso de venda de consórcio: fila `consorcio_venda_webhook_queue` + gatilho no aceite da proposta + edge function `consorcio-venda-webhook-dispatcher` (1 mensagem por VENDA, payload com texto pronto + campos, trava anti-backfill por data). Pendente: deploy e agendamento após revisão do diff pelo Grimaldo.
-
-- [x] Closer com can_manage_agenda abre "Configurar Closers" (R1/R2) e edita só o próprio cadastro; RLS por dono + trigger de colunas travadas. Endurecimento de closer_meeting_links e gate das engrenagens onEditHours ficaram para depois (decisão do usuário).
+- [x] Inventário do fluxo de qualificação pré-R1 (entregue no plano)
+- [ ] Criar `src/components/crm/qualification/CreditoQualificationQuestions.ts` (novo, textos exatos)
+- [ ] Criar `src/components/crm/qualification/CreditoQualificationQuestionnaire.tsx` (novo, mesmo visual do QualificationQuestionnaire)
+- [ ] Validar: typecheck + build OK; nenhum arquivo existente alterado
+- [ ] (próxima mensagem) Integração da qualificação de Crédito no fluxo
