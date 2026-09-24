@@ -9,6 +9,8 @@ import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { LossReasonDialog } from './LossReasonDialog';
+import { isSemInteresseStageName, registrarMotivoSemInteresse } from '@/lib/lossReasons';
 
 interface BulkMoveStageDialogProps {
   open: boolean;
@@ -30,9 +32,19 @@ export const BulkMoveStageDialog = ({
   const { data: stages } = useCRMStages(originId);
   const queryClient = useQueryClient();
 
+  const [showLossReason, setShowLossReason] = useState(false);
+
   const handleMove = async () => {
     if (!targetStageId || selectedDealIds.length === 0) return;
+    const targetStage = (stages || []).find((s: any) => s.id === targetStageId);
+    if (isSemInteresseStageName(targetStage?.stage_name)) {
+      setShowLossReason(true);
+      return;
+    }
+    await executeMove();
+  };
 
+  const executeMove = async () => {
     setIsMoving(true);
     try {
       const { error } = await supabase
@@ -57,6 +69,7 @@ export const BulkMoveStageDialog = ({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -104,5 +117,16 @@ export const BulkMoveStageDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <LossReasonDialog
+      open={showLossReason}
+      onOpenChange={setShowLossReason}
+      dealCount={selectedDealIds.length}
+      onConfirm={async (motivo, justificativa) => {
+        await registrarMotivoSemInteresse(selectedDealIds, motivo, justificativa);
+        setShowLossReason(false);
+        await executeMove();
+      }}
+    />
+    </>
   );
 };

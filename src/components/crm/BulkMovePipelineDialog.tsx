@@ -10,6 +10,8 @@ import { useDistributionConfig } from '@/hooks/useLeadDistribution';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { LossReasonDialog } from './LossReasonDialog';
+import { isSemInteresseStageName, registrarMotivoSemInteresse } from '@/lib/lossReasons';
 
 interface BulkMovePipelineDialogProps {
   open: boolean;
@@ -68,7 +70,19 @@ export const BulkMovePipelineDialog = ({
     return [{ id: group.id, name: group.name }];
   }) || [];
 
+  const [showLossReason, setShowLossReason] = useState(false);
+
   const handleMove = async () => {
+    if (!selectedOriginId || !selectedStageId || selectedDealIds.length === 0) return;
+    const targetStage = stages?.find((s: any) => s.id === selectedStageId);
+    if (isSemInteresseStageName(targetStage?.stage_name)) {
+      setShowLossReason(true);
+      return;
+    }
+    await executeMove();
+  };
+
+  const executeMove = async () => {
     if (!selectedOriginId || !selectedStageId || selectedDealIds.length === 0) return;
 
     const INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
@@ -247,6 +261,7 @@ export const BulkMovePipelineDialog = ({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -358,5 +373,16 @@ export const BulkMovePipelineDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <LossReasonDialog
+      open={showLossReason}
+      onOpenChange={setShowLossReason}
+      dealCount={selectedDealIds.length}
+      onConfirm={async (motivo, justificativa) => {
+        await registrarMotivoSemInteresse(selectedDealIds, motivo, justificativa);
+        setShowLossReason(false);
+        await executeMove();
+      }}
+    />
+    </>
   );
 };

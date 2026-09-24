@@ -20,6 +20,8 @@ import { Loader2 } from 'lucide-react';
 import { useCRMOrigins, useCRMStages, useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { toast } from 'sonner';
+import { LossReasonDialog } from './LossReasonDialog';
+import { isSemInteresseStageName, registrarMotivoSemInteresse } from '@/lib/lossReasons';
 
 interface MoveToPipelineModalProps {
   open: boolean;
@@ -72,14 +74,25 @@ export const MoveToPipelineModal = ({
     return [{ id: group.id, name: group.name }];
   })?.filter((o: any) => o.id !== currentOriginId) || [];
 
+  const [showLossReason, setShowLossReason] = useState(false);
+
   const handleConfirm = async () => {
     if (!selectedOriginId || !selectedStageId) {
       toast.error('Selecione a pipeline e o estágio destino');
       return;
     }
+    const stageName = stages?.find((s: any) => s.id === selectedStageId)?.stage_name;
+    if (isSemInteresseStageName(stageName)) {
+      setShowLossReason(true);
+      return;
+    }
+    await executeMove();
+  };
 
+  const executeMove = async () => {
     const targetOriginName = flatOrigins.find((o: any) => o.id === selectedOriginId)?.name || '';
     const targetStageName = stages?.find((s: any) => s.id === selectedStageId)?.stage_name || '';
+
 
     try {
       await updateDeal.mutateAsync({
@@ -107,6 +120,7 @@ export const MoveToPipelineModal = ({
   const isPending = updateDeal.isPending || createActivity.isPending;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -163,5 +177,17 @@ export const MoveToPipelineModal = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <LossReasonDialog
+      open={showLossReason}
+      onOpenChange={setShowLossReason}
+      dealCount={1}
+      dealName={dealName}
+      onConfirm={async (motivo, justificativa) => {
+        await registrarMotivoSemInteresse([dealId], motivo, justificativa);
+        setShowLossReason(false);
+        await executeMove();
+      }}
+    />
+    </>
   );
 };
