@@ -61,6 +61,7 @@ import { BulkSetTemperatureDialog } from '@/components/crm/BulkSetTemperatureDia
 import { BulkBroadcastDialog } from '@/components/crm/BulkBroadcastDialog';
 import { useMcfAtendimentoAccess } from '@/hooks/useMcfAtendimentoAccess';
 import { useBulkDeleteDeals } from '@/hooks/useDeleteDeals';
+import { isSemInteresseStageName, SEM_MOTIVO_FILTER_VALUE } from '@/lib/lossReasons';
 import { Download } from 'lucide-react';
 
 const Negocios = () => {
@@ -95,6 +96,7 @@ const Negocios = () => {
     activityPriority: 'all',
     outsideFilter: 'all',
     temperature: 'all',
+    lossReasons: [],
   });
   
   // Estado para seleção e transferência em massa
@@ -739,6 +741,14 @@ const Negocios = () => {
           return false;
         }
       }
+      // Filtro Motivo (Sem Interesse)
+      const lossSel = filters.lossReasons ?? [];
+      if (lossSel.length > 0) {
+        if (!isSemInteresseStageName((deal as any).crm_stages?.stage_name)) return false;
+        const motivo = String(((deal as any).custom_fields as Record<string, unknown> | null)?.motivo_sem_interesse ?? '').trim();
+        const ok = motivo ? lossSel.includes(motivo) : lossSel.includes(SEM_MOTIVO_FILTER_VALUE);
+        if (!ok) return false;
+      }
       // Filtro Outside
       if (filters.outsideFilter !== 'all') {
         if (!outsideMap) return false;
@@ -808,6 +818,7 @@ const Negocios = () => {
       activityPriority: 'all',
       outsideFilter: 'all',
       temperature: 'all',
+      lossReasons: [],
     });
   };
   
@@ -972,6 +983,17 @@ const Negocios = () => {
       });
     }
     
+    if (filters.lossReasons?.length) {
+      chips.push({
+        key: 'lossReasons',
+        label: 'Motivo',
+        value: filters.lossReasons
+          .map((v) => (v === SEM_MOTIVO_FILTER_VALUE ? 'Sem motivo' : v))
+          .join(', '),
+        onRemove: () => setFilters(f => ({ ...f, lossReasons: [] })),
+      });
+    }
+
     return chips;
   }, [filters, ownerOptions, closerFilterOptions]);
   

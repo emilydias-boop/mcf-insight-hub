@@ -41,6 +41,7 @@ import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelec
 import { AnamneseExternaButton, getAnamneseV2 } from "./AnamneseExternaButton";
 import { LeadTotalCompradoBadge } from "./LeadTotalCompradoBadge";
 import type { TotaisCliente } from "@/hooks/useTotaisPorCliente";
+import { isSemInteresseStageName } from '@/lib/lossReasons';
 
 
 const NEXT_ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -355,6 +356,23 @@ export const DealKanbanCard = ({
               Reembolso
             </Badge>
           )}
+          {/* Badge do Motivo de "Sem Interesse" (Reembolso já tem badge próprio logo acima) */}
+          {(() => {
+            const cf = deal.custom_fields as Record<string, unknown> | null | undefined;
+            const motivo = String(cf?.motivo_sem_interesse ?? '').trim();
+            if (!motivo || !isSemInteresseStageName(deal.crm_stages?.stage_name)) return null;
+            if (motivo.toLowerCase() === 'reembolso') return null;
+            const justificativa = String(cf?.justificativa_perda ?? '').trim();
+            return (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 max-w-[140px] truncate bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700"
+                title={justificativa ? `${motivo} — ${justificativa}` : motivo}
+              >
+                {motivo}
+              </Badge>
+            );
+          })()}
           {/* Anamnese vinda do encaminhamento externo (ENCAMINHADO GR) */}
           {anamneseExterna && (
             <AnamneseExternaButton anamnese={anamneseExterna} clienteNome={deal.name} />

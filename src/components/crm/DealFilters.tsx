@@ -21,7 +21,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle, Ban } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -33,6 +34,8 @@ import { useCloserFilterOptions } from '@/hooks/useCloserFilterOptions';
 import { ProductFilterPopover } from './ProductFilterPopover';
 import type { ProductFilterRule, ProductOperator } from '@/hooks/useProductFilterData';
 import { TEMPERATURE_META, type LeadTemperature } from './LeadTemperatureSelector';
+import { useLossReasons } from '@/hooks/useLossReasons';
+import { SEM_MOTIVO_FILTER_VALUE } from '@/lib/lossReasons';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
@@ -59,6 +62,8 @@ export interface DealFiltersState {
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
   temperature: TemperatureFilter;
+  /** Motivos de "Sem Interesse" selecionados (labels; SEM_MOTIVO_FILTER_VALUE = sem motivo). Opcional para não quebrar quem monta o estado em outros lugares. */
+  lossReasons?: string[];
 }
 
 interface DealFiltersProps {
@@ -92,6 +97,17 @@ export const DealFilters = ({
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
+  const [isLossReasonPopoverOpen, setIsLossReasonPopoverOpen] = useState(false);
+  const { all: lossReasonOptions } = useLossReasons();
+
+  // Alterna um motivo no filtro de "Sem Interesse" (multi-seleção)
+  const toggleLossReason = (value: string) => {
+    const current = filters.lossReasons ?? [];
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    onChange({ ...filters, lossReasons: next });
+  };
   const [localMinAttempts, setLocalMinAttempts] = useState('');
   const [localMaxAttempts, setLocalMaxAttempts] = useState('');
   
@@ -162,6 +178,7 @@ export const DealFilters = ({
     filters.activityPriority !== 'all',
     filters.outsideFilter !== 'all',
     filters.temperature !== 'all',
+    (filters.lossReasons?.length ?? 0) > 0,
   ].filter(Boolean).length;
   
   return (
@@ -581,7 +598,61 @@ export const DealFilters = ({
           </SelectItem>
         </SelectContent>
       </Select>
-      
+
+      {/* Filtro Motivo (Sem Interesse) */}
+      <Popover open={isLossReasonPopoverOpen} onOpenChange={setIsLossReasonPopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant={(filters.lossReasons?.length ?? 0) > 0 ? "default" : "outline"}
+            className="justify-start text-left font-normal"
+          >
+            <Ban className="mr-2 h-4 w-4" />
+            {(filters.lossReasons?.length ?? 0) > 0
+              ? `Motivo (${filters.lossReasons?.length})`
+              : "Motivo"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72" align="start">
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Mostra só negócios na etapa Sem Interesse com o motivo escolhido.
+            </p>
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={(filters.lossReasons ?? []).includes(SEM_MOTIVO_FILTER_VALUE)}
+                  onCheckedChange={() => toggleLossReason(SEM_MOTIVO_FILTER_VALUE)}
+                />
+                <span>Sem motivo registrado</span>
+              </label>
+              {lossReasonOptions.map((reason) => (
+                <label key={reason.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={(filters.lossReasons ?? []).includes(reason.label)}
+                    onCheckedChange={() => toggleLossReason(reason.label)}
+                  />
+                  <span>
+                    {reason.label}
+                    {!reason.is_active && (
+                      <span className="text-muted-foreground"> (antigo)</span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end border-t pt-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onChange({ ...filters, lossReasons: [] })}
+              >
+                Limpar
+              </Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
       {activeFiltersCount > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>
           <X className="h-4 w-4 mr-1" />
