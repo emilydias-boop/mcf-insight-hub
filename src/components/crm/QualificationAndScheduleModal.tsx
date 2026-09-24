@@ -32,11 +32,17 @@ import {
   type QualificationAnswers,
 } from './qualification/QualificationQuestions';
 import { QualificationQuestionnaire } from './qualification/QualificationQuestionnaire';
+import { CreditoQualificationQuestionnaire } from './qualification/CreditoQualificationQuestionnaire';
+import {
+  validateCreditoAnswers,
+  creditoAnswersToSummary,
+} from './qualification/CreditoQualificationQuestions';
 import { WhatsappPrintUploader } from './qualification/WhatsappPrintUploader';
 import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X, Edit2, Phone, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBUContext } from '@/contexts/BUContext';
 
 // Stage "Em contato" no Pipeline Inside Sales
 const EM_CONTATO_STAGE_ID = 'b1c0a7e2-9d4f-4a1c-8e3b-2f5d6a8b9c01';
@@ -48,6 +54,13 @@ const ALLOWED_SOURCE_STAGES_FOR_EM_CONTATO = new Set([
   'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', // Novo Lead
   'a1d19874-4d47-4405-94fd-fb5237da44dd', // Lead Qualificado
   'b06c9413-0312-4f1d-89b4-822d79bc6a90', // Sem Interesse
+]);
+
+// BU Crédito Imobiliário — etapas fixas da PIPELINE CRÉDITO IMOBILIÁRIO
+const CREDITO_EM_CONTATO_STAGE_ID = 'c4ed1701-0000-4000-8000-000000000003';
+const CREDITO_ALLOWED_SOURCE_STAGES = new Set([
+  'c4ed1701-0000-4000-8000-000000000001', // Parceiros 50k
+  'c4ed1701-0000-4000-8000-000000000002', // OS
 ]);
 
 interface QualificationAndScheduleModalProps {
@@ -66,6 +79,8 @@ export function QualificationAndScheduleModal({
   autoFocus = 'qualification',
 }: QualificationAndScheduleModalProps) {
   const { user } = useAuth();
+  const { activeBU } = useBUContext();
+  const isCredito = activeBU === 'credito';
   const { data: deal, refetch: refetchDeal } = useCRMDeal(dealId);
   const saveQualification = useSaveQualificationNote();
   const updateDeal = useUpdateCRMDeal();
@@ -165,12 +180,22 @@ export function QualificationAndScheduleModal({
   const handleSaveQualification = async () => {
     // Validação do novo questionário (obrigatório quando não há resumo IA)
     if (!hasAiSummary) {
-      const { valid, missing } = validateAnswers(answers);
-      if (!valid) {
-        toast.error(
-          `Responda todas as ${QUALIFICATION_QUESTIONS.length} perguntas antes de salvar (faltam ${missing.length}).`
-        );
-        return;
+      if (isCredito) {
+        const { valid, missing } = validateCreditoAnswers(answers);
+        if (!valid) {
+          toast.error(
+            'Responda as perguntas obrigatórias da qualificação de crédito (faltam ' + missing.length + ').'
+          );
+          return;
+        }
+      } else {
+        const { valid, missing } = validateAnswers(answers);
+        if (!valid) {
+          toast.error(
+            `Responda todas as ${QUALIFICATION_QUESTIONS.length} perguntas antes de salvar (faltam ${missing.length}).`
+          );
+          return;
+        }
       }
     }
 
@@ -179,7 +204,9 @@ export function QualificationAndScheduleModal({
       // Resumo agora derivado das respostas do questionário
       const summary =
         Object.keys(answers).length > 0
-          ? answersToSummary(answers, userName, contactChannel)
+          ? isCredito
+            ? creditoAnswersToSummary(answers, userName, contactChannel)
+            : answersToSummary(answers, userName, contactChannel)
           : leadSummary || generateQualificationSummary(qualificationData, userName);
       setLeadSummary(summary);
 
@@ -195,12 +222,15 @@ export function QualificationAndScheduleModal({
 
       // Se SDR confirmou que falou com o lead, mover para "Em contato"
       // (somente se a stage atual permitir — não mexe em R1 Agendada+)
-      if (faleiComLead && deal?.stage_id && ALLOWED_SOURCE_STAGES_FOR_EM_CONTATO.has(deal.stage_id)) {
+      // Etapa destino e origens permitidas variam por BU (Crédito tem pipeline próprio).
+      const targetStageId = isCredito ? CREDITO_EM_CONTATO_STAGE_ID : EM_CONTATO_STAGE_ID;
+      const allowed = isCredito ? CREDITO_ALLOWED_SOURCE_STAGES : ALLOWED_SOURCE_STAGES_FOR_EM_CONTATO;
+      if (faleiComLead && deal?.stage_id && allowed.has(deal.stage_id)) {
         try {
           const previousStageId = deal.stage_id;
           await updateDeal.mutateAsync({
             id: dealId,
-            stage_id: EM_CONTATO_STAGE_ID,
+            stage_id: targetStageId,
           } as any);
           await createActivity.mutateAsync({
             deal_id: dealId,
@@ -210,7 +240,7 @@ export function QualificationAndScheduleModal({
             metadata: {
               via: 'qualificacao_twilio',
               from_stage_id: previousStageId,
-              to_stage_id: EM_CONTATO_STAGE_ID,
+              to_stage_id: targetStageId,
             },
           });
           toast.success('Lead movido para "Em contato" 🎯');
@@ -367,7 +397,11 @@ export function QualificationAndScheduleModal({
                     - Obrigatório quando não há resumo IA (qualifica via ligação externa ou WhatsApp).
                     - Opcional quando já existe resumo IA (apenas complementa).
                   */}
-                  <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
+                  {isCredito ? (
+                    <CreditoQualificationQuestionnaire answers={answers} onChange={setAnswers} />
+                  ) : (
+                    <QualificationQuestionnaire answers={answers} onChange={setAnswers} />
+                  )}
                   {hasAiSummary && (
                     <p className="text-[11px] text-muted-foreground -mt-2">
                       Preenchimento opcional — a IA já qualificou este lead.
