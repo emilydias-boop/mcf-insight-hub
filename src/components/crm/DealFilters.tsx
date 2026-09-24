@@ -62,6 +62,8 @@ export interface DealFiltersState {
   activityPriority: ActivityPriorityFilter;
   outsideFilter: OutsideFilter;
   temperature: TemperatureFilter;
+  /** Motivos de "Sem Interesse" selecionados (labels; SEM_MOTIVO_FILTER_VALUE = sem motivo). Opcional para não quebrar quem monta o estado em outros lugares. */
+  lossReasons?: string[];
 }
 
 interface DealFiltersProps {
@@ -95,6 +97,7 @@ export const DealFilters = ({
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
+  const [isLossReasonPopoverOpen, setIsLossReasonPopoverOpen] = useState(false);
   const [localMinAttempts, setLocalMinAttempts] = useState('');
   const [localMaxAttempts, setLocalMaxAttempts] = useState('');
   
@@ -165,6 +168,7 @@ export const DealFilters = ({
     filters.activityPriority !== 'all',
     filters.outsideFilter !== 'all',
     filters.temperature !== 'all',
+    (filters.lossReasons?.length ?? 0) > 0,
   ].filter(Boolean).length;
   
   return (
