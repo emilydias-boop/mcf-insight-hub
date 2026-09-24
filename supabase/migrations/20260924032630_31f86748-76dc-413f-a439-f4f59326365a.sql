@@ -1,0 +1,1 @@
+CREATE POLICY "academia_notif_admin_criar" ON public.academia_notifications FOR INSERT TO authenticated WITH CHECK (public.academia_is_admin());
