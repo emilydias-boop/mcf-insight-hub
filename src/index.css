@@ -405,3 +405,72 @@ html.font-large {
 .SonaxWidget #minimized-actions img {
   margin-left: 8px;      /* 0.5rem @16px */
 }
+
+/* ===== Academia MCF — tema escopado (só dentro de .academia) ===== */
+.academia {
+  --background: 120 5% 4%;
+  --foreground: 96 20% 95%;
+  --card: 120 6% 7%;
+  --card-foreground: 96 20% 95%;
+  --popover: 105 8% 9%;
+  --popover-foreground: 96 20% 95%;
+  --primary: 76 90% 60%;
+  --primary-foreground: 120 5% 4%;
+  --secondary: 105 8% 9%;
+  --secondary-foreground: 96 20% 95%;
+  --muted: 105 8% 9%;
+  --muted-foreground: 114 5% 62%;
+  --accent: 105 8% 12%;
+  --accent-foreground: 96 20% 95%;
+  --border: 120 5% 16%;
+  --input: 120 5% 16%;
+  --ring: 76 90% 60%;
+  --academia-warn: 36 100% 65%;
+  --academia-surface-2: 105 8% 9%;
+  font-family: 'Manrope', system-ui, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+.academia.academia-light {
+  --background: 90 20% 97%;
+  --foreground: 120 5% 8%;
+  --card: 0 0% 100%;
+  --card-foreground: 120 5% 8%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 120 5% 8%;
+  --primary: 76 75% 42%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 90 15% 92%;
+  --secondary-foreground: 120 5% 8%;
+  --muted: 90 15% 92%;
+  --muted-foreground: 114 5% 40%;
+  --accent: 90 15% 90%;
+  --accent-foreground: 120 5% 8%;
+  --border: 120 5% 85%;
+  --input: 120 5% 85%;
+  --academia-warn: 32 90% 45%;
+  --academia-surface-2: 90 15% 94%;
+}
+.academia h1, .academia h2, .academia h3, .academia .font-display {
+  font-family: 'Manrope', system-ui, sans-serif;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+.academia .ac-card {
+  border-radius: 20px;
+  border: 1px solid hsl(var(--border));
+  background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--academia-surface-2)));
+}
+.academia .ac-eyebrow {
+  color: hsl(var(--primary));
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.academia .ac-warn { color: hsl(var(--academia-warn)); }
+.academia .ac-warn-bg { background: hsl(var(--academia-warn) / 0.12); border-color: hsl(var(--academia-warn) / 0.4); }
+@keyframes ac-conquista { 0% { transform: scale(.6) rotate(-8deg); opacity: 0 } 60% { transform: scale(1.08) rotate(2deg); opacity: 1 } 100% { transform: scale(1) } }
+.academia .ac-conquista { animation: ac-conquista .9s cubic-bezier(.2,.9,.3,1.2) both; }
+@keyframes ac-brilho { 0%,100% { box-shadow: 0 0 0 0 hsl(var(--primary) / .0) } 50% { box-shadow: 0 0 32px 4px hsl(var(--primary) / .35) } }
+.academia .ac-brilho { animation: ac-brilho 3s ease-in-out infinite; }
