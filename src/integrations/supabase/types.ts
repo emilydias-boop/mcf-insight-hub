@@ -95,6 +95,798 @@ export type Database = {
         }
         Relationships: []
       }
+      academia_badge_rules: {
+        Row: {
+          badge_id: string
+          id: string
+          regra: Json
+        }
+        Insert: {
+          badge_id: string
+          id?: string
+          regra: Json
+        }
+        Update: {
+          badge_id?: string
+          id?: string
+          regra?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_badge_rules_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "academia_badges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_badges: {
+        Row: {
+          cor: string | null
+          descricao: string | null
+          icone: string | null
+          id: string
+          nivel: number | null
+          nome: string
+          ordem: number
+          produto_id: string | null
+          slug: string
+          tipo: string
+          xp_bonus: number
+        }
+        Insert: {
+          cor?: string | null
+          descricao?: string | null
+          icone?: string | null
+          id?: string
+          nivel?: number | null
+          nome: string
+          ordem?: number
+          produto_id?: string | null
+          slug: string
+          tipo: string
+          xp_bonus?: number
+        }
+        Update: {
+          cor?: string | null
+          descricao?: string | null
+          icone?: string | null
+          id?: string
+          nivel?: number | null
+          nome?: string
+          ordem?: number
+          produto_id?: string | null
+          slug?: string
+          tipo?: string
+          xp_bonus?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_badges_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "academia_produtos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_frentes: {
+        Row: {
+          ativo: boolean
+          cor: string | null
+          created_at: string
+          id: string
+          nome: string
+          ordem: number
+          slug: string
+        }
+        Insert: {
+          ativo?: boolean
+          cor?: string | null
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number
+          slug: string
+        }
+        Update: {
+          ativo?: boolean
+          cor?: string | null
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          slug?: string
+        }
+        Relationships: []
+      }
+      academia_milestones: {
+        Row: {
+          assinatura_colaborador_em: string | null
+          assinatura_gestor_em: string | null
+          assinatura_padrinho_em: string | null
+          codigo: string
+          created_at: string
+          fechado_em: string | null
+          id: string
+          observacoes: string | null
+          user_id: string
+          user_track_id: string
+        }
+        Insert: {
+          assinatura_colaborador_em?: string | null
+          assinatura_gestor_em?: string | null
+          assinatura_padrinho_em?: string | null
+          codigo: string
+          created_at?: string
+          fechado_em?: string | null
+          id?: string
+          observacoes?: string | null
+          user_id: string
+          user_track_id: string
+        }
+        Update: {
+          assinatura_colaborador_em?: string | null
+          assinatura_gestor_em?: string | null
+          assinatura_padrinho_em?: string | null
+          codigo?: string
+          created_at?: string
+          fechado_em?: string | null
+          id?: string
+          observacoes?: string | null
+          user_id?: string
+          user_track_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_milestones_user_track_id_fkey"
+            columns: ["user_track_id"]
+            isOneToOne: false
+            referencedRelation: "academia_user_tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_modules: {
+        Row: {
+          id: string
+          janela_label: string | null
+          numero_label: string | null
+          objetivo: string | null
+          ordem: number
+          phase_id: string
+          titulo: string
+        }
+        Insert: {
+          id?: string
+          janela_label?: string | null
+          numero_label?: string | null
+          objetivo?: string | null
+          ordem?: number
+          phase_id: string
+          titulo: string
+        }
+        Update: {
+          id?: string
+          janela_label?: string | null
+          numero_label?: string | null
+          objetivo?: string | null
+          ordem?: number
+          phase_id?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_modules_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "academia_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_notifications: {
+        Row: {
+          corpo: string | null
+          criado_em: string
+          id: string
+          lida: boolean
+          link: string | null
+          tipo: string | null
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          corpo?: string | null
+          criado_em?: string
+          id?: string
+          lida?: boolean
+          link?: string | null
+          tipo?: string | null
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          corpo?: string | null
+          criado_em?: string
+          id?: string
+          lida?: boolean
+          link?: string | null
+          tipo?: string | null
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      academia_perfis: {
+        Row: {
+          atuacao_funil: string | null
+          avatar_url: string | null
+          cnpj: string | null
+          created_at: string
+          data_inicio: string
+          email: string | null
+          frente_id: string | null
+          funcao: string | null
+          gestor_id: string | null
+          id: string
+          nivel: string
+          nome: string
+          padrinho_id: string | null
+          produto_principal_id: string | null
+          status: string
+          updated_at: string
+          xp_total: number
+        }
+        Insert: {
+          atuacao_funil?: string | null
+          avatar_url?: string | null
+          cnpj?: string | null
+          created_at?: string
+          data_inicio?: string
+          email?: string | null
+          frente_id?: string | null
+          funcao?: string | null
+          gestor_id?: string | null
+          id: string
+          nivel?: string
+          nome: string
+          padrinho_id?: string | null
+          produto_principal_id?: string | null
+          status?: string
+          updated_at?: string
+          xp_total?: number
+        }
+        Update: {
+          atuacao_funil?: string | null
+          avatar_url?: string | null
+          cnpj?: string | null
+          created_at?: string
+          data_inicio?: string
+          email?: string | null
+          frente_id?: string | null
+          funcao?: string | null
+          gestor_id?: string | null
+          id?: string
+          nivel?: string
+          nome?: string
+          padrinho_id?: string | null
+          produto_principal_id?: string | null
+          status?: string
+          updated_at?: string
+          xp_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_perfis_frente_id_fkey"
+            columns: ["frente_id"]
+            isOneToOne: false
+            referencedRelation: "academia_frentes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academia_perfis_produto_principal_id_fkey"
+            columns: ["produto_principal_id"]
+            isOneToOne: false
+            referencedRelation: "academia_produtos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_phases: {
+        Row: {
+          bloqueante: boolean
+          codigo: string
+          dia_fim: number | null
+          dia_inicio: number | null
+          foco: string | null
+          id: string
+          ordem: number
+          periodo_label: string | null
+          quem_conduz: string | null
+          titulo: string
+          track_template_id: string
+        }
+        Insert: {
+          bloqueante?: boolean
+          codigo: string
+          dia_fim?: number | null
+          dia_inicio?: number | null
+          foco?: string | null
+          id?: string
+          ordem?: number
+          periodo_label?: string | null
+          quem_conduz?: string | null
+          titulo: string
+          track_template_id: string
+        }
+        Update: {
+          bloqueante?: boolean
+          codigo?: string
+          dia_fim?: number | null
+          dia_inicio?: number | null
+          foco?: string | null
+          id?: string
+          ordem?: number
+          periodo_label?: string | null
+          quem_conduz?: string | null
+          titulo?: string
+          track_template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_phases_track_template_id_fkey"
+            columns: ["track_template_id"]
+            isOneToOne: false
+            referencedRelation: "academia_track_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_produtos: {
+        Row: {
+          created_at: string
+          frente_id: string
+          icone: string | null
+          id: string
+          material: string | null
+          nome: string
+          para_quem: string | null
+          resumo: string | null
+          slug: string
+          voce_precisa_saber: string | null
+        }
+        Insert: {
+          created_at?: string
+          frente_id: string
+          icone?: string | null
+          id?: string
+          material?: string | null
+          nome: string
+          para_quem?: string | null
+          resumo?: string | null
+          slug: string
+          voce_precisa_saber?: string | null
+        }
+        Update: {
+          created_at?: string
+          frente_id?: string
+          icone?: string | null
+          id?: string
+          material?: string | null
+          nome?: string
+          para_quem?: string | null
+          resumo?: string | null
+          slug?: string
+          voce_precisa_saber?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_produtos_frente_id_fkey"
+            columns: ["frente_id"]
+            isOneToOne: false
+            referencedRelation: "academia_frentes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_quiz_attempts: {
+        Row: {
+          aprovado: boolean
+          criado_em: string
+          id: string
+          nota: number
+          quiz_id: string
+          respostas: Json | null
+          user_id: string
+        }
+        Insert: {
+          aprovado: boolean
+          criado_em?: string
+          id?: string
+          nota: number
+          quiz_id: string
+          respostas?: Json | null
+          user_id: string
+        }
+        Update: {
+          aprovado?: boolean
+          criado_em?: string
+          id?: string
+          nota?: number
+          quiz_id?: string
+          respostas?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_quiz_attempts_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "academia_quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_quiz_questions: {
+        Row: {
+          alternativas: Json
+          correta: number
+          enunciado: string
+          explicacao: string | null
+          id: string
+          ordem: number
+          quiz_id: string
+        }
+        Insert: {
+          alternativas?: Json
+          correta: number
+          enunciado: string
+          explicacao?: string | null
+          id?: string
+          ordem?: number
+          quiz_id: string
+        }
+        Update: {
+          alternativas?: Json
+          correta?: number
+          enunciado?: string
+          explicacao?: string | null
+          id?: string
+          ordem?: number
+          quiz_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_quiz_questions_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "academia_quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_quizzes: {
+        Row: {
+          created_at: string
+          id: string
+          nivel: number
+          nota_minima: number
+          produto_id: string | null
+          tentativas_max: number
+          titulo: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nivel?: number
+          nota_minima?: number
+          produto_id?: string | null
+          tentativas_max?: number
+          titulo: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nivel?: number
+          nota_minima?: number
+          produto_id?: string | null
+          tentativas_max?: number
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_quizzes_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "academia_produtos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_tasks: {
+        Row: {
+          badge_nivel: number | null
+          detalhe: string | null
+          id: string
+          module_id: string
+          obrigatoria: boolean
+          ordem: number
+          produto_id: string | null
+          quiz_id: string | null
+          slug: string | null
+          tipo_validacao: string
+          titulo: string
+          variantes: Json | null
+          xp: number
+        }
+        Insert: {
+          badge_nivel?: number | null
+          detalhe?: string | null
+          id?: string
+          module_id: string
+          obrigatoria?: boolean
+          ordem?: number
+          produto_id?: string | null
+          quiz_id?: string | null
+          slug?: string | null
+          tipo_validacao?: string
+          titulo: string
+          variantes?: Json | null
+          xp?: number
+        }
+        Update: {
+          badge_nivel?: number | null
+          detalhe?: string | null
+          id?: string
+          module_id?: string
+          obrigatoria?: boolean
+          ordem?: number
+          produto_id?: string | null
+          quiz_id?: string | null
+          slug?: string | null
+          tipo_validacao?: string
+          titulo?: string
+          variantes?: Json | null
+          xp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_tasks_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "academia_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academia_tasks_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "academia_produtos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academia_tasks_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "academia_quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_track_templates: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          frente_id: string | null
+          id: string
+          nome: string
+          publicado: boolean
+          versao: number
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          frente_id?: string | null
+          id?: string
+          nome: string
+          publicado?: boolean
+          versao?: number
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          frente_id?: string | null
+          id?: string
+          nome?: string
+          publicado?: boolean
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_track_templates_frente_id_fkey"
+            columns: ["frente_id"]
+            isOneToOne: false
+            referencedRelation: "academia_frentes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_user_badges: {
+        Row: {
+          badge_id: string
+          conquistado_em: string
+          evidencia: Json | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          conquistado_em?: string
+          evidencia?: Json | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          conquistado_em?: string
+          evidencia?: Json | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_user_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "academia_badges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_user_tasks: {
+        Row: {
+          comentario_validador: string | null
+          enviada_em: string | null
+          evidencia_url: string | null
+          id: string
+          marcada_em: string | null
+          reprovacoes: number
+          status: string
+          task_id: string
+          user_id: string
+          user_track_id: string
+          validada_em: string | null
+          validada_por: string | null
+        }
+        Insert: {
+          comentario_validador?: string | null
+          enviada_em?: string | null
+          evidencia_url?: string | null
+          id?: string
+          marcada_em?: string | null
+          reprovacoes?: number
+          status?: string
+          task_id: string
+          user_id: string
+          user_track_id: string
+          validada_em?: string | null
+          validada_por?: string | null
+        }
+        Update: {
+          comentario_validador?: string | null
+          enviada_em?: string | null
+          evidencia_url?: string | null
+          id?: string
+          marcada_em?: string | null
+          reprovacoes?: number
+          status?: string
+          task_id?: string
+          user_id?: string
+          user_track_id?: string
+          validada_em?: string | null
+          validada_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_user_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "academia_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academia_user_tasks_user_track_id_fkey"
+            columns: ["user_track_id"]
+            isOneToOne: false
+            referencedRelation: "academia_user_tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_user_tracks: {
+        Row: {
+          concluida_em: string | null
+          frente_id: string | null
+          id: string
+          iniciada_em: string
+          status: string
+          tipo: string
+          track_template_id: string
+          user_id: string
+        }
+        Insert: {
+          concluida_em?: string | null
+          frente_id?: string | null
+          id?: string
+          iniciada_em?: string
+          status?: string
+          tipo?: string
+          track_template_id: string
+          user_id: string
+        }
+        Update: {
+          concluida_em?: string | null
+          frente_id?: string | null
+          id?: string
+          iniciada_em?: string
+          status?: string
+          tipo?: string
+          track_template_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academia_user_tracks_frente_id_fkey"
+            columns: ["frente_id"]
+            isOneToOne: false
+            referencedRelation: "academia_frentes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academia_user_tracks_track_template_id_fkey"
+            columns: ["track_template_id"]
+            isOneToOne: false
+            referencedRelation: "academia_track_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academia_user_tracks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "academia_perfis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academia_xp_events: {
+        Row: {
+          criado_em: string
+          id: string
+          origem: string
+          referencia_id: string
+          user_id: string
+          xp: number
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          origem: string
+          referencia_id: string
+          user_id: string
+          xp: number
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          origem?: string
+          referencia_id?: string
+          user_id?: string
+          xp?: number
+        }
+        Relationships: []
+      }
       activity_templates: {
         Row: {
           created_at: string | null
@@ -17366,6 +18158,86 @@ export type Database = {
       _percentual_comissao: {
         Args: { numero_parcela: number; tipo_produto: string }
         Returns: number
+      }
+      academia_abrir_extensao: { Args: { _frente_id: string }; Returns: string }
+      academia_assinar_marco: {
+        Args: { _milestone_id: string; _observacoes?: string; _papel: string }
+        Returns: undefined
+      }
+      academia_buscar_usuarios: {
+        Args: { _busca: string }
+        Returns: {
+          email: string
+          full_name: string
+          id: string
+        }[]
+      }
+      academia_check_badges: { Args: { _uid: string }; Returns: undefined }
+      academia_desmarcar_tarefa: {
+        Args: { _user_task_id: string }
+        Returns: undefined
+      }
+      academia_enviar_tarefa: {
+        Args: { _evidencia_url?: string; _user_task_id: string }
+        Returns: string
+      }
+      academia_fase_concluida: {
+        Args: { _codigo: string; _user_track_id: string }
+        Returns: boolean
+      }
+      academia_fase_liberada: {
+        Args: { _phase_id: string; _user_track_id: string }
+        Returns: boolean
+      }
+      academia_gerar_trilha: { Args: never; Returns: string }
+      academia_is_admin: { Args: never; Returns: boolean }
+      academia_is_gestor_de: { Args: { _uid: string }; Returns: boolean }
+      academia_is_padrinho_de: { Args: { _uid: string }; Returns: boolean }
+      academia_media_turma: { Args: never; Returns: Json }
+      academia_nivel_por_xp: { Args: { _xp: number }; Returns: string }
+      academia_nomes: {
+        Args: { _ids: string[] }
+        Returns: {
+          full_name: string
+          id: string
+        }[]
+      }
+      academia_notificar: {
+        Args: {
+          _corpo: string
+          _link: string
+          _tipo: string
+          _titulo: string
+          _uid: string
+        }
+        Returns: undefined
+      }
+      academia_pode_ver: { Args: { _uid: string }; Returns: boolean }
+      academia_produto_nivel_ok: {
+        Args: { _nivel: number; _produto: string; _uid: string }
+        Returns: boolean
+      }
+      academia_quiz_conferir: {
+        Args: { _question_id: string; _resposta: number }
+        Returns: Json
+      }
+      academia_quiz_finalizar: {
+        Args: { _quiz_id: string; _respostas: Json }
+        Returns: Json
+      }
+      academia_quiz_perguntas: {
+        Args: { _quiz_id: string }
+        Returns: {
+          alternativas: Json
+          enunciado: string
+          id: string
+          ordem: number
+        }[]
+      }
+      academia_relatorios: { Args: never; Returns: Json }
+      academia_validar_tarefa: {
+        Args: { _aprovar: boolean; _comentario?: string; _user_task_id: string }
+        Returns: undefined
       }
       admin_deactivate_crm_stage: {
         Args: {
