@@ -5,14 +5,17 @@ import {
   QUALIFICATION_QUESTIONS,
   MIN_ANSWER_LENGTH,
 } from '@/components/crm/qualification/QualificationQuestions';
+import { validateCreditoAnswers } from '@/components/crm/qualification/CreditoQualificationQuestions';
 
 /**
  * BUs isentas de qualificação obrigatória antes de agendar a R1.
- * Apenas BU - Incorporador MCF exige qualificação (ligação com resumo IA ou
- * questionário via WhatsApp/ligação externa). Demais BUs listadas aqui
- * podem agendar R1 sem qualificação prévia.
+ * BU - Incorporador MCF exige qualificação (ligação com resumo IA ou
+ * questionário via WhatsApp/ligação externa).
+ * BU Crédito Imobiliário tem qualificação obrigatória PRÓPRIA (perguntas por
+ * modalidade: Construção / Home Equity / Comprar imóvel) e por isso NÃO está
+ * nesta lista. Demais BUs listadas aqui podem agendar R1 sem qualificação prévia.
  */
-export const BU_SEM_QUALIFICACAO_OBRIGATORIA = ['consorcio', 'solar', 'credito'] as const;
+export const BU_SEM_QUALIFICACAO_OBRIGATORIA = ['consorcio', 'solar'] as const;
 
 export type QualificationSource = 'ai_call_summary' | 'whatsapp' | 'call' | null;
 
@@ -33,16 +36,19 @@ export function useQualificationStatus(dealId?: string) {
     activeBU != null &&
     (BU_SEM_QUALIFICACAO_OBRIGATORIA as readonly string[]).includes(activeBU);
   return useQuery<QualificationStatus>({
-    queryKey: ['qualification-status', dealId, bypassForBU ? 'bypass' : 'check'],
+    // activeBU entra na chave para não reaproveitar cache entre BUs
+    // (cada uma tem regra própria de validação do qualification_note).
+    queryKey: ['qualification-status', dealId, activeBU ?? 'global', bypassForBU ? 'bypass' : 'check'],
     enabled: !!dealId,
     queryFn: async () => {
       if (!dealId) {
         return { isQualified: false, source: null, reason: 'sem deal' };
       }
 
-      // BUs isentas (ex.: Consórcio, Solar): qualificação obrigatória não se aplica.
-      // Apenas BU - Incorporador MCF exige qualificação (ligação com resumo IA
-      // ou questionário via WhatsApp/ligação externa) antes de agendar a R1.
+      // BUs isentas (Consórcio, Solar): qualificação obrigatória não se aplica.
+      // Fora dessa lista, BU - Incorporador MCF exige qualificação padrão
+      // (ligação com resumo IA ou questionário via WhatsApp/ligação externa)
+      // antes de agendar a R1, e BU Crédito Imobiliário exige a sua própria.
       if (bypassForBU) {
         return {
           isQualified: true,
@@ -74,6 +80,8 @@ export function useQualificationStatus(dealId?: string) {
         const md = (a.metadata || {}) as Record<string, any>;
         if (md.channel !== 'whatsapp' && md.channel !== 'call') return false;
         const answers = (md.answers || {}) as Record<string, string>;
+        // BU Crédito Imobiliário: regra própria (modalidade, renda, garantias).
+        if (activeBU === 'credito') return validateCreditoAnswers(answers).valid;
         // Mesma regra de validateAnswers: escolha única só precisa estar preenchida;
         // resposta livre continua exigindo MIN_ANSWER_LENGTH. Perguntas de escolha
         // ausentes em notas antigas (anteriores à pergunta) não invalidam o histórico.
@@ -102,7 +110,9 @@ export function useQualificationStatus(dealId?: string) {
         isQualified: false,
         source: null,
         reason:
-          'Ligue pelo sistema (IA), registre uma ligação externa ou responda o questionário via WhatsApp',
+          activeBU === 'credito'
+            ? 'Preencha a qualificação de crédito (modalidade, renda e garantias) antes de agendar a R1'
+            : 'Ligue pelo sistema (IA), registre uma ligação externa ou responda o questionário via WhatsApp',
       };
     },
     staleTime: 30_000,
