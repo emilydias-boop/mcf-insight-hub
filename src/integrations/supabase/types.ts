@@ -18388,6 +18388,7 @@ export type Database = {
         Args: { p_email: string; p_origin_id: string; p_phone_suffix: string }
         Returns: string
       }
+      classify_credito_icp: { Args: { p_answers: Json }; Returns: string }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
       closer_frases_avaliacao: {
         Args: {
