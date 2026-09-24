@@ -21,7 +21,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle, Ban } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -33,6 +34,8 @@ import { useCloserFilterOptions } from '@/hooks/useCloserFilterOptions';
 import { ProductFilterPopover } from './ProductFilterPopover';
 import type { ProductFilterRule, ProductOperator } from '@/hooks/useProductFilterData';
 import { TEMPERATURE_META, type LeadTemperature } from './LeadTemperatureSelector';
+import { useLossReasons } from '@/hooks/useLossReasons';
+import { SEM_MOTIVO_FILTER_VALUE } from '@/lib/lossReasons';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 export type ActivityPriorityFilter = 'all' | 'high' | 'medium' | 'low';
