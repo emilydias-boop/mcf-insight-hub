@@ -76,6 +76,17 @@ const MeusNoShows = lazy(() => import("./pages/crm/MeusNoShows"));
 const MeuHistorico = lazy(() => import("./pages/crm/MeuHistorico"));
 const Ligacoes = lazy(() => import("./pages/crm/Ligacoes"));
 const Agenda = lazy(() => import("./pages/crm/Agenda"));
+// Academia MCF
+const AcademiaLayout = lazy(() => import("./pages/academia/AcademiaLayout"));
+const AcademiaMinhaTrilha = lazy(() => import("./pages/academia/MinhaTrilha"));
+const AcademiaFase = lazy(() => import("./pages/academia/FaseDetalhe"));
+const AcademiaQuiz = lazy(() => import("./pages/academia/Quiz"));
+const AcademiaEstante = lazy(() => import("./pages/academia/Estante"));
+const AcademiaBiblioteca = lazy(() => import("./pages/academia/Biblioteca"));
+const AcademiaCombinadoPJ = lazy(() => import("./pages/academia/CombinadoPJ"));
+const AcademiaValidacoes = lazy(() => import("./pages/academia/Validacoes"));
+const AcademiaPainelGestor = lazy(() => import("./pages/academia/PainelGestor"));
+const AcademiaAdmin = lazy(() => import("./pages/academia/Admin"));
 const LeadsLimbo = lazy(() => import("./pages/crm/LeadsLimbo"));
 const RetornosParceiros = lazy(() => import("./pages/crm/RetornosParceiros"));
 const RecuperacaoA010 = lazy(() => import("./pages/crm/RecuperacaoA010"));
@@ -289,6 +300,20 @@ const App = () => (
                 <Route path="meus-no-shows" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeusNoShows /></RoleGuard>} />
                 <Route path="meu-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><MeuHistorico /></RoleGuard>} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
+              </Route>
+
+              {/* Academia MCF — universidade corporativa, criada 2026-09-24 */}
+              <Route path="academia" element={<AcademiaLayout />}>
+                <Route index element={<AcademiaMinhaTrilha />} />
+                <Route path="fase/:phaseId" element={<AcademiaFase />} />
+                <Route path="quiz/:quizId" element={<AcademiaQuiz />} />
+                <Route path="estante" element={<AcademiaEstante />} />
+                <Route path="biblioteca" element={<AcademiaBiblioteca />} />
+                <Route path="biblioteca/:slug" element={<AcademiaBiblioteca />} />
+                <Route path="combinado-pj" element={<AcademiaCombinadoPJ />} />
+                <Route path="validacoes" element={<AcademiaValidacoes />} />
+                <Route path="equipe" element={<AcademiaPainelGestor />} />
+                <Route path="admin" element={<RoleGuard allowedRoles={['admin', 'rh']}><AcademiaAdmin /></RoleGuard>} />
               </Route>
 
               {/* <Route path="bu-marketing" element={<ResourceGuard resource="dashboard"><MarketingDashboard /></ResourceGuard>} /> */}
