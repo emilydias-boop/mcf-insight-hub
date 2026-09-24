@@ -9,6 +9,8 @@ import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
+import { LossReasonDialog } from './LossReasonDialog';
+import { isSemInteresseStageName, registrarMotivoSemInteresse, isMotivoObrigatorioError } from '@/lib/lossReasons';
 import { StageSelectionControls } from './StageSelectionControls';
 import { StageSortDropdown, SortOption } from './StageSortDropdown';
 import { useAuth } from '@/contexts/AuthContext';
@@ -67,6 +69,9 @@ export const DealKanbanBoard = ({
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
+  const [pendingLossMove, setPendingLossMove] = useState<{
+    dealId: string; newStageId: string; oldStageId: string; dealName: string;
+  } | null>(null);
   const { data: stages, isLoading: isLoadingStages } = useCRMStages(originId);
   const { user, role } = useAuth();
   
@@ -237,6 +242,19 @@ export const DealKanbanBoard = ({
     
     const deal = deals.find(d => d.id === dealId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
+    const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
+
+    if (isSemInteresseStageName(newStage?.stage_name) && !isSemInteresseStageName(oldStage?.stage_name)) {
+      setPendingLossMove({ dealId, newStageId, oldStageId, dealName: deal?.name || '' });
+      return;
+    }
+
+    executeMove(dealId, newStageId, oldStageId);
+  };
+
+  const executeMove = (dealId: string, newStageId: string, oldStageId: string) => {
+    const deal = deals.find(d => d.id === dealId);
+    const newStage = visibleStages.find((s: any) => s.id === newStageId);
     
     updateDealMutation.mutate(
       { id: dealId, stage_id: newStageId, previousStageId: oldStageId },
@@ -257,8 +275,12 @@ export const DealKanbanBoard = ({
             });
           }
         },
-        onError: () => {
-          toast.error('Erro ao mover negócio');
+        onError: (err: any) => {
+          if (isMotivoObrigatorioError(err)) {
+            toast.error('Informe o motivo para mover para Sem Interesse.');
+          } else {
+            toast.error('Erro ao mover negócio');
+          }
         },
       }
     );
@@ -445,6 +467,22 @@ export const DealKanbanBoard = ({
         dealName={stageChangeModal.dealName}
         newStageName={stageChangeModal.newStageName}
       />
+
+      <LossReasonDialog
+        open={!!pendingLossMove}
+        onOpenChange={(open) => { if (!open) setPendingLossMove(null); }}
+        dealCount={1}
+        dealName={pendingLossMove?.dealName}
+        onConfirm={async (motivo, justificativa) => {
+          if (!pendingLossMove) return;
+          const { dealId, newStageId, oldStageId } = pendingLossMove;
+          await registrarMotivoSemInteresse([dealId], motivo, justificativa);
+          executeMove(dealId, newStageId, oldStageId);
+          setPendingLossMove(null);
+        }}
+      />
+
+
 
       <CopyLeadsFormatDialog
         open={copyDialogData.open}
