@@ -598,7 +598,61 @@ export const DealFilters = ({
           </SelectItem>
         </SelectContent>
       </Select>
-      
+
+      {/* Filtro Motivo (Sem Interesse) */}
+      <Popover open={isLossReasonPopoverOpen} onOpenChange={setIsLossReasonPopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant={(filters.lossReasons?.length ?? 0) > 0 ? "default" : "outline"}
+            className="justify-start text-left font-normal"
+          >
+            <Ban className="mr-2 h-4 w-4" />
+            {(filters.lossReasons?.length ?? 0) > 0
+              ? `Motivo (${filters.lossReasons?.length})`
+              : "Motivo"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72" align="start">
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Mostra só negócios na etapa Sem Interesse com o motivo escolhido.
+            </p>
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={(filters.lossReasons ?? []).includes(SEM_MOTIVO_FILTER_VALUE)}
+                  onCheckedChange={() => toggleLossReason(SEM_MOTIVO_FILTER_VALUE)}
+                />
+                <span>Sem motivo registrado</span>
+              </label>
+              {lossReasonOptions.map((reason) => (
+                <label key={reason.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={(filters.lossReasons ?? []).includes(reason.label)}
+                    onCheckedChange={() => toggleLossReason(reason.label)}
+                  />
+                  <span>
+                    {reason.label}
+                    {!reason.is_active && (
+                      <span className="text-muted-foreground"> (antigo)</span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end border-t pt-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onChange({ ...filters, lossReasons: [] })}
+              >
+                Limpar
+              </Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
       {activeFiltersCount > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>
           <X className="h-4 w-4 mr-1" />
