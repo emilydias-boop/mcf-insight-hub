@@ -21,6 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { registrarMotivoSemInteresse } from '@/lib/lossReasons';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
 const REFUND_REASONS = [
@@ -162,15 +163,28 @@ export function RefundModal({
 
         const reasonLabel = REFUND_REASONS.find(r => r.value === selectedReason)?.label || selectedReason;
 
+        // Registrar motivo "Reembolso" antes de mover (RPC grava motivo_sem_interesse,
+        // justificativa_perda, perdido_em, perdido_por e cria atividade loss_marked)
+        if (lostStageId) {
+          await registrarMotivoSemInteresse([dealId], 'Reembolso', justification.trim() || null);
+        }
+
+        // Ler custom_fields atual do banco e fazer merge só das chaves do reembolso
+        const { data: freshDeal } = await supabase
+          .from('crm_deals')
+          .select('custom_fields')
+          .eq('id', dealId)
+          .maybeSingle();
+        const baseFields = { ...((freshDeal?.custom_fields as Record<string, any>) || currentCustomFields || {}) };
+
         // Update deal with refund flags
         const updateData: any = {
           custom_fields: {
-            ...(currentCustomFields || {}),
+            ...baseFields,
             reembolso_solicitado: true,
             reembolso_em: new Date().toISOString(),
             motivo_reembolso: reasonLabel,
             justificativa_reembolso: justification.trim(),
-            motivo_sem_interesse: 'Reembolso',
           }
         };
 

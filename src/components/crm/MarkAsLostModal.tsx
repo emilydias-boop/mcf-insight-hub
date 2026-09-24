@@ -130,8 +130,8 @@ export const MarkAsLostModal = ({
                 <SelectValue placeholder="Selecione o motivo..." />
               </SelectTrigger>
               <SelectContent>
-                {LOSS_REASONS.map((reason) => (
-                  <SelectItem key={reason.value} value={reason.value}>
+                {lossReasons.map((reason) => (
+                  <SelectItem key={reason.id} value={reason.label}>
                     {reason.label}
                   </SelectItem>
                 ))}
@@ -141,7 +141,7 @@ export const MarkAsLostModal = ({
 
           <div className="space-y-2">
             <Label htmlFor="justification">
-              Justificativa {selectedReason === 'outro' ? '*' : '(opcional)'}
+              Justificativa {requiresNote ? '*' : '(opcional)'}
             </Label>
             <Textarea
               id="justification"
