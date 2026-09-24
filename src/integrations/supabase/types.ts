@@ -8578,6 +8578,33 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_loss_reasons: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          requires_note: boolean
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          requires_note?: boolean
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          requires_note?: boolean
+          sort_order?: number
+        }
+        Relationships: []
+      }
       crm_origins: {
         Row: {
           clint_id: string
@@ -19551,6 +19578,14 @@ export type Database = {
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       redact_audit_snapshot: { Args: { _data: Json }; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
+      registrar_motivo_sem_interesse: {
+        Args: {
+          p_deal_ids: string[]
+          p_justificativa?: string
+          p_motivo: string
+        }
+        Returns: number
+      }
       relatorio_closer_etapas: {
         Args: {
           _ate?: string

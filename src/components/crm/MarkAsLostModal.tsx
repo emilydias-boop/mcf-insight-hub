@@ -17,22 +17,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUpdateCRMDeal } from '@/hooks/useCRMData';
-import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, XCircle } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-
-const LOSS_REASONS = [
-  { value: 'sem_interesse', label: 'Sem interesse' },
-  { value: 'sem_condicoes', label: 'Sem condições financeiras' },
-  { value: 'comprou_concorrente', label: 'Comprou com concorrente' },
-  { value: 'telefone_invalido', label: 'Telefone inválido/inexistente' },
-  { value: 'nao_responde', label: 'Não responde contato' },
-  { value: 'nao_perfil', label: 'Não é o perfil' },
-  { value: 'momento_inadequado', label: 'Momento inadequado' },
-  { value: 'outro', label: 'Outro' },
-];
+import { useLossReasons } from '@/hooks/useLossReasons';
+import { isSemInteresseStageName, registrarMotivoSemInteresse } from '@/lib/lossReasons';
 
 interface MarkAsLostModalProps {
   open: boolean;
@@ -58,8 +47,8 @@ export const MarkAsLostModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const updateDeal = useUpdateCRMDeal();
-  const createActivity = useCreateDealActivity();
-  const { user } = useAuth();
+  const { active: lossReasons } = useLossReasons();
+  const requiresNote = !!lossReasons.find(r => r.label === selectedReason)?.requires_note;
 
   const handleConfirm = async () => {
     if (!selectedReason) {
@@ -67,7 +56,7 @@ export const MarkAsLostModal = ({
       return;
     }
 
-    if (selectedReason === 'outro' && !justification.trim()) {
+    if (requiresNote && !justification.trim()) {
       toast.error('Descreva o motivo da perda');
       return;
     }
@@ -75,15 +64,17 @@ export const MarkAsLostModal = ({
     setIsSubmitting(true);
 
     try {
-      // 1. Find the "lost" stage for this origin
-      const { data: lostStage } = await supabase
+      // 1. Find the "lost" stage for this origin — prefer "sem interesse", fallback "perdido"
+      const { data: candidates } = await supabase
         .from('crm_stages')
-        .select('id, stage_name')
+        .select('id, stage_name, stage_order')
         .eq('origin_id', originId)
         .or('stage_name.ilike.%sem interesse%,stage_name.ilike.%perdido%')
-        .order('stage_order', { ascending: false })
-        .limit(1)
-        .single();
+        .order('stage_order', { ascending: false });
+
+      const lostStage =
+        (candidates || []).find((s: any) => isSemInteresseStageName(s.stage_name)) ||
+        (candidates || []).find((s: any) => (s.stage_name || '').toLowerCase().includes('perdido'));
 
       if (!lostStage) {
         toast.error('Estágio de perda não encontrado para esta origem');
@@ -91,32 +82,15 @@ export const MarkAsLostModal = ({
         return;
       }
 
-      const reasonLabel = LOSS_REASONS.find(r => r.value === selectedReason)?.label || selectedReason;
+      const reasonLabel = selectedReason;
 
-      // 2. Update deal with new stage and loss info in custom_fields
+      // 2. Registrar motivo (RPC faz merge atômico e cria atividade loss_marked)
+      await registrarMotivoSemInteresse([dealId], reasonLabel, justification || null);
+
+      // 3. Mover etapa (sem sobrescrever custom_fields)
       await updateDeal.mutateAsync({
         id: dealId,
         stage_id: lostStage.id,
-        custom_fields: {
-          ...currentCustomFields,
-          motivo_sem_interesse: reasonLabel,
-          justificativa_perda: justification || null,
-          perdido_em: new Date().toISOString(),
-          perdido_por: user?.email || null,
-        },
-      });
-
-      // 3. Log activity
-      await createActivity.mutateAsync({
-        deal_id: dealId,
-        activity_type: 'loss_marked',
-        description: `Lead marcado como perdido: ${reasonLabel}${justification ? ` - ${justification}` : ''}`,
-        metadata: {
-          reason: selectedReason,
-          reason_label: reasonLabel,
-          justification: justification || null,
-          stage_name: lostStage.stage_name,
-        },
       });
 
       toast.success('Lead marcado como perdido');
@@ -156,8 +130,8 @@ export const MarkAsLostModal = ({
                 <SelectValue placeholder="Selecione o motivo..." />
               </SelectTrigger>
               <SelectContent>
-                {LOSS_REASONS.map((reason) => (
-                  <SelectItem key={reason.value} value={reason.value}>
+                {lossReasons.map((reason) => (
+                  <SelectItem key={reason.id} value={reason.label}>
                     {reason.label}
                   </SelectItem>
                 ))}
@@ -167,7 +141,7 @@ export const MarkAsLostModal = ({
 
           <div className="space-y-2">
             <Label htmlFor="justification">
-              Justificativa {selectedReason === 'outro' ? '*' : '(opcional)'}
+              Justificativa {requiresNote ? '*' : '(opcional)'}
             </Label>
             <Textarea
               id="justification"
