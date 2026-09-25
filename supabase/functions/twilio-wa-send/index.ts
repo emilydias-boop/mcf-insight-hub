@@ -76,6 +76,12 @@ Deno.serve(async (req) => {
     const { data: hasAccess } = await admin.rpc('has_mcf_atendimento_access', { _user_id: userId });
     if (!hasAccess) return json({ error: 'Sem acesso ao MCF - Atendimento' }, 403);
 
+    const pausa = await checarPausaWhatsApp();
+    if (pausa.pausado) {
+      console.log('[TWILIO-WA-SEND] bloqueado: WhatsApp pausado');
+      return respostaWhatsAppPausado(corsHeaders, pausa.motivo);
+    }
+
     // ---- teto diario de ATENDIMENTO (1:1) por usuario ----
     // wa_enviados_1a1_hoje conta apenas as mensagens outbound do usuario no dia
     // (fuso America/Sao_Paulo) que NAO pertencem a um disparo em massa. Assim um
