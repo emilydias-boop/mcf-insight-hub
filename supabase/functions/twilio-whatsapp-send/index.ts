@@ -57,6 +57,12 @@ serve(async (req) => {
       );
     }
 
+    const pausa = await checarPausaWhatsApp();
+    if (pausa.pausado) {
+      console.log('[TWILIO-WHATSAPP] bloqueado: WhatsApp pausado');
+      return respostaWhatsAppPausado(corsHeaders, pausa.motivo);
+    }
+
     const body: SendRequest = await req.json();
     console.log('[TWILIO-WHATSAPP] Request:', JSON.stringify({ to: body.to, hasTemplate: !!body.templateSid }));
 
