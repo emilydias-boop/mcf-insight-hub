@@ -1,6 +1,7 @@
 // Test-send a WhatsApp template end-to-end (admin-only).
 // Builds the same variable map as automation-processor and dispatches via Twilio.
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { checarPausaWhatsApp, respostaWhatsAppPausado } from '../_shared/waPausa.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
