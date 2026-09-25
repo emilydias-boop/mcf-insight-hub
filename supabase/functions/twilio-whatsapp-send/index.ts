@@ -1,6 +1,7 @@
 // Twilio WhatsApp Send - Send WhatsApp messages via Twilio API
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { checarPausaWhatsApp, respostaWhatsAppPausado } from '../_shared/waPausa.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,6 +55,12 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: 'Unauthorized' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
+    }
+
+    const pausa = await checarPausaWhatsApp();
+    if (pausa.pausado) {
+      console.log('[TWILIO-WHATSAPP] bloqueado: WhatsApp pausado');
+      return respostaWhatsAppPausado(corsHeaders, pausa.motivo);
     }
 
     const body: SendRequest = await req.json();

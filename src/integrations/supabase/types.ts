@@ -18186,6 +18186,15 @@ export type Database = {
         Args: { numero_parcela: number; tipo_produto: string }
         Returns: number
       }
+      _wa_aplicar_pausa: {
+        Args: {
+          p_motivo: string
+          p_pausar: boolean
+          p_por: string
+          p_por_nome: string
+        }
+        Returns: Json
+      }
       academia_abrir_extensao: { Args: { _frente_id: string }; Returns: string }
       academia_assinar_marco: {
         Args: { _milestone_id: string; _observacoes?: string; _papel: string }
@@ -19939,6 +19948,10 @@ export type Database = {
           phone: string
         }[]
       }
+      wa_definir_pausa: {
+        Args: { p_motivo?: string; p_pausar: boolean }
+        Returns: Json
+      }
       wa_dono_ativo: { Args: { _profile_id: string }; Returns: boolean }
       wa_e164_br: { Args: { _raw: string }; Returns: string }
       wa_enviados_1a1_hoje: { Args: { _user_id?: string }; Returns: number }
@@ -19947,6 +19960,8 @@ export type Database = {
         Args: { _sender: string; _user_id?: string }
         Returns: number
       }
+      wa_envio_liberado: { Args: never; Returns: boolean }
+      wa_envio_status: { Args: never; Returns: Json }
       wa_get_or_create_conversation: {
         Args: { _contact_name?: string; _deal_id?: string; _phone_e164: string }
         Returns: string

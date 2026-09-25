@@ -1,6 +1,7 @@
 // Test-send a WhatsApp template end-to-end (admin-only).
 // Builds the same variable map as automation-processor and dispatches via Twilio.
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { checarPausaWhatsApp, respostaWhatsAppPausado } from '../_shared/waPausa.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,6 +63,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Forbidden — admin/manager only' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    const pausa = await checarPausaWhatsApp();
+    if (pausa.pausado) {
+      console.log('[AUTOMATION-TEST-SEND] bloqueado: WhatsApp pausado');
+      return respostaWhatsAppPausado(corsHeaders, pausa.motivo);
     }
 
     const body = await req.json() as TestSendBody;

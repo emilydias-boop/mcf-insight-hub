@@ -2,6 +2,7 @@
 // #48 conversa por telefone | #50 janela de 24h | #60 templates aprovados
 // #49 StatusCallback | midia: audio gravado e arquivo, via bucket wa-media.
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { checarPausaWhatsApp, respostaWhatsAppPausado } from '../_shared/waPausa.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -74,6 +75,12 @@ Deno.serve(async (req) => {
 
     const { data: hasAccess } = await admin.rpc('has_mcf_atendimento_access', { _user_id: userId });
     if (!hasAccess) return json({ error: 'Sem acesso ao MCF - Atendimento' }, 403);
+
+    const pausa = await checarPausaWhatsApp();
+    if (pausa.pausado) {
+      console.log('[TWILIO-WA-SEND] bloqueado: WhatsApp pausado');
+      return respostaWhatsAppPausado(corsHeaders, pausa.motivo);
+    }
 
     // ---- teto diario de ATENDIMENTO (1:1) por usuario ----
     // wa_enviados_1a1_hoje conta apenas as mensagens outbound do usuario no dia
