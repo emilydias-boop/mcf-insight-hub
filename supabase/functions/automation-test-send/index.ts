@@ -65,6 +65,12 @@ Deno.serve(async (req) => {
       });
     }
 
+    const pausa = await checarPausaWhatsApp();
+    if (pausa.pausado) {
+      console.log('[AUTOMATION-TEST-SEND] bloqueado: WhatsApp pausado');
+      return respostaWhatsAppPausado(corsHeaders, pausa.motivo);
+    }
+
     const body = await req.json() as TestSendBody;
     if (!body.templateId || !body.phone) {
       return new Response(JSON.stringify({ error: 'templateId and phone are required' }), {
