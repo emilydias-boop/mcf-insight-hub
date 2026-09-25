@@ -1,6 +1,7 @@
 // Twilio WhatsApp Send - Send WhatsApp messages via Twilio API
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { checarPausaWhatsApp, respostaWhatsAppPausado } from '../_shared/waPausa.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
