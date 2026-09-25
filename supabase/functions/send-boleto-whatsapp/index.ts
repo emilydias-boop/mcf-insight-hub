@@ -117,6 +117,12 @@ serve(async (req) => {
     if (!accountSid || !authToken) throw new Error('Twilio credentials not configured');
     if (!fromNumber) throw new Error('TWILIO_WHATSAPP_FROM not configured');
 
+    const pausa = await checarPausaWhatsApp();
+    if (pausa.pausado) {
+      console.log('[SEND-BOLETO] bloqueado: WhatsApp pausado');
+      return respostaWhatsAppPausado(corsHeaders, pausa.motivo);
+    }
+
     let normalizedTo = telefone.replace(/\D/g, '');
     if (!normalizedTo.startsWith('55')) normalizedTo = '55' + normalizedTo;
     normalizedTo = 'whatsapp:+' + normalizedTo;
