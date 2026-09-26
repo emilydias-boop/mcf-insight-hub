@@ -18,6 +18,7 @@ import {
   formatDuration,
   validateWaMedia,
 } from '@/lib/waMedia';
+import { useWaEnvioStatus, WA_PAUSADO_TOOLTIP } from '@/hooks/wa/useWaEnvioStatus';
 
 /**
  * As fontes product_name / purchase_date não existem no modelo de conversa por pessoa,
@@ -80,6 +81,7 @@ export function MessageComposer({
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recorder = useAudioRecorder();
+  const { pausado } = useWaEnvioStatus();
 
   useEffect(() => {
     if (!file || !file.type.startsWith('image/')) {
@@ -137,6 +139,7 @@ export function MessageComposer({
 
   if (canSendFree) {
     const submit = async () => {
+      if (pausado) return;
       if (recorder.result) {
         const audio = recorder.result;
         if (audio.conversionFailed) {
@@ -265,8 +268,8 @@ export function MessageComposer({
           variant="outline"
           size="icon"
           className="h-[52px] w-[52px] shrink-0"
-          title="Anexar arquivo"
-          disabled={sending || recorder.recording || recorder.processing || !!recorder.result}
+          title={pausado ? WA_PAUSADO_TOOLTIP : 'Anexar arquivo'}
+          disabled={pausado || sending || recorder.recording || recorder.processing || !!recorder.result}
           onClick={() => fileInputRef.current?.click()}
         >
           <Paperclip className="h-5 w-5" />
@@ -276,8 +279,8 @@ export function MessageComposer({
           variant={recorder.recording ? 'destructive' : 'outline'}
           size="icon"
           className="h-[52px] w-[52px] shrink-0"
-          title={recorder.recording ? 'Parar gravação' : 'Gravar áudio'}
-          disabled={sending || !!file || recorder.processing || !!recorder.result}
+          title={pausado ? WA_PAUSADO_TOOLTIP : recorder.recording ? 'Parar gravação' : 'Gravar áudio'}
+          disabled={pausado || sending || !!file || recorder.processing || !!recorder.result}
           onClick={() => (recorder.recording ? stopRecording() : void recorder.start())}
         >
           {recorder.recording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
@@ -285,7 +288,8 @@ export function MessageComposer({
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={hasAttachment ? 'Legenda (opcional)…' : 'Digite sua mensagem…'}
+          placeholder={pausado ? WA_PAUSADO_TOOLTIP : hasAttachment ? 'Legenda (opcional)…' : 'Digite sua mensagem…'}
+          disabled={pausado}
           rows={2}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -297,7 +301,9 @@ export function MessageComposer({
         />
         <Button
           onClick={submit}
+          title={pausado ? WA_PAUSADO_TOOLTIP : undefined}
           disabled={
+            pausado ||
             (!text.trim() && !hasAttachment) ||
             sending ||
             recorder.recording ||
@@ -315,7 +321,7 @@ export function MessageComposer({
   }
 
   const submitTemplate = async () => {
-    if (!selectedTpl) return;
+    if (!selectedTpl || pausado) return;
     for (const v of selectedTpl.variables ?? []) {
       if (!vars[String(v.index)]?.trim()) {
         toast.error(`Preencha a variável: ${v.label}`);
@@ -370,9 +376,9 @@ export function MessageComposer({
       <div className="p-3 space-y-3">
         <div>
           <Label className="text-xs">Template</Label>
-          <Select value={tplId} onValueChange={setTplId}>
+          <Select value={tplId} onValueChange={setTplId} disabled={pausado}>
             <SelectTrigger className="h-9">
-              <SelectValue placeholder={loadingTpls ? 'Carregando…' : 'Escolha um template aprovado'} />
+              <SelectValue placeholder={pausado ? WA_PAUSADO_TOOLTIP : loadingTpls ? 'Carregando…' : 'Escolha um template aprovado'} />
             </SelectTrigger>
             <SelectContent>
               {templates.length === 0 && (
@@ -413,7 +419,7 @@ export function MessageComposer({
               </div>
             )}
             <div className="flex justify-end">
-              <Button onClick={submitTemplate} disabled={sending} size="sm">
+              <Button onClick={submitTemplate} disabled={pausado || sending} size="sm" title={pausado ? WA_PAUSADO_TOOLTIP : undefined}>
                 <Send className="h-4 w-4 mr-2" />
                 Enviar template
               </Button>
