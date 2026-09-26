@@ -58,6 +58,7 @@ const DEFAULT_OWNER_EMAIL = "carol.correa@minhacasafinanciada.com";
 
 export function TemplateTestSendDialog({ templateId, templateName, open, onOpenChange }: Props) {
   const { toast } = useToast();
+  const { pausado: waPausado } = useWaEnvioStatus();
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("Cliente Teste");
   const [employees, setEmployees] = useState<Employee[]>([]);

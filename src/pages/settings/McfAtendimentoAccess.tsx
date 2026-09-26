@@ -13,6 +13,107 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useCheckinTemplates } from '@/hooks/checkin/useCheckinTemplates';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useWaEnvioStatus, formatDesdePausa } from '@/hooks/wa/useWaEnvioStatus';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
+function WaEnvioCard() {
+  const qc = useQueryClient();
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
+  const wa = useWaEnvioStatus();
+  const [pausarOpen, setPausarOpen] = useState(false);
+  const [religarOpen, setReligarOpen] = useState(false);
+  const [motivo, setMotivo] = useState('');
+
+  const definir = useMutation({
+    mutationFn: async ({ p_pausar, p_motivo }: { p_pausar: boolean; p_motivo: string | null }) => {
+      const { data, error } = await supabase.rpc('wa_definir_pausa', { p_pausar, p_motivo: p_motivo ?? '' } as never);
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_d, v) => {
+      toast.success(v.p_pausar ? 'Envio de WhatsApp pausado' : 'Envio de WhatsApp religado');
+      qc.invalidateQueries({ queryKey: ['wa-envio-status'] });
+      setPausarOpen(false);
+      setReligarOpen(false);
+      setMotivo('');
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err)),
+  });
+
+  return (
+    <Card className="p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-medium">Envio de WhatsApp</div>
+        {wa.pausado ? (
+          <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-300">Pausado</Badge>
+        ) : (
+          <Badge variant="outline" className="border-green-600/60 bg-green-600/10 text-green-700 dark:text-green-300">Ativo</Badge>
+        )}
+      </div>
+      {wa.pausado && (
+        <div className="text-sm text-muted-foreground space-y-0.5">
+          <div><span className="font-medium text-foreground">Motivo:</span> {wa.motivo ?? '—'}</div>
+          <div><span className="font-medium text-foreground">Desde:</span> {formatDesdePausa(wa.desde)}</div>
+          <div><span className="font-medium text-foreground">Por:</span> {wa.porNome ?? '—'}</div>
+        </div>
+      )}
+      {isAdmin && (
+        <div className="flex justify-end">
+          {wa.pausado ? (
+            <Button size="sm" onClick={() => setReligarOpen(true)} disabled={definir.isPending}>Religar envio</Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setPausarOpen(true)} disabled={definir.isPending}>Pausar envio</Button>
+          )}
+        </div>
+      )}
+
+      <Dialog open={pausarOpen} onOpenChange={(o) => { setPausarOpen(o); if (!o) setMotivo(''); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Pausar envio de WhatsApp</DialogTitle></DialogHeader>
+          <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo da pausa (obrigatório)" />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPausarOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!motivo.trim() || definir.isPending}
+              onClick={() => definir.mutate({ p_pausar: true, p_motivo: motivo.trim() })}
+            >
+              Pausar envio
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={religarOpen} onOpenChange={setReligarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Religar envio de WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Religa a caixa de entrada, lembretes e automações por WhatsApp e devolve o SDR IA ao estado anterior. Disparos que estavam pausados NÃO voltam sozinhos — retome cada um na tela de Disparos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={definir.isPending}
+              onClick={(e) => { e.preventDefault(); definir.mutate({ p_pausar: false, p_motivo: null }); }}
+            >
+              Religar envio
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
 
 type Profile = { id: string; full_name: string | null; email: string | null };
 
@@ -86,6 +187,7 @@ export default function McfAtendimentoAccess() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">
+      <WaEnvioCard />
       <div className="flex items-center gap-2">
         <MessageSquare className="h-5 w-5 text-emerald-600" />
         <h1 className="text-2xl font-bold">Acesso MCF - Atendimento</h1>
