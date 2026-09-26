@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useWaEnvioStatus } from '@/hooks/wa/useWaEnvioStatus';
 
 interface Props {
   boleto: ConsorcioBoleto;
@@ -19,6 +20,7 @@ interface Props {
 
 export function BoletoSection({ boleto, hasPhone = true }: Props) {
   const sendWhatsApp = useSendBoletoWhatsApp();
+  const { pausado: waPausado } = useWaEnvioStatus();
   const { data: pdfUrl } = useBoletoSignedUrl(boleto.storage_path);
 
   const handleCopyLinha = () => {
@@ -107,9 +109,9 @@ export function BoletoSection({ boleto, hasPhone = true }: Props) {
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Abrir WhatsApp Web
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleWhatsApp('twilio')}>
+                    <DropdownMenuItem onClick={() => handleWhatsApp('twilio')} disabled={waPausado}>
                       <Send className="h-4 w-4 mr-2" />
-                      Enviar via Twilio
+                      {waPausado ? 'Enviar via Twilio (pausado)' : 'Enviar via Twilio'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

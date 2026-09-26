@@ -250,6 +250,7 @@ function CriarDisparoDialog({
   const atualizar = useUpdateWaBroadcast();
   const montar = useMontarPublico();
   const iniciar = useIniciarBroadcast();
+  const { pausado: waPausado } = useWaEnvioStatus();
 
   // a função devolve vazio para quem não é admin/manager, mas o gate da UI não
   // depende só disso

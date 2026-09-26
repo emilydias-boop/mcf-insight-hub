@@ -787,6 +787,11 @@ export function AppSidebar() {
                       >
                         <item.icon className="h-5 w-5" />
                         {!isCollapsed && <span>{item.title}</span>}
+                        {!isCollapsed && item.url === '/checkin' && waPausado && (
+                          <Badge variant="outline" className="ml-auto h-5 px-1.5 text-[10px] border-amber-500/60 text-amber-600">
+                            Pausado
+                          </Badge>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

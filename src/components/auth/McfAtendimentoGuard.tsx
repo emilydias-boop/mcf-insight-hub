@@ -1,9 +1,11 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ShieldAlert } from 'lucide-react';
+import { PauseCircle, ShieldAlert } from 'lucide-react';
 import { useMcfAtendimentoAccess } from '@/hooks/useMcfAtendimentoAccess';
+import { useWaEnvioStatus, formatDesdePausa } from '@/hooks/wa/useWaEnvioStatus';
 
 export const McfAtendimentoGuard = ({ children }: { children: React.ReactNode }) => {
   const { hasAccess, loading } = useMcfAtendimentoAccess();
+  const wa = useWaEnvioStatus();
 
   if (loading) {
     return (
@@ -25,5 +27,20 @@ export const McfAtendimentoGuard = ({ children }: { children: React.ReactNode })
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {wa.pausado && (
+        <Alert className="mx-4 mt-4 w-auto border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200 [&>svg]:text-amber-600">
+          <PauseCircle className="h-4 w-4" />
+          <AlertTitle>Envio de WhatsApp pausado</AlertTitle>
+          <AlertDescription>
+            {wa.motivo ?? 'Envio suspenso'}. Pausado desde {formatDesdePausa(wa.desde)} por {wa.porNome ?? '—'}.
+            Conversas e mensagens recebidas continuam visíveis; nenhuma mensagem sai (caixa, disparos,
+            lembretes e automações por WhatsApp) até religar.
+          </AlertDescription>
+        </Alert>
+      )}
+      {children}
+    </>
+  );
 };

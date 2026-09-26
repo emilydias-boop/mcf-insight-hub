@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Send, CheckCircle2, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useWaEnvioStatus } from "@/hooks/wa/useWaEnvioStatus";
 import {
   Select,
   SelectContent,
@@ -355,7 +356,11 @@ export function TemplateTestSendDialog({ templateId, templateName, open, onOpenC
           <Button variant="outline" onClick={() => handleClose(false)} disabled={loading}>
             Fechar
           </Button>
-          <Button onClick={handleSend} disabled={loading || !phone || missingRequired.length > 0}>
+          <Button
+            onClick={handleSend}
+            disabled={waPausado || loading || !phone || missingRequired.length > 0}
+            title={waPausado ? "Envio pausado — conta do WhatsApp suspensa" : undefined}
+          >
             {loading ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
