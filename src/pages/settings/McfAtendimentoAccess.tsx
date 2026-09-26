@@ -35,7 +35,7 @@ function WaEnvioCard() {
 
   const definir = useMutation({
     mutationFn: async ({ p_pausar, p_motivo }: { p_pausar: boolean; p_motivo: string | null }) => {
-      const { data, error } = await supabase.rpc('wa_definir_pausa', { p_pausar, p_motivo: p_motivo ?? '' } as never);
+      const { data, error } = await supabase.rpc('wa_definir_pausa', { p_pausar, p_motivo: p_motivo ?? undefined });
       if (error) throw error;
       return data;
     },
