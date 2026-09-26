@@ -93,6 +93,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType, ROLE_LABELS } from "@/types/user-management";
+import { useWaEnvioStatus } from "@/hooks/wa/useWaEnvioStatus";
 
 type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo" | "marketing" | "cobranca_consorcio";
 
@@ -422,6 +423,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const isCollapsed = state === "collapsed";
+  const { pausado: waPausado } = useWaEnvioStatus();
   const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
 
@@ -787,6 +789,11 @@ export function AppSidebar() {
                       >
                         <item.icon className="h-5 w-5" />
                         {!isCollapsed && <span>{item.title}</span>}
+                        {!isCollapsed && item.url === '/checkin' && waPausado && (
+                          <Badge variant="outline" className="ml-auto h-5 px-1.5 text-[10px] border-amber-500/60 text-amber-600">
+                            Pausado
+                          </Badge>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

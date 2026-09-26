@@ -31,6 +31,7 @@ import {
 import { ArrowLeft, Loader2, Pencil, Plus, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWaEnvioStatus } from '@/hooks/wa/useWaEnvioStatus';
 import {
   useCreateWaBroadcast,
   useExcluirRascunho,
@@ -249,6 +250,7 @@ function CriarDisparoDialog({
   const atualizar = useUpdateWaBroadcast();
   const montar = useMontarPublico();
   const iniciar = useIniciarBroadcast();
+  const { pausado: waPausado } = useWaEnvioStatus();
 
   // a função devolve vazio para quem não é admin/manager, mas o gate da UI não
   // depende só disso
@@ -520,7 +522,7 @@ function CriarDisparoDialog({
 
 
   const handleDisparar = async () => {
-    if (!broadcast) return;
+    if (!broadcast || waPausado) return;
     await iniciar.mutateAsync(broadcast.id);
     setConfirmOpen(false);
     handleClose(false);
@@ -615,7 +617,8 @@ function CriarDisparoDialog({
           {step === 3 && (
             <Button
               onClick={() => setConfirmOpen(true)}
-              disabled={bloqueado || contagemIndisponivel}
+              disabled={waPausado || bloqueado || contagemIndisponivel}
+              title={waPausado ? 'Envio pausado' : undefined}
             >
               <Send className="mr-2 h-4 w-4" /> Revisar e disparar
             </Button>

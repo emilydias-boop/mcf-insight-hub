@@ -28,6 +28,7 @@ import {
   interpolarPreview,
 } from '@/components/checkin/broadcast/waBroadcastLabels';
 import { formatDateTime } from '@/lib/formatters';
+import { useWaEnvioStatus } from '@/hooks/wa/useWaEnvioStatus';
 
 export default function DisparoDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +40,7 @@ export default function DisparoDetalhe() {
   const controlar = useControlarBroadcast();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [motivo, setMotivo] = useState('');
+  const { pausado: waPausado } = useWaEnvioStatus();
 
   if (isLoading) {
     return <div className="p-6 text-muted-foreground">Carregando disparo…</div>;
@@ -91,7 +93,11 @@ export default function DisparoDetalhe() {
             </Button>
           )}
           {podeControlar && broadcast.status === 'pausado' && (
-            <Button onClick={() => controlar.retomar(broadcast.id)} disabled={controlar.isPending}>
+            <Button
+              onClick={() => controlar.retomar(broadcast.id)}
+              disabled={waPausado || controlar.isPending}
+              title={waPausado ? 'Envio pausado' : undefined}
+            >
               <Play className="mr-2 h-4 w-4" /> Retomar
             </Button>
           )}
