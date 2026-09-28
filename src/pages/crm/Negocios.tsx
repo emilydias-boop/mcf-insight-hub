@@ -1337,25 +1337,14 @@ const Negocios = () => {
         onOpenChange={setDeleteDialogOpen}
         count={
           isOwnerDeleter && !isPrivilegedDeleter
-            ? (buscaAtiva
-                ? (dealsData || []).filter((d: any) => selectedDealIds.has(d.id) && d.owner_profile_id === user?.id).length
-                : (idsPropriosSelecionados?.length ?? 0))
+            ? (idsPropriosSelecionados?.length ?? 0)
             : selectedDealIds.size
         }
         isDeleting={bulkDelete.isPending}
         onConfirm={() => {
           let ids = Array.from(selectedDealIds);
           if (isOwnerDeleter && !isPrivilegedDeleter) {
-            if (!buscaAtiva) {
-              ids = idsPropriosSelecionados ?? [];
-            } else {
-              const ownIds = new Set(
-                (dealsData || [])
-                  .filter((d: any) => d.owner_profile_id === user?.id)
-                  .map((d: any) => d.id)
-              );
-              ids = ids.filter((id) => ownIds.has(id));
-            }
+            ids = idsPropriosSelecionados ?? [];
           }
           bulkDelete.mutate(ids, {
             onSuccess: () => {
@@ -1462,18 +1451,16 @@ const Negocios = () => {
           if (!o) setExportSelectedOnly(false);
         }}
         deals={
-          buscaAtiva
-            ? (exportSelectedOnly ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id)) : filteredDeals)
-            : (exportSelectedOnly
-                ? (dealsExportacao || []).filter((d: any) => selectedDealIds.has(d.id))
-                : (dealsExportacao || []))
+          exportSelectedOnly
+            ? (dealsExportacao || []).filter((d: any) => selectedDealIds.has(d.id))
+            : (dealsExportacao || [])
         }
         stages={(currentPipelineStages || []).map((s: any) => ({
           id: s.id,
           stage_name: s.stage_name,
           stage_order: s.stage_order,
         }))}
-        channelMap={buscaAtiva ? channelMap : channelMapExportacao}
+        channelMap={channelMapExportacao}
       />
       
       {/* Drawer para deals cross-pipeline */}
