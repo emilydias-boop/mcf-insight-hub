@@ -5,7 +5,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useCRMDeals, useCRMStages, useSyncClintData } from '@/hooks/useCRMData';
-import { montarFiltrosKanban, useKanbanOrigemIds, useKanbanDonos, useKanbanProdutos, useKanbanContagem, buscarKanbanLista } from '@/hooks/useKanbanServidor';
+import { montarFiltrosKanban, useKanbanOrigemIds, useKanbanDonos, useKanbanProdutos, useKanbanContagem, useKanbanBuscaOutrasPipelines, buscarKanbanLista } from '@/hooks/useKanbanServidor';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
@@ -383,23 +383,31 @@ const Negocios = () => {
     ? (myCloser?.email || userProfile?.email || undefined)
     : undefined;
   
-  const buscaAtiva = !!filters.search && filters.search.trim().length >= 2;
-  const { 
-    data: dealsData, 
-    isLoading, 
+  // Debounce da busca: o input digita em filters.search (instantâneo),
+  // mas a busca no servidor só dispara 350 ms depois da última tecla.
+  const [buscaDebounced, setBuscaDebounced] = useState(filters.search);
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(filters.search), 350);
+    return () => clearTimeout(t);
+  }, [filters.search]);
+
+  const {
+    data: dealsData,
+    isLoading,
     error,
   } = useCRMDeals({
     originId: dealsScopeId,
     searchTerm: filters.search || undefined,
     limit: 10000,
-    enabled: buscaAtiva,
+    // legado: kanban e busca rodam no servidor (kanban_*); remover na limpeza
+    enabled: false,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
     ownerProfileId: isRestrictedRole ? user?.id : undefined,
     // Closer (inclui dual role sdr+closer): união com r1/r2_closer_email
     meetingCloserEmail,
   });
 
-  // Kanban no servidor (sem busca): contagem real + páginas de 50 por coluna
+  // Kanban no servidor: contagem real + páginas de 50 por coluna
   const { data: kanbanOrigemIds = [] } = useKanbanOrigemIds(dealsScopeId || undefined);
   const restricaoKanban = useMemo(() => {
     const r: Record<string, string> = {};
@@ -408,11 +416,12 @@ const Negocios = () => {
     return r;
   }, [isRestrictedRole, user?.id, meetingCloserEmail]);
   const filtrosKanban = useMemo(
-    () => montarFiltrosKanban(filters, restricaoKanban),
-    [filters, restricaoKanban],
+    () => montarFiltrosKanban({ ...filters, search: buscaDebounced }, restricaoKanban),
+    [filters, buscaDebounced, restricaoKanban],
   );
-  const { data: donosKanban } = useKanbanDonos(buscaAtiva ? [] : kanbanOrigemIds, restricaoKanban);
-  const { data: produtosKanban, isLoading: isLoadingProdutosKanban } = useKanbanProdutos(kanbanOrigemIds, restricaoKanban, !buscaAtiva);
+  const { data: outrasPipelines } = useKanbanBuscaOutrasPipelines(kanbanOrigemIds, filtrosKanban);
+  const { data: donosKanban } = useKanbanDonos(kanbanOrigemIds, restricaoKanban);
+  const { data: produtosKanban, isLoading: isLoadingProdutosKanban } = useKanbanProdutos(kanbanOrigemIds, restricaoKanban, true);
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
   const visibleStages = getVisibleStages();
