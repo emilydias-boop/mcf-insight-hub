@@ -436,7 +436,7 @@ const Negocios = () => {
     originIds: kanbanOrigemIds,
     filtros: filtrosKanban,
     colunas: colunasCabecalho,
-    enabled: !buscaAtiva,
+    enabled: true,
   });
   const totalServidor = useMemo(
     () => (contagemCabecalho ? Array.from(contagemCabecalho.values()).reduce((a, b) => a + Number(b || 0), 0) : undefined),
@@ -446,7 +446,7 @@ const Negocios = () => {
   // Exportação e exclusão em massa no modo servidor (busca inativa)
   const [dealsExportacao, setDealsExportacao] = useState<any[] | null>(null);
   useEffect(() => {
-    if (!exportDialogOpen || buscaAtiva || kanbanOrigemIds.length === 0) {
+    if (!exportDialogOpen || kanbanOrigemIds.length === 0) {
       setDealsExportacao(null);
       return;
     }
@@ -457,7 +457,7 @@ const Negocios = () => {
       .catch(() => { if (!cancelado) toast.error('Erro ao carregar negócios para exportar'); })
       .finally(() => toast.dismiss(t));
     return () => { cancelado = true; };
-  }, [exportDialogOpen, buscaAtiva, kanbanOrigemIds, filtrosKanban]);
+  }, [exportDialogOpen, kanbanOrigemIds, filtrosKanban]);
   const channelMapExportacao = useMemo(() => {
     const m = new Map<string, SalesChannel>();
     (dealsExportacao || []).forEach((d: any) => {
@@ -469,7 +469,7 @@ const Negocios = () => {
 
   const [idsPropriosSelecionados, setIdsPropriosSelecionados] = useState<string[] | null>(null);
   useEffect(() => {
-    if (!deleteDialogOpen || buscaAtiva || !(isOwnerDeleter && !isPrivilegedDeleter) || !user?.id) {
+    if (!deleteDialogOpen || !(isOwnerDeleter && !isPrivilegedDeleter) || !user?.id) {
       setIdsPropriosSelecionados(null);
       return;
     }
@@ -488,7 +488,7 @@ const Negocios = () => {
       if (!cancelado) setIdsPropriosSelecionados(proprios);
     })();
     return () => { cancelado = true; };
-  }, [deleteDialogOpen, buscaAtiva, isOwnerDeleter, isPrivilegedDeleter, selectedDealIds, user?.id]);
+  }, [deleteDialogOpen, isOwnerDeleter, isPrivilegedDeleter, selectedDealIds, user?.id]);
 
   const currentStageIds = useMemo(() => {
     return new Set((currentPipelineStages || []).map((s: any) => s.id));
@@ -508,7 +508,7 @@ const Negocios = () => {
   }, []);
   
   // Derivar opções de owners a partir dos deals carregados
-  const { ownerOptions } = useDealOwnerOptions(buscaAtiva ? dealsData : (donosKanban as any), activeBU);
+  const { ownerOptions } = useDealOwnerOptions(donosKanban as any, activeBU);
   const { data: closerFilterOptions } = useCloserFilterOptions(activeBU);
   
   // Buscar tags únicas para o filtro
