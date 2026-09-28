@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CopyLeadsFormatDialog, buildCopyLeadData, CopyLeadData } from './CopyLeadsFormatDialog';
 import { useTotaisPorCliente, normalizarEmail } from '@/hooks/useTotaisPorCliente';
+import { KanbanColunaServidor } from './KanbanColunaServidor';
+import { useKanbanContagem, invalidarKanban } from '@/hooks/useKanbanServidor';
 
 interface Deal {
   id: string;
@@ -51,6 +54,7 @@ interface DealKanbanBoardProps {
   onClearStageSelection?: (dealIds: string[]) => void;
   channelMap?: Map<string, SalesChannel>;
   outsideMap?: Map<string, { isOutside: boolean; productName: string | null }>;
+  servidor?: { originIds: string[]; filtros: Record<string, unknown> };
 }
 
 const INITIAL_VISIBLE_COUNT = 50;
@@ -66,6 +70,7 @@ export const DealKanbanBoard = ({
   onClearStageSelection,
   channelMap,
   outsideMap,
+  servidor,
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
@@ -100,7 +105,23 @@ export const DealKanbanBoard = ({
     const activeStages = (stages || []).filter((s: any) => s.is_active);
     return activeStages.filter((s: any) => canViewStage(s.id));
   }, [stages, canViewStage]);
-  
+
+  const queryClient = useQueryClient();
+  const colunasServidor = useMemo(
+    () => visibleStages.map((s: any) => ({ id: s.id as string, name: s.stage_name as string })),
+    [visibleStages],
+  );
+  const { data: contagemServidor } = useKanbanContagem({
+    originIds: servidor?.originIds ?? [],
+    filtros: servidor?.filtros ?? {},
+    colunas: colunasServidor,
+    enabled: !!servidor,
+  });
+  const dealsServidorRef = useRef(new Map<string, any>());
+  const registrarDealsServidor = useCallback((lista: any[]) => {
+    for (const d of lista) dealsServidorRef.current.set(d.id, d);
+  }, []);
+
   // Função de ordenação por critério selecionado
   const sortDeals = useCallback((
     stageDeals: Deal[], 
@@ -240,7 +261,7 @@ export const DealKanbanBoard = ({
       return;
     }
     
-    const deal = deals.find(d => d.id === dealId);
+    const deal = deals.find(d => d.id === dealId) ?? dealsServidorRef.current.get(dealId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
 
@@ -253,13 +274,14 @@ export const DealKanbanBoard = ({
   };
 
   const executeMove = (dealId: string, newStageId: string, oldStageId: string) => {
-    const deal = deals.find(d => d.id === dealId);
+    const deal = deals.find(d => d.id === dealId) ?? dealsServidorRef.current.get(dealId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     
     updateDealMutation.mutate(
       { id: dealId, stage_id: newStageId, previousStageId: oldStageId },
       {
         onSuccess: () => {
+          if (servidor) invalidarKanban(queryClient);
           // O registro em deal_activities (stage_change) é feito pelo trigger
           // trg_log_deal_stage_change em crm_deals — não duplicar aqui.
 
@@ -291,6 +313,29 @@ export const DealKanbanBoard = ({
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-3 h-full overflow-x-auto pb-4">
           {visibleStages.map((stage: any) => {
+            if (servidor) {
+              return (
+                <KanbanColunaServidor
+                  key={stage.id}
+                  stage={stage}
+                  originIds={servidor.originIds}
+                  filtros={servidor.filtros}
+                  colunasIds={colunasServidor.map((c) => c.id)}
+                  total={contagemServidor?.get(stage.id)}
+                  ordem={stageSorts[stage.id] || 'stage_newest'}
+                  onOrdemChange={(sort) => handleSortChange(stage.id, sort)}
+                  selectionEnabled={selectionEnabled}
+                  selectedDealIds={selectedDealIds}
+                  onSelectionChange={onSelectionChange}
+                  onSelectAllInStage={onSelectAllInStage}
+                  onClearStageSelection={onClearStageSelection}
+                  onSelectByCountInStage={onSelectByCountInStage}
+                  onDealClick={handleDealClick}
+                  onDealsCarregados={registrarDealsServidor}
+                  onAbrirCopiaPersonalizada={(leads) => setCopyDialogData({ open: true, leads })}
+                />
+              );
+            }
             const stageDeals = dealsByStage[stage.id] || [];
             const visibleCount = getVisibleCountForStage(stage.id);
             const visibleDeals = stageDeals.slice(0, visibleCount);
