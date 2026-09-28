@@ -2714,6 +2714,33 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_nome_renomeado_por_comprador: {
+        Row: {
+          id: string
+          nome_antes: string | null
+          nome_restaurado: string | null
+          registro_id: string
+          restaurado_em: string
+          tabela: string
+        }
+        Insert: {
+          id?: string
+          nome_antes?: string | null
+          nome_restaurado?: string | null
+          registro_id: string
+          restaurado_em?: string
+          tabela: string
+        }
+        Update: {
+          id?: string
+          nome_antes?: string | null
+          nome_restaurado?: string | null
+          registro_id?: string
+          restaurado_em?: string
+          tabela?: string
+        }
+        Relationships: []
+      }
       bi_public_tokens: {
         Row: {
           active: boolean
@@ -19451,6 +19478,92 @@ export type Database = {
       is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
+      kanban_canal: {
+        Args: { p_custom: Json; p_email: string; p_tags: string[] }
+        Returns: string
+      }
+      kanban_contagem: {
+        Args: {
+          p_colunas_ids: string[]
+          p_colunas_nomes: string[]
+          p_filtros: Json
+          p_origin_ids: string[]
+        }
+        Returns: {
+          stage_id: string
+          total: number
+        }[]
+      }
+      kanban_donos: {
+        Args: { p_filtros?: Json; p_origin_ids: string[] }
+        Returns: {
+          owner_id: string
+          owner_profile_id: string
+        }[]
+      }
+      kanban_eh_sem_interesse: { Args: { p: string }; Returns: boolean }
+      kanban_filtrados: {
+        Args: {
+          p_colunas_ids?: string[]
+          p_com_metricas?: boolean
+          p_filtros?: Json
+          p_origin_ids: string[]
+          p_stage_id?: string
+          p_stage_name?: string
+        }
+        Returns: {
+          atividades: number
+          canal: string
+          criado_em: string
+          id: string
+          is_outside: boolean
+          ligacoes: number
+          ordem_etapa: string
+          stage_id: string
+          stage_name: string
+          ultima_tentativa: string
+        }[]
+      }
+      kanban_lista: {
+        Args: {
+          p_colunas_ids?: string[]
+          p_filtros: Json
+          p_limit?: number
+          p_offset?: number
+          p_ordem?: string
+          p_origin_ids: string[]
+          p_stage_id?: string
+          p_stage_name?: string
+        }
+        Returns: Json[]
+      }
+      kanban_norm_tag: { Args: { p: string }; Returns: string }
+      kanban_ordem_sql: { Args: { p_ordem: string }; Returns: string }
+      kanban_pagina: {
+        Args: {
+          p_colunas_ids: string[]
+          p_filtros: Json
+          p_limit?: number
+          p_offset?: number
+          p_ordem?: string
+          p_origin_ids: string[]
+          p_stage_id: string
+          p_stage_name: string
+        }
+        Returns: Json[]
+      }
+      kanban_produtos: {
+        Args: { p_filtros?: Json; p_origin_ids: string[] }
+        Returns: {
+          produto: string
+        }[]
+      }
+      kanban_resumo_deal: {
+        Args: { p_deal_id: string; p_stage_id: string }
+        Returns: Json
+      }
+      kanban_rotulo_produto: { Args: { p: string }; Returns: string }
+      kanban_status_etapa: { Args: { p: string }; Returns: string }
       kb_buscar: {
         Args: { _escopos?: string[]; _limite?: number; _query: string }
         Returns: {
