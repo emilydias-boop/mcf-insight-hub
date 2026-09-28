@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfDay, endOfDay, format, addHours } from "date-fns";
+import { format } from "date-fns";
 
 export interface UnassignedContractItem {
   deal_id: string | null;
@@ -60,9 +60,6 @@ export function useUnassignedContracts(
   return useQuery({
     queryKey: ['unassigned-contracts', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu],
     queryFn: async (): Promise<UnassignedContracts> => {
-      const BRT_OFFSET_HOURS = 3;
-      const start = addHours(startOfDay(startDate), BRT_OFFSET_HOURS).toISOString();
-      const end = addHours(endOfDay(endDate), BRT_OFFSET_HOURS).toISOString();
 
       // Régua nova: cauções efetivas do período (data da transação + closer da R1).
       const { data: caucoes, error } = await (supabase as any).rpc('caucoes_efetivas', {
@@ -82,9 +79,6 @@ export function useUnassignedContracts(
 
       const items: UnassignedContractItem[] = [];
       const sdrItems: UnassignedContractItem[] = [];
-      const attributedDeals = new Set(
-        rows.filter((r) => r.closer_id).map((r) => r.deal_id).filter(Boolean) as string[],
-      );
 
       rows.forEach((r: any) => {
         const base = {
