@@ -16,7 +16,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 
 const integer = (n: number) => n.toLocaleString('pt-BR');
-const pctFormat = (v: number) => `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const currency = (n: number) => new Intl.NumberFormat('pt-BR', {
   style: 'currency', currency: 'BRL', maximumFractionDigits: 0, minimumFractionDigits: 0,
 }).format(n);
@@ -49,7 +48,7 @@ function Etapa({ title, value, children, highlight = false }: { title: string; v
   );
 }
 
-function EtapaDupla({ title, pares }: { title: string; pares: { label: string; value: number }[] }) {
+function EtapaDupla({ title, pares, children }: { title: string; pares: { label: string; value: number }[]; children?: React.ReactNode }) {
   return (
     <div className="min-w-0 flex-1 border-l-2 border-border pl-4 py-2">
       <p className="text-xs font-medium text-muted-foreground">{title}</p>
@@ -61,28 +60,27 @@ function EtapaDupla({ title, pares }: { title: string; pares: { label: string; v
           </div>
         ))}
       </div>
-      <div className="mt-2 min-h-8" />
+      <div className="mt-2 min-h-8 text-xs leading-relaxed text-muted-foreground">{children}</div>
     </div>
   );
 }
 
 function DiaADia({ bu }: { bu: VDBu }) {
-  type Col = { label: string; key: keyof VDTotais } | { label: string; especial: 'taxa_no_show' };
+  type Col = { label: string; key: keyof VDTotais };
   const columns: Col[] = [
     ...(bu.bu === 'incorporador'
       ? [{ label: 'A010', key: 'entrada_a010' as const }, { label: 'Anamnese', key: 'entrada_anamnese' as const }]
       : [{ label: 'Entrada', key: 'entrada' as const }]),
-    { label: 'Agend.', key: 'agendamentos' },
-    ...(bu.bu === 'incorporador' ? [{ label: 'Lead A', key: 'agendamentos_a' as const }, { label: 'Lead B', key: 'agendamentos_b' as const }] : []),
+    ...(bu.bu === 'incorporador'
+      ? [{ label: 'Lead A', key: 'agendamentos_a' as const }, { label: 'Lead B', key: 'agendamentos_b' as const }]
+      : [{ label: 'Agend.', key: 'agendamentos' as const }]),
     { label: 'R1 marc.', key: 'r1_marcadas' },
     { label: 'R1 real.', key: 'r1_realizadas' },
     { label: 'No-show', key: 'r1_no_show' },
-    { label: '% No-show', especial: 'taxa_no_show' as const },
     { label: 'Fechamento', key: 'fechamentos' },
     ...(bu.bu === 'consorcio' ? [{ label: 'Cartas', key: 'cartas' as const }, { label: 'Valor', key: 'valor' as const }] : []),
     ...(bu.bu === 'incorporador' ? [{ label: 'Sem R1', key: 'fechamentos_sem_r1' as const }] : []),
   ];
-  const pct = (v: number | null | undefined) => (v === null || v === undefined ? '—' : pctFormat(v));
   const cell = (key: keyof VDTotais, value: number | undefined) => key === 'valor' ? currency(value ?? 0) : integer(value ?? 0);
 
   return (
@@ -103,13 +101,13 @@ function DiaADia({ bu }: { bu: VDBu }) {
               const date = parseYmdLocal(dia.data);
               return <TableRow key={dia.data}>
                 <TableCell className="whitespace-nowrap font-medium">{date ? format(date, 'dd/MM, EEE', { locale: ptBR }) : dia.data}</TableCell>
-                {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{'especial' in c ? pct(dia.taxa_no_show) : cell(c.key, dia[c.key])}</TableCell>)}
+                {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{cell(c.key, dia[c.key])}</TableCell>)}
               </TableRow>;
             })}
           </TableBody>
           <TableFooter><TableRow>
             <TableCell>Total</TableCell>
-            {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{'especial' in c ? pct(bu.taxas.no_show) : cell(c.key, bu.totais[c.key])}</TableCell>)}
+            {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{cell(c.key, bu.totais[c.key])}</TableCell>)}
           </TableRow></TableFooter>
         </Table>
       </CollapsibleContent>
@@ -135,29 +133,30 @@ function BuSection({ bu, singleDay }: { bu: VDBu; singleDay: boolean }) {
               {t.entrada_importados > 0 ? `inclui ${integer(t.entrada_importados)} importados (base clint)` : null}
             </Etapa>
           )}
-          <Etapa title="Agendamento" value={t.agendamentos}>
-            <span className="flex flex-wrap gap-x-4">
-              {bu.bu === 'incorporador' ? (
-                <>
-                  <span><strong className="font-semibold text-foreground">Lead A:</strong> {integer(t.agendamentos_a)}</span>
-                  <span><strong className="font-semibold text-foreground">Lead B:</strong> {integer(t.agendamentos_b)}</span>
-                  {t.agendamentos_outros > 0 && <span>+ {integer(t.agendamentos_outros)} C / sem segmento</span>}
-                </>
-              ) : (
-                <span>sem segmentação A/B nesta BU</span>
+          {bu.bu === 'incorporador' ? (
+            <EtapaDupla title="Agendamento" pares={[
+              { label: 'Lead A', value: t.agendamentos_a },
+              { label: 'Lead B', value: t.agendamentos_b },
+            ]}>
+              <span className="flex flex-wrap gap-x-4">
+                {t.agendamentos_outros > 0 && <span>+ {integer(t.agendamentos_outros)} C / sem segmento</span>}
+                {t.reagendamentos > 0 && <span>inclui {integer(t.reagendamentos)} reagendamentos</span>}
+              </span>
+              {t.agendamentos_fora_regua > 0 && (
+                <span className="mt-1 block">{integer(t.agendamentos_fora_regua)} marcados por closer/gestão não contam (régua da TV)</span>
               )}
-              {t.reagendamentos > 0 && <span>inclui {integer(t.reagendamentos)} reagendamentos</span>}
-            </span>
-            {bu.bu === 'incorporador' && t.agendamentos_fora_regua > 0 && (
-              <span className="mt-1 block">{integer(t.agendamentos_fora_regua)} marcados por closer/gestão não contam (régua da TV)</span>
-            )}
-          </Etapa>
+            </EtapaDupla>
+          ) : (
+            <Etapa title="Agendamento" value={t.agendamentos}>
+              <span className="flex flex-wrap gap-x-4">
+                <span>sem segmentação A/B nesta BU</span>
+                {t.reagendamentos > 0 && <span>inclui {integer(t.reagendamentos)} reagendamentos</span>}
+              </span>
+            </Etapa>
+          )}
           <Etapa title="R1 Realizada" value={t.r1_realizadas}>
-            <span className="block font-semibold text-foreground">
-              Taxa de no-show: {bu.taxas.no_show === null ? '—' : pctFormat(bu.taxas.no_show)}
-            </span>
-            <span className="block">no-show ÷ (realizadas + no-show)</span>
-            <span className="block">de {integer(t.r1_marcadas)} marcadas · {integer(t.r1_no_show)} no-show · {integer(t.r1_pendentes)} pendentes</span>
+            <span className="block font-semibold text-foreground">No-show: {integer(t.r1_no_show)}</span>
+            <span className="block">de {integer(t.r1_marcadas)} marcadas · {integer(t.r1_pendentes)} pendentes</span>
           </Etapa>
           <Taxa value={bu.taxas.realizada_fechamento} label="fechamentos ÷ realizadas" />
           <Etapa title={bu.fechamento_label} value={t.fechamentos} highlight>
@@ -251,7 +250,7 @@ export default function VisaoDiaria() {
       {!isLoading && !error && data?.bus.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma BU encontrada para o período.</p>}
 
       <footer className="border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
-        Entrada Incorporador = compradores A010 (pessoas distintas, Hubla+Kiwify) e leads Anamnese sem A010, mostrados separados. Entrada Consórcio/Solar = todo negócio criado na pipeline, inclusive importações. Agendamento = mesma régua da TV Incorporador: 1ª e 2ª marcação de cada negócio pela data em que foi marcada (reagendamento conta uma vez); no Incorporador não contam marcações feitas por closer, coordenação ou gestão; Lead A/B = segmento ICP do negócio. R1 Realizada = pela data da reunião, mesma régua do Painel Comercial. Taxa de no-show = no-show ÷ (realizadas + no-show) — reuniões ainda pendentes não entram. Contrato pago = cauções efetivas sem estorno; 'sem R1' = contrato pago sem reunião vinculada. Carta fechada = propostas aceitas pela data do aceite (perna A da Produção Gerada).
+        Entrada Incorporador = compradores A010 (pessoas distintas, Hubla+Kiwify) e leads Anamnese sem A010, mostrados separados. Entrada Consórcio/Solar = todo negócio criado na pipeline, inclusive importações. Agendamento = mesma régua da TV Incorporador: 1ª e 2ª marcação de cada negócio pela data em que foi marcada (reagendamento conta uma vez); no Incorporador não contam marcações feitas por closer, coordenação ou gestão; Lead A/B = segmento ICP do negócio. No Incorporador o agendamento é mostrado só por Lead A e Lead B, sem total. R1 Realizada = pela data da reunião, mesma régua do Painel Comercial. No-show = reuniões R1 marcadas como no-show pelo closer na agenda, pela data da reunião. Contrato pago = cauções efetivas sem estorno; 'sem R1' = contrato pago sem reunião vinculada. Carta fechada = propostas aceitas pela data do aceite (perna A da Produção Gerada).
       </footer>
     </main>
   );
