@@ -8124,8 +8124,59 @@ export type Database = {
           },
         ]
       }
+      crm_contact_aliases: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          documento: string | null
+          email: string | null
+          id: string
+          nome: string | null
+          observacao: string | null
+          origem: string
+          telefone: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          documento?: string | null
+          email?: string | null
+          id?: string
+          nome?: string | null
+          observacao?: string | null
+          origem?: string
+          telefone?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          documento?: string | null
+          email?: string | null
+          id?: string
+          nome?: string | null
+          observacao?: string | null
+          origem?: string
+          telefone?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contact_aliases_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_contacts: {
         Row: {
+          aliases_busca: string | null
           clint_id: string
           created_at: string | null
           custom_fields: Json | null
@@ -8143,6 +8194,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          aliases_busca?: string | null
           clint_id: string
           created_at?: string | null
           custom_fields?: Json | null
@@ -8160,6 +8212,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          aliases_busca?: string | null
           clint_id?: string
           created_at?: string | null
           custom_fields?: Json | null
@@ -19586,6 +19639,10 @@ export type Database = {
       }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       redact_audit_snapshot: { Args: { _data: Json }; Returns: Json }
+      refresh_contact_aliases_busca: {
+        Args: { p_contact_id: string }
+        Returns: undefined
+      }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
       registrar_motivo_sem_interesse: {
         Args: {

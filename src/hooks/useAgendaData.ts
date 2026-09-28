@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { sanitizarTermoBusca } from '@/lib/contactSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfWeek, endOfWeek, format, addDays, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1036,7 +1037,7 @@ export function useSearchDealsForSchedule(
       const { data: contacts } = await supabase
         .from('crm_contacts')
         .select('id')
-        .or(`name.ilike.%${query}%${phoneFilter}${emailFilter}`)
+        .or(`name.ilike.%${query}%${phoneFilter}${emailFilter},aliases_busca.ilike.%${sanitizarTermoBusca(query)}%`)
         .limit(10);
 
       // 3. Se achou contatos, buscar os deals relacionados

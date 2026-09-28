@@ -1,4 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { orContatoPorTermo } from '@/lib/contactSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { mensagemDuplicateContact } from '@/lib/duplicateContactError';
@@ -468,7 +469,7 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         const { data: matchingContacts } = await supabase
           .from('crm_contacts')
           .select('id')
-          .or(`name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`)
+          .or(orContatoPorTermo(term))
           .limit(500);
         
         const contactIds = matchingContacts?.map(c => c.id) || [];
@@ -538,7 +539,21 @@ export const useCRMDealsInfinite = (filters: InfiniteDealsFilters = {}) => {
       
       if (filters.originId) query = query.eq('origin_id', filters.originId);
       if (filters.stageId) query = query.eq('stage_id', filters.stageId);
-      if (filters.searchTerm) query = query.ilike('name', `%${filters.searchTerm}%`);
+      if (filters.searchTerm && filters.searchTerm.trim()) {
+        const term = filters.searchTerm.trim();
+        // Mesma estratégia de 2 passos do useCRMDeals (inclui contatos alternativos)
+        const { data: matchingContacts } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .or(orContatoPorTermo(term))
+          .limit(500);
+        const contactIds = matchingContacts?.map(c => c.id) || [];
+        if (contactIds.length > 0) {
+          query = query.or(`name.ilike.%${term}%,contact_id.in.(${contactIds.join(',')})`);
+        } else {
+          query = query.ilike('name', `%${term}%`);
+        }
+      }
       query = query.eq('is_archived', false);
       
       const { data, error } = await query;
