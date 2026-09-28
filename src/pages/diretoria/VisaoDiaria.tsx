@@ -134,29 +134,30 @@ function BuSection({ bu, singleDay }: { bu: VDBu; singleDay: boolean }) {
               {t.entrada_importados > 0 ? `inclui ${integer(t.entrada_importados)} importados (base clint)` : null}
             </Etapa>
           )}
-          <Etapa title="Agendamento" value={t.agendamentos}>
-            <span className="flex flex-wrap gap-x-4">
-              {bu.bu === 'incorporador' ? (
-                <>
-                  <span><strong className="font-semibold text-foreground">Lead A:</strong> {integer(t.agendamentos_a)}</span>
-                  <span><strong className="font-semibold text-foreground">Lead B:</strong> {integer(t.agendamentos_b)}</span>
-                  {t.agendamentos_outros > 0 && <span>+ {integer(t.agendamentos_outros)} C / sem segmento</span>}
-                </>
-              ) : (
-                <span>sem segmentação A/B nesta BU</span>
+          {bu.bu === 'incorporador' ? (
+            <EtapaDupla title="Agendamento" pares={[
+              { label: 'Lead A', value: t.agendamentos_a },
+              { label: 'Lead B', value: t.agendamentos_b },
+            ]}>
+              <span className="flex flex-wrap gap-x-4">
+                {t.agendamentos_outros > 0 && <span>+ {integer(t.agendamentos_outros)} C / sem segmento</span>}
+                {t.reagendamentos > 0 && <span>inclui {integer(t.reagendamentos)} reagendamentos</span>}
+              </span>
+              {t.agendamentos_fora_regua > 0 && (
+                <span className="mt-1 block">{integer(t.agendamentos_fora_regua)} marcados por closer/gestão não contam (régua da TV)</span>
               )}
-              {t.reagendamentos > 0 && <span>inclui {integer(t.reagendamentos)} reagendamentos</span>}
-            </span>
-            {bu.bu === 'incorporador' && t.agendamentos_fora_regua > 0 && (
-              <span className="mt-1 block">{integer(t.agendamentos_fora_regua)} marcados por closer/gestão não contam (régua da TV)</span>
-            )}
-          </Etapa>
+            </EtapaDupla>
+          ) : (
+            <Etapa title="Agendamento" value={t.agendamentos}>
+              <span className="flex flex-wrap gap-x-4">
+                <span>sem segmentação A/B nesta BU</span>
+                {t.reagendamentos > 0 && <span>inclui {integer(t.reagendamentos)} reagendamentos</span>}
+              </span>
+            </Etapa>
+          )}
           <Etapa title="R1 Realizada" value={t.r1_realizadas}>
-            <span className="block font-semibold text-foreground">
-              Taxa de no-show: {bu.taxas.no_show === null ? '—' : pctFormat(bu.taxas.no_show)}
-            </span>
-            <span className="block">no-show ÷ (realizadas + no-show)</span>
-            <span className="block">de {integer(t.r1_marcadas)} marcadas · {integer(t.r1_no_show)} no-show · {integer(t.r1_pendentes)} pendentes</span>
+            <span className="block font-semibold text-foreground">No-show: {integer(t.r1_no_show)}</span>
+            <span className="block">de {integer(t.r1_marcadas)} marcadas · {integer(t.r1_pendentes)} pendentes</span>
           </Etapa>
           <Taxa value={bu.taxas.realizada_fechamento} label="fechamentos ÷ realizadas" />
           <Etapa title={bu.fechamento_label} value={t.fechamentos} highlight>
