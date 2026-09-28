@@ -19486,8 +19486,8 @@ export type Database = {
         }
         Returns: Json
       }
-      kanban_canal: {
-        Args: { p_custom: Json; p_email: string; p_tags: string[] }
+      kanban_canal_de: {
+        Args: { p_a010: boolean; p_custom: Json; p_tags: string[] }
         Returns: string
       }
       kanban_contagem: {
@@ -19569,6 +19569,13 @@ export type Database = {
       kanban_resumo_deal: {
         Args: { p_deal_id: string; p_stage_id: string }
         Returns: Json
+      }
+      kanban_resumo_lote: {
+        Args: { p_ids: string[] }
+        Returns: {
+          deal_id: string
+          resumo: Json
+        }[]
       }
       kanban_rotulo_produto: { Args: { p: string }; Returns: string }
       kanban_status_etapa: { Args: { p: string }; Returns: string }
@@ -20030,6 +20037,10 @@ export type Database = {
       }
       vincular_venda_ao_participante: {
         Args: { p_attendee_id: string; p_transaction_id: string }
+        Returns: Json
+      }
+      visao_diaria_bus: {
+        Args: { p_from: string; p_to: string }
         Returns: Json
       }
       wa_abrir_conversa: { Args: { _deal_id: string }; Returns: string }
