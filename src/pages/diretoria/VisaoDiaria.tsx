@@ -94,8 +94,9 @@ function DiaADia({ bu }: { bu: VDBu }) {
   );
 }
 
-function BuSection({ bu, singleDay, hasPastDays }: { bu: VDBu; singleDay: boolean; hasPastDays: boolean }) {
+function BuSection({ bu, singleDay }: { bu: VDBu; singleDay: boolean }) {
   const t = bu.totais;
+  const pendentesAnteriores = bu.dias.reduce((soma, d) => (d.data < hojeSaoPaulo() ? soma + (d.r1_pendentes ?? 0) : soma), 0);
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-3"><CardTitle className="text-lg">{bu.label}</CardTitle></CardHeader>
@@ -123,10 +124,10 @@ function BuSection({ bu, singleDay, hasPastDays }: { bu: VDBu; singleDay: boolea
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Badge variant="secondary" className="gap-1.5 py-1"><Taxa value={bu.taxas.entrada_fechamento} label="Entrada → Fechamento" compact /></Badge>
         </div>
-        {hasPastDays && t.r1_pendentes > 0 && (
+        {pendentesAnteriores > 0 && (
           <p className="mt-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            {integer(t.r1_pendentes)} R1 sem status marcado na agenda — a taxa de comparecimento fica subestimada até o closer marcar
+            {integer(pendentesAnteriores)} R1 de dias anteriores sem status marcado na agenda — a taxa de comparecimento fica subestimada até o closer marcar
           </p>
         )}
         {!singleDay && <DiaADia bu={bu} />}
@@ -156,8 +157,7 @@ export default function VisaoDiaria() {
 
   const days = draft?.from && draft?.to ? differenceInCalendarDays(draft.to, draft.from) + 1 : 0;
   const invalidRange = days > 93;
-  const generatedAt = data?.gerado_em ? new Date(data.gerado_em) : null;
-  const hasPastDays = period.from < today;
+  const geradoEm = data?.gerado_em ?? '';
 
   return (
     <main className="mx-auto max-w-[1500px] space-y-6 p-4 md:p-6">
@@ -167,7 +167,7 @@ export default function VisaoDiaria() {
           <p className="mt-1 text-sm text-muted-foreground">Entrada → Agendamento → R1 Realizada → Fechamento, por BU</p>
         </div>
         <div className="flex items-center gap-3">
-          {generatedAt && !Number.isNaN(generatedAt.getTime()) && <span className="text-xs text-muted-foreground">Atualizado às {new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(generatedAt)}</span>}
+          {geradoEm && <span className="text-xs text-muted-foreground">Atualizado às {geradoEm.slice(11, 16)}</span>}
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} title="Atualizar" aria-label="Atualizar">
             <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
           </Button>
@@ -205,7 +205,7 @@ export default function VisaoDiaria() {
 
       {isLoading && <div className="space-y-4" aria-label="Carregando visão diária">{[1, 2, 3].map((n) => <Skeleton key={n} className="h-52 w-full rounded-md" />)}</div>}
       {error && <Card><CardContent className="space-y-3 pt-6"><p className="text-sm text-destructive">{error.message}</p><Button variant="outline" onClick={() => refetch()}>Tentar de novo</Button></CardContent></Card>}
-      {!isLoading && !error && data?.bus.map((bu) => <BuSection key={bu.bu} bu={bu} singleDay={data.periodo.de === data.periodo.ate} hasPastDays={hasPastDays} />)}
+      {!isLoading && !error && data?.bus.map((bu) => <BuSection key={bu.bu} bu={bu} singleDay={data.periodo.de === data.periodo.ate} />)}
       {!isLoading && !error && data?.bus.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma BU encontrada para o período.</p>}
 
       <footer className="border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
