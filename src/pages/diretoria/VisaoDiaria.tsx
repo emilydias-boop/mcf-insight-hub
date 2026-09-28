@@ -126,17 +126,36 @@ function BuSection({ bu, singleDay }: { bu: VDBu; singleDay: boolean }) {
       <CardHeader className="pb-3"><CardTitle className="text-lg">{bu.label}</CardTitle></CardHeader>
       <CardContent>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
-          <Etapa title="Entrada de lead" value={t.entrada}>
-            {bu.bu === 'incorporador' ? `A010: ${integer(t.entrada_a010)} · Anamnese: ${integer(t.entrada_anamnese)}` :
-              t.entrada_importados > 0 ? `inclui ${integer(t.entrada_importados)} importados (base clint)` : null}
-          </Etapa>
-          <Taxa value={bu.taxas.entrada_agendamento} label="agendamentos ÷ entradas" />
+          {bu.bu === 'incorporador' ? (
+            <EtapaDupla title="Entrada de lead" pares={[
+              { label: 'A010', value: t.entrada_a010 },
+              { label: 'Anamnese', value: t.entrada_anamnese },
+            ]} />
+          ) : (
+            <Etapa title="Entrada de lead" value={t.entrada}>
+              {t.entrada_importados > 0 ? `inclui ${integer(t.entrada_importados)} importados (base clint)` : null}
+            </Etapa>
+          )}
           <Etapa title="Agendamento" value={t.agendamentos}>
-            {t.reagendamentos > 0 && `+ ${integer(t.reagendamentos)} reagendamentos`}
+            <span className="flex flex-wrap gap-x-4">
+              {bu.bu === 'incorporador' ? (
+                <>
+                  <span><strong className="font-semibold text-foreground">Lead A:</strong> {integer(t.agendamentos_a)}</span>
+                  <span><strong className="font-semibold text-foreground">Lead B:</strong> {integer(t.agendamentos_b)}</span>
+                  {t.agendamentos_outros > 0 && <span>+ {integer(t.agendamentos_outros)} C / sem segmento</span>}
+                </>
+              ) : (
+                <span>sem segmentação A/B nesta BU</span>
+              )}
+              {t.reagendamentos > 0 && <span>+ {integer(t.reagendamentos)} reagendamentos</span>}
+            </span>
           </Etapa>
-          <Taxa value={bu.taxas.comparecimento} label="realizadas ÷ R1 marcadas" />
           <Etapa title="R1 Realizada" value={t.r1_realizadas}>
-            de {integer(t.r1_marcadas)} marcadas · {integer(t.r1_no_show)} no-show · {integer(t.r1_pendentes)} pendentes
+            <span className="block font-semibold text-foreground">
+              Taxa de no-show: {bu.taxas.no_show === null ? '—' : pctFormat(bu.taxas.no_show)}
+            </span>
+            <span className="block">no-show ÷ (realizadas + no-show)</span>
+            <span className="block">de {integer(t.r1_marcadas)} marcadas · {integer(t.r1_no_show)} no-show · {integer(t.r1_pendentes)} pendentes</span>
           </Etapa>
           <Taxa value={bu.taxas.realizada_fechamento} label="fechamentos ÷ realizadas" />
           <Etapa title={bu.fechamento_label} value={t.fechamentos} highlight>
@@ -144,9 +163,6 @@ function BuSection({ bu, singleDay }: { bu: VDBu; singleDay: boolean }) {
             {bu.bu === 'consorcio' && <>{integer(t.cartas)} cartas · <strong className="font-semibold text-foreground">{currency(t.valor)}</strong></>}
             {bu.bu === 'solar' && t.valor > 0 && <strong className="font-semibold text-foreground">{currency(t.valor)}</strong>}
           </Etapa>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Badge variant="secondary" className="gap-1.5 py-1"><Taxa value={bu.taxas.entrada_fechamento} label="Entrada → Fechamento" compact /></Badge>
         </div>
         {pendentesAnteriores > 0 && (
           <p className="mt-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
@@ -233,7 +249,7 @@ export default function VisaoDiaria() {
       {!isLoading && !error && data?.bus.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma BU encontrada para o período.</p>}
 
       <footer className="border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
-        Taxas por volume do período (não coorte): em 'Hoje' oscilam, em 7/30 dias estabilizam. Entrada Incorporador = compradores A010 (pessoas distintas, Hubla+Kiwify) + leads Anamnese sem A010. Entrada Consórcio/Solar = todo negócio criado na pipeline, inclusive importações. Agendamento = R1 marcadas no dia (sem reagendamento). R1 Realizada = pela data da reunião, mesma régua do Painel Comercial. Contrato pago = cauções efetivas sem estorno; 'sem R1' = contrato pago sem reunião vinculada. Carta fechada = propostas aceitas pela data do aceite (mesma perna A da Produção Gerada).
+        Entrada Incorporador = compradores A010 (pessoas distintas, Hubla+Kiwify) e leads Anamnese sem A010, mostrados separados. Entrada Consórcio/Solar = todo negócio criado na pipeline, inclusive importações. Agendamento = R1 marcadas no dia (sem reagendamento); Lead A/B = segmento ICP do negócio. R1 Realizada = pela data da reunião, mesma régua do Painel Comercial. Taxa de no-show = no-show ÷ (realizadas + no-show) — reuniões ainda pendentes não entram. Contrato pago = cauções efetivas sem estorno; 'sem R1' = contrato pago sem reunião vinculada. Carta fechada = propostas aceitas pela data do aceite (perna A da Produção Gerada).
       </footer>
     </main>
   );
