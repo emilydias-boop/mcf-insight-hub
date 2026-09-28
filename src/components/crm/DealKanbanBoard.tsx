@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CopyLeadsFormatDialog, buildCopyLeadData, CopyLeadData } from './CopyLeadsFormatDialog';
 import { useTotaisPorCliente, normalizarEmail } from '@/hooks/useTotaisPorCliente';
+import { KanbanColunaServidor } from './KanbanColunaServidor';
+import { useKanbanContagem, invalidarKanban } from '@/hooks/useKanbanServidor';
 
 interface Deal {
   id: string;
@@ -51,6 +54,7 @@ interface DealKanbanBoardProps {
   onClearStageSelection?: (dealIds: string[]) => void;
   channelMap?: Map<string, SalesChannel>;
   outsideMap?: Map<string, { isOutside: boolean; productName: string | null }>;
+  servidor?: { originIds: string[]; filtros: Record<string, unknown> };
 }
 
 const INITIAL_VISIBLE_COUNT = 50;
@@ -66,6 +70,7 @@ export const DealKanbanBoard = ({
   onClearStageSelection,
   channelMap,
   outsideMap,
+  servidor,
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
