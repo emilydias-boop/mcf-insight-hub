@@ -279,6 +279,30 @@ export function useKanbanProdutos(originIds: string[], filtros: Record<string, u
 }
 
 // ---------------------------------------------------------------------------
+// 7b. useKanbanBuscaOutrasPipelines
+// ---------------------------------------------------------------------------
+
+/** Busca (2+ caracteres) em negócios de OUTRAS pipelines/origens. */
+export function useKanbanBuscaOutrasPipelines(originIds: string[], filtros: Record<string, unknown>) {
+  const temBusca = typeof filtros.search === 'string' && (filtros.search as string).length >= 2;
+  return useQuery({
+    queryKey: ['kanban', 'outras-pipelines', originIds, filtros],
+    enabled: temBusca && originIds.length > 0,
+    staleTime: 15 * 1000,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<{ total: number; itens: any[] }> => {
+      const { data, error } = await (supabase as any).rpc('kanban_busca_outras_pipelines', {
+        p_excluir_origin_ids: originIds,
+        p_filtros: filtros,
+        p_limit: 50,
+      });
+      if (error) throw error;
+      return { total: Number(data?.total ?? 0), itens: (data?.itens ?? []) as any[] };
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // 8. resumoDoDeal
 // ---------------------------------------------------------------------------
 
