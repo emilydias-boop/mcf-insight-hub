@@ -5,7 +5,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useCRMDeals, useCRMStages, useSyncClintData } from '@/hooks/useCRMData';
-import { montarFiltrosKanban, useKanbanOrigemIds, useKanbanDonos, useKanbanProdutos, useKanbanContagem, buscarKanbanLista } from '@/hooks/useKanbanServidor';
+import { montarFiltrosKanban, useKanbanOrigemIds, useKanbanDonos, useKanbanProdutos, useKanbanContagem, useKanbanBuscaOutrasPipelines, buscarKanbanLista } from '@/hooks/useKanbanServidor';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
@@ -383,23 +383,31 @@ const Negocios = () => {
     ? (myCloser?.email || userProfile?.email || undefined)
     : undefined;
   
-  const buscaAtiva = !!filters.search && filters.search.trim().length >= 2;
-  const { 
-    data: dealsData, 
-    isLoading, 
+  // Debounce da busca: o input digita em filters.search (instantâneo),
+  // mas a busca no servidor só dispara 350 ms depois da última tecla.
+  const [buscaDebounced, setBuscaDebounced] = useState(filters.search);
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(filters.search), 350);
+    return () => clearTimeout(t);
+  }, [filters.search]);
+
+  const {
+    data: dealsData,
+    isLoading,
     error,
   } = useCRMDeals({
     originId: dealsScopeId,
     searchTerm: filters.search || undefined,
     limit: 10000,
-    enabled: buscaAtiva,
+    // legado: kanban e busca rodam no servidor (kanban_*); remover na limpeza
+    enabled: false,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
     ownerProfileId: isRestrictedRole ? user?.id : undefined,
     // Closer (inclui dual role sdr+closer): união com r1/r2_closer_email
     meetingCloserEmail,
   });
 
-  // Kanban no servidor (sem busca): contagem real + páginas de 50 por coluna
+  // Kanban no servidor: contagem real + páginas de 50 por coluna
   const { data: kanbanOrigemIds = [] } = useKanbanOrigemIds(dealsScopeId || undefined);
   const restricaoKanban = useMemo(() => {
     const r: Record<string, string> = {};
@@ -408,11 +416,12 @@ const Negocios = () => {
     return r;
   }, [isRestrictedRole, user?.id, meetingCloserEmail]);
   const filtrosKanban = useMemo(
-    () => montarFiltrosKanban(filters, restricaoKanban),
-    [filters, restricaoKanban],
+    () => montarFiltrosKanban({ ...filters, search: buscaDebounced }, restricaoKanban),
+    [filters, buscaDebounced, restricaoKanban],
   );
-  const { data: donosKanban } = useKanbanDonos(buscaAtiva ? [] : kanbanOrigemIds, restricaoKanban);
-  const { data: produtosKanban, isLoading: isLoadingProdutosKanban } = useKanbanProdutos(kanbanOrigemIds, restricaoKanban, !buscaAtiva);
+  const { data: outrasPipelines } = useKanbanBuscaOutrasPipelines(kanbanOrigemIds, filtrosKanban);
+  const { data: donosKanban } = useKanbanDonos(kanbanOrigemIds, restricaoKanban);
+  const { data: produtosKanban, isLoading: isLoadingProdutosKanban } = useKanbanProdutos(kanbanOrigemIds, restricaoKanban, true);
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
   const visibleStages = getVisibleStages();
@@ -427,7 +436,7 @@ const Negocios = () => {
     originIds: kanbanOrigemIds,
     filtros: filtrosKanban,
     colunas: colunasCabecalho,
-    enabled: !buscaAtiva,
+    enabled: true,
   });
   const totalServidor = useMemo(
     () => (contagemCabecalho ? Array.from(contagemCabecalho.values()).reduce((a, b) => a + Number(b || 0), 0) : undefined),
@@ -437,7 +446,7 @@ const Negocios = () => {
   // Exportação e exclusão em massa no modo servidor (busca inativa)
   const [dealsExportacao, setDealsExportacao] = useState<any[] | null>(null);
   useEffect(() => {
-    if (!exportDialogOpen || buscaAtiva || kanbanOrigemIds.length === 0) {
+    if (!exportDialogOpen || kanbanOrigemIds.length === 0) {
       setDealsExportacao(null);
       return;
     }
@@ -448,7 +457,7 @@ const Negocios = () => {
       .catch(() => { if (!cancelado) toast.error('Erro ao carregar negócios para exportar'); })
       .finally(() => toast.dismiss(t));
     return () => { cancelado = true; };
-  }, [exportDialogOpen, buscaAtiva, kanbanOrigemIds, filtrosKanban]);
+  }, [exportDialogOpen, kanbanOrigemIds, filtrosKanban]);
   const channelMapExportacao = useMemo(() => {
     const m = new Map<string, SalesChannel>();
     (dealsExportacao || []).forEach((d: any) => {
@@ -460,7 +469,7 @@ const Negocios = () => {
 
   const [idsPropriosSelecionados, setIdsPropriosSelecionados] = useState<string[] | null>(null);
   useEffect(() => {
-    if (!deleteDialogOpen || buscaAtiva || !(isOwnerDeleter && !isPrivilegedDeleter) || !user?.id) {
+    if (!deleteDialogOpen || !(isOwnerDeleter && !isPrivilegedDeleter) || !user?.id) {
       setIdsPropriosSelecionados(null);
       return;
     }
@@ -479,12 +488,8 @@ const Negocios = () => {
       if (!cancelado) setIdsPropriosSelecionados(proprios);
     })();
     return () => { cancelado = true; };
-  }, [deleteDialogOpen, buscaAtiva, isOwnerDeleter, isPrivilegedDeleter, selectedDealIds, user?.id]);
+  }, [deleteDialogOpen, isOwnerDeleter, isPrivilegedDeleter, selectedDealIds, user?.id]);
 
-  const currentStageIds = useMemo(() => {
-    return new Set((currentPipelineStages || []).map((s: any) => s.id));
-  }, [currentPipelineStages]);
-  
   // State para abrir drawer de deal cross-pipeline
   const [crossPipelineDealId, setCrossPipelineDealId] = useState<string | null>(null);
   const [crossPipelineDrawerOpen, setCrossPipelineDrawerOpen] = useState(false);
@@ -499,7 +504,7 @@ const Negocios = () => {
   }, []);
   
   // Derivar opções de owners a partir dos deals carregados
-  const { ownerOptions } = useDealOwnerOptions(buscaAtiva ? dealsData : (donosKanban as any), activeBU);
+  const { ownerOptions } = useDealOwnerOptions(donosKanban as any, activeBU);
   const { data: closerFilterOptions } = useCloserFilterOptions(activeBU);
   
   // Buscar tags únicas para o filtro
@@ -861,25 +866,6 @@ const Negocios = () => {
     });
   }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap, outsideMap]);
   
-  // Separar deals da pipeline atual vs cross-pipeline
-  const isSearchActive = !!filters.search && filters.search.trim().length >= 2;
-  
-  const { currentPipelineDeals, crossPipelineDeals } = useMemo(() => {
-    if (!isSearchActive || currentStageIds.size === 0) {
-      return { currentPipelineDeals: filteredDeals, crossPipelineDeals: [] };
-    }
-    const current: any[] = [];
-    const cross: any[] = [];
-    filteredDeals.forEach((deal: any) => {
-      if (deal.stage_id && currentStageIds.has(deal.stage_id)) {
-        current.push(deal);
-      } else {
-        cross.push(deal);
-      }
-    });
-    return { currentPipelineDeals: current, crossPipelineDeals: cross };
-  }, [filteredDeals, currentStageIds, isSearchActive]);
-
   const clearFilters = () => {
     setFilters({
       search: '',
@@ -1118,20 +1104,20 @@ const Negocios = () => {
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {(() => {
-                  const n = buscaAtiva ? currentPipelineDeals.length : (totalServidor ?? 0);
+                  const n = totalServidor ?? 0;
                   return `${n.toLocaleString('pt-BR')} oportunidade${n !== 1 ? 's' : ''}`;
                 })()}
-                {crossPipelineDeals.length > 0 && isSearchActive && (
+                {(outrasPipelines?.total ?? 0) > 0 && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <button className="ml-1 text-primary font-medium hover:underline cursor-pointer">
-                        (+ {crossPipelineDeals.length} em outras pipelines)
+                        (+ {outrasPipelines!.total} em outras pipelines)
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-80 p-3" align="start">
                       <p className="text-xs font-semibold text-muted-foreground mb-2">Encontrados em outras pipelines:</p>
                       <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                        {crossPipelineDeals.map((deal: any) => (
+                        {outrasPipelines!.itens.map((deal: any) => (
                           <div
                             key={deal.id}
                             className="flex items-center justify-between gap-2 p-1.5 rounded-md hover:bg-accent cursor-pointer transition-colors"
@@ -1146,6 +1132,9 @@ const Negocios = () => {
                             </Badge>
                           </div>
                         ))}
+                        {outrasPipelines!.total > outrasPipelines!.itens.length && (
+                          <p className="text-[11px] text-muted-foreground pt-1">Mostrando os {outrasPipelines!.itens.length} mais recentes</p>
+                        )}
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -1215,8 +1204,8 @@ const Negocios = () => {
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
           isLoadingTags={isLoadingTags}
-          availableProducts={buscaAtiva ? availableProducts : (produtosKanban ?? [])}
-          isLoadingProducts={buscaAtiva ? isLoadingProducts : isLoadingProdutosKanban}
+          availableProducts={produtosKanban ?? []}
+          isLoadingProducts={isLoadingProdutosKanban}
         />
         
         {activeFilterChips.length > 0 && (
@@ -1294,11 +1283,8 @@ const Negocios = () => {
               
               
               <div className="flex-1 overflow-hidden">
-                <DealKanbanBoard 
-                  deals={currentPipelineDeals.map((deal: any) => ({
-                    ...deal,
-                    stage: deal.crm_stages?.stage_name || 'Sem estágio',
-                  }))}
+                <DealKanbanBoard
+                  deals={[]}
                   originId={dealsScopeId}
                   showLostDeals={filters.dealStatus === 'lost'}
                   selectedDealIds={selectedDealIds}
@@ -1308,7 +1294,7 @@ const Negocios = () => {
                   onClearStageSelection={handleClearStageSelection}
                   channelMap={channelMap}
                   outsideMap={outsideMap}
-                  servidor={buscaAtiva ? undefined : { originIds: kanbanOrigemIds, filtros: filtrosKanban }}
+                  servidor={{ originIds: kanbanOrigemIds, filtros: filtrosKanban }}
                 />
               </div>
             </div>
@@ -1351,25 +1337,14 @@ const Negocios = () => {
         onOpenChange={setDeleteDialogOpen}
         count={
           isOwnerDeleter && !isPrivilegedDeleter
-            ? (buscaAtiva
-                ? (dealsData || []).filter((d: any) => selectedDealIds.has(d.id) && d.owner_profile_id === user?.id).length
-                : (idsPropriosSelecionados?.length ?? 0))
+            ? (idsPropriosSelecionados?.length ?? 0)
             : selectedDealIds.size
         }
         isDeleting={bulkDelete.isPending}
         onConfirm={() => {
           let ids = Array.from(selectedDealIds);
           if (isOwnerDeleter && !isPrivilegedDeleter) {
-            if (!buscaAtiva) {
-              ids = idsPropriosSelecionados ?? [];
-            } else {
-              const ownIds = new Set(
-                (dealsData || [])
-                  .filter((d: any) => d.owner_profile_id === user?.id)
-                  .map((d: any) => d.id)
-              );
-              ids = ids.filter((id) => ownIds.has(id));
-            }
+            ids = idsPropriosSelecionados ?? [];
           }
           bulkDelete.mutate(ids, {
             onSuccess: () => {
@@ -1476,18 +1451,16 @@ const Negocios = () => {
           if (!o) setExportSelectedOnly(false);
         }}
         deals={
-          buscaAtiva
-            ? (exportSelectedOnly ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id)) : filteredDeals)
-            : (exportSelectedOnly
-                ? (dealsExportacao || []).filter((d: any) => selectedDealIds.has(d.id))
-                : (dealsExportacao || []))
+          exportSelectedOnly
+            ? (dealsExportacao || []).filter((d: any) => selectedDealIds.has(d.id))
+            : (dealsExportacao || [])
         }
         stages={(currentPipelineStages || []).map((s: any) => ({
           id: s.id,
           stage_name: s.stage_name,
           stage_order: s.stage_order,
         }))}
-        channelMap={buscaAtiva ? channelMap : channelMapExportacao}
+        channelMap={channelMapExportacao}
       />
       
       {/* Drawer para deals cross-pipeline */}
