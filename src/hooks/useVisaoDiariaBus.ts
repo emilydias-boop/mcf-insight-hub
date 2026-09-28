@@ -10,6 +10,8 @@ export interface VDTotais {
   agendamentos_a: number;
   agendamentos_b: number;
   agendamentos_outros: number;
+  agendamentos_fora_regua: number;
+  /** Já somado dentro de `agendamentos` (não somar de novo no front). */
   reagendamentos: number;
   r1_marcadas: number;
   r1_realizadas: number;
