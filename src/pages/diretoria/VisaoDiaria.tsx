@@ -49,7 +49,7 @@ function Etapa({ title, value, children, highlight = false }: { title: string; v
   );
 }
 
-function EtapaDupla({ title, pares }: { title: string; pares: { label: string; value: number }[] }) {
+function EtapaDupla({ title, pares, children }: { title: string; pares: { label: string; value: number }[]; children?: React.ReactNode }) {
   return (
     <div className="min-w-0 flex-1 border-l-2 border-border pl-4 py-2">
       <p className="text-xs font-medium text-muted-foreground">{title}</p>
@@ -61,28 +61,27 @@ function EtapaDupla({ title, pares }: { title: string; pares: { label: string; v
           </div>
         ))}
       </div>
-      <div className="mt-2 min-h-8" />
+      <div className="mt-2 min-h-8 text-xs leading-relaxed text-muted-foreground">{children}</div>
     </div>
   );
 }
 
 function DiaADia({ bu }: { bu: VDBu }) {
-  type Col = { label: string; key: keyof VDTotais } | { label: string; especial: 'taxa_no_show' };
+  type Col = { label: string; key: keyof VDTotais };
   const columns: Col[] = [
     ...(bu.bu === 'incorporador'
       ? [{ label: 'A010', key: 'entrada_a010' as const }, { label: 'Anamnese', key: 'entrada_anamnese' as const }]
       : [{ label: 'Entrada', key: 'entrada' as const }]),
-    { label: 'Agend.', key: 'agendamentos' },
-    ...(bu.bu === 'incorporador' ? [{ label: 'Lead A', key: 'agendamentos_a' as const }, { label: 'Lead B', key: 'agendamentos_b' as const }] : []),
+    ...(bu.bu === 'incorporador'
+      ? [{ label: 'Lead A', key: 'agendamentos_a' as const }, { label: 'Lead B', key: 'agendamentos_b' as const }]
+      : [{ label: 'Agend.', key: 'agendamentos' as const }]),
     { label: 'R1 marc.', key: 'r1_marcadas' },
     { label: 'R1 real.', key: 'r1_realizadas' },
     { label: 'No-show', key: 'r1_no_show' },
-    { label: '% No-show', especial: 'taxa_no_show' as const },
     { label: 'Fechamento', key: 'fechamentos' },
     ...(bu.bu === 'consorcio' ? [{ label: 'Cartas', key: 'cartas' as const }, { label: 'Valor', key: 'valor' as const }] : []),
     ...(bu.bu === 'incorporador' ? [{ label: 'Sem R1', key: 'fechamentos_sem_r1' as const }] : []),
   ];
-  const pct = (v: number | null | undefined) => (v === null || v === undefined ? '—' : pctFormat(v));
   const cell = (key: keyof VDTotais, value: number | undefined) => key === 'valor' ? currency(value ?? 0) : integer(value ?? 0);
 
   return (
