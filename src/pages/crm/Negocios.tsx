@@ -1104,20 +1104,20 @@ const Negocios = () => {
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {(() => {
-                  const n = buscaAtiva ? currentPipelineDeals.length : (totalServidor ?? 0);
+                  const n = totalServidor ?? 0;
                   return `${n.toLocaleString('pt-BR')} oportunidade${n !== 1 ? 's' : ''}`;
                 })()}
-                {crossPipelineDeals.length > 0 && isSearchActive && (
+                {(outrasPipelines?.total ?? 0) > 0 && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <button className="ml-1 text-primary font-medium hover:underline cursor-pointer">
-                        (+ {crossPipelineDeals.length} em outras pipelines)
+                        (+ {outrasPipelines!.total} em outras pipelines)
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-80 p-3" align="start">
                       <p className="text-xs font-semibold text-muted-foreground mb-2">Encontrados em outras pipelines:</p>
                       <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                        {crossPipelineDeals.map((deal: any) => (
+                        {outrasPipelines!.itens.map((deal: any) => (
                           <div
                             key={deal.id}
                             className="flex items-center justify-between gap-2 p-1.5 rounded-md hover:bg-accent cursor-pointer transition-colors"
@@ -1132,6 +1132,9 @@ const Negocios = () => {
                             </Badge>
                           </div>
                         ))}
+                        {outrasPipelines!.total > outrasPipelines!.itens.length && (
+                          <p className="text-[11px] text-muted-foreground pt-1">Mostrando os {outrasPipelines!.itens.length} mais recentes</p>
+                        )}
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -1201,8 +1204,8 @@ const Negocios = () => {
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
           isLoadingTags={isLoadingTags}
-          availableProducts={buscaAtiva ? availableProducts : (produtosKanban ?? [])}
-          isLoadingProducts={buscaAtiva ? isLoadingProducts : isLoadingProdutosKanban}
+          availableProducts={produtosKanban ?? []}
+          isLoadingProducts={isLoadingProdutosKanban}
         />
         
         {activeFilterChips.length > 0 && (
@@ -1280,11 +1283,8 @@ const Negocios = () => {
               
               
               <div className="flex-1 overflow-hidden">
-                <DealKanbanBoard 
-                  deals={currentPipelineDeals.map((deal: any) => ({
-                    ...deal,
-                    stage: deal.crm_stages?.stage_name || 'Sem estágio',
-                  }))}
+                <DealKanbanBoard
+                  deals={[]}
                   originId={dealsScopeId}
                   showLostDeals={filters.dealStatus === 'lost'}
                   selectedDealIds={selectedDealIds}
@@ -1294,7 +1294,7 @@ const Negocios = () => {
                   onClearStageSelection={handleClearStageSelection}
                   channelMap={channelMap}
                   outsideMap={outsideMap}
-                  servidor={buscaAtiva ? undefined : { originIds: kanbanOrigemIds, filtros: filtrosKanban }}
+                  servidor={{ originIds: kanbanOrigemIds, filtros: filtrosKanban }}
                 />
               </div>
             </div>
