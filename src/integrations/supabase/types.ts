@@ -19478,6 +19478,14 @@ export type Database = {
       is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
+      kanban_busca_outras_pipelines: {
+        Args: {
+          p_excluir_origin_ids: string[]
+          p_filtros?: Json
+          p_limit?: number
+        }
+        Returns: Json
+      }
       kanban_canal: {
         Args: { p_custom: Json; p_email: string; p_tags: string[] }
         Returns: string
