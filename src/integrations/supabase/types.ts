@@ -2552,6 +2552,45 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_caucao_venda_direta: {
+        Row: {
+          attendee_id: string
+          contract_paid_at_antigo: string | null
+          corrigido_em: string | null
+          deal_id: string | null
+          lead_name: string | null
+          motivo: string | null
+          produto: string | null
+          status_antigo: string | null
+          transacao_id: string | null
+          valor: number | null
+        }
+        Insert: {
+          attendee_id: string
+          contract_paid_at_antigo?: string | null
+          corrigido_em?: string | null
+          deal_id?: string | null
+          lead_name?: string | null
+          motivo?: string | null
+          produto?: string | null
+          status_antigo?: string | null
+          transacao_id?: string | null
+          valor?: number | null
+        }
+        Update: {
+          attendee_id?: string
+          contract_paid_at_antigo?: string | null
+          corrigido_em?: string | null
+          deal_id?: string | null
+          lead_name?: string | null
+          motivo?: string | null
+          produto?: string | null
+          status_antigo?: string | null
+          transacao_id?: string | null
+          valor?: number | null
+        }
+        Relationships: []
+      }
       backup_effective_from_a001_a009: {
         Row: {
           effective_from: string | null
@@ -18488,6 +18527,20 @@ export type Database = {
           sdr_name: string
           segment: string
           valor: number
+        }[]
+      }
+      caucoes_orfas: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          customer_email: string
+          customer_name: string
+          linked_deal_id: string
+          net_value: number
+          product_name: string
+          sale_date: string
+          source: string
+          transaction_id: string
+          tx_date: string
         }[]
       }
       check_duplicate_contact_by_identity: {
