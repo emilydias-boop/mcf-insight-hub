@@ -1117,7 +1117,10 @@ const Negocios = () => {
                 )}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                {currentPipelineDeals.length} oportunidade{currentPipelineDeals.length !== 1 ? 's' : ''}
+                {(() => {
+                  const n = buscaAtiva ? currentPipelineDeals.length : (totalServidor ?? 0);
+                  return `${n.toLocaleString('pt-BR')} oportunidade${n !== 1 ? 's' : ''}`;
+                })()}
                 {crossPipelineDeals.length > 0 && isSearchActive && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1212,8 +1215,8 @@ const Negocios = () => {
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
           isLoadingTags={isLoadingTags}
-          availableProducts={availableProducts}
-          isLoadingProducts={isLoadingProducts}
+          availableProducts={buscaAtiva ? availableProducts : (produtosKanban ?? [])}
+          isLoadingProducts={buscaAtiva ? isLoadingProducts : isLoadingProdutosKanban}
         />
         
         {activeFilterChips.length > 0 && (
@@ -1305,6 +1308,7 @@ const Negocios = () => {
                   onClearStageSelection={handleClearStageSelection}
                   channelMap={channelMap}
                   outsideMap={outsideMap}
+                  servidor={buscaAtiva ? undefined : { originIds: kanbanOrigemIds, filtros: filtrosKanban }}
                 />
               </div>
             </div>
@@ -1347,19 +1351,25 @@ const Negocios = () => {
         onOpenChange={setDeleteDialogOpen}
         count={
           isOwnerDeleter && !isPrivilegedDeleter
-            ? (dealsData || []).filter((d: any) => selectedDealIds.has(d.id) && d.owner_profile_id === user?.id).length
+            ? (buscaAtiva
+                ? (dealsData || []).filter((d: any) => selectedDealIds.has(d.id) && d.owner_profile_id === user?.id).length
+                : (idsPropriosSelecionados?.length ?? 0))
             : selectedDealIds.size
         }
         isDeleting={bulkDelete.isPending}
         onConfirm={() => {
           let ids = Array.from(selectedDealIds);
           if (isOwnerDeleter && !isPrivilegedDeleter) {
-            const ownIds = new Set(
-              (dealsData || [])
-                .filter((d: any) => d.owner_profile_id === user?.id)
-                .map((d: any) => d.id)
-            );
-            ids = ids.filter((id) => ownIds.has(id));
+            if (!buscaAtiva) {
+              ids = idsPropriosSelecionados ?? [];
+            } else {
+              const ownIds = new Set(
+                (dealsData || [])
+                  .filter((d: any) => d.owner_profile_id === user?.id)
+                  .map((d: any) => d.id)
+              );
+              ids = ids.filter((id) => ownIds.has(id));
+            }
           }
           bulkDelete.mutate(ids, {
             onSuccess: () => {
@@ -1466,16 +1476,18 @@ const Negocios = () => {
           if (!o) setExportSelectedOnly(false);
         }}
         deals={
-          exportSelectedOnly
-            ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id))
-            : filteredDeals
+          buscaAtiva
+            ? (exportSelectedOnly ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id)) : filteredDeals)
+            : (exportSelectedOnly
+                ? (dealsExportacao || []).filter((d: any) => selectedDealIds.has(d.id))
+                : (dealsExportacao || []))
         }
         stages={(currentPipelineStages || []).map((s: any) => ({
           id: s.id,
           stage_name: s.stage_name,
           stage_order: s.stage_order,
         }))}
-        channelMap={channelMap}
+        channelMap={buscaAtiva ? channelMap : channelMapExportacao}
       />
       
       {/* Drawer para deals cross-pipeline */}
