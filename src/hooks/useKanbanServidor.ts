@@ -26,7 +26,8 @@ const PAGE_SIZE_LISTA = 2000;
 
 /**
  * Converte o estado de filtros da tela no payload `p_filtros` das RPCs.
- * Não inclui `search` nem `dateRange` (viram `dateFrom`/`dateTo`).
+ * Inclui `search` quando tem 2+ caracteres (busca roda no servidor);
+ * `dateRange` vira `dateFrom`/`dateTo`.
  * Remove chaves null/undefined para a chave de cache ficar estável.
  */
 export function montarFiltrosKanban(
@@ -57,6 +58,9 @@ export function montarFiltrosKanban(
       out.dateTo = format(filters.dateRange.to, 'yyyy-MM-dd');
     }
   }
+
+  const search = filters.search?.trim();
+  if (search && search.length >= 2) out.search = search;
 
   if (opts.restrictOwnerProfileId) out.restrictOwnerProfileId = opts.restrictOwnerProfileId;
   if (opts.restrictCloserEmail) out.restrictCloserEmail = opts.restrictCloserEmail;
