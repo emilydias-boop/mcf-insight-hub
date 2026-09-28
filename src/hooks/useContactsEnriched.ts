@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { orContatoPorTermo } from '@/lib/contactSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { differenceInDays } from 'date-fns';
 import { useDuplicateContactIds } from './useDuplicateContactIds';
@@ -80,7 +81,7 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
   query = query.or('is_archived.is.null,is_archived.eq.false');
 
   if (searchTerm && searchTerm.length >= 3) {
-    query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+    query = query.or(orContatoPorTermo(searchTerm));
   }
 
   const { data: contacts, error: contactsError, count } = await query;

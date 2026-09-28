@@ -88,9 +88,9 @@ export function useConsorciadoSearch(query: string, enabled = true) {
           .eq('is_archived', false)
           .limit(15);
         if (digits.length >= 6) {
-          q = q.or(`name.ilike.${like},email.ilike.${like},phone.ilike.${`%${digits}%`}`);
+          q = q.or(`name.ilike.${like},email.ilike.${like},phone.ilike.${`%${digits}%`},aliases_busca.ilike.${like},aliases_busca.ilike.${`%${digits}%`}`);
         } else {
-          q = q.or(`name.ilike.${like},email.ilike.${like}`);
+          q = q.or(`name.ilike.${like},email.ilike.${like},aliases_busca.ilike.${like}`);
         }
         const { data } = await q;
         return (data || []).map<ConsorciadoMatch>((r: any) => ({

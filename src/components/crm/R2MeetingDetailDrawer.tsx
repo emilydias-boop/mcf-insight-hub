@@ -628,6 +628,14 @@ export function R2MeetingDetailDrawer({
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="font-medium truncate">{v.produto}</div>
+                          {(() => {
+                            const att: any = meeting?.attendees?.find((a) => a.id === activeAttendeeId);
+                            const nomePart = (att?.attendee_name || att?.name || '').trim().toLowerCase();
+                            const comprador = (v.comprador_nome || '').trim();
+                            return comprador && comprador.toLowerCase() !== nomePart ? (
+                              <div className="text-[11px] text-muted-foreground truncate">Comprado por: {comprador}</div>
+                            ) : null;
+                          })()}
                           <div className="flex items-baseline gap-2 mt-0.5">
                             <span className="font-bold">{formatCurrency(v.liquido)}</span>
                             <span className="text-[10px] text-muted-foreground">líquido</span>

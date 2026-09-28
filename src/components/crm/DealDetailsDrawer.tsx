@@ -26,6 +26,7 @@ import { CrossPipelineHistory } from './CrossPipelineHistory';
 import { LeadTemperatureSelector, type LeadTemperature } from './LeadTemperatureSelector';
 import { LeadTagsManager } from './LeadTagsManager';
 import { LeadCallButton } from './LeadCallButton';
+import { OutrosContatosLead } from './OutrosContatosLead';
 import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
 import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -177,6 +178,9 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                   <LeadCallButton phone={contact.phone} dealId={deal.id} size="sm" />
                 </div>
               )}
+
+              {/* ===== OUTROS CONTATOS (aliases) ===== */}
+              <OutrosContatosLead contactId={deal.contact_id || undefined} />
 
               {/* ===== TAGS DO LEAD ===== */}
               <LeadTagsManager
