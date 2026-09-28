@@ -124,7 +124,7 @@ function BuSection({ bu, singleDay, hasPastDays }: { bu: VDBu; singleDay: boolea
           <Badge variant="secondary" className="gap-1.5 py-1"><Taxa value={bu.taxas.entrada_fechamento} label="Entrada → Fechamento" compact /></Badge>
         </div>
         {hasPastDays && t.r1_pendentes > 0 && (
-          <p className="mt-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+          <p className="mt-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             {integer(t.r1_pendentes)} R1 sem status marcado na agenda — a taxa de comparecimento fica subestimada até o closer marcar
           </p>
@@ -148,11 +148,6 @@ export default function VisaoDiaria() {
 
   const selectPreset = (choice: Preset) => {
     setPreset(choice);
-    if (choice === 'personalizado') {
-      setDraft({ from: parseYmdLocal(period.from) ?? undefined, to: parseYmdLocal(period.to) ?? undefined });
-      setCalendarOpen(true);
-      return;
-    }
     const start = choice === 'ontem' ? subDays(todayDate, 1) : choice === 'sete' ? subDays(todayDate, 6) : choice === 'mes' ? startOfMonth(todayDate) : todayDate;
     const end = choice === 'ontem' ? start : todayDate;
     setPeriod({ from: formatDateForDB(start), to: formatDateForDB(end) });
@@ -183,9 +178,15 @@ export default function VisaoDiaria() {
         {([['hoje', 'Hoje'], ['ontem', 'Ontem'], ['sete', 'Últimos 7 dias'], ['mes', 'Mês atual']] as const).map(([key, label]) =>
           <Button key={key} size="sm" variant={preset === key ? 'default' : 'outline'} onClick={() => selectPreset(key)}>{label}</Button>
         )}
-        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <Popover open={calendarOpen} onOpenChange={(open) => {
+          setCalendarOpen(open);
+          if (open) {
+            setPreset('personalizado');
+            setDraft({ from: parseYmdLocal(period.from) ?? undefined, to: parseYmdLocal(period.to) ?? undefined });
+          }
+        }}>
           <PopoverTrigger asChild>
-            <Button size="sm" variant={preset === 'personalizado' ? 'default' : 'outline'} onClick={() => selectPreset('personalizado')}>
+            <Button size="sm" variant={preset === 'personalizado' ? 'default' : 'outline'}>
               <CalendarDays className="mr-2 h-4 w-4" /> Personalizado
             </Button>
           </PopoverTrigger>
