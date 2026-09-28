@@ -105,7 +105,23 @@ export const DealKanbanBoard = ({
     const activeStages = (stages || []).filter((s: any) => s.is_active);
     return activeStages.filter((s: any) => canViewStage(s.id));
   }, [stages, canViewStage]);
-  
+
+  const queryClient = useQueryClient();
+  const colunasServidor = useMemo(
+    () => visibleStages.map((s: any) => ({ id: s.id as string, name: s.stage_name as string })),
+    [visibleStages],
+  );
+  const { data: contagemServidor } = useKanbanContagem({
+    originIds: servidor?.originIds ?? [],
+    filtros: servidor?.filtros ?? {},
+    colunas: colunasServidor,
+    enabled: !!servidor,
+  });
+  const dealsServidorRef = useRef(new Map<string, any>());
+  const registrarDealsServidor = useCallback((lista: any[]) => {
+    for (const d of lista) dealsServidorRef.current.set(d.id, d);
+  }, []);
+
   // Função de ordenação por critério selecionado
   const sortDeals = useCallback((
     stageDeals: Deal[], 
@@ -245,7 +261,7 @@ export const DealKanbanBoard = ({
       return;
     }
     
-    const deal = deals.find(d => d.id === dealId);
+    const deal = deals.find(d => d.id === dealId) ?? dealsServidorRef.current.get(dealId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
 
