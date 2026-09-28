@@ -16,7 +16,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 
 const integer = (n: number) => n.toLocaleString('pt-BR');
-const pctFormat = (v: number) => `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const currency = (n: number) => new Intl.NumberFormat('pt-BR', {
   style: 'currency', currency: 'BRL', maximumFractionDigits: 0, minimumFractionDigits: 0,
 }).format(n);
@@ -251,7 +250,7 @@ export default function VisaoDiaria() {
       {!isLoading && !error && data?.bus.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma BU encontrada para o período.</p>}
 
       <footer className="border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
-        Entrada Incorporador = compradores A010 (pessoas distintas, Hubla+Kiwify) e leads Anamnese sem A010, mostrados separados. Entrada Consórcio/Solar = todo negócio criado na pipeline, inclusive importações. Agendamento = mesma régua da TV Incorporador: 1ª e 2ª marcação de cada negócio pela data em que foi marcada (reagendamento conta uma vez); no Incorporador não contam marcações feitas por closer, coordenação ou gestão; Lead A/B = segmento ICP do negócio. R1 Realizada = pela data da reunião, mesma régua do Painel Comercial. Taxa de no-show = no-show ÷ (realizadas + no-show) — reuniões ainda pendentes não entram. Contrato pago = cauções efetivas sem estorno; 'sem R1' = contrato pago sem reunião vinculada. Carta fechada = propostas aceitas pela data do aceite (perna A da Produção Gerada).
+        Entrada Incorporador = compradores A010 (pessoas distintas, Hubla+Kiwify) e leads Anamnese sem A010, mostrados separados. Entrada Consórcio/Solar = todo negócio criado na pipeline, inclusive importações. Agendamento = mesma régua da TV Incorporador: 1ª e 2ª marcação de cada negócio pela data em que foi marcada (reagendamento conta uma vez); no Incorporador não contam marcações feitas por closer, coordenação ou gestão; Lead A/B = segmento ICP do negócio. No Incorporador o agendamento é mostrado só por Lead A e Lead B, sem total. R1 Realizada = pela data da reunião, mesma régua do Painel Comercial. No-show = reuniões R1 marcadas como no-show pelo closer na agenda, pela data da reunião. Contrato pago = cauções efetivas sem estorno; 'sem R1' = contrato pago sem reunião vinculada. Carta fechada = propostas aceitas pela data do aceite (perna A da Produção Gerada).
       </footer>
     </main>
   );
