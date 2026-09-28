@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 
 const integer = (n: number) => n.toLocaleString('pt-BR');
+const pctFormat = (v: number) => `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const currency = (n: number) => new Intl.NumberFormat('pt-BR', {
   style: 'currency', currency: 'BRL', maximumFractionDigits: 0, minimumFractionDigits: 0,
 }).format(n);
@@ -49,17 +50,40 @@ function Etapa({ title, value, children, highlight = false }: { title: string; v
   );
 }
 
+function EtapaDupla({ title, pares }: { title: string; pares: { label: string; value: number }[] }) {
+  return (
+    <div className="min-w-0 flex-1 border-l-2 border-border pl-4 py-2">
+      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+      <div className="mt-1 flex gap-6">
+        {pares.map((par) => (
+          <div key={par.label}>
+            <p className="text-3xl font-semibold tabular-nums text-foreground">{integer(par.value)}</p>
+            <p className="text-xs text-muted-foreground">{par.label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 min-h-8" />
+    </div>
+  );
+}
+
 function DiaADia({ bu }: { bu: VDBu }) {
-  const columns: { label: string; key: keyof VDTotais }[] = [
-    { label: 'Entrada', key: 'entrada' },
+  type Col = { label: string; key: keyof VDTotais } | { label: string; especial: 'taxa_no_show' };
+  const columns: Col[] = [
+    ...(bu.bu === 'incorporador'
+      ? [{ label: 'A010', key: 'entrada_a010' as const }, { label: 'Anamnese', key: 'entrada_anamnese' as const }]
+      : [{ label: 'Entrada', key: 'entrada' as const }]),
     { label: 'Agend.', key: 'agendamentos' },
+    ...(bu.bu === 'incorporador' ? [{ label: 'Lead A', key: 'agendamentos_a' as const }, { label: 'Lead B', key: 'agendamentos_b' as const }] : []),
     { label: 'R1 marc.', key: 'r1_marcadas' },
     { label: 'R1 real.', key: 'r1_realizadas' },
     { label: 'No-show', key: 'r1_no_show' },
+    { label: '% No-show', especial: 'taxa_no_show' as const },
     { label: 'Fechamento', key: 'fechamentos' },
     ...(bu.bu === 'consorcio' ? [{ label: 'Cartas', key: 'cartas' as const }, { label: 'Valor', key: 'valor' as const }] : []),
     ...(bu.bu === 'incorporador' ? [{ label: 'Sem R1', key: 'fechamentos_sem_r1' as const }] : []),
   ];
+  const pct = (v: number | null | undefined) => (v === null || v === undefined ? '—' : pctFormat(v));
   const cell = (key: keyof VDTotais, value: number | undefined) => key === 'valor' ? currency(value ?? 0) : integer(value ?? 0);
 
   return (
@@ -73,20 +97,20 @@ function DiaADia({ bu }: { bu: VDBu }) {
         <Table>
           <TableHeader><TableRow>
             <TableHead className="whitespace-nowrap">Data</TableHead>
-            {columns.map((c) => <TableHead key={c.key} className="text-right whitespace-nowrap">{c.label}</TableHead>)}
+            {columns.map((c) => <TableHead key={c.label} className="text-right whitespace-nowrap">{c.label}</TableHead>)}
           </TableRow></TableHeader>
           <TableBody>
             {bu.dias.map((dia) => {
               const date = parseYmdLocal(dia.data);
               return <TableRow key={dia.data}>
                 <TableCell className="whitespace-nowrap font-medium">{date ? format(date, 'dd/MM, EEE', { locale: ptBR }) : dia.data}</TableCell>
-                {columns.map((c) => <TableCell key={c.key} className="text-right tabular-nums whitespace-nowrap">{cell(c.key, dia[c.key])}</TableCell>)}
+                {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{'especial' in c ? pct(dia.taxa_no_show) : cell(c.key, dia[c.key])}</TableCell>)}
               </TableRow>;
             })}
           </TableBody>
           <TableFooter><TableRow>
             <TableCell>Total</TableCell>
-            {columns.map((c) => <TableCell key={c.key} className="text-right tabular-nums whitespace-nowrap">{cell(c.key, bu.totais[c.key])}</TableCell>)}
+            {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{'especial' in c ? pct(bu.taxas.no_show) : cell(c.key, bu.totais[c.key])}</TableCell>)}
           </TableRow></TableFooter>
         </Table>
       </CollapsibleContent>
