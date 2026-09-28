@@ -274,13 +274,14 @@ export const DealKanbanBoard = ({
   };
 
   const executeMove = (dealId: string, newStageId: string, oldStageId: string) => {
-    const deal = deals.find(d => d.id === dealId);
+    const deal = deals.find(d => d.id === dealId) ?? dealsServidorRef.current.get(dealId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     
     updateDealMutation.mutate(
       { id: dealId, stage_id: newStageId, previousStageId: oldStageId },
       {
         onSuccess: () => {
+          if (servidor) invalidarKanban(queryClient);
           // O registro em deal_activities (stage_change) é feito pelo trigger
           // trg_log_deal_stage_change em crm_deals — não duplicar aqui.
 
@@ -312,6 +313,29 @@ export const DealKanbanBoard = ({
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-3 h-full overflow-x-auto pb-4">
           {visibleStages.map((stage: any) => {
+            if (servidor) {
+              return (
+                <KanbanColunaServidor
+                  key={stage.id}
+                  stage={stage}
+                  originIds={servidor.originIds}
+                  filtros={servidor.filtros}
+                  colunasIds={colunasServidor.map((c) => c.id)}
+                  total={contagemServidor?.get(stage.id)}
+                  ordem={stageSorts[stage.id] || 'stage_newest'}
+                  onOrdemChange={(sort) => handleSortChange(stage.id, sort)}
+                  selectionEnabled={selectionEnabled}
+                  selectedDealIds={selectedDealIds}
+                  onSelectionChange={onSelectionChange}
+                  onSelectAllInStage={onSelectAllInStage}
+                  onClearStageSelection={onClearStageSelection}
+                  onSelectByCountInStage={onSelectByCountInStage}
+                  onDealClick={handleDealClick}
+                  onDealsCarregados={registrarDealsServidor}
+                  onAbrirCopiaPersonalizada={(leads) => setCopyDialogData({ open: true, leads })}
+                />
+              );
+            }
             const stageDeals = dealsByStage[stage.id] || [];
             const visibleCount = getVisibleCountForStage(stage.id);
             const visibleDeals = stageDeals.slice(0, visibleCount);
