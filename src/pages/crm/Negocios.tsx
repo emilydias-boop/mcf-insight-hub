@@ -5,6 +5,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useCRMDeals, useCRMStages, useSyncClintData } from '@/hooks/useCRMData';
+import { montarFiltrosKanban, useKanbanOrigemIds, useKanbanDonos, useKanbanProdutos, useKanbanContagem, buscarKanbanLista } from '@/hooks/useKanbanServidor';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
@@ -382,6 +383,7 @@ const Negocios = () => {
     ? (myCloser?.email || userProfile?.email || undefined)
     : undefined;
   
+  const buscaAtiva = !!filters.search && filters.search.trim().length >= 2;
   const { 
     data: dealsData, 
     isLoading, 
@@ -390,17 +392,95 @@ const Negocios = () => {
     originId: dealsScopeId,
     searchTerm: filters.search || undefined,
     limit: 10000,
+    enabled: buscaAtiva,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
     ownerProfileId: isRestrictedRole ? user?.id : undefined,
     // Closer (inclui dual role sdr+closer): união com r1/r2_closer_email
     meetingCloserEmail,
   });
+
+  // Kanban no servidor (sem busca): contagem real + páginas de 50 por coluna
+  const { data: kanbanOrigemIds = [] } = useKanbanOrigemIds(dealsScopeId || undefined);
+  const restricaoKanban = useMemo(() => {
+    const r: Record<string, string> = {};
+    if (isRestrictedRole && user?.id) r.restrictOwnerProfileId = user.id;
+    if (meetingCloserEmail) r.restrictCloserEmail = meetingCloserEmail;
+    return r;
+  }, [isRestrictedRole, user?.id, meetingCloserEmail]);
+  const filtrosKanban = useMemo(
+    () => montarFiltrosKanban(filters, restricaoKanban),
+    [filters, restricaoKanban],
+  );
+  const { data: donosKanban } = useKanbanDonos(buscaAtiva ? [] : kanbanOrigemIds, restricaoKanban);
+  const { data: produtosKanban, isLoading: isLoadingProdutosKanban } = useKanbanProdutos(kanbanOrigemIds, restricaoKanban, !buscaAtiva);
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
   const visibleStages = getVisibleStages();
   
   // Buscar stages da pipeline atual para detectar deals cross-pipeline
   const { data: currentPipelineStages } = useCRMStages(dealsScopeId);
+  const colunasCabecalho = useMemo(
+    () => (currentPipelineStages || []).map((s: any) => ({ id: s.id as string, name: s.stage_name as string })),
+    [currentPipelineStages],
+  );
+  const { data: contagemCabecalho } = useKanbanContagem({
+    originIds: kanbanOrigemIds,
+    filtros: filtrosKanban,
+    colunas: colunasCabecalho,
+    enabled: !buscaAtiva,
+  });
+  const totalServidor = useMemo(
+    () => (contagemCabecalho ? Array.from(contagemCabecalho.values()).reduce((a, b) => a + Number(b || 0), 0) : undefined),
+    [contagemCabecalho],
+  );
+
+  // Exportação e exclusão em massa no modo servidor (busca inativa)
+  const [dealsExportacao, setDealsExportacao] = useState<any[] | null>(null);
+  useEffect(() => {
+    if (!exportDialogOpen || buscaAtiva || kanbanOrigemIds.length === 0) {
+      setDealsExportacao(null);
+      return;
+    }
+    let cancelado = false;
+    const t = toast.loading('Carregando negócios para exportar...');
+    buscarKanbanLista({ originIds: kanbanOrigemIds, filtros: filtrosKanban, ordem: 'stage_newest' })
+      .then((lista) => { if (!cancelado) setDealsExportacao(lista); })
+      .catch(() => { if (!cancelado) toast.error('Erro ao carregar negócios para exportar'); })
+      .finally(() => toast.dismiss(t));
+    return () => { cancelado = true; };
+  }, [exportDialogOpen, buscaAtiva, kanbanOrigemIds, filtrosKanban]);
+  const channelMapExportacao = useMemo(() => {
+    const m = new Map<string, SalesChannel>();
+    (dealsExportacao || []).forEach((d: any) => {
+      const email = d.crm_contacts?.email?.toLowerCase().trim();
+      if (email && d.kanban_canal) m.set(email, d.kanban_canal);
+    });
+    return m;
+  }, [dealsExportacao]);
+
+  const [idsPropriosSelecionados, setIdsPropriosSelecionados] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!deleteDialogOpen || buscaAtiva || !(isOwnerDeleter && !isPrivilegedDeleter) || !user?.id) {
+      setIdsPropriosSelecionados(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const ids = Array.from(selectedDealIds);
+      const proprios: string[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data } = await supabase
+          .from('crm_deals')
+          .select('id')
+          .in('id', ids.slice(i, i + 200))
+          .eq('owner_profile_id', user.id);
+        (data || []).forEach((r: any) => proprios.push(r.id));
+      }
+      if (!cancelado) setIdsPropriosSelecionados(proprios);
+    })();
+    return () => { cancelado = true; };
+  }, [deleteDialogOpen, buscaAtiva, isOwnerDeleter, isPrivilegedDeleter, selectedDealIds, user?.id]);
+
   const currentStageIds = useMemo(() => {
     return new Set((currentPipelineStages || []).map((s: any) => s.id));
   }, [currentPipelineStages]);
@@ -419,7 +499,7 @@ const Negocios = () => {
   }, []);
   
   // Derivar opções de owners a partir dos deals carregados
-  const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
+  const { ownerOptions } = useDealOwnerOptions(buscaAtiva ? dealsData : (donosKanban as any), activeBU);
   const { data: closerFilterOptions } = useCloserFilterOptions(activeBU);
   
   // Buscar tags únicas para o filtro
@@ -1037,7 +1117,10 @@ const Negocios = () => {
                 )}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                {currentPipelineDeals.length} oportunidade{currentPipelineDeals.length !== 1 ? 's' : ''}
+                {(() => {
+                  const n = buscaAtiva ? currentPipelineDeals.length : (totalServidor ?? 0);
+                  return `${n.toLocaleString('pt-BR')} oportunidade${n !== 1 ? 's' : ''}`;
+                })()}
                 {crossPipelineDeals.length > 0 && isSearchActive && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1132,8 +1215,8 @@ const Negocios = () => {
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
           isLoadingTags={isLoadingTags}
-          availableProducts={availableProducts}
-          isLoadingProducts={isLoadingProducts}
+          availableProducts={buscaAtiva ? availableProducts : (produtosKanban ?? [])}
+          isLoadingProducts={buscaAtiva ? isLoadingProducts : isLoadingProdutosKanban}
         />
         
         {activeFilterChips.length > 0 && (
@@ -1225,6 +1308,7 @@ const Negocios = () => {
                   onClearStageSelection={handleClearStageSelection}
                   channelMap={channelMap}
                   outsideMap={outsideMap}
+                  servidor={buscaAtiva ? undefined : { originIds: kanbanOrigemIds, filtros: filtrosKanban }}
                 />
               </div>
             </div>
@@ -1267,19 +1351,25 @@ const Negocios = () => {
         onOpenChange={setDeleteDialogOpen}
         count={
           isOwnerDeleter && !isPrivilegedDeleter
-            ? (dealsData || []).filter((d: any) => selectedDealIds.has(d.id) && d.owner_profile_id === user?.id).length
+            ? (buscaAtiva
+                ? (dealsData || []).filter((d: any) => selectedDealIds.has(d.id) && d.owner_profile_id === user?.id).length
+                : (idsPropriosSelecionados?.length ?? 0))
             : selectedDealIds.size
         }
         isDeleting={bulkDelete.isPending}
         onConfirm={() => {
           let ids = Array.from(selectedDealIds);
           if (isOwnerDeleter && !isPrivilegedDeleter) {
-            const ownIds = new Set(
-              (dealsData || [])
-                .filter((d: any) => d.owner_profile_id === user?.id)
-                .map((d: any) => d.id)
-            );
-            ids = ids.filter((id) => ownIds.has(id));
+            if (!buscaAtiva) {
+              ids = idsPropriosSelecionados ?? [];
+            } else {
+              const ownIds = new Set(
+                (dealsData || [])
+                  .filter((d: any) => d.owner_profile_id === user?.id)
+                  .map((d: any) => d.id)
+              );
+              ids = ids.filter((id) => ownIds.has(id));
+            }
           }
           bulkDelete.mutate(ids, {
             onSuccess: () => {
@@ -1386,16 +1476,18 @@ const Negocios = () => {
           if (!o) setExportSelectedOnly(false);
         }}
         deals={
-          exportSelectedOnly
-            ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id))
-            : filteredDeals
+          buscaAtiva
+            ? (exportSelectedOnly ? (filteredDeals || []).filter((d: any) => selectedDealIds.has(d.id)) : filteredDeals)
+            : (exportSelectedOnly
+                ? (dealsExportacao || []).filter((d: any) => selectedDealIds.has(d.id))
+                : (dealsExportacao || []))
         }
         stages={(currentPipelineStages || []).map((s: any) => ({
           id: s.id,
           stage_name: s.stage_name,
           stage_order: s.stage_order,
         }))}
-        channelMap={channelMap}
+        channelMap={buscaAtiva ? channelMap : channelMapExportacao}
       />
       
       {/* Drawer para deals cross-pipeline */}

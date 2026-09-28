@@ -386,11 +386,13 @@ interface DealFilters {
   meetingCloserEmail?: string;
   searchTerm?: string;
   limit?: number;
+  enabled?: boolean;
 }
 
 export const useCRMDeals = (filters: DealFilters = {}) => {
   return useQuery({
     queryKey: ['crm-deals', filters],
+    enabled: filters.enabled !== false,
     queryFn: async () => {
       const limit = filters.limit || 5000;
       
@@ -745,6 +747,7 @@ export const useUpdateCRMDeal = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
       toast.success('Negócio atualizado com sucesso');
     },
     onError: (error: any) => {
