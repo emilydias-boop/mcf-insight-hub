@@ -102,13 +102,13 @@ function DiaADia({ bu }: { bu: VDBu }) {
               const date = parseYmdLocal(dia.data);
               return <TableRow key={dia.data}>
                 <TableCell className="whitespace-nowrap font-medium">{date ? format(date, 'dd/MM, EEE', { locale: ptBR }) : dia.data}</TableCell>
-                {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{'especial' in c ? pct(dia.taxa_no_show) : cell(c.key, dia[c.key])}</TableCell>)}
+                {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{cell(c.key, dia[c.key])}</TableCell>)}
               </TableRow>;
             })}
           </TableBody>
           <TableFooter><TableRow>
             <TableCell>Total</TableCell>
-            {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{'especial' in c ? pct(bu.taxas.no_show) : cell(c.key, bu.totais[c.key])}</TableCell>)}
+            {columns.map((c) => <TableCell key={c.label} className="text-right tabular-nums whitespace-nowrap">{cell(c.key, bu.totais[c.key])}</TableCell>)}
           </TableRow></TableFooter>
         </Table>
       </CollapsibleContent>
