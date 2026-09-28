@@ -7,7 +7,6 @@ import { useVisaoDiariaBus, hojeSaoPaulo, type VDBu, type VDTotais } from '@/hoo
 import { formatDateForDB, parseYmdLocal } from '@/lib/dateHelpers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
