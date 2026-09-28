@@ -7,6 +7,9 @@ export interface VDTotais {
   entrada_anamnese: number;
   entrada_importados: number;
   agendamentos: number;
+  agendamentos_a: number;
+  agendamentos_b: number;
+  agendamentos_outros: number;
   reagendamentos: number;
   r1_marcadas: number;
   r1_realizadas: number;
@@ -24,6 +27,7 @@ export interface VDTaxas {
   comparecimento: number | null;
   realizada_fechamento: number | null;
   entrada_fechamento: number | null;
+  no_show: number | null;
 }
 
 export interface VDBu {
@@ -32,7 +36,7 @@ export interface VDBu {
   fechamento_label: string;
   totais: VDTotais;
   taxas: VDTaxas;
-  dias: (Omit<VDTotais, 'fechamentos_total'> & { data: string })[];
+  dias: (Omit<VDTotais, 'fechamentos_total'> & { data: string; taxa_no_show: number | null })[];
 }
 
 export interface VDResult {
