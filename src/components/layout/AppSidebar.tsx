@@ -136,6 +136,12 @@ const menuItems: MenuItem[] = [
     url: "/checkin",
     icon: MessageSquare,
   },
+  {
+    title: "Visão Diária",
+    url: "/diretoria/visao-diaria",
+    icon: LayoutDashboard,
+    requiredRoles: ["admin", "manager", "coordenador"],
+  },
   // Visão Chairman - desativada (manter comentado para rollback)
   // {
   //   title: "Visão Chairman",

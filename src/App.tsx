@@ -46,6 +46,7 @@ const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoA
 
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const VisaoDiaria = lazy(() => import("./pages/diretoria/VisaoDiaria"));
 const MeuDesempenhoCloser = lazy(() => import("./pages/closer/MeuDesempenhoCloser"));
 // [REMOVIDO 2026-06-24] Seção Financeiro desativada — preservado para rollback.
 // const Receita = lazy(() => import("./pages/receita/Index"));
@@ -230,6 +231,7 @@ const App = () => (
               <Route path="checkin/disparos" element={<McfAtendimentoGuard><Disparos /></McfAtendimentoGuard>} />
               <Route path="checkin/disparos/:id" element={<McfAtendimentoGuard><DisparoDetalhe /></McfAtendimentoGuard>} />
               <Route path="checkin/acesso" element={<RoleGuard allowedRoles={['admin', 'manager']}><McfAtendimentoAccess /></RoleGuard>} />
+              <Route path="diretoria/visao-diaria" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><VisaoDiaria /></RoleGuard>} />
               {/* Visão Chairman - rota desativada (manter para rollback) */}
               {/* <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} /> */}
               <Route index element={<Navigate to="/home" replace />} />
