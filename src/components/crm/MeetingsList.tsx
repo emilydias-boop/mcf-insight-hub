@@ -180,7 +180,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                 return (t as any)?.name || '';
               })
             : [];
-          const channel = classifySimple({ tags: tagsArr });
+          const channel = isCredito ? classifyCredito(tagsArr) : classifySimple({ tags: tagsArr });
 
           if (channelFilter && channel !== channelFilter) continue;
 
@@ -201,7 +201,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             isPartner: !!att.is_partner,
             parentAttendeeId: att.parent_attendee_id || null,
             channel,
-            segment: resolveLeadSegment(dealForChannel?.icp_segment),
+            segment: resolveLeadSegment(dealForChannel?.icp_segment, isCredito),
             sdrName: resolveSdrName(att, meeting),
           });
         }
@@ -219,7 +219,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
               return (t as any)?.name || '';
             })
           : [];
-        const channel = classifySimple({ tags: tagsArr });
+        const channel = isCredito ? classifyCredito(tagsArr) : classifySimple({ tags: tagsArr });
 
         if (channelFilter && channel !== channelFilter) continue;
 
@@ -240,13 +240,13 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           isPartner: false,
           parentAttendeeId: null,
           channel,
-          segment: resolveLeadSegment(dealForChannel?.icp_segment),
+          segment: resolveLeadSegment(dealForChannel?.icp_segment, isCredito),
           sdrName: resolveSdrName(null, meeting),
         });
       }
     }
     return rows;
-  }, [meetings, statusFilter, searchTerm, channelFilter]);
+  }, [meetings, statusFilter, searchTerm, channelFilter, isCredito]);
 
   /**
    * Grava o status no ATTENDEE (não no slot) e sincroniza o slot apenas para
