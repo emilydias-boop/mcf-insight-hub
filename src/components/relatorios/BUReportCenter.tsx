@@ -4,18 +4,18 @@ import { FileText } from 'lucide-react';
 import { ReportTypeSelector, ReportType } from './ReportTypeSelector';
 import { ContractReportPanel } from './ContractReportPanel';
 import { SalesReportPanel } from './SalesReportPanel';
-import { PerformanceReportPanel } from './PerformanceReportPanel';
+// [REMOVIDO 2026-09-29] Painéis sem uso (não habilitados em nenhum lugar) — preservados para rollback.
+// import { PerformanceReportPanel } from './PerformanceReportPanel';
 import { AcquisitionReportPanel } from './AcquisitionReportPanel';
 import { CarrinhoReportPanel } from './CarrinhoReportPanel';
-import { ProductsReportPanel } from './ProductsReportPanel';
+// import { ProductsReportPanel } from './ProductsReportPanel';
 import { InvestigationReportPanel } from './InvestigationReportPanel';
 import { NaoComprouReportPanel } from './NaoComprouReportPanel';
-import { CrossBUReportPanel } from './CrossBUReportPanel';
+// import { CrossBUReportPanel } from './CrossBUReportPanel';
 import { ControleDiegoPanel } from './ControleDiegoPanel';
 import { CarrinhoAnalysisReportPanel } from './CarrinhoAnalysisReportPanel';
 import { DailyViewPanel } from './DailyViewPanel';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
 
 // BU display names
