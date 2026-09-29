@@ -47,6 +47,7 @@ const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoA
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const VisaoDiaria = lazy(() => import("./pages/diretoria/VisaoDiaria"));
+const PainelComercialCredito = lazy(() => import("./pages/bu-credito/PainelComercialCredito"));
 const MeuDesempenhoCloser = lazy(() => import("./pages/closer/MeuDesempenhoCloser"));
 // [REMOVIDO 2026-06-24] Seção Financeiro desativada — preservado para rollback.
 // const Receita = lazy(() => import("./pages/receita/Index"));
@@ -296,6 +297,7 @@ const App = () => (
               </Route>
 
               {/* BU Crédito Imobiliário — criada 2026-09-23. Pipeline resolvida via bu_origin_mapping (bu='credito'). */}
+              <Route path="credito/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><BUProvider bu="credito" basePath="/credito/crm"><PainelComercialCredito /></BUProvider></RoleGuard>} />
               <Route path="credito/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="credito" basePath="/credito/crm" /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
