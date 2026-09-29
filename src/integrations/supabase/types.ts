@@ -8190,6 +8190,33 @@ export type Database = {
           },
         ]
       }
+      crm_canais_entrada: {
+        Row: {
+          ativo: boolean
+          codigo: string
+          cor: string
+          descricao: string | null
+          ordem: number
+          rotulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          codigo: string
+          cor: string
+          descricao?: string | null
+          ordem: number
+          rotulo: string
+        }
+        Update: {
+          ativo?: boolean
+          codigo?: string
+          cor?: string
+          descricao?: string | null
+          ordem?: number
+          rotulo?: string
+        }
+        Relationships: []
+      }
       crm_contact_aliases: {
         Row: {
           contact_id: string
@@ -19540,8 +19567,22 @@ export type Database = {
         }
         Returns: Json
       }
+      kanban_canais_entrada: {
+        Args: { p_filtros?: Json; p_origin_ids: string[] }
+        Returns: {
+          codigo: string
+          cor: string
+          ordem: number
+          rotulo: string
+          total: number
+        }[]
+      }
       kanban_canal_de: {
         Args: { p_a010: boolean; p_custom: Json; p_tags: string[] }
+        Returns: string
+      }
+      kanban_canal_entrada: {
+        Args: { p_custom: Json; p_data_source: string; p_tags: string[] }
         Returns: string
       }
       kanban_contagem: {
