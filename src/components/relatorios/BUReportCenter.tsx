@@ -4,18 +4,18 @@ import { FileText } from 'lucide-react';
 import { ReportTypeSelector, ReportType } from './ReportTypeSelector';
 import { ContractReportPanel } from './ContractReportPanel';
 import { SalesReportPanel } from './SalesReportPanel';
-import { PerformanceReportPanel } from './PerformanceReportPanel';
+// [REMOVIDO 2026-09-29] Painéis sem uso (não habilitados em nenhum lugar) — preservados para rollback.
+// import { PerformanceReportPanel } from './PerformanceReportPanel';
 import { AcquisitionReportPanel } from './AcquisitionReportPanel';
 import { CarrinhoReportPanel } from './CarrinhoReportPanel';
-import { ProductsReportPanel } from './ProductsReportPanel';
+// import { ProductsReportPanel } from './ProductsReportPanel';
 import { InvestigationReportPanel } from './InvestigationReportPanel';
 import { NaoComprouReportPanel } from './NaoComprouReportPanel';
-import { CrossBUReportPanel } from './CrossBUReportPanel';
+// import { CrossBUReportPanel } from './CrossBUReportPanel';
 import { ControleDiegoPanel } from './ControleDiegoPanel';
 import { CarrinhoAnalysisReportPanel } from './CarrinhoAnalysisReportPanel';
 import { DailyViewPanel } from './DailyViewPanel';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { useAuth } from '@/contexts/AuthContext';
 import { BUProvider } from '@/contexts/BUContext';
 
 // BU display names
@@ -38,7 +38,6 @@ export function BUReportCenter({
   bu, 
   availableReports = ['contracts', 'sales', 'performance'] 
 }: BUReportCenterProps) {
-  const { role } = useAuth();
   const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
   
   const buName = BU_NAMES[bu];
@@ -53,7 +52,6 @@ export function BUReportCenter({
             <h1 className="text-2xl font-bold">Relatórios - {buName}</h1>
             <p className="text-muted-foreground">
               Gere relatórios personalizados da sua equipe
-              {role === 'coordenador' && ' (apenas sua equipe)'}
             </p>
           </div>
         </div>
@@ -84,17 +82,21 @@ export function BUReportCenter({
           <SalesReportPanel bu={bu} />
         )}
         
+        {/* [REMOVIDO 2026-09-29] Painel de Desempenho sem uso (não habilitado em nenhum lugar) — preservado para rollback.
         {selectedReport === 'performance' && (
           <PerformanceReportPanel bu={bu} />
         )}
+        */}
         
         {selectedReport === 'acquisition' && (
           <AcquisitionReportPanel bu={bu} />
         )}
         
+        {/* [REMOVIDO 2026-09-29] Painel de Produtos Adquiridos sem uso (não habilitado em nenhum lugar) — preservado para rollback.
         {selectedReport === 'products' && (
           <ProductsReportPanel bu={bu} />
         )}
+        */}
         
         {selectedReport === 'investigation' && (
           <InvestigationReportPanel bu={bu} />
@@ -108,9 +110,11 @@ export function BUReportCenter({
           <CarrinhoReportPanel bu={bu} />
         )}
         
+        {/* [REMOVIDO 2026-09-29] Painel Cross-BU sem uso (não habilitado em nenhum lugar) — preservado para rollback.
         {selectedReport === 'cross_bu' && (
           <CrossBUReportPanel bu={bu} />
         )}
+        */}
         
         {selectedReport === 'controle_diego' && (
           <ControleDiegoPanel bu={bu} />
