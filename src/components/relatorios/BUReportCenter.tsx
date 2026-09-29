@@ -82,17 +82,21 @@ export function BUReportCenter({
           <SalesReportPanel bu={bu} />
         )}
         
+        {/* [REMOVIDO 2026-09-29] Painel de Desempenho sem uso (não habilitado em nenhum lugar) — preservado para rollback.
         {selectedReport === 'performance' && (
           <PerformanceReportPanel bu={bu} />
         )}
+        */}
         
         {selectedReport === 'acquisition' && (
           <AcquisitionReportPanel bu={bu} />
         )}
         
+        {/* [REMOVIDO 2026-09-29] Painel de Produtos Adquiridos sem uso (não habilitado em nenhum lugar) — preservado para rollback.
         {selectedReport === 'products' && (
           <ProductsReportPanel bu={bu} />
         )}
+        */}
         
         {selectedReport === 'investigation' && (
           <InvestigationReportPanel bu={bu} />
@@ -106,9 +110,11 @@ export function BUReportCenter({
           <CarrinhoReportPanel bu={bu} />
         )}
         
+        {/* [REMOVIDO 2026-09-29] Painel Cross-BU sem uso (não habilitado em nenhum lugar) — preservado para rollback.
         {selectedReport === 'cross_bu' && (
           <CrossBUReportPanel bu={bu} />
         )}
+        */}
         
         {selectedReport === 'controle_diego' && (
           <ControleDiegoPanel bu={bu} />

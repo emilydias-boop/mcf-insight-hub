@@ -150,7 +150,7 @@ export function FunnelCellDrillModal({ open, onOpenChange, metric, channel, chan
                         <TableCell>
                           {it.dealId && (
                             <a
-                              href={`/crm/leads/${it.dealId}`}
+                              href={`/crm/negocios?deal=${it.dealId}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-muted-foreground hover:text-foreground"

@@ -68,8 +68,8 @@ const reportOptions: ReportTypeOption[] = [
   },
   {
     id: 'controle_diego',
-    title: 'Controle Diego',
-    description: 'Contratos pagos - envio de vídeo',
+    title: 'Envio de Vídeo',
+    description: 'Contratos pagos — controle de envio de vídeo',
     icon: Video,
   },
   {
