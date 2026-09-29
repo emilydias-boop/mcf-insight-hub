@@ -390,12 +390,12 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
           .select('customer_email')
           .in('customer_email', emails)
           .eq('sale_status', 'refunded'),
-        // Parcerias
-        supabase.from('hubla_transactions')
-          .select('id, customer_email, sale_date, product_name, product_price, net_value, gross_override, installment_number')
-          .eq('product_category', 'parceria')
-          .in('sale_status', ['completed', 'paid'])
-          .in('customer_email', emails),
+        // Parcerias (via RPC vendas_parceria — fonte única)
+        (supabase.rpc as any)('vendas_parceria', {
+          p_from: effectiveStart.toISOString(),
+          p_to: null,
+          p_emails: emails,
+        }),
         // R2 status options
         supabase.from('r2_status_options').select('id, name').eq('is_active', true),
       ]);
