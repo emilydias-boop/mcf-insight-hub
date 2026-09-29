@@ -48,6 +48,7 @@ export default function Agenda() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { role, allRoles, user } = useAuth();
   const activeBU = useActiveBU();
+  const isCredito = activeBU === 'credito';
   const { data: myCloser } = useMyCloser(activeBU);
   const sdrOwnerEmail = allRoles.includes('sdr') && activeBU === 'incorporador' ? user?.email || undefined : undefined;
 
@@ -74,6 +75,9 @@ export default function Agenda() {
   const [closerFilter, setCloserFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [channelFilter, setChannelFilter] = useState<string | null>(null);
+  // Cada BU tem seu próprio conjunto de canais (A010/ANAMNESE/PLANILHA x
+  // PARCEIRO_50K/OS), então ao trocar de BU o filtro anterior não tem sentido.
+  useEffect(() => { setChannelFilter(null); }, [activeBU]);
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingSlot | null>(null);
   const [quickScheduleOpen, setQuickScheduleOpen] = useState(false);
@@ -227,6 +231,13 @@ export default function Agenda() {
               return (t as any)?.name || '';
             })
           : [];
+        if (isCredito) {
+          // Crédito Imobiliário: canal pela tag de entrada — same keys as MeetingsList.
+          const lower = arr.map((t) => (t || '').trim().toLowerCase());
+          if (lower.some((t) => t === 'parceiro-50k')) return 'PARCEIRO_50K';
+          if (lower.some((t) => t === 'os')) return 'OS';
+          return 'OUTROS';
+        }
         const norm = arr.map((t) => (t || '').trim().toUpperCase());
         if (norm.some((t) => t === 'A010')) return 'A010';
         if (norm.some((t) => t === 'ANAMNESE')) return 'ANAMNESE';
@@ -262,7 +273,7 @@ export default function Agenda() {
       );
     }
     return result;
-  }, [meetings, closerFilter, statusFilter, searchTerm, channelFilter, isCloser, myCloser?.id]);
+  }, [meetings, closerFilter, statusFilter, searchTerm, channelFilter, isCloser, myCloser?.id, isCredito]);
 
   const handlePrev = () => {
     if (viewMode === 'day') {
@@ -384,6 +395,13 @@ export default function Agenda() {
             return (t as any)?.name || '';
           })
         : [];
+      if (isCredito) {
+        // Crédito Imobiliário: canal pela tag de entrada — same keys as MeetingsList.
+        const lower = arr.map((t) => (t || '').trim().toLowerCase());
+        if (lower.some((t) => t === 'parceiro-50k')) return 'PARCEIRO_50K';
+        if (lower.some((t) => t === 'os')) return 'OS';
+        return 'OUTROS';
+      }
       const norm = arr.map((t) => (t || '').trim().toUpperCase());
       if (norm.some((t) => t === 'A010')) return 'A010';
       if (norm.some((t) => t === 'ANAMNESE')) return 'ANAMNESE';
@@ -401,7 +419,7 @@ export default function Agenda() {
           'Data/Hora': format(parseISO(meeting.scheduled_at), 'dd/MM/yyyy HH:mm'),
           'Lead': att.attendee_name || att.contact?.name || '',
           'Telefone': att.attendee_phone || att.contact?.phone || '',
-          'Canal': channel,
+          'Canal': isCredito && channel === 'PARCEIRO_50K' ? 'Parceiros 50k' : channel,
           'Closer': meeting.closer?.name || '',
           'Status': STATUS_LABELS[att.status] || att.status || '',
           'Nota do Closer': (att as any).closer_notes || '',
@@ -414,7 +432,7 @@ export default function Agenda() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Agenda R1');
     XLSX.writeFile(wb, `agenda-r1-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-  }, [filteredMeetings]);
+  }, [filteredMeetings, isCredito]);
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -666,10 +684,20 @@ export default function Agenda() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos canais</SelectItem>
-              <SelectItem value="A010">A010</SelectItem>
-              <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
-              <SelectItem value="PLANILHA">PLANILHA</SelectItem>
-              <SelectItem value="OUTROS">OUTROS</SelectItem>
+              {isCredito ? (
+                <>
+                  <SelectItem value="PARCEIRO_50K">Parceiros 50k</SelectItem>
+                  <SelectItem value="OS">OS</SelectItem>
+                  <SelectItem value="OUTROS">OUTROS</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="A010">A010</SelectItem>
+                  <SelectItem value="ANAMNESE">ANAMNESE</SelectItem>
+                  <SelectItem value="PLANILHA">PLANILHA</SelectItem>
+                  <SelectItem value="OUTROS">OUTROS</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
