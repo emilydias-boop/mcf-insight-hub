@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfMonth, endOfMonth, format, subHours, addHours } from 'date-fns';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
 
 export interface ContractReportFilters {
   startDate: Date;
@@ -23,6 +23,7 @@ export interface ContractReportRow {
   originName: string;
   currentStage: string;
   contractPaidAt: string;
+  effDate: string;
   dealCreatedAt: string;
   salesChannel: 'a010' | 'bio' | 'live';
   contactEmail: string | null;
@@ -38,6 +39,39 @@ export interface ContractReportRow {
   };
 }
 
+interface CaucaoEfetivaRow {
+  attendee_id: string;
+  deal_id: string | null;
+  lead_name: string | null;
+  eff_date: string;
+  fonte: string | null;
+  contract_paid_at: string | null;
+  refunded_at: string | null;
+  closer_id: string | null;
+  closer_name: string | null;
+  closer_bu: string | null;
+  sdr_id: string | null;
+  sdr_email: string | null;
+  sdr_name: string | null;
+  segment: string | null;
+  valor: number | null;
+  origin_id: string | null;
+}
+
+interface CaucaoOrfaRow {
+  transaction_id: string;
+  tx_date: string;
+  sale_date: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  product_name: string | null;
+  net_value: number | null;
+  linked_deal_id: string | null;
+  source: string | null;
+}
+
+const ATTENDEE_BATCH = 150;
+
 export const useContractReport = (
   filters: ContractReportFilters,
   allowedCloserIds: string[] | null, // null = all closers (admin/manager)
@@ -46,53 +80,32 @@ export const useContractReport = (
   return useQuery({
     queryKey: ['contract-report', filters, allowedCloserIds, bu],
     queryFn: async (): Promise<ContractReportRow[]> => {
-      // If BU is specified, fetch allowed origin_ids from bu_origin_mapping
-      let buOriginIds: string[] | null = null;
-      if (bu) {
-        const { data: mappings } = await supabase
-          .from('bu_origin_mapping')
-          .select('entity_id, entity_type')
-          .eq('bu', bu);
-        
-        if (mappings && mappings.length > 0) {
-          // Get origin IDs directly mapped
-          const directOriginIds = mappings
-            .filter(m => m.entity_type === 'origin')
-            .map(m => m.entity_id);
-          
-          // Get origins belonging to mapped groups
-          const groupIds = mappings
-            .filter(m => m.entity_type === 'group')
-            .map(m => m.entity_id);
-          
-          if (groupIds.length > 0) {
-            const { data: groupOrigins } = await supabase
-              .from('crm_origins')
-              .select('id')
-              .in('group_id', groupIds);
-            
-            if (groupOrigins) {
-              directOriginIds.push(...groupOrigins.map(o => o.id));
-            }
-          }
-          
-          buOriginIds = directOriginIds;
-          
-          // If no origins mapped for this BU, return empty
-          if (buOriginIds.length === 0) return [];
-        }
-      }
-      // Corrigir fuso horário BRT (UTC-3): somar 3h em ambos os extremos
-      // Ex: filtrar "05/03 BRT" = buscar de 05/03 03:00 UTC até 06/03 02:59 UTC (janela 24h exata)
-      const BRT_OFFSET_HOURS = 3;
-      const startISO = addHours(new Date(format(filters.startDate, 'yyyy-MM-dd') + 'T00:00:00'), BRT_OFFSET_HOURS).toISOString();
-      const endISO = addHours(new Date(format(filters.endDate, 'yyyy-MM-dd') + 'T23:59:59'), BRT_OFFSET_HOURS).toISOString();
-      
-      // Query meeting_slot_attendees with status = 'contract_paid'
-      // Filter by contract_paid_at (payment date), not scheduled_at (meeting date)
-      let query = supabase
-        .from('meeting_slot_attendees')
-        .select(`
+      if (allowedCloserIds && allowedCloserIds.length === 0) return [];
+
+      const p_from = format(filters.startDate, 'yyyy-MM-dd');
+      const p_to = format(filters.endDate, 'yyyy-MM-dd');
+
+      // Passo 1: fonte única (mesma do Painel Comercial) — 1 linha por negócio com contrato pago
+      const { data: caucoesRaw, error: caucoesError } = await (supabase.rpc as any)('caucoes_efetivas', {
+        p_from,
+        p_to,
+        p_bu: bu ?? null,
+      });
+      if (caucoesError) throw caucoesError;
+
+      let caucoes = (caucoesRaw || []) as CaucaoEfetivaRow[];
+      if (filters.closerId) caucoes = caucoes.filter(c => c.closer_id === filters.closerId);
+      if (allowedCloserIds) caucoes = caucoes.filter(c => !!c.closer_id && allowedCloserIds.includes(c.closer_id));
+      if (filters.originId) caucoes = caucoes.filter(c => c.origin_id === filters.originId);
+
+      // Passo 2: detalhes dos attendees (a RPC já decidiu quem entra)
+      const attendeeIds = [...new Set(caucoes.map(c => c.attendee_id).filter(Boolean))];
+      const detailsById = new Map<string, any>();
+      for (let i = 0; i < attendeeIds.length; i += ATTENDEE_BATCH) {
+        const lote = attendeeIds.slice(i, i + ATTENDEE_BATCH);
+        const { data: detalhes, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
           id,
           attendee_name,
           attendee_phone,
@@ -139,66 +152,30 @@ export const useContractReport = (
             )
           )
         `)
-        .not('contract_paid_at', 'is', null)
-        .eq('is_partner', false)
-        .gte('contract_paid_at', startISO)
-        .lte('contract_paid_at', endISO);
-      
-      // Filter by specific closer if provided
-      if (filters.closerId) {
-        query = query.eq('meeting_slots.closer_id', filters.closerId);
+          .in('id', lote);
+        if (error) throw error;
+        (detalhes || []).forEach((d: any) => detailsById.set(d.id, d));
       }
-      
-      // Filter by allowed closers (for gestor/coordenador)
-      if (allowedCloserIds && allowedCloserIds.length > 0) {
-        query = query.in('meeting_slots.closer_id', allowedCloserIds);
-      } else if (allowedCloserIds && allowedCloserIds.length === 0) {
-        // No allowed closers means no access
-        return [];
+
+      // E-mail do closer atribuído (numa única query)
+      const closerIds = [...new Set(caucoes.map(c => c.closer_id).filter(Boolean))] as string[];
+      const closerEmailMap: Record<string, string> = {};
+      if (closerIds.length > 0) {
+        const { data: closersData } = await supabase
+          .from('closers')
+          .select('id, email')
+          .in('id', closerIds);
+        (closersData || []).forEach((c: any) => { closerEmailMap[c.id] = c.email || ''; });
       }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      if (!data) return [];
-      
-      // Filter by BU origin_ids if specified
-      let filteredData = data;
-      if (buOriginIds) {
-        filteredData = data.filter((row: any) => {
-          const originId = row.crm_deals?.origin_id;
-          return originId && buOriginIds.includes(originId);
-        });
-      }
-      
-      // Collect linked attendee IDs to avoid duplicates
-      const linkedAttendeeIds = new Set(
-        filteredData.map((row: any) => row.id).filter(Boolean)
-      );
-      
-      // Fetch unlinked Hubla A000 transactions (contracts without meetings)
-      // Uma transação só é "não vinculada" quando NÃO tem attendee E NÃO tem deal vinculado
-      const { data: unlinkedHubla } = await supabase
-        .from('hubla_transactions')
-        .select('id, sale_date, customer_name, customer_email, customer_phone, product_name, net_value, source, linked_attendee_id, linked_deal_id')
-        .eq('product_category', 'contrato')
-        .is('linked_attendee_id', null)
-        .is('linked_deal_id', null)
-        .gte('sale_date', startISO)
-        .lte('sale_date', endISO)
-        .order('sale_date', { ascending: false });
-      
-      // Sort by payment date (DESC - most recent first)
-      const sortedData = [...filteredData].sort((a: any, b: any) => {
-        const dateA = a.contract_paid_at || '';
-        const dateB = b.contract_paid_at || '';
-        return dateB.localeCompare(dateA);
-      });
-      
+
+      const sortedData = caucoes
+        .map(c => ({ caucao: c, row: detailsById.get(c.attendee_id) || {} }))
+        .sort((a, b) => (b.caucao.eff_date || '').localeCompare(a.caucao.eff_date || ''));
+      const detailRows = sortedData.map(s => s.row);
+
       // Fetch SDR profiles from booked_by UUIDs (priority) and owner_id emails (fallback)
       const bookedByIds = [...new Set(
-        sortedData
+        detailRows
           .map((row: any) => row.booked_by)
           .filter(Boolean)
       )];
@@ -221,7 +198,7 @@ export const useContractReport = (
       
       // Fallback: fetch SDR names from profiles based on owner_id (email)
       const sdrEmails = [...new Set(
-        sortedData
+        detailRows
           .map((row: any) => row.crm_deals?.owner_id)
           .filter(Boolean)
       )];
@@ -243,7 +220,7 @@ export const useContractReport = (
       }
       
       // Collect all contact emails to check for A010 purchases
-      const contactEmails = sortedData
+      const contactEmails = detailRows
         .map((row: any) => row.crm_deals?.crm_contacts?.email || row.attendee_email)
         .filter(Boolean) as string[];
       
@@ -279,9 +256,8 @@ export const useContractReport = (
       };
       
       // Transform meeting-based data
-      const meetingRows: ContractReportRow[] = sortedData.map((row: any) => {
+      const meetingRows: ContractReportRow[] = sortedData.map(({ caucao, row }: { caucao: CaucaoEfetivaRow; row: any }) => {
         const slot = row.meeting_slots;
-        const closer = slot?.closers;
         const deal = row.crm_deals;
         const origin = deal?.crm_origins;
         const stage = deal?.crm_stages;
@@ -289,8 +265,8 @@ export const useContractReport = (
         const customFields = deal?.custom_fields || {};
         
         const bookedByProfile = row.booked_by ? bookedByMap[row.booked_by] : null;
-        const sdrEmail = bookedByProfile?.email || deal?.owner_id || '';
-        const sdrName = bookedByProfile?.full_name || sdrNameMap[sdrEmail] || sdrEmail;
+        const sdrEmail = caucao.sdr_email || bookedByProfile?.email || deal?.owner_id || '';
+        const sdrName = caucao.sdr_name || bookedByProfile?.full_name || sdrNameMap[sdrEmail] || sdrEmail;
         
         const contactEmail = contact?.email || null;
         const contactPhone = contact?.phone || row.attendee_phone || null;
@@ -308,69 +284,64 @@ export const useContractReport = (
         const salesChannel = detectSalesChannel(contactEmail, contactTags);
         
         return {
-          id: row.id,
-          dealId: row.deal_id || null,
-          closerName: closer?.name || 'N/A',
-          closerEmail: closer?.email || '',
+          id: caucao.attendee_id,
+          dealId: caucao.deal_id || row.deal_id || null,
+          closerName: caucao.closer_name || 'N/A',
+          closerEmail: (caucao.closer_id && closerEmailMap[caucao.closer_id]) || '',
           meetingDate: slot?.scheduled_at || '',
           meetingType: slot?.meeting_type || 'r1',
-          leadName: row.attendee_name || 'N/A',
+          leadName: row.attendee_name || caucao.lead_name || 'N/A',
           leadPhone: row.attendee_phone || '',
           sdrEmail,
           sdrName,
           originName: origin?.display_name || origin?.name || 'N/A',
           currentStage: stage?.stage_name || 'N/A',
-          contractPaidAt: row.contract_paid_at || slot?.scheduled_at || '',
+          contractPaidAt: caucao.contract_paid_at || '',
+          effDate: caucao.eff_date || '',
           dealCreatedAt: deal?.created_at || '',
           salesChannel,
           contactEmail,
           contactId: deal?.contact_id || null,
           contactTags,
-          isRefunded: row.status === 'refunded',
-          originId: origin?.id || null,
+          isRefunded: caucao.refunded_at != null,
+          originId: caucao.origin_id || origin?.id || null,
           customFields,
         };
       });
       
-      // Deals já representados pelas linhas de agenda do período (reforço anti-duplicidade)
-      const agendaDealIds = new Set(
-        filteredData.map((row: any) => row.deal_id).filter(Boolean)
-      );
+      // "Compra Direta": só quando não há filtro de BU — fonte única caucoes_orfas
+      let unlinkedRows: ContractReportRow[] = [];
+      if (!bu) {
+        const { data: orfas, error: orfasError } = await (supabase.rpc as any)('caucoes_orfas', { p_from, p_to });
+        if (orfasError) throw orfasError;
+        unlinkedRows = ((orfas || []) as CaucaoOrfaRow[]).map((h) => ({
+          id: `hubla-${h.transaction_id}`,
+          dealId: h.linked_deal_id || null,
+          closerName: 'Compra Direta',
+          closerEmail: '',
+          meetingDate: '',
+          meetingType: 'direct',
+          leadName: h.customer_name || 'N/A',
+          leadPhone: '',
+          sdrEmail: '',
+          sdrName: 'N/A',
+          originName: 'Compra Direta',
+          currentStage: 'N/A',
+          contractPaidAt: h.sale_date || h.tx_date || '',
+          effDate: h.tx_date || '',
+          dealCreatedAt: '',
+          salesChannel: detectSalesChannel(h.customer_email, []),
+          contactEmail: h.customer_email || null,
+          contactId: null,
+          contactTags: [],
+          isRefunded: false,
+          originId: null,
+          customFields: {},
+        }));
+      }
 
-      // Transform unlinked Hubla transactions (direct purchases without meetings)
-      const unlinkedRows: ContractReportRow[] = (unlinkedHubla || [])
-        .filter((h: any) => !h.linked_deal_id || !agendaDealIds.has(h.linked_deal_id))
-        .map((h: any) => ({
-        id: `hubla-${h.id}`,
-        dealId: null,
-        closerName: 'Compra Direta',
-        closerEmail: '',
-        meetingDate: '',
-        meetingType: 'direct',
-        leadName: h.customer_name || 'N/A',
-        leadPhone: h.customer_phone || '',
-        sdrEmail: '',
-        sdrName: 'N/A',
-        originName: 'Compra Direta',
-        currentStage: 'N/A',
-        contractPaidAt: h.sale_date || '',
-        dealCreatedAt: '',
-        salesChannel: detectSalesChannel(h.customer_email, []),
-        contactEmail: h.customer_email || null,
-        contactId: null,
-        contactTags: [],
-        isRefunded: false,
-        originId: null,
-        customFields: {},
-      }));
-      
-      // Merge and sort all rows by payment date (DESC)
-      // When BU filter is active, exclude unlinked rows (no origin to verify BU)
-      const allRows = buOriginIds 
-        ? meetingRows 
-        : [...meetingRows, ...unlinkedRows];
-      return allRows.sort((a, b) => 
-        (b.contractPaidAt || '').localeCompare(a.contractPaidAt || '')
+      return [...meetingRows, ...unlinkedRows].sort((a, b) =>
+        (b.effDate || '').localeCompare(a.effDate || '')
       );
     },
     enabled: filters.startDate instanceof Date && filters.endDate instanceof Date,
