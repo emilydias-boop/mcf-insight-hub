@@ -13,13 +13,12 @@ import { DateRange } from 'react-day-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { useContractReport, getDefaultContractReportFilters, ContractReportFilters } from '@/hooks/useContractReport';
-import { useHublaA000Contracts, normalizePhoneForMatch, normalizeEmailForMatch } from '@/hooks/useHublaA000Contracts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { loadXLSX } from '@/lib/lazyExport';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
-type DataSource = 'all' | 'agenda' | 'hubla' | 'pending';
+type DataSource = 'all' | 'agenda' | 'pending';
 
 interface ContractReportPanelProps {
   bu?: BusinessUnit;
@@ -27,7 +26,7 @@ interface ContractReportPanelProps {
 
 interface UnifiedContractRow {
   id: string;
-  source: 'agenda' | 'hubla' | 'pending';
+  source: 'agenda' | 'pending';
   closerName: string;
   closerEmail: string;
   dealCreatedAt: string;
@@ -77,7 +76,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       const result = await client
         .from('crm_origins')
         .select('id, name, display_name')
-        .eq('is_active', true);
+        .eq('is_archived', false);
       
       if (result.error) throw result.error;
       const items = (result.data as OriginOption[]) || [];
@@ -108,58 +107,25 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   // Fetch Agenda data (contract_paid)
   const { data: agendaData = [], isLoading: loadingAgenda } = useContractReport(filters, allowedCloserIds, bu);
   
-  // Fetch Hubla A000 data
-  const { data: hublaData = [], isLoading: loadingHubla } = useHublaA000Contracts({
-    startDate: dateRange?.from || defaultFilters.startDate,
-    endDate: dateRange?.to || defaultFilters.endDate,
+  // Contratos pagos SEM caução marcada (fonte única: caucoes_orfas)
+  const orfasFrom = format(dateRange?.from || defaultFilters.startDate, 'yyyy-MM-dd');
+  const orfasTo = format(dateRange?.to || defaultFilters.endDate, 'yyyy-MM-dd');
+  const { data: orfasData = [], isLoading: loadingHubla } = useQuery<any[]>({
+    queryKey: ['caucoes-orfas', orfasFrom, orfasTo],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('caucoes_orfas', { p_from: orfasFrom, p_to: orfasTo });
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev,
   });
-  
-  // Build email/phone sets from Agenda for matching
-  const agendaEmailSet = useMemo(() => {
-    const set = new Set<string>();
-    agendaData.forEach(row => {
-      if (row.contactEmail) {
-        set.add(normalizeEmailForMatch(row.contactEmail));
-      }
-    });
-    return set;
-  }, [agendaData]);
-  
-  const agendaPhoneSet = useMemo(() => {
-    const set = new Set<string>();
-    agendaData.forEach(row => {
-      if (row.leadPhone) {
-        const normalized = normalizePhoneForMatch(row.leadPhone);
-        if (normalized.length >= 8) set.add(normalized);
-      }
-    });
-    return set;
-  }, [agendaData]);
-  
-  // Categorize Hubla transactions: matched vs pending
-  const { hublaMatched, hublaPending } = useMemo(() => {
-    const matched: typeof hublaData = [];
-    const pending: typeof hublaData = [];
-    
-    hublaData.forEach(tx => {
-      const emailMatch = tx.customerEmail && agendaEmailSet.has(normalizeEmailForMatch(tx.customerEmail));
-      const phoneMatch = tx.customerPhone && agendaPhoneSet.has(normalizePhoneForMatch(tx.customerPhone));
-      
-      if (emailMatch || phoneMatch) {
-        matched.push(tx);
-      } else {
-        pending.push(tx);
-      }
-    });
-    
-    return { hublaMatched: matched, hublaPending: pending };
-  }, [hublaData, agendaEmailSet, agendaPhoneSet]);
   
   // Transform to unified format
   const unifiedData = useMemo((): UnifiedContractRow[] => {
     const rows: UnifiedContractRow[] = [];
     
-    // Add Agenda rows
     if (selectedSource === 'all' || selectedSource === 'agenda') {
       agendaData.forEach(row => {
         rows.push({
@@ -169,7 +135,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           closerEmail: row.closerEmail,
           dealCreatedAt: row.dealCreatedAt || '',
           meetingDate: row.meetingDate || '',
-          contractPaidAt: row.contractPaidAt || '',
+          contractPaidAt: row.effDate || '',
           leadName: row.leadName,
           leadPhone: row.leadPhone,
           leadEmail: row.contactEmail || '',
@@ -177,7 +143,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
           originName: row.originName,
           currentStage: row.currentStage,
           salesChannel: row.salesChannel.toUpperCase(),
-          productName: 'Contrato R1',
+          productName: 'Contrato',
           netValue: null,
           isRefunded: row.isRefunded,
           customFields: row.customFields,
@@ -185,82 +151,35 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       });
     }
     
-    // Add Hubla rows (all or just pending)
-    if (selectedSource === 'hubla') {
-      hublaData.forEach(tx => {
+    // Pendentes (sem caução marcada) — não têm canal, somem quando um canal é filtrado
+    if ((selectedSource === 'all' || selectedSource === 'pending') && selectedChannel === 'all') {
+      orfasData.forEach((tx: any) => {
         rows.push({
-          id: `hubla-${tx.id}`,
-          source: 'hubla',
-          closerName: '—',
-          closerEmail: '',
-          dealCreatedAt: '',
-          meetingDate: '',
-          contractPaidAt: tx.saleDate,
-          leadName: tx.customerName,
-          leadPhone: tx.customerPhone || '',
-          leadEmail: tx.customerEmail || '',
-          sdrName: '—',
-          originName: '—',
-          currentStage: '—',
-          salesChannel: '—',
-          productName: tx.productName,
-          netValue: tx.netValue,
-          isRefunded: false,
-          customFields: {},
-        });
-      });
-    } else if (selectedSource === 'pending') {
-      hublaPending.forEach(tx => {
-        rows.push({
-          id: `pending-${tx.id}`,
+          id: `pending-${tx.transaction_id}`,
           source: 'pending',
           closerName: 'Sem atribuição',
           closerEmail: '',
           dealCreatedAt: '',
           meetingDate: '',
-          contractPaidAt: tx.saleDate,
-          leadName: tx.customerName,
-          leadPhone: tx.customerPhone || '',
-          leadEmail: tx.customerEmail || '',
+          contractPaidAt: tx.tx_date || '',
+          leadName: tx.customer_name || 'N/A',
+          leadPhone: '',
+          leadEmail: tx.customer_email || '',
           sdrName: '—',
           originName: '—',
           currentStage: '—',
           salesChannel: '—',
-          productName: tx.productName,
-          netValue: tx.netValue,
-          isRefunded: false,
-          customFields: {},
-        });
-      });
-    } else if (selectedSource === 'all') {
-      // For "all", add pending Hubla transactions
-      hublaPending.forEach(tx => {
-        rows.push({
-          id: `pending-${tx.id}`,
-          source: 'pending',
-          closerName: 'Sem atribuição',
-          closerEmail: '',
-          dealCreatedAt: '',
-          meetingDate: '',
-          contractPaidAt: tx.saleDate,
-          leadName: tx.customerName,
-          leadPhone: tx.customerPhone || '',
-          leadEmail: tx.customerEmail || '',
-          sdrName: '—',
-          originName: '—',
-          currentStage: '—',
-          salesChannel: '—',
-          productName: tx.productName,
-          netValue: tx.netValue,
+          productName: tx.product_name || '',
+          netValue: tx.net_value ?? null,
           isRefunded: false,
           customFields: {},
         });
       });
     }
     
-    // Filter by sales channel
+    // Filter by sales channel (only agenda rows have channel)
     let filtered = rows.filter(row => 
-      selectedChannel === 'all' || row.salesChannel === selectedChannel.toUpperCase() || row.source !== 'agenda'
+      selectedChannel === 'all' || (row.source === 'agenda' && row.salesChannel === selectedChannel.toUpperCase())
     );
     
     // Filter by search term (name, email, phone)
@@ -277,27 +196,28 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       });
     }
     
-    // Sort by date DESC
+    // Sort by date DESC (effDate agenda / tx_date pendentes)
     return filtered.sort((a, b) => (b.contractPaidAt || '').localeCompare(a.contractPaidAt || ''));
-  }, [agendaData, hublaData, hublaPending, selectedSource, selectedChannel, searchTerm]);
+  }, [agendaData, orfasData, selectedSource, selectedChannel, searchTerm]);
   
   // Calculate stats from filtered data
   const stats = useMemo(() => {
     const agendaTotal = unifiedData.filter(r => r.source === 'agenda').length;
-    const hublaTotal = unifiedData.filter(r => r.source === 'hubla' || r.source === 'pending').length;
     const pendingTotal = unifiedData.filter(r => r.source === 'pending').length;
+    const refundedTotal = unifiedData.filter(r => r.isRefunded).length;
+    const grandTotal = unifiedData.filter(r => !r.isRefunded).length;
     const uniqueClosers = new Set(
       unifiedData.filter(r => r.source === 'agenda').map(r => r.closerEmail)
     ).size;
     
-    return { agendaTotal, hublaTotal, pendingTotal, uniqueClosers };
+    return { agendaTotal, pendingTotal, refundedTotal, grandTotal, uniqueClosers };
   }, [unifiedData]);
   
   // Export to Excel
   const handleExportExcel = async () => {
     const XLSX = await loadXLSX();
     const exportData = unifiedData.map(row => ({
-      'Fonte': row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla',
+      'Fonte': row.source === 'agenda' ? 'Agenda' : 'Pendente',
       'Data Entrada': row.dealCreatedAt ? format(parseISO(row.dealCreatedAt), 'dd/MM/yyyy', { locale: ptBR }) : '',
       'SDR': row.sdrName,
       'Data R1': row.meetingDate ? format(parseISO(row.meetingDate), 'dd/MM/yyyy', { locale: ptBR }) : '',
@@ -363,10 +283,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                   <SelectValue placeholder="Fonte" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Ambos</SelectItem>
-                  <SelectItem value="agenda">Agenda (atribuídos)</SelectItem>
-                  <SelectItem value="hubla">Hubla A000</SelectItem>
-                  <SelectItem value="pending">Pendentes</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="agenda">Atribuídos (agenda)</SelectItem>
+                  <SelectItem value="pending">Sem caução marcada</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -436,7 +355,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                 <Download className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Agenda (Atribuídos)</p>
+                <p className="text-sm text-muted-foreground">Atribuídos</p>
                 <p className="text-3xl font-bold">{stats.agendaTotal}</p>
               </div>
             </div>
@@ -450,8 +369,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                 <FileSpreadsheet className="h-6 w-6 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Hubla A000 (Total)</p>
-                <p className="text-3xl font-bold">{stats.hublaTotal}</p>
+                <p className="text-sm text-muted-foreground">Total de contratos</p>
+                <p className="text-3xl font-bold">{stats.grandTotal}</p>
+                <p className="text-xs text-muted-foreground">{stats.refundedTotal} estornados</p>
               </div>
             </div>
           </CardContent>
@@ -464,7 +384,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                 <AlertCircle className="h-6 w-6 text-warning" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Pendentes</p>
+                <p className="text-sm text-muted-foreground">Sem caução marcada</p>
                 <p className="text-3xl font-bold">{stats.pendingTotal}</p>
               </div>
             </div>
@@ -537,7 +457,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                                 : ''
                           }
                         >
-                          {row.source === 'agenda' ? 'Agenda' : row.source === 'pending' ? 'Pendente' : 'Hubla'}
+                          {row.source === 'agenda' ? 'Agenda' : 'Pendente'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm">
