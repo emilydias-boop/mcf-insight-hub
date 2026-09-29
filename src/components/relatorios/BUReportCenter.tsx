@@ -38,7 +38,6 @@ export function BUReportCenter({
   bu, 
   availableReports = ['contracts', 'sales', 'performance'] 
 }: BUReportCenterProps) {
-  const { role } = useAuth();
   const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
   
   const buName = BU_NAMES[bu];
@@ -53,7 +52,6 @@ export function BUReportCenter({
             <h1 className="text-2xl font-bold">Relatórios - {buName}</h1>
             <p className="text-muted-foreground">
               Gere relatórios personalizados da sua equipe
-              {role === 'coordenador' && ' (apenas sua equipe)'}
             </p>
           </div>
         </div>
