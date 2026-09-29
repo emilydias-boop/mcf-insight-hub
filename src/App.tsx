@@ -47,6 +47,7 @@ const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoA
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const VisaoDiaria = lazy(() => import("./pages/diretoria/VisaoDiaria"));
+const PainelComercialCredito = lazy(() => import("./pages/bu-credito/PainelComercialCredito"));
 const MeuDesempenhoCloser = lazy(() => import("./pages/closer/MeuDesempenhoCloser"));
 // [REMOVIDO 2026-06-24] Seção Financeiro desativada — preservado para rollback.
 // const Receita = lazy(() => import("./pages/receita/Index"));
