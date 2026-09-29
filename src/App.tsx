@@ -248,8 +248,9 @@ const App = () => (
                 <Route path="auditoria" element={<ReceitaAuditoria />} />
               </Route>
               */}
-              <Route path="relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Relatorios /></RoleGuard>} />
-              <Route path="relatorios/leads-sem-tag" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LeadsSemTag /></RoleGuard>} />
+              {/* [REMOVIDO 2026-09-29] Rotas /relatorios e /relatorios/leads-sem-tag desativadas — redirecionam para /bu-incorporador/relatorios. */}
+              <Route path="relatorios" element={<Navigate to="/bu-incorporador/relatorios" replace />} />
+              <Route path="relatorios/leads-sem-tag" element={<Navigate to="/bu-incorporador/relatorios" replace />} />
               
               {/* BU Consórcio */}
               <Route path="consorcio/bi-consorcio" element={<ResourceGuard resource="crm"><BIConsorcio /></ResourceGuard>} />
