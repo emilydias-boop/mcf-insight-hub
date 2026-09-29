@@ -52,6 +52,7 @@ import { RequestR1ApprovalDialog } from './RequestR1ApprovalDialog';
 import type { R1ForcePayload } from '@/hooks/useCreateR1ForceRequest';
 import { useQualificationStatus } from '@/hooks/useQualificationStatus';
 import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -143,6 +144,9 @@ export function QuickScheduleModal({
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const activeBU = useActiveBU();
+  // BU Crédito Imobiliário usa qualificação própria (ICP / Parcial / Fora do ICP),
+  // exibida pelo LeadSegmentBadge em vez do modelo Lead A/B/C das outras BUs.
+  const isCredito = activeBU === 'credito';
   // Alguns pontos do app abrem este modal sem passar a lista de closers
   // (o "Qualificar e Agendar" passava um array vazio fixo). Sem fallback o
   // SDR ficava sem NENHUM closer para escolher e não conseguia agendar.
@@ -927,20 +931,37 @@ export function QuickScheduleModal({
             {/* Lead Type Badge */}
             {selectedDeal && (
               <div className="flex items-center gap-2 pt-1">
-                <Badge 
-                  variant="outline" 
-                  className={cn(
-                    "font-semibold",
-                    detectedLeadType === 'A'
-                      ? 'border-blue-500 text-blue-600'
-                      : detectedLeadType
-                        ? 'border-purple-500 text-purple-600'
-                        : 'border-muted-foreground text-muted-foreground'
-                  )}
-                >
-                  <Tag className="h-3 w-3 mr-1" />
-                  {detectedLeadType ? `Lead ${detectedLeadType}` : 'Sem classificação'}
-                </Badge>
+                {isCredito ? (
+                  dealIcpSegment ? (
+                    <LeadSegmentBadge segment={dealIcpSegment} />
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'font-semibold',
+                        'border-muted-foreground text-muted-foreground'
+                      )}
+                    >
+                      <Tag className="h-3 w-3 mr-1" />
+                      Sem qualificação
+                    </Badge>
+                  )
+                ) : (
+                  <Badge 
+                    variant="outline" 
+                    className={cn(
+                      "font-semibold",
+                      detectedLeadType === 'A'
+                        ? 'border-blue-500 text-blue-600'
+                        : detectedLeadType
+                          ? 'border-purple-500 text-purple-600'
+                          : 'border-muted-foreground text-muted-foreground'
+                    )}
+                  >
+                    <Tag className="h-3 w-3 mr-1" />
+                    {detectedLeadType ? `Lead ${detectedLeadType}` : 'Sem classificação'}
+                  </Badge>
+                )}
                 <span className="text-xs text-muted-foreground">
                   Classificação do negócio (ICP)
                 </span>
@@ -1031,6 +1052,7 @@ export function QuickScheduleModal({
           </div>
 
           {/* Já Constrói / Conhece Consórcio Toggle (dynamic by BU) */}
+          {!isCredito && (
           <div className="space-y-2">
             <Label>{activeBU === 'consorcio' ? 'Conhece consórcio?' : 'Já constrói?'}</Label>
             <div className="flex gap-2">
@@ -1068,6 +1090,7 @@ export function QuickScheduleModal({
               }
             </p>
           </div>
+          )}
 
           {/* Date and Time */}
           <div className="grid grid-cols-2 gap-4">
@@ -1276,7 +1299,9 @@ export function QuickScheduleModal({
             )}>
               <div className="flex items-center justify-between">
                 <span>
-                  {detectedLeadType ? `Lead ${detectedLeadType}` : 'Lead sem classificação'} às {selectedTime}
+                  {isCredito
+                    ? (dealIcpSegment ? `Lead ${dealIcpSegment}` : 'Lead sem qualificação')
+                    : (detectedLeadType ? `Lead ${detectedLeadType}` : 'Lead sem classificação')} às {selectedTime}
                 </span>
                 <span className="font-medium">
                   {slotAvailability.currentCount}/{slotAvailability.maxLeads ?? 4} leads
@@ -1285,7 +1310,7 @@ export function QuickScheduleModal({
                   )}
                 </span>
               </div>
-              {slotAvailability.currentCount > 0 && slotAvailability.attendees && (
+              {slotAvailability.currentCount > 0 && slotAvailability.attendees && !isCredito && (
                 <div className="flex gap-2 text-xs">
                   {(() => {
                     const buildsCount = slotAvailability.attendees.filter((a: any) => a.already_builds === true).length;
