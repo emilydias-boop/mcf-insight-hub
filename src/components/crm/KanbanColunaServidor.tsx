@@ -364,6 +364,8 @@ export const KanbanColunaServidor = ({
                             isSelected={selectedDealIds.has(deal.id)}
                             onSelect={onSelectionChange}
                             salesChannel={deal.kanban_canal || 'live'}
+                            canalEntradaRotulo={deal.kanban_canal_entrada_rotulo}
+                            canalEntradaCor={deal.kanban_canal_entrada_cor}
                             outsideInfo={deal.kanban_outside}
                             totaisCliente={email ? totaisPorCliente?.get(normalizarEmail(email)) : undefined}
                           />

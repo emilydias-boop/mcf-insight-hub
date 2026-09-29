@@ -40,6 +40,7 @@ export function montarFiltrosKanban(
     dealStatus: filters.dealStatus,
     inactivityDays: filters.inactivityDays,
     salesChannel: filters.salesChannel,
+    canalEntrada: filters.canalEntrada && filters.canalEntrada !== 'all' ? filters.canalEntrada : undefined,
     attemptsRange: filters.attemptsRange,
     selectedTags: filters.selectedTags,
     tagFilters: filters.tagFilters,
@@ -254,6 +255,23 @@ export function useKanbanDonos(originIds: string[], filtros: Record<string, unkn
       });
       if (error) throw error;
       return (data || []) as { owner_profile_id: string | null; owner_id: string | null }[];
+    },
+  });
+}
+
+export function useKanbanCanaisEntrada(originIds: string[], filtros: Record<string, unknown>) {
+  return useQuery({
+    queryKey: ['kanban', 'canais-entrada', originIds, filtros],
+    enabled: originIds.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<{ codigo: string; rotulo: string; cor: string; ordem: number; total: number }[]> => {
+      const { data, error } = await (supabase as any).rpc('kanban_canais_entrada', {
+        p_origin_ids: originIds,
+        p_filtros: filtros,
+      });
+      if (error) throw error;
+      return ((data || []) as { codigo: string; rotulo: string; cor: string; ordem: number; total: number | string }[])
+        .map((item) => ({ ...item, total: Number(item.total) }));
     },
   });
 }

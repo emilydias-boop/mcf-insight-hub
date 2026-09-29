@@ -5,7 +5,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { useCRMDeals, useCRMStages, useSyncClintData } from '@/hooks/useCRMData';
-import { montarFiltrosKanban, useKanbanOrigemIds, useKanbanDonos, useKanbanProdutos, useKanbanContagem, useKanbanBuscaOutrasPipelines, buscarKanbanLista } from '@/hooks/useKanbanServidor';
+import { montarFiltrosKanban, useKanbanOrigemIds, useKanbanDonos, useKanbanCanaisEntrada, useKanbanProdutos, useKanbanContagem, useKanbanBuscaOutrasPipelines, buscarKanbanLista } from '@/hooks/useKanbanServidor';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
@@ -88,6 +88,7 @@ const Negocios = () => {
     dealStatus: 'all',
     inactivityDays: null,
     salesChannel: 'all',
+    canalEntrada: 'all',
     attemptsRange: null,
     selectedTags: [],
     tagFilters: [],
@@ -421,6 +422,7 @@ const Negocios = () => {
   );
   const { data: outrasPipelines } = useKanbanBuscaOutrasPipelines(kanbanOrigemIds, filtrosKanban);
   const { data: donosKanban } = useKanbanDonos(kanbanOrigemIds, restricaoKanban);
+  const { data: canaisEntrada } = useKanbanCanaisEntrada(kanbanOrigemIds, restricaoKanban);
   const { data: produtosKanban, isLoading: isLoadingProdutosKanban } = useKanbanProdutos(kanbanOrigemIds, restricaoKanban, true);
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
@@ -875,6 +877,7 @@ const Negocios = () => {
       dealStatus: 'all',
       inactivityDays: null,
       salesChannel: 'all',
+      canalEntrada: 'all',
       attemptsRange: null,
       selectedTags: [],
       tagFilters: [],
@@ -983,6 +986,16 @@ const Negocios = () => {
         onRemove: () => setFilters(f => ({ ...f, salesChannel: 'all' })),
       });
     }
+
+    if (filters.canalEntrada && filters.canalEntrada !== 'all') {
+      const canal = canaisEntrada?.find((item) => item.codigo === filters.canalEntrada);
+      chips.push({
+        key: 'canalEntrada',
+        label: 'Canal',
+        value: canal?.rotulo || filters.canalEntrada,
+        onRemove: () => setFilters(f => ({ ...f, canalEntrada: 'all' })),
+      });
+    }
     
     if (filters.attemptsRange) {
       chips.push({
@@ -1061,7 +1074,7 @@ const Negocios = () => {
     }
 
     return chips;
-  }, [filters, ownerOptions, closerFilterOptions]);
+  }, [filters, ownerOptions, closerFilterOptions, canaisEntrada]);
   
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
@@ -1200,6 +1213,7 @@ const Negocios = () => {
           filters={filters} 
           onChange={setFilters} 
           activeBU={activeBU}
+          canaisEntrada={canaisEntrada ?? []}
           onClear={clearFilters}
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}

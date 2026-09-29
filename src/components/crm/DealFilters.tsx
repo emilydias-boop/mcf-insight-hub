@@ -53,6 +53,7 @@ export interface DealFiltersState {
   dealStatus: 'all' | 'open' | 'won' | 'lost';
   inactivityDays: number | null;
   salesChannel: SalesChannelFilter;
+  canalEntrada?: string;
   attemptsRange: { min: number; max: number } | null;
   selectedTags: string[];
   tagFilters: TagFilterRule[];
@@ -82,6 +83,7 @@ interface DealFiltersProps {
   isLoadingProducts?: boolean;
   /** BU ativa para restringir a lista de closers */
   activeBU?: string | null;
+  canaisEntrada?: { codigo: string; rotulo: string; cor: string; total: number }[];
 }
 
 export const DealFilters = ({ 
@@ -94,6 +96,7 @@ export const DealFilters = ({
   availableProducts = [],
   isLoadingProducts = false,
   activeBU,
+  canaisEntrada = [],
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
@@ -171,7 +174,7 @@ export const DealFilters = ({
     filters.closerEmail,
     filters.dealStatus !== 'all',
     filters.inactivityDays !== null,
-    filters.salesChannel !== 'all',
+    (filters.canalEntrada ?? 'all') !== 'all',
     filters.attemptsRange !== null,
     filters.tagFilters.length > 0,
     filters.productFilters.length > 0,
@@ -336,41 +339,34 @@ export const DealFilters = ({
       </Select>
       
       {/* Filtro de Canal de Entrada */}
-      <Select
-        value={filters.salesChannel}
-        onValueChange={(value) => onChange({ 
-          ...filters, 
-          salesChannel: value as SalesChannelFilter 
-        })}
-      >
-        <SelectTrigger className="w-[130px]">
-          <div className="flex items-center gap-2">
-            <Radio className="h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="Canal" />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos</SelectItem>
-          <SelectItem value="a010">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              A010
-            </span>
-          </SelectItem>
-          <SelectItem value="bio">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              BIO
-            </span>
-          </SelectItem>
-          <SelectItem value="live">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-500" />
-              LIVE
-            </span>
-          </SelectItem>
-        </SelectContent>
-      </Select>
+      <TooltipProvider delayDuration={100}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Select
+              value={filters.canalEntrada || 'all'}
+              onValueChange={(value) => onChange({ ...filters, canalEntrada: value })}
+            >
+              <SelectTrigger className="w-[200px]">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <Radio className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <SelectValue placeholder="Canal de entrada" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os canais</SelectItem>
+                {canaisEntrada.map((canal) => (
+                  <SelectItem key={canal.codigo} value={canal.codigo}>
+                    {canal.rotulo} ({canal.total.toLocaleString('pt-BR')})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            <p>Por onde o lead entrou no CRM. Não muda depois: quem entrou pela Anamnese e comprou o A010 continua Anamnese (a compra do A010 está no filtro Produtos).</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       
       {/* Filtro de Tentativas (Range) */}
       <Popover open={isAttemptsPopoverOpen} onOpenChange={setIsAttemptsPopoverOpen}>
