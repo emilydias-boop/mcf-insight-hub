@@ -18656,6 +18656,7 @@ export type Database = {
         }
         Returns: Json
       }
+      eh_produto_parceria: { Args: { p_nome: string }; Returns: boolean }
       embracon_indices_class: {
         Args: { p_fonte?: string; p_mes: string }
         Returns: {
@@ -20087,6 +20088,34 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      vendas_parceria: {
+        Args: {
+          p_emails?: string[]
+          p_from: string
+          p_sem_vinculo?: boolean
+          p_to?: string
+        }
+        Returns: {
+          count_in_dashboard: boolean
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          excluded_from_cart: boolean
+          gross_override: number
+          hubla_id: string
+          id: string
+          installment_number: number
+          linked_attendee_id: string
+          net_value: number
+          product_name: string
+          product_price: number
+          reference_price: number
+          sale_date: string
+          sale_status: string
+          source: string
+          total_installments: number
+        }[]
       }
       vincular_venda_ao_participante: {
         Args: { p_attendee_id: string; p_transaction_id: string }
