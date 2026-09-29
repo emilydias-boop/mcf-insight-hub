@@ -289,7 +289,14 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     );
   }
 
-  const channelCounts = { A010: 0, ANAMNESE: 0, PLANILHA: 0, OUTROS: 0 } as Record<SimpleChannel, number>;
+  const channelCounts = {
+    A010: 0,
+    ANAMNESE: 0,
+    PLANILHA: 0,
+    OUTROS: 0,
+    PARCEIRO_50K: 0,
+    OS: 0,
+  } as Record<SimpleChannel, number>;
   for (const r of attendeeRows) channelCounts[r.channel]++;
   const total = attendeeRows.length;
 
@@ -297,16 +304,26 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     <div className="border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b text-xs">
         <span className="text-muted-foreground">
-          {channelFilter ? `Filtrado por canal: ${channelFilter}` : 'Todos os canais'}
+          {channelFilter
+            ? `Filtrado por canal: ${isCredito ? (CHANNEL_LABEL[channelFilter as SimpleChannel] || channelFilter) : channelFilter}`
+            : 'Todos os canais'}
         </span>
         <div className="flex items-center gap-2">
           {!channelFilter && (
-            <>
-              <Badge variant="outline" className="border-blue-400 text-blue-600">A010: {channelCounts.A010}</Badge>
-              <Badge variant="outline" className="border-purple-400 text-purple-600">ANAMNESE: {channelCounts.ANAMNESE}</Badge>
-              <Badge variant="outline" className="border-emerald-400 text-emerald-600">PLANILHA: {channelCounts.PLANILHA}</Badge>
-              <Badge variant="outline" className="text-muted-foreground">OUTROS: {channelCounts.OUTROS}</Badge>
-            </>
+            isCredito ? (
+              <>
+                <Badge variant="outline" className="border-amber-400 text-amber-600">Parceiros 50k: {channelCounts.PARCEIRO_50K}</Badge>
+                <Badge variant="outline" className="border-sky-400 text-sky-600">OS: {channelCounts.OS}</Badge>
+                <Badge variant="outline" className="text-muted-foreground">OUTROS: {channelCounts.OUTROS}</Badge>
+              </>
+            ) : (
+              <>
+                <Badge variant="outline" className="border-blue-400 text-blue-600">A010: {channelCounts.A010}</Badge>
+                <Badge variant="outline" className="border-purple-400 text-purple-600">ANAMNESE: {channelCounts.ANAMNESE}</Badge>
+                <Badge variant="outline" className="border-emerald-400 text-emerald-600">PLANILHA: {channelCounts.PLANILHA}</Badge>
+                <Badge variant="outline" className="text-muted-foreground">OUTROS: {channelCounts.OUTROS}</Badge>
+              </>
+            )
           )}
           <Badge variant="secondary" className="font-semibold">Total: {total}</Badge>
         </div>
@@ -366,10 +383,12 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                       row.channel === 'A010' && 'border-blue-400 text-blue-600',
                       row.channel === 'ANAMNESE' && 'border-purple-400 text-purple-600',
                       row.channel === 'PLANILHA' && 'border-emerald-400 text-emerald-600',
+                      row.channel === 'PARCEIRO_50K' && 'border-amber-400 text-amber-600',
+                      row.channel === 'OS' && 'border-sky-400 text-sky-600',
                       row.channel === 'OUTROS' && 'text-muted-foreground'
                     )}
                   >
-                    {row.channel}
+                    {CHANNEL_LABEL[row.channel]}
                   </Badge>
                 </TableCell>
                 <TableCell>
