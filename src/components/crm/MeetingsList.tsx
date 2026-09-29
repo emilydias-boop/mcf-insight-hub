@@ -11,6 +11,7 @@ import { NoShowReasonPicker } from '@/components/crm/NoShowReasonPicker';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { cn } from '@/lib/utils';
 import { useMemo, useState } from 'react';
+import { useActiveBU } from '@/hooks/useActiveBU';
 
 interface MeetingsListProps {
   meetings: MeetingSlot[];
@@ -53,7 +54,17 @@ const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; variant: 'default'
  * - OUTROS → qualquer outra coisa
  * Prioridade quando há múltiplas tags: A010 > ANAMNESE > PLANILHA.
  */
-type SimpleChannel = 'A010' | 'ANAMNESE' | 'PLANILHA' | 'OUTROS';
+type SimpleChannel = 'A010' | 'ANAMNESE' | 'PLANILHA' | 'OUTROS' | 'PARCEIRO_50K' | 'OS';
+
+/** Rótulo amigável exibido na tabela e no aviso "Filtrado por canal". */
+const CHANNEL_LABEL: Record<SimpleChannel, string> = {
+  A010: 'A010',
+  ANAMNESE: 'ANAMNESE',
+  PLANILHA: 'PLANILHA',
+  OUTROS: 'OUTROS',
+  PARCEIRO_50K: 'Parceiros 50k',
+  OS: 'OS',
+};
 
 function classifySimple(opts: { tags: string[] }): SimpleChannel {
   const norm = opts.tags.map((t) => (t || '').trim().toUpperCase());
@@ -63,11 +74,28 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
+/**
+ * Classificação de canal da BU Crédito Imobiliário — baseada nas tags de
+ * entrada do lead: 'parceiro-50k' (indicação de parceiro) e 'os' (ordem de
+ * serviço). Qualquer outra combinação cai em OUTROS.
+ */
+function classifyCredito(tags: string[]): SimpleChannel {
+  const norm = tags.map((t) => (t || '').trim().toLowerCase());
+  if (norm.some((t) => t === 'parceiro-50k')) return 'PARCEIRO_50K';
+  if (norm.some((t) => t === 'os')) return 'OS';
+  return 'OUTROS';
+}
+
 /** Segmento ICP (aditivo): coluna dedicada crm_deals.icp_segment ('A' | 'B' | 'C'). */
 type LeadSegment = string | null;
 
-function resolveLeadSegment(icpSegment: unknown): LeadSegment {
-  const v = (icpSegment ?? '').toString().trim().toUpperCase();
+function resolveLeadSegment(icpSegment: unknown, allowCredito: boolean): LeadSegment {
+  const original = (icpSegment ?? '').toString().trim();
+  const v = original.toUpperCase();
+  // BU Crédito Imobiliário usa a escala própria ICP / Parcial / Fora do ICP —
+  // o LeadSegmentBadge já conhece esses rótulos, então devolvemos o valor
+  // original (com a caixa de gravado) em vez de só A/B/C.
+  if (allowCredito && (v === 'ICP' || v === 'PARCIAL' || v === 'FORA DO ICP')) return original;
   if (v === 'A' || v === 'B' || v === 'C') return v;
   return null;
 }
@@ -116,6 +144,8 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
   const updateStatus = useUpdateAttendeeAndSlotStatus();
   const cancelMeeting = useCancelMeeting();
   const [noShowRowId, setNoShowRowId] = useState<string | null>(null);
+  const activeBU = useActiveBU();
+  const isCredito = activeBU === 'credito';
 
   // Expand meetings into attendee-level rows
   const attendeeRows = useMemo((): AttendeeRow[] => {
