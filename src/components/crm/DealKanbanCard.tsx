@@ -87,6 +87,8 @@ interface DealKanbanCardProps {
   isSelected?: boolean;
   onSelect?: (dealId: string, selected: boolean) => void;
   salesChannel?: SalesChannel;
+  canalEntradaRotulo?: string | null;
+  canalEntradaCor?: string | null;
   outsideInfo?: { isOutside: boolean; productName: string | null };
   totaisCliente?: TotaisCliente | null;
 }
@@ -101,6 +103,8 @@ export const DealKanbanCard = ({
   isSelected = false,
   onSelect,
   salesChannel = 'live',
+  canalEntradaRotulo,
+  canalEntradaCor,
   outsideInfo,
   totaisCliente,
 }: DealKanbanCardProps) => {
@@ -149,8 +153,28 @@ export const DealKanbanCard = ({
         };
     }
   };
-  
-  const channelBadge = getChannelBadge();
+
+  const canalEntradaColorClasses: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-700',
+    teal: 'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-700',
+    orange: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-700',
+    cyan: 'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-950 dark:text-cyan-400 dark:border-cyan-700',
+    purple: 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-700',
+    green: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400 dark:border-green-700',
+    indigo: 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-400 dark:border-indigo-700',
+    pink: 'bg-pink-100 text-pink-700 border-pink-300 dark:bg-pink-950 dark:text-pink-400 dark:border-pink-700',
+    amber: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700',
+    slate: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-700',
+    zinc: 'bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-950 dark:text-zinc-400 dark:border-zinc-700',
+    gray: 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-950 dark:text-gray-400 dark:border-gray-700',
+  };
+  const canalEntradaCorNormalizada = canalEntradaCor?.trim().toLowerCase() || 'gray';
+  const channelBadge = canalEntradaRotulo?.trim()
+    ? {
+        label: canalEntradaRotulo.trim(),
+        className: canalEntradaColorClasses[canalEntradaCorNormalizada] || canalEntradaColorClasses.gray,
+      }
+    : getChannelBadge();
 
   // Formatar mês de entrada: Jan/26, Fev/26, etc.
   const getEntryMonth = (createdAt: string) => {
