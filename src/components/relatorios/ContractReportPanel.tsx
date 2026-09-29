@@ -202,8 +202,8 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   
   // Calculate stats from filtered data
   const stats = useMemo(() => {
-    const agendaTotal = unifiedData.filter(r => r.source === 'agenda').length;
-    const pendingTotal = unifiedData.filter(r => r.source === 'pending').length;
+    const agendaTotal = unifiedData.filter(r => r.source === 'agenda' && !r.isRefunded).length;
+    const pendingTotal = unifiedData.filter(r => r.source === 'pending' && !r.isRefunded).length;
     const refundedTotal = unifiedData.filter(r => r.isRefunded).length;
     const grandTotal = unifiedData.filter(r => !r.isRefunded).length;
     const uniqueClosers = new Set(
@@ -365,13 +365,12 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-blue-500/10">
-                <FileSpreadsheet className="h-6 w-6 text-blue-500" />
+              <div className="p-3 rounded-full bg-warning/10">
+                <AlertCircle className="h-6 w-6 text-warning" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total de contratos</p>
-                <p className="text-3xl font-bold">{stats.grandTotal}</p>
-                <p className="text-xs text-muted-foreground">{stats.refundedTotal} estornados</p>
+                <p className="text-sm text-muted-foreground">Sem caução marcada</p>
+                <p className="text-3xl font-bold">{stats.pendingTotal}</p>
               </div>
             </div>
           </CardContent>
@@ -380,12 +379,13 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-warning/10">
-                <AlertCircle className="h-6 w-6 text-warning" />
+              <div className="p-3 rounded-full bg-blue-500/10">
+                <FileSpreadsheet className="h-6 w-6 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Sem caução marcada</p>
-                <p className="text-3xl font-bold">{stats.pendingTotal}</p>
+                <p className="text-sm text-muted-foreground">Total de contratos</p>
+                <p className="text-3xl font-bold">{stats.grandTotal}</p>
+                <p className="text-xs text-muted-foreground">{stats.refundedTotal} estornados</p>
               </div>
             </div>
           </CardContent>
