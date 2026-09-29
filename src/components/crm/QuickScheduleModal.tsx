@@ -1031,6 +1031,7 @@ export function QuickScheduleModal({
           </div>
 
           {/* Já Constrói / Conhece Consórcio Toggle (dynamic by BU) */}
+          {!isCredito && (
           <div className="space-y-2">
             <Label>{activeBU === 'consorcio' ? 'Conhece consórcio?' : 'Já constrói?'}</Label>
             <div className="flex gap-2">
@@ -1068,6 +1069,7 @@ export function QuickScheduleModal({
               }
             </p>
           </div>
+          )}
 
           {/* Date and Time */}
           <div className="grid grid-cols-2 gap-4">
@@ -1276,7 +1278,9 @@ export function QuickScheduleModal({
             )}>
               <div className="flex items-center justify-between">
                 <span>
-                  {detectedLeadType ? `Lead ${detectedLeadType}` : 'Lead sem classificação'} às {selectedTime}
+                  {isCredito
+                    ? (dealIcpSegment ? `Lead ${dealIcpSegment}` : 'Lead sem qualificação')
+                    : (detectedLeadType ? `Lead ${detectedLeadType}` : 'Lead sem classificação')} às {selectedTime}
                 </span>
                 <span className="font-medium">
                   {slotAvailability.currentCount}/{slotAvailability.maxLeads ?? 4} leads
@@ -1285,7 +1289,7 @@ export function QuickScheduleModal({
                   )}
                 </span>
               </div>
-              {slotAvailability.currentCount > 0 && slotAvailability.attendees && (
+              {slotAvailability.currentCount > 0 && slotAvailability.attendees && !isCredito && (
                 <div className="flex gap-2 text-xs">
                   {(() => {
                     const buildsCount = slotAvailability.attendees.filter((a: any) => a.already_builds === true).length;
