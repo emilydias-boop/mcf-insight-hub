@@ -7,6 +7,8 @@ import { ClipboardList, Sparkles, MessageCircle, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { QUALIFICATION_QUESTIONS } from './QualificationQuestions';
+import { creditoVisibleQuestions, previewCreditoIcp } from './CreditoQualificationQuestions';
+import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 
 function WhatsappPrintThumb({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -98,6 +100,12 @@ export function QualificationHistorySection({ dealId }: Props) {
             const answers = (meta.answers || {}) as Record<string, string>;
             const printPath = meta.whatsapp_print_url as string | undefined;
             const sdrName = meta.sdr_name as string | undefined;
+            // A chave 'modalidade' só existe no questionário da BU Crédito
+            // (CREDITO_QUALIFICATION_QUESTIONS) — é o marcador de que estas
+            // respostas não são do formulário de incorporador.
+            const isCreditoAnswers =
+              typeof answers.modalidade === 'string' && answers.modalidade.trim().length > 0;
+            const creditoIcp = isCreditoAnswers ? previewCreditoIcp(answers) : null;
 
             return (
               <div
@@ -138,25 +146,35 @@ export function QualificationHistorySection({ dealId }: Props) {
                   </span>
                 </div>
 
-                {sdrName && (
-                  <Badge variant="outline" className="text-[10px] mb-2">
-                    Por: {sdrName}
-                  </Badge>
+                {(sdrName || creditoIcp) && (
+                  <div className="flex items-center gap-2 mb-2">
+                    {sdrName && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Por: {sdrName}
+                      </Badge>
+                    )}
+                    {creditoIcp && <LeadSegmentBadge segment={creditoIcp} size="sm" />}
+                  </div>
                 )}
 
                 {/* Questionário estruturado (WhatsApp) */}
                 {!isAI && Object.keys(answers).length > 0 && (
                   <div className="space-y-2">
-                    {QUALIFICATION_QUESTIONS.map((q) => {
-                      const a = (answers[q.key] || '').trim();
-                      if (!a) return null;
-                      return (
-                        <div key={q.key} className="text-xs">
-                          <p className="font-medium text-foreground/80">▸ {q.label}</p>
-                          <p className="text-muted-foreground whitespace-pre-wrap pl-3">{a}</p>
-                        </div>
-                      );
-                    })}
+                    {(() => {
+                      const questions: { key: string; label: string }[] = isCreditoAnswers
+                        ? creditoVisibleQuestions(answers)
+                        : QUALIFICATION_QUESTIONS;
+                      return questions.map((q) => {
+                        const a = (answers[q.key] || '').trim();
+                        if (!a) return null;
+                        return (
+                          <div key={q.key} className="text-xs">
+                            <p className="font-medium text-foreground/80">▸ {q.label}</p>
+                            <p className="text-muted-foreground whitespace-pre-wrap pl-3">{a}</p>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
 
