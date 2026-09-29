@@ -420,8 +420,9 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
 
       const refundEmails = new Set((refundsResult.data || []).map(r => (r.customer_email || '').toLowerCase().trim()));
 
-      // Build reference price lookup from product_configurations for parceria products
-      const parceriaProductNames = [...new Set((parceriasResult.data || []).map(p => p.product_name).filter(Boolean))];
+      // Build reference price lookup from product_configurations for parceria products (fallback quando a RPC não trouxer reference_price)
+      const parceriaRows: any[] = parceriasResult.data || [];
+      const parceriaProductNames = [...new Set(parceriaRows.filter(p => p.reference_price == null).map(p => p.product_name).filter(Boolean))];
       let refPriceLookup = new Map<string, number>();
       if (parceriaProductNames.length > 0) {
         const { data: pcData } = await supabase
@@ -433,20 +434,30 @@ export function useCarrinhoAnalysisReport(startDate: Date | null, endDate: Date 
         }
       }
 
+      // Data do contrato por email (para ignorar parceria comprada antes do contrato)
+      const contractDateByEmail = new Map<string, number>();
+      for (const t of uniqueContracts) {
+        const e = (t.customer_email || '').toLowerCase().trim();
+        if (e) contractDateByEmail.set(e, new Date(t.sale_date).getTime());
+      }
+
+      // Primeira parceria com sale_date >= data do contrato (ordem crescente)
       const parceriaMap = new Map<string, { date: string; product: string; grossValue: number | null; netValue: number | null }>();
-      for (const p of parceriasResult.data || []) {
+      const sortedParcerias = [...parceriaRows].sort((a, b) => new Date(a.sale_date).getTime() - new Date(b.sale_date).getTime());
+      for (const p of sortedParcerias) {
         const e = (p.customer_email || '').toLowerCase().trim();
-        if (e && !parceriaMap.has(e)) {
-          const refPrice = p.product_name ? refPriceLookup.get(p.product_name.toLowerCase().trim()) : undefined;
-          const grossValue = getDeduplicatedGross({
-            product_name: p.product_name,
-            product_price: p.product_price,
-            installment_number: p.installment_number,
-            gross_override: p.gross_override,
-            reference_price: refPrice ?? null,
-          }, true);
-          parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue, netValue: p.net_value ?? null });
-        }
+        if (!e || parceriaMap.has(e)) continue;
+        const contractMs = contractDateByEmail.get(e);
+        if (contractMs != null && new Date(p.sale_date).getTime() < contractMs) continue;
+        const refPrice = p.reference_price ?? (p.product_name ? refPriceLookup.get(p.product_name.toLowerCase().trim()) : undefined);
+        const grossValue = getDeduplicatedGross({
+          product_name: p.product_name,
+          product_price: p.product_price,
+          installment_number: p.installment_number,
+          gross_override: p.gross_override,
+          reference_price: refPrice ?? null,
+        }, true);
+        parceriaMap.set(e, { date: p.sale_date || '', product: p.product_name || '', grossValue, netValue: p.net_value ?? null });
       }
 
       const statusNameMap = new Map<string, string>();
