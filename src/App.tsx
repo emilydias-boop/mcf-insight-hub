@@ -54,8 +54,10 @@ const MeuDesempenhoCloser = lazy(() => import("./pages/closer/MeuDesempenhoClose
 // const ReceitaTransacoes = lazy(() => import("./pages/receita/Transacoes"));
 // const ImportarHubla = lazy(() => import("./pages/receita/ImportarHubla"));
 // const ReceitaAuditoria = lazy(() => import("./pages/receita/Auditoria"));
-const Relatorios = lazy(() => import("./pages/Relatorios"));
-const LeadsSemTag = lazy(() => import("./pages/relatorios/LeadsSemTag"));
+// [REMOVIDO 2026-09-29] Página Relatorios.tsx era mockup com dados fixos de 2024 — preservado para rollback.
+// const Relatorios = lazy(() => import("./pages/Relatorios"));
+// [REMOVIDO 2026-09-29] Tela LeadsSemTag (eventos do Clint, sem acessos desde 05/04/2026) desativada — preservado para rollback.
+// const LeadsSemTag = lazy(() => import("./pages/relatorios/LeadsSemTag"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
 const GerenciamentoUsuarios = lazy(() => import("./pages/GerenciamentoUsuarios"));
 const CRM = lazy(() => import("./pages/CRM"));
