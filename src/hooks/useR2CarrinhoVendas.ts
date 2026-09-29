@@ -141,25 +141,12 @@ export function useR2CarrinhoVendas(weekStart: Date, weekEnd: Date, carrinhoConf
 
       const emails = Array.from(emailsSet);
 
-      // 3. Buscar transações de parceria da semana (usar endOfDay para incluir vendas do dia inteiro)
+      // 3. Buscar transações de parceria da semana via RPC vendas_parceria (fonte única)
       // O corte do carrinho define quais R2s pertencem à semana, mas vendas podem acontecer o dia todo
-      let query = supabase
-        .from('hubla_transactions')
-        .select('*')
-        .eq('product_category', 'parceria')
-        .gte('sale_date', effectiveStart.toISOString())
-        .lte('sale_date', effectiveEnd.toISOString())
-        .order('sale_date', { ascending: false });
-
-      // Construir filtro OR para emails e telefones
-      const orFilters: string[] = [];
-      
-      if (emails.length > 0) {
-        orFilters.push(`customer_email.in.(${emails.join(',')})`);
-      }
-
-      // Para telefones, vamos buscar todas as transações de parceria e filtrar no cliente
-      const { data: transactions, error: txError } = await query;
+      const { data: transactions, error: txError } = await (supabase.rpc as any)('vendas_parceria', {
+        p_from: effectiveStart.toISOString(),
+        p_to: effectiveEnd.toISOString(),
+      });
 
       if (txError) throw txError;
 

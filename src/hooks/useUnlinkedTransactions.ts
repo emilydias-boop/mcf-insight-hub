@@ -23,15 +23,12 @@ export function useUnlinkedTransactions(weekDate: Date) {
   return useQuery({
     queryKey: ['unlinked-transactions', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
-      // Buscar todas transações de parceria da semana (matching por email/telefone filtra relevância)
-      const { data: transactions, error: txError } = await supabase
-        .from('hubla_transactions')
-        .select('*')
-        .eq('product_category', 'parceria')
-        .gte('sale_date', weekStart.toISOString())
-        .lte('sale_date', endOfDay(weekEnd).toISOString())
-        .is('linked_attendee_id', null)
-        .order('sale_date', { ascending: false });
+      // Buscar todas transações de parceria da semana via RPC vendas_parceria (fonte única, sem vínculo)
+      const { data: transactions, error: txError } = await (supabase.rpc as any)('vendas_parceria', {
+        p_from: weekStart.toISOString(),
+        p_to: endOfDay(weekEnd).toISOString(),
+        p_sem_vinculo: true,
+      });
 
       if (txError) throw txError;
       if (!transactions) return [];
