@@ -11,6 +11,7 @@ import { NoShowReasonPicker } from '@/components/crm/NoShowReasonPicker';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { cn } from '@/lib/utils';
 import { useMemo, useState } from 'react';
+import { useActiveBU } from '@/hooks/useActiveBU';
 
 interface MeetingsListProps {
   meetings: MeetingSlot[];
@@ -53,7 +54,17 @@ const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; variant: 'default'
  * - OUTROS → qualquer outra coisa
  * Prioridade quando há múltiplas tags: A010 > ANAMNESE > PLANILHA.
  */
-type SimpleChannel = 'A010' | 'ANAMNESE' | 'PLANILHA' | 'OUTROS';
+type SimpleChannel = 'A010' | 'ANAMNESE' | 'PLANILHA' | 'OUTROS' | 'PARCEIRO_50K' | 'OS';
+
+/** Rótulo amigável exibido na tabela e no aviso "Filtrado por canal". */
+const CHANNEL_LABEL: Record<SimpleChannel, string> = {
+  A010: 'A010',
+  ANAMNESE: 'ANAMNESE',
+  PLANILHA: 'PLANILHA',
+  OUTROS: 'OUTROS',
+  PARCEIRO_50K: 'Parceiros 50k',
+  OS: 'OS',
+};
 
 function classifySimple(opts: { tags: string[] }): SimpleChannel {
   const norm = opts.tags.map((t) => (t || '').trim().toUpperCase());
@@ -63,11 +74,28 @@ function classifySimple(opts: { tags: string[] }): SimpleChannel {
   return 'OUTROS';
 }
 
+/**
+ * Classificação de canal da BU Crédito Imobiliário — baseada nas tags de
+ * entrada do lead: 'parceiro-50k' (indicação de parceiro) e 'os' (ordem de
+ * serviço). Qualquer outra combinação cai em OUTROS.
+ */
+function classifyCredito(tags: string[]): SimpleChannel {
+  const norm = tags.map((t) => (t || '').trim().toLowerCase());
+  if (norm.some((t) => t === 'parceiro-50k')) return 'PARCEIRO_50K';
+  if (norm.some((t) => t === 'os')) return 'OS';
+  return 'OUTROS';
+}
+
 /** Segmento ICP (aditivo): coluna dedicada crm_deals.icp_segment ('A' | 'B' | 'C'). */
 type LeadSegment = string | null;
 
-function resolveLeadSegment(icpSegment: unknown): LeadSegment {
-  const v = (icpSegment ?? '').toString().trim().toUpperCase();
+function resolveLeadSegment(icpSegment: unknown, allowCredito: boolean): LeadSegment {
+  const original = (icpSegment ?? '').toString().trim();
+  const v = original.toUpperCase();
+  // BU Crédito Imobiliário usa a escala própria ICP / Parcial / Fora do ICP —
+  // o LeadSegmentBadge já conhece esses rótulos, então devolvemos o valor
+  // original (com a caixa de gravado) em vez de só A/B/C.
+  if (allowCredito && (v === 'ICP' || v === 'PARCIAL' || v === 'FORA DO ICP')) return original;
   if (v === 'A' || v === 'B' || v === 'C') return v;
   return null;
 }
@@ -116,6 +144,8 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
   const updateStatus = useUpdateAttendeeAndSlotStatus();
   const cancelMeeting = useCancelMeeting();
   const [noShowRowId, setNoShowRowId] = useState<string | null>(null);
+  const activeBU = useActiveBU();
+  const isCredito = activeBU === 'credito';
 
   // Expand meetings into attendee-level rows
   const attendeeRows = useMemo((): AttendeeRow[] => {
@@ -150,7 +180,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                 return (t as any)?.name || '';
               })
             : [];
-          const channel = classifySimple({ tags: tagsArr });
+          const channel = isCredito ? classifyCredito(tagsArr) : classifySimple({ tags: tagsArr });
 
           if (channelFilter && channel !== channelFilter) continue;
 
@@ -171,7 +201,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
             isPartner: !!att.is_partner,
             parentAttendeeId: att.parent_attendee_id || null,
             channel,
-            segment: resolveLeadSegment(dealForChannel?.icp_segment),
+            segment: resolveLeadSegment(dealForChannel?.icp_segment, isCredito),
             sdrName: resolveSdrName(att, meeting),
           });
         }
@@ -189,7 +219,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
               return (t as any)?.name || '';
             })
           : [];
-        const channel = classifySimple({ tags: tagsArr });
+        const channel = isCredito ? classifyCredito(tagsArr) : classifySimple({ tags: tagsArr });
 
         if (channelFilter && channel !== channelFilter) continue;
 
@@ -210,13 +240,13 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
           isPartner: false,
           parentAttendeeId: null,
           channel,
-          segment: resolveLeadSegment(dealForChannel?.icp_segment),
+          segment: resolveLeadSegment(dealForChannel?.icp_segment, isCredito),
           sdrName: resolveSdrName(null, meeting),
         });
       }
     }
     return rows;
-  }, [meetings, statusFilter, searchTerm, channelFilter]);
+  }, [meetings, statusFilter, searchTerm, channelFilter, isCredito]);
 
   /**
    * Grava o status no ATTENDEE (não no slot) e sincroniza o slot apenas para
@@ -259,7 +289,14 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     );
   }
 
-  const channelCounts = { A010: 0, ANAMNESE: 0, PLANILHA: 0, OUTROS: 0 } as Record<SimpleChannel, number>;
+  const channelCounts = {
+    A010: 0,
+    ANAMNESE: 0,
+    PLANILHA: 0,
+    OUTROS: 0,
+    PARCEIRO_50K: 0,
+    OS: 0,
+  } as Record<SimpleChannel, number>;
   for (const r of attendeeRows) channelCounts[r.channel]++;
   const total = attendeeRows.length;
 
@@ -267,16 +304,26 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     <div className="border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b text-xs">
         <span className="text-muted-foreground">
-          {channelFilter ? `Filtrado por canal: ${channelFilter}` : 'Todos os canais'}
+          {channelFilter
+            ? `Filtrado por canal: ${isCredito ? (CHANNEL_LABEL[channelFilter as SimpleChannel] || channelFilter) : channelFilter}`
+            : 'Todos os canais'}
         </span>
         <div className="flex items-center gap-2">
           {!channelFilter && (
-            <>
-              <Badge variant="outline" className="border-blue-400 text-blue-600">A010: {channelCounts.A010}</Badge>
-              <Badge variant="outline" className="border-purple-400 text-purple-600">ANAMNESE: {channelCounts.ANAMNESE}</Badge>
-              <Badge variant="outline" className="border-emerald-400 text-emerald-600">PLANILHA: {channelCounts.PLANILHA}</Badge>
-              <Badge variant="outline" className="text-muted-foreground">OUTROS: {channelCounts.OUTROS}</Badge>
-            </>
+            isCredito ? (
+              <>
+                <Badge variant="outline" className="border-amber-400 text-amber-600">Parceiros 50k: {channelCounts.PARCEIRO_50K}</Badge>
+                <Badge variant="outline" className="border-sky-400 text-sky-600">OS: {channelCounts.OS}</Badge>
+                <Badge variant="outline" className="text-muted-foreground">OUTROS: {channelCounts.OUTROS}</Badge>
+              </>
+            ) : (
+              <>
+                <Badge variant="outline" className="border-blue-400 text-blue-600">A010: {channelCounts.A010}</Badge>
+                <Badge variant="outline" className="border-purple-400 text-purple-600">ANAMNESE: {channelCounts.ANAMNESE}</Badge>
+                <Badge variant="outline" className="border-emerald-400 text-emerald-600">PLANILHA: {channelCounts.PLANILHA}</Badge>
+                <Badge variant="outline" className="text-muted-foreground">OUTROS: {channelCounts.OUTROS}</Badge>
+              </>
+            )
           )}
           <Badge variant="secondary" className="font-semibold">Total: {total}</Badge>
         </div>
@@ -336,10 +383,12 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                       row.channel === 'A010' && 'border-blue-400 text-blue-600',
                       row.channel === 'ANAMNESE' && 'border-purple-400 text-purple-600',
                       row.channel === 'PLANILHA' && 'border-emerald-400 text-emerald-600',
+                      row.channel === 'PARCEIRO_50K' && 'border-amber-400 text-amber-600',
+                      row.channel === 'OS' && 'border-sky-400 text-sky-600',
                       row.channel === 'OUTROS' && 'text-muted-foreground'
                     )}
                   >
-                    {row.channel}
+                    {CHANNEL_LABEL[row.channel]}
                   </Badge>
                 </TableCell>
                 <TableCell>
