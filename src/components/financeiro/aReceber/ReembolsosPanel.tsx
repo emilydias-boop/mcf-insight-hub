@@ -253,16 +253,19 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
   const [pedidoAte, setPedidoAte] = useState('');
   const [previstaDe, setPrevistaDe] = useState('');
   const [previstaAte, setPrevistaAte] = useState('');
+  const [pagoDe, setPagoDe] = useState('');
+  const [pagoAte, setPagoAte] = useState('');
 
   const limparFiltrosData = () => {
     setPrazoDe(''); setPrazoAte('');
     setPedidoDe(''); setPedidoAte('');
     setPrevistaDe(''); setPrevistaAte('');
+    setPagoDe(''); setPagoAte('');
     setFiltroStatus('todos');
     setFiltroPrazo('todos');
   };
 
-  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte || filtroStatus !== 'todos' || filtroPrazo !== 'todos');
+  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte || pagoDe || pagoAte || filtroStatus !== 'todos' || filtroPrazo !== 'todos');
 
   const reembolsosFiltrados = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
@@ -284,6 +287,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       }
       if (!inRange(r.data_pedido, pedidoDe, pedidoAte)) return false;
       if (!inRange(r.data_prevista_pagamento, previstaDe, previstaAte)) return false;
+      if (!inRange(r.data_pagamento, pagoDe, pagoAte)) return false;
       if (prazoDe || prazoAte) {
         const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
         const deadlineIso = w.deadline ? format(w.deadline, 'yyyy-MM-dd') : null;
