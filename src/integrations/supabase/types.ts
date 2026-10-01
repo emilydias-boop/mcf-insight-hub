@@ -2591,6 +2591,45 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_contrato_pago_movido: {
+        Row: {
+          attendee_id: string
+          attendee_name: string | null
+          era_is_partner: boolean | null
+          id: string
+          motivo: string | null
+          movido_em: string
+          pago_antes: string | null
+          pago_depois: string | null
+          status_antes: string | null
+          status_depois: string | null
+        }
+        Insert: {
+          attendee_id: string
+          attendee_name?: string | null
+          era_is_partner?: boolean | null
+          id?: string
+          motivo?: string | null
+          movido_em?: string
+          pago_antes?: string | null
+          pago_depois?: string | null
+          status_antes?: string | null
+          status_depois?: string | null
+        }
+        Update: {
+          attendee_id?: string
+          attendee_name?: string | null
+          era_is_partner?: boolean | null
+          id?: string
+          motivo?: string | null
+          movido_em?: string
+          pago_antes?: string | null
+          pago_depois?: string | null
+          status_antes?: string | null
+          status_depois?: string | null
+        }
+        Relationships: []
+      }
       backup_effective_from_a001_a009: {
         Row: {
           effective_from: string | null
