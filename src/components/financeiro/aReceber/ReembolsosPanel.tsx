@@ -253,16 +253,19 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
   const [pedidoAte, setPedidoAte] = useState('');
   const [previstaDe, setPrevistaDe] = useState('');
   const [previstaAte, setPrevistaAte] = useState('');
+  const [pagoDe, setPagoDe] = useState('');
+  const [pagoAte, setPagoAte] = useState('');
 
   const limparFiltrosData = () => {
     setPrazoDe(''); setPrazoAte('');
     setPedidoDe(''); setPedidoAte('');
     setPrevistaDe(''); setPrevistaAte('');
+    setPagoDe(''); setPagoAte('');
     setFiltroStatus('todos');
     setFiltroPrazo('todos');
   };
 
-  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte || filtroStatus !== 'todos' || filtroPrazo !== 'todos');
+  const temFiltroData = !!(prazoDe || prazoAte || pedidoDe || pedidoAte || previstaDe || previstaAte || pagoDe || pagoAte || filtroStatus !== 'todos' || filtroPrazo !== 'todos');
 
   const reembolsosFiltrados = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
@@ -284,6 +287,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       }
       if (!inRange(r.data_pedido, pedidoDe, pedidoAte)) return false;
       if (!inRange(r.data_prevista_pagamento, previstaDe, previstaAte)) return false;
+      if (!inRange(r.data_pagamento, pagoDe, pagoAte)) return false;
       if (prazoDe || prazoAte) {
         const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
         const deadlineIso = w.deadline ? format(w.deadline, 'yyyy-MM-dd') : null;
@@ -300,7 +304,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       }
       return true;
     });
-  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte, filtroStatus, filtroPrazo]);
+  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte, pagoDe, pagoAte, filtroStatus, filtroPrazo]);
 
   // Totais dos cards (sobre a lista filtrada)
   const totais = useMemo(() => {
@@ -610,7 +614,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 {exportando ? 'Exportando…' : 'Exportar Excel'}
               </Button>
             </div>
-            <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-3">
+            <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-md border p-2 space-y-1">
                 <Label className="text-xs text-muted-foreground">Prazo limite</Label>
                 <div className="flex items-center gap-2">
@@ -644,6 +648,14 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                   <Input type="date" value={previstaDe} onChange={(e) => setPrevistaDe(e.target.value)} className="h-8 text-xs" />
                   <span className="text-xs text-muted-foreground">até</span>
                   <Input type="date" value={previstaAte} onChange={(e) => setPrevistaAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="rounded-md border p-2 space-y-1">
+                <Label className="text-xs text-muted-foreground">Pago em</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={pagoDe} onChange={(e) => setPagoDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={pagoAte} onChange={(e) => setPagoAte(e.target.value)} className="h-8 text-xs" />
                 </div>
               </div>
             </div>
