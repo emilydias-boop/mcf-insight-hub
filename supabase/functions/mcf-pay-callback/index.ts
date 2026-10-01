@@ -12,6 +12,27 @@ const SECRET = Deno.env.get("MCF_PAY_CALLBACK_SECRET") ?? "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+// Regra de negócio (Matheus, 28/09/2026): SÓ a compra do contrato (A000) é "contrato pago".
+// Qualquer outro produto comprado pelo MCF Pay (A003 Anticrise, A005 P2, A001, A009,
+// Construir Para Morar, Consórcio...) é VENDA DIRETA: não marca contract_paid na agenda,
+// não marca refunded_at na agenda e não gera refund_mcf_pay (que é a contagem oficial de
+// estorno de contrato).
+const CONTRACT_PRODUCT_IDS = new Set(["59ea1243-14a3-4400-af39-555a24f12f34"]);
+const CONTRACT_NAME_RE = /(^|\W)(A000|contrato)(\W|$)/i;
+
+function isContractPurchase(data: any): { contract: boolean; products: string[]; known: boolean } {
+  const list = Array.isArray(data?.products) ? data.products : null;
+  if (!list || list.length === 0) {
+    // Payload antigo sem lista de produtos: mantém o comportamento anterior (trata como contrato).
+    return { contract: true, products: [], known: false };
+  }
+  const names = list.map((p: any) => String(p?.name ?? "")).filter(Boolean);
+  const contract = list.some(
+    (p: any) => CONTRACT_PRODUCT_IDS.has(String(p?.id ?? "")) || CONTRACT_NAME_RE.test(String(p?.name ?? "")),
+  );
+  return { contract, products: names, known: true };
+}
+
 function normalizePhone(input: string | null | undefined): string | null {
   if (!input) return null;
   const digits = String(input).replace(/\D+/g, "");
@@ -23,7 +44,7 @@ function normalizeName(input: string | null | undefined): string | null {
   if (!input) return null;
   return String(input)
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim() || null;
@@ -257,6 +278,44 @@ async function log(
   } as never);
 }
 
+async function registrarHistoricoAR(
+  data: any, isPaid: boolean, transactionId: string | null, amount: number | null,
+  effectivePaidAt: string, resolvedDealId: string, event: string,
+) {
+  // === Registro no módulo Financeiro > À Receber (não altera parcelas — só histórico) ===
+  try {
+    const arEmail =
+      (data?.customer?.email ?? data?.customer_email ?? null)?.toString().toLowerCase().trim() || null;
+    if (arEmail) {
+      const { data: titulos } = await supabase
+        .from("ar_titulos")
+        .select("id")
+        .eq("customer_email", arEmail)
+        .in("product_code", ["A001", "A002", "A003", "A004", "A009"])
+        .neq("status", "cancelado");
+      if (titulos && titulos.length > 0) {
+        const rows = titulos.map((t: any) => ({
+          titulo_id: t.id,
+          tipo: isPaid ? "mcf_pay_confirmacao" : "mcf_pay_reembolso",
+          descricao: isPaid
+            ? `MCF PAY confirmou recebimento (tx ${transactionId ?? "s/id"})`
+            : `MCF PAY estornou pagamento (tx ${transactionId ?? "s/id"})`,
+          valor: amount ?? null,
+          metadata: {
+            transaction_id: transactionId,
+            paid_at: effectivePaidAt,
+            deal_id: resolvedDealId,
+            event,
+          },
+        }));
+        await supabase.from("ar_historico").insert(rows as never);
+      }
+    }
+  } catch (err) {
+    console.warn("[ar_historico] falha ao registrar evento MCF PAY:", err);
+  }
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -323,6 +382,7 @@ Deno.serve(async (req) => {
   const paidAt: string | null = data?.paid_at ?? null;
   const amount: number | null = typeof data?.amount === "number" ? data.amount : null;
   const transactionId: string | null = data?.transaction_id ?? null;
+  const purchase = isContractPurchase(data);
 
   if (!event) {
     await log({
@@ -385,6 +445,75 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "unsupported_event" }, 400);
   }
 
+  const effectivePaidAt = paidAt ?? new Date().toISOString();
+  const currentCustom = (deal.custom_fields as Record<string, unknown>) ?? {};
+
+  // ===== VENDA DIRETA (produto que não é contrato) =====
+  // Registra no negócio, mas NÃO toca na agenda (contract_paid / refunded_at) nem gera
+  // refund_mcf_pay. A venda em si já entra pelo webhook de vendas (hubla_transactions).
+  if (!purchase.contract) {
+    const prevList = Array.isArray(currentCustom.mcf_pay_vendas_diretas)
+      ? (currentCustom.mcf_pay_vendas_diretas as unknown[])
+      : [];
+    const entry = {
+      transaction_id: transactionId,
+      produtos: purchase.products,
+      amount,
+      paid_at: isPaid ? effectivePaidAt : null,
+      refunded_at: isRefunded ? new Date().toISOString() : null,
+      event,
+      recebido_em: new Date().toISOString(),
+    };
+    const newCustomVd = {
+      ...currentCustom,
+      mcf_pay_vendas_diretas: [...prevList, entry].slice(-20),
+      mcf_pay_last_event_at: new Date().toISOString(),
+    };
+    await supabase.from("crm_deals").update({ custom_fields: newCustomVd as never }).eq("id", resolvedDealId);
+
+    try {
+      await supabase.from("deal_activities").insert({
+        deal_id: resolvedDealId,
+        activity_type: isRefunded ? "venda_direta_estornada" : "venda_direta_mcf_pay",
+        description: isRefunded
+          ? `MCF PAY estornou venda direta: ${purchase.products.join(" + ")} (tx ${transactionId ?? "s/id"})`
+          : `Venda direta pelo MCF PAY: ${purchase.products.join(" + ")} — não é contrato pago (tx ${transactionId ?? "s/id"})`,
+        metadata: { source: "mcf_pay", transaction_id: transactionId, amount, event, produtos: purchase.products },
+      } as never);
+    } catch (err) {
+      console.warn("[mcf-pay-callback] falha ao registrar venda direta:", err);
+    }
+
+    await log({
+      deal_id: dealId,
+      event,
+      status: "success",
+      http_status: 200,
+      payload: body,
+      response: {
+        ok: true,
+        applied: isPaid ? "venda_direta" : "venda_direta_estornada",
+        contrato: false,
+        produtos: purchase.products,
+        match_strategy: matchStrategy,
+        resolved_deal_id: resolvedDealId,
+        candidates: resolved.candidates ?? null,
+      },
+      signature_preview: expected.slice(0, 16),
+    });
+
+    await registrarHistoricoAR(data, isPaid, transactionId, amount, effectivePaidAt, resolvedDealId, event);
+
+    return json({
+      ok: true,
+      deal_id: dealId,
+      resolved_deal_id: resolvedDealId,
+      applied: isPaid ? "venda_direta" : "venda_direta_estornada",
+      match_strategy: matchStrategy,
+    });
+  }
+
+  // ===== CONTRATO (A000) — comportamento de sempre =====
   // Localizar attendee mais recente do deal
   const { data: attendees } = await supabase
     .from("meeting_slot_attendees")
@@ -394,14 +523,12 @@ Deno.serve(async (req) => {
     .limit(1);
   const attendee = attendees?.[0] ?? null;
 
-  const effectivePaidAt = paidAt ?? new Date().toISOString();
   const alreadyPaid = Boolean(attendee?.contract_paid_at);
   // Preserva contract_paid_at existente (fonte de verdade da venda manual).
   const finalContractPaidAt = attendee?.contract_paid_at ?? effectivePaidAt;
   const keptExisting = alreadyPaid;
 
   // Atualiza custom_fields no deal (fonte mcf_pay)
-  const currentCustom = (deal.custom_fields as Record<string, unknown>) ?? {};
   const newCustom = {
     ...currentCustom,
     payment_source: isRefunded ? "mcf_pay_refunded" : "mcf_pay",
@@ -472,6 +599,8 @@ Deno.serve(async (req) => {
       ok: true,
       attendee_id: attendee?.id ?? null,
       applied: isPaid ? "paid" : "refunded",
+      contrato: true,
+      produtos_informados: purchase.known,
       already_paid: alreadyPaid,
       kept_existing_contract_paid_at: keptExisting,
       match_strategy: matchStrategy,
@@ -481,38 +610,7 @@ Deno.serve(async (req) => {
     signature_preview: expected.slice(0, 16),
   });
 
-  // === Registro no módulo Financeiro > À Receber (não altera parcelas — só histórico) ===
-  try {
-    const arEmail =
-      (data?.customer?.email ?? data?.customer_email ?? null)?.toString().toLowerCase().trim() || null;
-    if (arEmail) {
-      const { data: titulos } = await supabase
-        .from("ar_titulos")
-        .select("id")
-        .eq("customer_email", arEmail)
-        .in("product_code", ["A001", "A002", "A003", "A004", "A009"])
-        .neq("status", "cancelado");
-      if (titulos && titulos.length > 0) {
-        const rows = titulos.map((t: any) => ({
-          titulo_id: t.id,
-          tipo: isPaid ? "mcf_pay_confirmacao" : "mcf_pay_reembolso",
-          descricao: isPaid
-            ? `MCF PAY confirmou recebimento (tx ${transactionId ?? "s/id"})`
-            : `MCF PAY estornou pagamento (tx ${transactionId ?? "s/id"})`,
-          valor: amount ?? null,
-          metadata: {
-            transaction_id: transactionId,
-            paid_at: effectivePaidAt,
-            deal_id: resolvedDealId,
-            event,
-          },
-        }));
-        await supabase.from("ar_historico").insert(rows as never);
-      }
-    }
-  } catch (err) {
-    console.warn("[ar_historico] falha ao registrar evento MCF PAY:", err);
-  }
+  await registrarHistoricoAR(data, isPaid, transactionId, amount, effectivePaidAt, resolvedDealId, event);
 
   return json({
     ok: true,
