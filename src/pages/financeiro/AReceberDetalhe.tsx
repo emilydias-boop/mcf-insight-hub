@@ -30,6 +30,12 @@ import {
   CobrancaResponsavelDialog,
   CobrancaResponsavelInfo,
 } from '@/components/financeiro/aReceber/CobrancaResponsavelDialog';
+import { useGerentesConta, GerenteContaInfo } from '@/components/financeiro/aReceber/GerenteConta';
+
+function GerenteContaDoTitulo({ tituloId }: { tituloId: string }) {
+  const { data } = useGerentesConta(tituloId);
+  return <GerenteContaInfo gerente={data?.get(tituloId)} />;
+}
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -389,7 +395,13 @@ export default function AReceberDetalhe() {
           </Button>
         </CardHeader>
         <CardContent>
-          <CobrancaResponsavelInfo titulo={titulo} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <CobrancaResponsavelInfo titulo={titulo} />
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Gerente de contas</p>
+              <GerenteContaDoTitulo tituloId={titulo.id} />
+            </div>
+          </div>
         </CardContent>
       </Card>
       <CobrancaResponsavelDialog titulo={titulo} open={openCobranca} onOpenChange={setOpenCobranca} />
