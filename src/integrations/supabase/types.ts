@@ -2657,6 +2657,33 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_fusao_homonimo: {
+        Row: {
+          created_at: string
+          dados_antes: Json
+          id: number
+          motivo: string
+          registro_id: string
+          tabela: string
+        }
+        Insert: {
+          created_at?: string
+          dados_antes: Json
+          id?: number
+          motivo: string
+          registro_id: string
+          tabela: string
+        }
+        Update: {
+          created_at?: string
+          dados_antes?: Json
+          id?: number
+          motivo?: string
+          registro_id?: string
+          tabela?: string
+        }
+        Relationships: []
+      }
       backup_liquido_juros_carrinho: {
         Row: {
           corrigido_em: string
