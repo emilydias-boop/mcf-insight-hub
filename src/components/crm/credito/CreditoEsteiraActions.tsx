@@ -76,7 +76,7 @@ const ACOES_POR_ETAPA: Record<string, Acao[]> = {
   ],
 };
 
-const ETAPAS_CONHECIDAS = new Set(Object.values(STAGE));
+const ETAPAS_CONHECIDAS: Set<string> = new Set(Object.values(STAGE));
 const ETAPAS_FINAIS = new Set([STAGE.VENDA, STAGE.REPROVADO, STAGE.SEM_INTERESSE, STAGE.PERDIDO]);
 
 // Mini trilha: Documentação → Grupo → Análise → Resultado
