@@ -614,7 +614,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                 {exportando ? 'Exportando…' : 'Exportar Excel'}
               </Button>
             </div>
-            <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-3">
+            <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-md border p-2 space-y-1">
                 <Label className="text-xs text-muted-foreground">Prazo limite</Label>
                 <div className="flex items-center gap-2">
