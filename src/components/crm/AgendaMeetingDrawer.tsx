@@ -82,6 +82,7 @@ import { useUpdateCRMDeal } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { AgendadorEditor } from '@/components/crm/AgendadorEditor';
 import { QualificationHistorySection } from './qualification/QualificationHistorySection';
+import { CreditoEsteiraActions } from '@/components/crm/credito/CreditoEsteiraActions';
 import {
   Accordion,
   AccordionContent,
@@ -147,6 +148,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const queryClient = useQueryClient();
   const { role, user } = useAuth();
   const { activeBU } = useBUContext();
+  const isCredito = activeBU === 'credito';
   const isSdr = role === 'sdr';
   const { canManageAgenda, canLinkContract, canCancelMeeting } = useMyAgendaCapabilities();
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
@@ -1141,7 +1143,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     )}
 
                     {/* Follow-up Closer - destaque imediato após marcar R1 Realizada */}
-                    {activeBU !== 'consorcio' && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
+                    {activeBU !== 'consorcio' && !isCredito && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
                       <div className="col-span-2 animate-in fade-in slide-in-from-top-1 duration-300">
                         <Button
                           variant="default"
@@ -1201,7 +1203,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </Button>
                     
                     {/* Vincular Contrato - Show for completed status without contract_paid (not for Consórcio) */}
-                    {(canLinkContract || !isSdr) && activeBU !== 'consorcio' && selectedParticipant.status === 'completed' && (
+                    {(canLinkContract || !isSdr) && activeBU !== 'consorcio' && !isCredito && selectedParticipant.status === 'completed' && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1215,6 +1217,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
                   </div>
                 </div>
+
+                {/* Esteira pós-R1 da BU Crédito */}
+                {isCredito && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
+                  <CreditoEsteiraActions dealId={(selectedParticipant as any).dealId} />
+                )}
 
                 {/* Detalhes do contrato vinculado */}
                 {selectedParticipant.status === 'contract_paid' && (
