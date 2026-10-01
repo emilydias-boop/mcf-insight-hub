@@ -304,7 +304,7 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
       }
       return true;
     });
-  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte, filtroStatus, filtroPrazo]);
+  }, [reembolsos, listSearch, prazoDe, prazoAte, pedidoDe, pedidoAte, previstaDe, previstaAte, pagoDe, pagoAte, filtroStatus, filtroPrazo]);
 
   // Totais dos cards (sobre a lista filtrada)
   const totais = useMemo(() => {
@@ -648,6 +648,14 @@ export function ReembolsosPanel({ open, onOpenChange }: Props) {
                   <Input type="date" value={previstaDe} onChange={(e) => setPrevistaDe(e.target.value)} className="h-8 text-xs" />
                   <span className="text-xs text-muted-foreground">até</span>
                   <Input type="date" value={previstaAte} onChange={(e) => setPrevistaAte(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="rounded-md border p-2 space-y-1">
+                <Label className="text-xs text-muted-foreground">Pago em</Label>
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={pagoDe} onChange={(e) => setPagoDe(e.target.value)} className="h-8 text-xs" />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input type="date" value={pagoAte} onChange={(e) => setPagoAte(e.target.value)} className="h-8 text-xs" />
                 </div>
               </div>
             </div>
