@@ -9,7 +9,7 @@ import {
   CREDITO_QUALIFICATION_QUESTIONS,
   creditoVisibleQuestions,
   creditoAnswerOk,
-  parseMoney,
+  pruneCreditoAnswers,
   previewCreditoIcp,
   type CreditoAnswers,
   type CreditoQuestion,
@@ -22,8 +22,8 @@ interface Props {
 }
 
 /**
- * Ao trocar a modalidade, limpa as respostas das perguntas condicionais
- * (showWhen) que não valem para a nova modalidade — evita resposta órfã.
+ * Ao trocar a modalidade (ou qualquer resposta que afete condições), remove as
+ * respostas das perguntas que deixaram de valer — evita resposta órfã.
  */
 function handleChange(
   answers: CreditoAnswers,
@@ -31,15 +31,7 @@ function handleChange(
   key: string,
   value: string,
 ) {
-  const next = { ...answers, [key]: value };
-  if (key === 'modalidade') {
-    for (const q of CREDITO_QUALIFICATION_QUESTIONS) {
-      if (q.showWhen && !q.showWhen.includes(value as never)) {
-        delete next[q.key];
-      }
-    }
-  }
-  onChange(next);
+  onChange(pruneCreditoAnswers({ ...answers, [key]: value }));
 }
 
 export function CreditoQualificationQuestionnaire({ answers, onChange, disabled }: Props) {
@@ -54,31 +46,34 @@ export function CreditoQualificationQuestionnaire({ answers, onChange, disabled 
   const renderCampo = (q: CreditoQuestion, value: string, ok: boolean) => {
     if (q.type === 'choice') {
       return (
-        <RadioGroup
-          value={value}
-          onValueChange={(v) => handleChange(answers, onChange, q.key, v)}
-          disabled={disabled}
-          className="grid gap-2"
-        >
-          {(q.options || []).map((opt, i) => (
-            <label
-              key={opt}
-              htmlFor={`credito-${q.key}-${i}`}
-              className={cn(
-                'flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm',
-                value === opt ? 'border-primary bg-primary/5' : 'border-border'
-              )}
-            >
-              <RadioGroupItem value={opt} id={`credito-${q.key}-${i}`} />
-              {opt}
-            </label>
-          ))}
-        </RadioGroup>
+        <>
+          <RadioGroup
+            value={value}
+            onValueChange={(v) => handleChange(answers, onChange, q.key, v)}
+            disabled={disabled}
+            className="grid gap-2"
+          >
+            {(q.options || []).map((opt, i) => (
+              <label
+                key={opt}
+                htmlFor={`credito-${q.key}-${i}`}
+                className={cn(
+                  'flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm',
+                  value === opt ? 'border-primary bg-primary/5' : 'border-border'
+                )}
+              >
+                <RadioGroupItem value={opt} id={`credito-${q.key}-${i}`} />
+                {opt}
+              </label>
+            ))}
+          </RadioGroup>
+          {q.help && <p className="text-[11px] text-muted-foreground">{q.help}</p>}
+        </>
       );
     }
 
     if (q.type === 'money') {
-      const moneyOk = (parseMoney(value) ?? 0) > 0;
+      const moneyOk = creditoAnswerOk(q, value);
       return (
         <>
           <div className="relative">
@@ -98,6 +93,26 @@ export function CreditoQualificationQuestionnaire({ answers, onChange, disabled 
               )}
             />
           </div>
+          {q.help && <p className="text-[11px] text-muted-foreground">{q.help}</p>}
+        </>
+      );
+    }
+
+    if (q.type === 'short') {
+      const shortOk = creditoAnswerOk(q, value);
+      return (
+        <>
+          <Input
+            value={value}
+            onChange={(e) => handleChange(answers, onChange, q.key, e.target.value)}
+            placeholder={q.placeholder}
+            disabled={disabled}
+            className={cn(
+              'text-sm',
+              !shortOk && value.trim().length > 0 && !q.optional &&
+                'border-amber-500/60 focus-visible:ring-amber-500/40'
+            )}
+          />
           {q.help && <p className="text-[11px] text-muted-foreground">{q.help}</p>}
         </>
       );
@@ -139,6 +154,11 @@ export function CreditoQualificationQuestionnaire({ answers, onChange, disabled 
           const ok = creditoAnswerOk(q, value);
           return (
             <div key={q.key} className="space-y-1.5">
+              {q.section && (
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2 border-t">
+                  {q.section}
+                </p>
+              )}
               <Label className="text-sm font-medium flex items-start gap-2">
                 <span className="text-muted-foreground">{idx + 1}.</span>
                 <span>
@@ -166,7 +186,7 @@ export function CreditoQualificationQuestionnaire({ answers, onChange, disabled 
               Prévia: {icp}
             </Badge>
           ) : (
-            answers.modalidade === 'Comprar imóvel' && (
+            answers.modalidade === 'Imóvel Pronto' && (
               <Badge variant="secondary">Sem ICP definido — depende do crédito conseguido</Badge>
             )
           )}
