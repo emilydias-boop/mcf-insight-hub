@@ -3,6 +3,7 @@
 // e registra o pacote completo em crm_externo_encaminhamentos.
 // Somente adição: não altera nenhum fluxo existente do CRM.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveActiveOwnerProfileId } from "../_shared/resolveOwnerProfile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -342,7 +343,33 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---------- Negócio na etapa ENCAMINHADO GR (sem responsável) ----------
+    // ---------- Responsável: distribuição automática (Admin → Distribuição de Leads) ----------
+    // Sem configuração ativa para a pipeline, fica sem dono (como antes). Nunca lança.
+    let ownerEmail: string | null = null;
+    let ownerProfileId: string | null = null;
+    let ownerNome: string | null = null;
+    try {
+      const { data: nextOwner, error: ownerErr } = await supabase.rpc("get_next_lead_owner", {
+        p_origin_id: destino.origin_id,
+      });
+      if (ownerErr) console.error("[crm-externo] get_next_lead_owner:", ownerErr.message);
+      if (nextOwner) {
+        ownerEmail = String(nextOwner);
+        ownerProfileId = await resolveActiveOwnerProfileId(supabase, ownerEmail, "crm-externo-encaminhamento");
+        if (ownerProfileId) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", ownerProfileId)
+            .maybeSingle();
+          ownerNome = prof?.full_name ?? null;
+        }
+      }
+    } catch (e) {
+      console.error("[crm-externo] distribuição:", (e as Error).message);
+    }
+
+    // ---------- Negócio na etapa ENCAMINHADO GR ----------
     const { data: deal, error: dealErr } = await supabase
       .from("crm_deals")
       .insert({
@@ -353,6 +380,8 @@ Deno.serve(async (req) => {
         stage_id: stage.id,
         data_source: "webhook",
         product_name: destino.label,
+        owner_id: ownerEmail,
+        owner_profile_id: ownerProfileId,
         custom_fields: {
           origem_externa: sourceApp,
           encaminhamento_external_id: externalId,
@@ -403,6 +432,7 @@ Deno.serve(async (req) => {
         contact_id: contactId,
         status: "recebida",
         callback_url: callbackUrl,
+        responsavel_nome: ownerNome ?? ownerEmail,
       })
       .select("id")
       .single();
@@ -414,6 +444,7 @@ Deno.serve(async (req) => {
       `Motivo: ${motivo}`,
       score !== null && score !== undefined ? `Score: ${score}${faixa ? ` (${faixa})` : ""}` : "",
       resumoHistorico(historico) ? `\nHistórico de atendimento:\n${resumoHistorico(historico)}` : "",
+      ownerEmail ? `Distribuído automaticamente para ${ownerNome ?? ownerEmail}.` : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -433,6 +464,7 @@ Deno.serve(async (req) => {
       area,
       rota: destino.rota,
       status: "recebida",
+      responsavel: ownerNome ?? ownerEmail,
     }, 201);
   } catch (e) {
     console.error("[crm-externo-encaminhamento]", (e as Error).message);

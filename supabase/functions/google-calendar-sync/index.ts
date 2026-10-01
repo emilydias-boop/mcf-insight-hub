@@ -294,10 +294,11 @@ Deno.serve(async (req) => {
     if (leadEmail) attendees.push({ email: leadEmail, displayName: leadName ?? undefined });
     attendees.push({ email: closer.email, displayName: closer.name });
 
+    // Único conteúdo autorizado na descrição do evento (visível ao lead).
+    // NUNCA incluir slot.notes: é observação interna do SDR.
     const descriptionParts = [
       meetingLink ? `Link da reunião: ${meetingLink}` : null,
-      slot.notes ? `Observações:\n${slot.notes}` : null,
-      'Agendado via CRM MCF',
+      'Agendado via CRM MCF — o briefing do lead está no CRM (Agenda R1).',
     ].filter(Boolean);
 
     const eventBody = {

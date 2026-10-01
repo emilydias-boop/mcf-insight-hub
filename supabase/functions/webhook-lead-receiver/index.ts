@@ -447,28 +447,26 @@ serve(async (req) => {
       }
     }
 
-    // 7d. Fallback: buscar por nome exato na mesma origin (captura duplicatas como "Anna")
+    // 7d. Fallback por nome — SÓ quando o payload não traz nem e-mail nem telefone.
+    // Nome sozinho não decide identidade: homônimos (ex.: dois "Ricardo Rodrigues de Oliveira",
+    // 01/10/2026) eram fundidos num lead só e o telefone do original era sobrescrito.
+    // E mesmo nesse caso, só casa com contato que também não tem e-mail nem telefone.
     const leadName = (payload.name || payload.nome_completo || '').trim();
-    if (!existingContact && leadName && endpoint.origin_id) {
+    if (!existingContact && leadName && endpoint.origin_id && !emailTrimmed && !normalizedPhone) {
       const { data: contactsByName } = await supabase
         .from('crm_contacts')
-        .select('id, email')
+        .select('id, email, phone')
         .ilike('name', leadName)
         .eq('origin_id', endpoint.origin_id)
+        .is('email', null)
+        .is('phone', null)
         .order('created_at', { ascending: true })
         .limit(1);
-      
+
       const contactByName = contactsByName?.[0] || null;
       if (contactByName) {
         existingContact = contactByName;
-        console.log('[WEBHOOK-RECEIVER] ⚠️ Contato encontrado por NOME na mesma origin:', contactByName.id, '- Nome:', leadName);
-        // Enriquecer contato com dados que faltam
-        const enrichData: Record<string, string> = { updated_at: new Date().toISOString() };
-        if (!contactByName.email && emailTrimmed) enrichData.email = emailTrimmed.toLowerCase();
-        if (normalizedPhone) enrichData.phone = normalizedPhone;
-        if (Object.keys(enrichData).length > 1) {
-          await supabase.from('crm_contacts').update(enrichData).eq('id', contactByName.id);
-        }
+        console.log('[WEBHOOK-RECEIVER] ⚠️ Contato sem e-mail/telefone encontrado por NOME na mesma origin:', contactByName.id, '- Nome:', leadName);
       }
     }
 
@@ -494,15 +492,56 @@ serve(async (req) => {
         mergedTags = [...new Set([...currentTags, ...autoTags])];
       }
 
+      // Nunca sobrescreve nome/e-mail/telefone de contato existente: só preenche campo vazio.
+      // Dado diferente vira contato alternativo (crm_contact_aliases), igual ao comprador da Hubla.
+      const { data: currentFields } = await supabase
+        .from('crm_contacts')
+        .select('name, email, phone')
+        .eq('id', contactId)
+        .single();
+
+      const incomingName = ((payload.name || payload.nome_completo || '') as string).trim() || null;
+      const incomingEmail = emailTrimmed ? emailTrimmed.toLowerCase() : null;
+      const digitsOf = (v: string | null | undefined) => (v || '').replace(/\D/g, '');
+      const samePhone = (a: string | null | undefined, b: string | null | undefined) => {
+        const da = digitsOf(a), db = digitsOf(b);
+        return !!da && !!db && da.slice(-8) === db.slice(-8);
+      };
+
+      const contactUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (mergedTags.length > 0) contactUpdate.tags = mergedTags;
+      if (!currentFields?.name?.trim() && incomingName) contactUpdate.name = incomingName;
+      if (!currentFields?.email?.trim() && incomingEmail) contactUpdate.email = incomingEmail;
+      if (!digitsOf(currentFields?.phone) && normalizedPhone) contactUpdate.phone = normalizedPhone;
+
       await supabase
         .from('crm_contacts')
-        .update({
-          name: payload.name || payload.nome_completo,
-          phone: normalizedPhone,
-          tags: mergedTags.length > 0 ? mergedTags : undefined,
-          updated_at: new Date().toISOString()
-        })
+        .update(contactUpdate)
         .eq('id', contactId);
+
+      const aliasNome = incomingName && currentFields?.name?.trim() &&
+        incomingName.toLowerCase() !== currentFields.name.trim().toLowerCase() ? incomingName : null;
+      const aliasEmail = incomingEmail && currentFields?.email?.trim() &&
+        incomingEmail !== currentFields.email.trim().toLowerCase() ? incomingEmail : null;
+      const aliasFone = normalizedPhone && digitsOf(currentFields?.phone) &&
+        !samePhone(normalizedPhone, currentFields?.phone) ? normalizedPhone : null;
+
+      if (aliasNome || aliasEmail || aliasFone) {
+        const { error: aliasErr } = await supabase
+          .from('crm_contact_aliases')
+          .insert({
+            contact_id: contactId,
+            nome: aliasNome ?? incomingName,
+            email: aliasEmail,
+            telefone: aliasFone,
+            origem: 'webhook',
+            observacao: `Dados diferentes recebidos pelo webhook ${slug}`,
+          });
+        // 23505 = já existe esse alias (índice único) — ok, não duplica.
+        if (aliasErr && aliasErr.code !== '23505') {
+          console.warn('[WEBHOOK-RECEIVER] Falha ao registrar contato alternativo:', aliasErr.message);
+        }
+      }
     } else {
       const { data: newContact, error: contactError } = await supabase
         .from('crm_contacts')
