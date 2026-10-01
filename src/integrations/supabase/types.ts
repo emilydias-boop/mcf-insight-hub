@@ -18735,6 +18735,11 @@ export type Database = {
         Args: { p_attendee_id: string; p_booked_by: string }
         Returns: Json
       }
+      credito_avancar_etapa: {
+        Args: { p_acao: string; p_deal_id: string; p_motivo?: string }
+        Returns: Json
+      }
+      credito_renda_total: { Args: { p_answers: Json }; Returns: number }
       crm_deal_merge_custom_fields: {
         Args: { _deal_id: string; _patch: Json }
         Returns: Json
