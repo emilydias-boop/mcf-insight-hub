@@ -33,6 +33,7 @@ import {
   CobrancaResponsavelInfo,
   CobrancaResponsavelFilter,
 } from '@/components/financeiro/aReceber/CobrancaResponsavelDialog';
+import { useGerentesConta, GerenteContaInfo, GerenteContaFilter } from '@/components/financeiro/aReceber/GerenteConta';
 import { ReconciliacaoPanel } from '@/components/financeiro/aReceber/ReconciliacaoPanel';
 import { ReembolsosPanel } from '@/components/financeiro/aReceber/ReembolsosPanel';
 import { DuplicidadePanel } from '@/components/financeiro/aReceber/DuplicidadePanel';
@@ -88,6 +89,8 @@ export default function AReceber() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const isAdmin = role === 'admin';
+  const { data: gerentesConta } = useGerentesConta();
+  const [gerenteFiltro, setGerenteFiltro] = useState('todos');
   const { canManage } = useCanManageAr();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('aberto');
@@ -138,7 +141,13 @@ export default function AReceber() {
   };
 
   const titulosFiltrados = useMemo(() => {
-    const list = titulos ?? [];
+    let list = titulos ?? [];
+    if (gerenteFiltro !== 'todos') {
+      list = list.filter(t => {
+        const g = gerentesConta?.get(t.id)?.gerente_nome;
+        return gerenteFiltro === 'none' ? !g : g === gerenteFiltro;
+      });
+    }
     const q = numeroTitulo.trim().toLowerCase();
     if (!q) return list;
     return list.filter(t => {
@@ -146,7 +155,7 @@ export default function AReceber() {
       // aceita "761226" ou "761226-2" (prefixo do documento da parcela)
       return num.includes(q) || q.startsWith(num);
     });
-  }, [titulos, numeroTitulo]);
+  }, [titulos, numeroTitulo, gerenteFiltro, gerentesConta]);
 
   const kpis = useMemo(() => {
     const list = titulosFiltrados;
@@ -335,6 +344,7 @@ export default function AReceber() {
             </SelectContent>
           </Select>
           <CobrancaResponsavelFilter value={cobrancaResp} onChange={setCobrancaResp} />
+          <GerenteContaFilter value={gerenteFiltro} onChange={setGerenteFiltro} gerentes={gerentesConta} />
         </CardContent>
       </Card>
 
@@ -457,6 +467,7 @@ export default function AReceber() {
                       <TableCell onDoubleClick={(e) => e.stopPropagation()}>
                         <div className="space-y-1">
                           <CobrancaResponsavelInfo titulo={t} compact />
+                          <GerenteContaInfo gerente={gerentesConta?.get(t.id)} compact />
                           <Button
                             size="sm"
                             variant="outline"

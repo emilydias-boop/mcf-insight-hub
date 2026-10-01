@@ -18512,6 +18512,17 @@ export type Database = {
         Returns: Json
       }
       ar_extract_product_code: { Args: { p_name: string }; Returns: string }
+      ar_gerente_conta_por_titulo: {
+        Args: { p_titulo_id?: string }
+        Returns: {
+          area: string
+          gerente_email: string
+          gerente_nome: string
+          gerente_telefone: string
+          recebido_em: string
+          titulo_id: string
+        }[]
+      }
       ar_get_reference_price: { Args: { p_code: string }; Returns: number }
       asaas_caucao_recon: { Args: { p_cobrancas: Json }; Returns: Json }
       assign_partner_to_gr: {
