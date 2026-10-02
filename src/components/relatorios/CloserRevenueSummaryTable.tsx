@@ -2,7 +2,12 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronDown, Users } from 'lucide-react';
+import { ChevronDown, Users, Info } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useCanalEntrada } from '@/hooks/useCanalEntrada';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
@@ -62,6 +67,15 @@ export const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
   'p2',
 ]);
 
+export type ModoAgrupamento = 'closer' | 'sdr' | 'canal';
+const MODO_KEY = 'closer-revenue-agrupar-por';
+const MODO_TITULO: Record<ModoAgrupamento, string> = {
+  closer: 'Faturamento por Closer',
+  sdr: 'Faturamento por SDR',
+  canal: 'Faturamento por Canal de Entrada',
+};
+const CANAL_DIRETO = 'Direto (sem entrada)';
+
 interface CloserRow {
   id: string;
   name: string;
@@ -86,6 +100,18 @@ export function CloserRevenueSummaryTable({
 }: CloserRevenueSummaryTableProps) {
   const [selectedCloser, setSelectedCloser] = useState<{ id: string; name: string } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [modo, setModoState] = useState<ModoAgrupamento>(() => {
+    try {
+      const v = localStorage.getItem(MODO_KEY);
+      if (v === 'closer' || v === 'sdr' || v === 'canal') return v;
+    } catch { /* ignore */ }
+    return 'closer';
+  });
+  const setModo = (v: ModoAgrupamento) => {
+    setModoState(v);
+    setSelectedCloser(null);
+    try { localStorage.setItem(MODO_KEY, v); } catch { /* ignore */ }
+  };
 
   // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
   const filteredTxs = useMemo(() => (
@@ -103,6 +129,24 @@ export function CloserRevenueSummaryTable({
     [filteredTxs, globalFirstIds],
   );
   const { map: pagamentosMap } = usePagamentosDaVenda(pagamentoIds);
+  const { map: canalMap, isLoading: loadingCanal } = useCanalEntrada(filteredIds, modo === 'canal');
+
+  const sdrIds = useMemo(() => {
+    if (modo !== 'sdr') return [] as string[];
+    const set = new Set<string>();
+    atribuicaoMap.forEach((a) => { if (a.sdr_profile_id) set.add(a.sdr_profile_id); });
+    return Array.from(set).sort();
+  }, [atribuicaoMap, modo]);
+  const { data: sdrNames, isLoading: loadingSdrNames } = useQuery({
+    queryKey: ['closer-revenue-sdr-names', sdrIds.join(',')],
+    enabled: sdrIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('id, full_name').in('id', sdrIds);
+      if (error) throw error;
+      return new Map((data || []).map((p: any) => [p.id as string, (p.full_name as string) || 'SDR sem nome']));
+    },
+  });
 
   const { summaryData, closerTransactionsMap } = useMemo(() => {
     const closerTotals = new Map<string, CloserRow>();
@@ -120,6 +164,44 @@ export function CloserRevenueSummaryTable({
     let vitalicio: CloserRow = { id: '__vitalicio__', name: 'Vitalício', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const vitalicioTxs: Transaction[] = [];
     
+    // Modo Canal: todas as transações filtradas, sem baldes automáticos e sem outside
+    if (modo === 'canal') {
+      const canalTotals = new Map<string, CloserRow>();
+      for (const tx of filteredTxs) {
+        const gross = getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
+        const net = tx.net_value || 0;
+        const aRec = calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
+        const canal = canalMap.get(tx.id)?.canal || CANAL_DIRETO;
+        const id = `canal:${canal}`;
+        const row = canalTotals.get(id) || { id, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 };
+        row.count++;
+        row.gross += gross;
+        row.net += net;
+        row.aReceber = (row.aReceber || 0) + aRec;
+        canalTotals.set(id, row);
+        const arr = txMap.get(id) || [];
+        arr.push(tx);
+        txMap.set(id, arr);
+      }
+      const rows = Array.from(canalTotals.values()).sort((a, b) => {
+        const da = a.name === CANAL_DIRETO ? 1 : 0;
+        const db = b.name === CANAL_DIRETO ? 1 : 0;
+        return da - db || b.gross - a.gross;
+      });
+      return {
+        summaryData: {
+          rows,
+          totalGross: rows.reduce((s, r) => s + r.gross, 0),
+          totalNet: rows.reduce((s, r) => s + r.net, 0),
+          totalAReceber: rows.reduce((s, r) => s + (r.aReceber || 0), 0),
+          totalCount: rows.reduce((s, r) => s + r.count, 0),
+          totalOutsideCount: 0,
+          totalOutsideGross: 0,
+        },
+        closerTransactionsMap: txMap,
+      };
+    }
+
     for (const tx of filteredTxs) {
       const isFirst = globalFirstIds.has(tx.id);
       const gross = getDeduplicatedGross(tx as any, isFirst);
@@ -176,7 +258,12 @@ export function CloserRevenueSummaryTable({
       // 5. Match com closer (RPC atribuicao_closer_vendas)
       const atr = atribuicaoMap.get(tx.id);
       if (atr) {
-        const existing = closerTotals.get(atr.closer_id) || { id: atr.closer_id, name: atr.closer_nome, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, outraBu: atr.outra_bu };
+        // Modo SDR agrupa por sdr_profile_id; sem SDR → "Sem SDR"
+        const key = modo === 'sdr' ? (atr.sdr_profile_id || '__sem_sdr__') : atr.closer_id;
+        const nome = modo === 'sdr'
+          ? (atr.sdr_profile_id ? (sdrNames?.get(atr.sdr_profile_id) || 'SDR sem nome') : 'Sem SDR')
+          : atr.closer_nome;
+        const existing = closerTotals.get(key) || { id: key, name: nome, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, outraBu: modo === 'sdr' ? false : atr.outra_bu };
         if (atr.is_outside) {
           existing.outsideCount++;
           existing.outsideGross += gross;
@@ -186,10 +273,10 @@ export function CloserRevenueSummaryTable({
           existing.aReceber = (existing.aReceber || 0) + aRec;
           existing.net += net;
         }
-        closerTotals.set(atr.closer_id, existing);
-        const arr = txMap.get(atr.closer_id) || [];
+        closerTotals.set(key, existing);
+        const arr = txMap.get(key) || [];
         arr.push(tx);
-        txMap.set(atr.closer_id, arr);
+        txMap.set(key, arr);
         continue;
       }
 
@@ -214,7 +301,7 @@ export function CloserRevenueSummaryTable({
     
     const rows: CloserRow[] = Array.from(closerTotals.values())
       .filter((r) => r.count > 0 || r.outsideCount > 0)
-      .sort((a, b) => b.gross - a.gross);
+      .sort((a, b) => (a.id === '__sem_sdr__' ? 1 : 0) - (b.id === '__sem_sdr__' ? 1 : 0) || b.gross - a.gross);
     
     // Categorias automáticas no final
     const autoCategories = [
@@ -244,9 +331,11 @@ export function CloserRevenueSummaryTable({
       summaryData: { rows, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
-  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu]);
+  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames]);
 
-  if (isLoading || loadingAtribuicao || summaryData.rows.length === 0) return null;
+  if (isLoading || loadingAtribuicao) return null;
+  if (modo === 'closer' && summaryData.rows.length === 0) return null;
+  const modoCarregando = loadingCanal || (modo === 'sdr' && loadingSdrNames);
 
   const selectedTxs = selectedCloser ? (closerTransactionsMap.get(selectedCloser.id) || []) : [];
 
@@ -259,7 +348,33 @@ export function CloserRevenueSummaryTable({
               <CardTitle className="flex items-center justify-between text-base">
                 <span className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  Faturamento por Closer
+                  {MODO_TITULO[modo]}
+                  {modo === 'canal' && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-4 w-4 text-muted-foreground" onClick={(e) => e.stopPropagation()} />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-xs">
+                          Canal = primeiro produto de entrada comprado pelo cliente; sem compra de entrada, usa a etiqueta do lead no CRM.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <ToggleGroup
+                      type="single"
+                      size="sm"
+                      variant="outline"
+                      value={modo}
+                      onValueChange={(v) => v && setModo(v as ModoAgrupamento)}
+                      className="ml-2"
+                    >
+                      <ToggleGroupItem value="closer" className="h-7 px-2 text-xs">Closer</ToggleGroupItem>
+                      <ToggleGroupItem value="sdr" className="h-7 px-2 text-xs">SDR</ToggleGroupItem>
+                      <ToggleGroupItem value="canal" className="h-7 px-2 text-xs">Canal de entrada</ToggleGroupItem>
+                    </ToggleGroup>
+                  </span>
                 </span>
                 <span className="flex items-center gap-2">
                   <Badge variant="secondary" className="font-mono text-xs">
@@ -275,10 +390,13 @@ export function CloserRevenueSummaryTable({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent>
+              {modoCarregando ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>
+              ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Closer</TableHead>
+                    <TableHead>{modo === 'closer' ? 'Closer' : modo === 'sdr' ? 'SDR' : 'Canal'}</TableHead>
                     <TableHead className="text-right">Transações</TableHead>
                     <TableHead className="text-right">Faturamento Bruto</TableHead>
                     <TableHead className="text-right">A receber</TableHead>
@@ -295,7 +413,7 @@ export function CloserRevenueSummaryTable({
                       <TableCell>
                         <button
                           className={`font-medium text-left hover:underline cursor-pointer ${
-                            row.id === '__unassigned__' ? 'text-muted-foreground' : 
+                            row.id === '__unassigned__' || row.id === '__sem_sdr__' || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 
                             row.id === '__launch__' ? 'text-amber-500' :
                             row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
                             row.id === '__renovacao__' ? 'text-teal-400' :
@@ -366,6 +484,7 @@ export function CloserRevenueSummaryTable({
                   </TableRow>
                 </TableFooter>
               </Table>
+              )}
             </CardContent>
           </CollapsibleContent>
         </Card>
@@ -386,6 +505,8 @@ export function CloserRevenueSummaryTable({
           atribuicaoMap={atribuicaoMap}
           pagamentosMap={pagamentosMap}
           bu={bu}
+          modo={modo}
+          canalMap={canalMap}
         />
       )}
     </>
