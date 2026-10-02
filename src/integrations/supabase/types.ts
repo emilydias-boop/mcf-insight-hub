@@ -18768,6 +18768,8 @@ export type Database = {
         Returns: boolean
       }
       can_self_manage_agenda: { Args: never; Returns: boolean }
+      canal_do_produto: { Args: { p_nome: string }; Returns: string }
+      canal_entrada_vendas: { Args: { p_ids: string[] }; Returns: Json }
       caucoes_efetivas: {
         Args: { p_bu?: string; p_from: string; p_to: string }
         Returns: {
