@@ -409,9 +409,10 @@ export default function ReunioesEquipe() {
   // Calculate contract totals from closerMetrics (source of truth - deduplicated, consistent with Closer table)
   const contractsFromClosers = useMemo(() => {
     const contratoPago = closerMetrics?.reduce((sum, c) => sum + c.contrato_pago, 0) || 0;
+    const contratoBruto = closerMetrics?.reduce((sum, c) => sum + (c.contrato_bruto || 0), 0) || 0;
     const outside = closerMetrics?.reduce((sum, c) => sum + c.outside, 0) || 0;
     const reembolsos = closerMetrics?.reduce((sum, c) => sum + (c.reembolsos || 0), 0) || 0;
-    return { contratoPago, outside, reembolsos, total: contratoPago + outside };
+    return { contratoPago, contratoBruto, outside, reembolsos, total: contratoBruto + outside };
   }, [closerMetrics]);
 
   // Contratos/cauções pagos no período que a atribuição atual não consegue
@@ -609,7 +610,7 @@ export default function ReunioesEquipe() {
       r1Agendada: sumCloser(rows, 'r1_agendada'),
       r1Realizada: sumCloser(rows, 'r1_realizada'),
       noShows: sumCloser(rows, 'noshow'),
-      contratos: sumCloser(rows, 'contrato_pago'),
+      contratos: sumCloser(rows, 'contrato_bruto'),
     });
     return { a: build(closerMetricsA), b: build(closerMetricsB), c: build(closerMetricsC) };
   }, [closerMetricsA, closerMetricsB, closerMetricsC]);
@@ -679,7 +680,7 @@ export default function ReunioesEquipe() {
     const totalContratosSdrAxis =
       filteredBySDR.reduce((s, r) => s + (r.contratos || 0), 0) + (unassignedSdr.total || 0);
     const totalContratosCloserAxis =
-      (contractsFromClosers.contratoPago || 0) + (unassignedCloser.total || 0);
+      (contractsFromClosers.contratoBruto || 0) + (unassignedCloser.total || 0);
     const totalContratosCard = closerAxisForTop ? totalContratosCloserAxis : totalContratosSdrAxis;
     return {
       ...teamKPIs,

@@ -62,17 +62,23 @@ export function CloserSummaryTable({
       r1_realizada: acc.r1_realizada + row.r1_realizada,
       noshow: acc.noshow + row.noshow,
       contrato_pago: acc.contrato_pago + row.contrato_pago,
+      contrato_bruto: acc.contrato_bruto + row.contrato_bruto,
       outside: acc.outside + row.outside,
       r2_agendada: acc.r2_agendada + row.r2_agendada,
       reembolsos: acc.reembolsos + (row.reembolsos || 0),
       reembolsos_valor: acc.reembolsos_valor + (row.reembolsos_valor || 0),
     }),
-    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0, reembolsos: 0, reembolsos_valor: 0 }
+    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, contrato_bruto: 0, outside: 0, r2_agendada: 0, reembolsos: 0, reembolsos_valor: 0 }
   );
 
   // Taxa de conversão considera apenas cauções com negócio no CRM (órfãos ficam
   // fora de qualquer total/KPI — só aparecem na linha de diagnóstico).
-  const totalTaxaConversao = totals.r1_realizada > 0 
+  // A BRUTA (contrato_bruto = líquido + reembolsados) manda na cor; a líquida
+  // (contrato_pago) fica embaixo, no formato "líq. X,X%".
+  const totalTaxaBruta = totals.r1_realizada > 0
+    ? ((totals.contrato_bruto / totals.r1_realizada) * 100)
+    : 0;
+  const totalTaxaLiquida = totals.r1_realizada > 0
     ? ((totals.contrato_pago / totals.r1_realizada) * 100)
     : 0;
 
@@ -91,13 +97,13 @@ export function CloserSummaryTable({
   const segBMap = byId(segmentBData);
   const segCMap = byId(segmentCData);
 
-  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_pago' | 'venda_direta' | 'r2_agendada';
+  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_bruto' | 'venda_direta' | 'r2_agendada';
   const SEG_COLS: { key: SegKey; label: string; cls: string }[] = [
     { key: 'r1_agendada', label: 'R1 Agendada', cls: 'text-blue-400' },
     { key: 'outside', label: 'Outside', cls: 'text-orange-400' },
     { key: 'r1_realizada', label: 'R1 Realizada', cls: 'text-green-400' },
     { key: 'noshow', label: 'No-show', cls: 'text-red-400' },
-    { key: 'contrato_pago', label: 'Contrato Pago', cls: 'text-amber-400' },
+    { key: 'contrato_bruto', label: 'Contrato Pago', cls: 'text-amber-400' },
     { key: 'venda_direta', label: 'Venda direta', cls: 'text-violet-400' },
     { key: 'r2_agendada', label: 'R2 Agendada', cls: 'text-purple-400' },
   ];
@@ -105,7 +111,7 @@ export function CloserSummaryTable({
     (map.get(closerId)?.[key] as number | undefined) ?? 0;
   const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
     (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
-  const segmentedKeys = new Set<SegKey>(['r1_agendada', 'r1_realizada', 'noshow', 'contrato_pago', 'r2_agendada']);
+  const segmentedKeys = new Set<SegKey>(['r1_agendada', 'r1_realizada', 'noshow', 'contrato_bruto', 'r2_agendada']);
   // Venda direta não tem segmento ICP → uma coluna só (total), mesmo com A/B/C.
   const totalOnlyKeys = new Set<SegKey>(['venda_direta']);
   const segLabels = (k: SegKey) => totalOnlyKeys.has(k) ? ['Total'] : segmentedKeys.has(k) ? ['A', 'B', 'C', 's/ICP'] : ['A', 'B'];
@@ -118,7 +124,7 @@ export function CloserSummaryTable({
 
   const un = unassigned && unassigned.total > 0 ? unassigned : null;
   const unFor = (key: SegKey, seg?: 'a' | 'b') =>
-    key === 'contrato_pago' ? (seg ? (un?.[seg] ?? 0) : (un?.total ?? 0)) : 0;
+    key === 'contrato_bruto' ? (seg ? (un?.[seg] ?? 0) : (un?.total ?? 0)) : 0;
 
   return (
     <div className="rounded-md border border-border overflow-hidden">
@@ -154,11 +160,16 @@ export function CloserSummaryTable({
           </TableHeader>
           <TableBody>
             {data.map((row) => {
-              // Calculate taxa de conversão (Contrato Pago / R1 Realizada)
-              const taxaConversao = row.r1_realizada > 0 
+              // Taxa de conversão: a BRUTA (contrato_bruto) é a grande e manda na
+              // cor; a LÍQUIDA (contrato_pago) vai pequena embaixo, "líq. X,X%".
+              const taxaBruta = row.r1_realizada > 0
+                ? ((row.contrato_bruto / row.r1_realizada) * 100)
+                : 0;
+              const taxaLiquida = row.r1_realizada > 0
                 ? ((row.contrato_pago / row.r1_realizada) * 100)
                 : 0;
-              const taxaConversaoFormatted = taxaConversao.toFixed(1);
+              const taxaConversaoFormatted = taxaBruta.toFixed(1);
+              const taxaLiquidaFormatted = taxaLiquida.toFixed(1);
 
               // Calculate taxa de no-show (No-Show / R1 Agendada)
               const taxaNoShow = row.r1_agendada > 0 
@@ -166,10 +177,10 @@ export function CloserSummaryTable({
                 : 0;
               const taxaNoShowFormatted = taxaNoShow.toFixed(1);
 
-              // Taxa conversão color: green >= 20%, amber >= 10%, red < 10%
-              const taxaColorClass = taxaConversao >= 20 
+              // Taxa conversão (bruta) color: green >= 20%, amber >= 10%, red < 10%
+              const taxaColorClass = taxaBruta >= 20 
                 ? 'text-green-400' 
-                : taxaConversao >= 10 
+                : taxaBruta >= 10 
                   ? 'text-amber-400' 
                   : 'text-red-400';
 
@@ -223,6 +234,7 @@ export function CloserSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
+                    <div className="text-[11px] text-muted-foreground">líq. {taxaLiquidaFormatted}%</div>
                   </TableCell>
                 </TableRow>
                 </Fragment>
@@ -251,18 +263,18 @@ export function CloserSummaryTable({
                           key={`un-${c.key}-${index}`}
                           className={`text-center ${index === 0 ? 'border-l border-border/60' : ''}`}
                           onClick={
-                            onUnassignedClick && c.key === 'contrato_pago' && index < 2
+                            onUnassignedClick && c.key === 'contrato_bruto' && index < 2
                               ? (e) => { e.stopPropagation(); onUnassignedClick(index === 0 ? 'A' : 'B'); }
                               : undefined
                           }
                         >
-                          {c.key === 'contrato_pago' ? value : '—'}
+                          {c.key === 'contrato_bruto' ? value : '—'}
                         </TableCell>
                       ));
                     })
                   : SEG_COLS.map((c) => (
                       <TableCell key={`un-${c.key}`} className="text-center">
-                        {c.key === 'contrato_pago' ? unFor(c.key) : '—'}
+                        {c.key === 'contrato_bruto' ? unFor(c.key) : '—'}
                       </TableCell>
                     ))}
                 <TableCell className="text-center">—</TableCell>
@@ -319,14 +331,15 @@ export function CloserSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${
-                  totalTaxaConversao >= 20 
+                  totalTaxaBruta >= 20 
                     ? 'text-green-400' 
-                    : totalTaxaConversao >= 10 
+                    : totalTaxaBruta >= 10 
                       ? 'text-amber-400' 
                       : 'text-red-400'
                 }`}>
-                  {totalTaxaConversao.toFixed(1)}%
+                  {totalTaxaBruta.toFixed(1)}%
                 </span>
+                <div className="text-[11px] text-muted-foreground">líq. {totalTaxaLiquida.toFixed(1)}%</div>
               </TableCell>
             </TableRow>
           </TableBody>
