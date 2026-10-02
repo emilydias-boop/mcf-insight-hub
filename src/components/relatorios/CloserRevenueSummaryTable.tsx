@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { CloserRevenueDetailDialog } from './CloserRevenueDetailDialog';
 import { useAtribuicaoCloser } from '@/hooks/useAtribuicaoCloser';
+import { usePagamentosDaVenda, calcRecebimento } from '@/hooks/usePagamentosDaVenda';
 
 interface Closer {
   id: string;
@@ -69,6 +70,7 @@ interface CloserRow {
   net: number;
   outsideCount: number;
   outsideGross: number;
+  aReceber?: number;
   outraBu?: boolean;
 }
 
@@ -96,6 +98,11 @@ export function CloserRevenueSummaryTable({
   ), [transactions, bu]);
   const filteredIds = useMemo(() => filteredTxs.map(t => t.id), [filteredTxs]);
   const { map: atribuicaoMap, isLoading: loadingAtribuicao } = useAtribuicaoCloser(filteredIds, bu);
+  const pagamentoIds = useMemo(
+    () => filteredTxs.filter(tx => getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id)) > 0).map(tx => tx.id),
+    [filteredTxs, globalFirstIds],
+  );
+  const { map: pagamentosMap } = usePagamentosDaVenda(pagamentoIds);
 
   const { summaryData, closerTransactionsMap } = useMemo(() => {
     const closerTotals = new Map<string, CloserRow>();
@@ -117,6 +124,7 @@ export function CloserRevenueSummaryTable({
       const isFirst = globalFirstIds.has(tx.id);
       const gross = getDeduplicatedGross(tx as any, isFirst);
       const net = tx.net_value || 0;
+      const aRec = calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
       
       // 1. Launch sales — but only if no R1 match (Inside Sales override)
       if (tx.sale_origin === 'launch' || 
@@ -127,6 +135,7 @@ export function CloserRevenueSummaryTable({
           // Pure launch — isolate
           launch.count++;
           launch.gross += gross;
+        launch.aReceber = (launch.aReceber || 0) + aRec;
           launch.net += net;
           launchTxs.push(tx);
           continue;
@@ -138,6 +147,7 @@ export function CloserRevenueSummaryTable({
       if (tx.product_category === 'a010') {
         a010.count++;
         a010.gross += gross;
+        a010.aReceber = (a010.aReceber || 0) + aRec;
         a010.net += net;
         a010Txs.push(tx);
         continue;
@@ -147,6 +157,7 @@ export function CloserRevenueSummaryTable({
       if (tx.product_category === 'renovacao') {
         renovacao.count++;
         renovacao.gross += gross;
+        renovacao.aReceber = (renovacao.aReceber || 0) + aRec;
         renovacao.net += net;
         renovacaoTxs.push(tx);
         continue;
@@ -156,6 +167,7 @@ export function CloserRevenueSummaryTable({
       if (tx.product_category === 'ob_vitalicio') {
         vitalicio.count++;
         vitalicio.gross += gross;
+        vitalicio.aReceber = (vitalicio.aReceber || 0) + aRec;
         vitalicio.net += net;
         vitalicioTxs.push(tx);
         continue;
@@ -171,6 +183,7 @@ export function CloserRevenueSummaryTable({
         } else {
           existing.count++;
           existing.gross += gross;
+          existing.aReceber = (existing.aReceber || 0) + aRec;
           existing.net += net;
         }
         closerTotals.set(atr.closer_id, existing);
@@ -185,6 +198,7 @@ export function CloserRevenueSummaryTable({
       if (pnLower.includes('lucrômetro') || pnLower.includes('lucrometro')) {
         lucrometro.count++;
         lucrometro.gross += gross;
+        lucrometro.aReceber = (lucrometro.aReceber || 0) + aRec;
         lucrometro.net += net;
         lucrometroTxs.push(tx);
         continue;
@@ -193,6 +207,7 @@ export function CloserRevenueSummaryTable({
       // 7. Sem closer
       unassigned.count++;
       unassigned.gross += gross;
+      unassigned.aReceber = (unassigned.aReceber || 0) + aRec;
       unassigned.net += net;
       unassignedTxs.push(tx);
     }
@@ -220,15 +235,16 @@ export function CloserRevenueSummaryTable({
     
     const totalGross = rows.reduce((s, r) => s + r.gross, 0);
     const totalNet = rows.reduce((s, r) => s + r.net, 0);
+    const totalAReceber = rows.reduce((s, r) => s + (r.aReceber || 0), 0);
     const totalCount = rows.reduce((s, r) => s + r.count, 0);
     const totalOutsideCount = rows.reduce((s, r) => s + r.outsideCount, 0);
     const totalOutsideGross = rows.reduce((s, r) => s + r.outsideGross, 0);
     
     return {
-      summaryData: { rows, totalGross, totalNet, totalCount, totalOutsideCount, totalOutsideGross },
+      summaryData: { rows, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
-  }, [filteredTxs, atribuicaoMap, globalFirstIds, bu]);
+  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu]);
 
   if (isLoading || loadingAtribuicao || summaryData.rows.length === 0) return null;
 
@@ -265,6 +281,7 @@ export function CloserRevenueSummaryTable({
                     <TableHead>Closer</TableHead>
                     <TableHead className="text-right">Transações</TableHead>
                     <TableHead className="text-right">Faturamento Bruto</TableHead>
+                    <TableHead className="text-right">A receber</TableHead>
                     <TableHead className="text-right">Receita Líquida</TableHead>
                     <TableHead className="text-right">Ticket Médio</TableHead>
                     <TableHead className="text-right">% do Total</TableHead>
@@ -300,6 +317,9 @@ export function CloserRevenueSummaryTable({
                       <TableCell className="text-right font-mono">
                         {formatCurrency(row.gross)}
                       </TableCell>
+                      <TableCell className={`text-right font-mono ${(row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                        {(row.aReceber || 0) > 0 ? formatCurrency(row.aReceber || 0) : '-'}
+                      </TableCell>
                       <TableCell className="text-right font-mono text-success">
                         {formatCurrency(row.net)}
                       </TableCell>
@@ -326,6 +346,9 @@ export function CloserRevenueSummaryTable({
                     <TableCell className="text-right font-bold">{summaryData.totalCount}</TableCell>
                     <TableCell className="text-right font-mono font-bold">
                       {formatCurrency(summaryData.totalGross)}
+                    </TableCell>
+                    <TableCell className={`text-right font-mono font-bold ${summaryData.totalAReceber > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                      {summaryData.totalAReceber > 0 ? formatCurrency(summaryData.totalAReceber) : '-'}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold text-success">
                       {formatCurrency(summaryData.totalNet)}
@@ -361,6 +384,7 @@ export function CloserRevenueSummaryTable({
           startDate={startDate}
           endDate={endDate}
           atribuicaoMap={atribuicaoMap}
+          pagamentosMap={pagamentosMap}
           bu={bu}
         />
       )}

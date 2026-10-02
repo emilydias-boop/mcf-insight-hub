@@ -19,6 +19,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+import { usePagamentosDaVenda, calcRecebimento } from '@/hooks/usePagamentosDaVenda';
 import { useAcquisitionReport } from '@/hooks/useAcquisitionReport';
 
 interface SalesReportPanelProps {
@@ -562,20 +563,34 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   };
   
   // Calculate stats from filtered data
+  const grossOf = (t: any) => shouldUseBUFilter
+    ? (t.product_price || t.net_value || 0)
+    : getDeduplicatedGross(t, globalFirstIds.has(t.id));
+  const pagamentoIds = useMemo(
+    () => filteredTransactions.filter((t) => grossOf(t) > 0).map((t) => t.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredTransactions, globalFirstIds, shouldUseBUFilter],
+  );
+  const { map: pagamentosMap } = usePagamentosDaVenda(pagamentoIds);
+
   const stats = useMemo(() => {
-    const totalGross = filteredTransactions.reduce((sum, t) => {
-      if (shouldUseBUFilter) {
-        return sum + (t.product_price || t.net_value || 0);
-      }
-      const isFirst = globalFirstIds.has(t.id);
-      return sum + getDeduplicatedGross(t, isFirst);
-    }, 0);
+    let totalGross = 0;
+    let totalRecebido = 0;
+    let totalAReceber = 0;
+    for (const t of filteredTransactions) {
+      const g = grossOf(t);
+      totalGross += g;
+      const r = calcRecebimento(g, pagamentosMap.get(t.id)?.pago);
+      totalRecebido += r.recebido;
+      totalAReceber += r.aReceber;
+    }
     const totalNet = filteredTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
     const count = filteredTransactions.length;
     const avgTicket = count > 0 ? totalNet / count : 0;
     
-    return { totalGross, totalNet, count, avgTicket };
-  }, [filteredTransactions, globalFirstIds]);
+    return { totalGross, totalNet, count, avgTicket, totalRecebido, totalAReceber };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredTransactions, globalFirstIds, pagamentosMap, shouldUseBUFilter]);
 
 
   // Helper to get enriched data for a transaction
@@ -932,6 +947,12 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Faturamento Bruto</p>
                 <p className="text-2xl font-bold">{formatCurrency(stats.totalGross)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Recebido {formatCurrency(stats.totalRecebido)} ·{' '}
+                  <span className={stats.totalAReceber > 0 ? 'text-amber-500' : undefined}>
+                    A receber {formatCurrency(stats.totalAReceber)}
+                  </span>
+                </p>
               </div>
             </div>
           </CardContent>

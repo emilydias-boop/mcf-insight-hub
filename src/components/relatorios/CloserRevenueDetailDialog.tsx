@@ -11,6 +11,7 @@ import { subMonths } from 'date-fns';
 import { UnassignedTransactionsDetailPanel } from './UnassignedTransactionsDetailPanel';
 import { useAtribuicaoCloser, type Atribuicao } from '@/hooks/useAtribuicaoCloser';
 import { ALLOWED_INCORPORADOR_CATEGORIES } from './CloserRevenueSummaryTable';
+import { calcRecebimento, type PagamentoDaVenda } from '@/hooks/usePagamentosDaVenda';
 
 const SP_DATETIME = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
@@ -58,6 +59,7 @@ interface CloserRevenueDetailDialogProps {
   startDate?: Date;
   endDate?: Date;
   atribuicaoMap?: Map<string, Atribuicao>;
+  pagamentosMap?: Map<string, PagamentoDaVenda>;
   bu?: string;
 }
 
@@ -110,6 +112,7 @@ export function CloserRevenueDetailDialog({
   startDate,
   endDate,
   atribuicaoMap,
+  pagamentosMap,
   bu,
 }: CloserRevenueDetailDialogProps) {
   const isAutomaticRow = closerId.startsWith('__');
@@ -153,10 +156,12 @@ export function CloserRevenueDetailDialog({
   const vendas = useMemo(() => {
     const rows = transactions.map((tx) => {
       const a = atribuicaoMap?.get(tx.id);
+      const gross = getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
       return {
         tx,
         a,
-        gross: getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id)),
+        gross,
+        aReceber: calcRecebimento(gross, pagamentosMap?.get(tx.id)?.pago).aReceber,
         net: tx.net_value || 0,
         outside: !!a?.is_outside,
       };
@@ -168,11 +173,14 @@ export function CloserRevenueDetailDialog({
       rows,
       totalGross: dentro.reduce((s, r) => s + r.gross, 0),
       totalNet: dentro.reduce((s, r) => s + r.net, 0),
+      totalAReceber: dentro.reduce((s, r) => s + r.aReceber, 0),
+      vendasMcfAReceber: dentro.filter((r) => grupoVenda(r.tx) === 'venda').reduce((s, r) => s + r.aReceber, 0),
+      outsideAReceber: fora.reduce((s, r) => s + r.aReceber, 0),
       outsideCount: fora.length,
       outsideGross: fora.reduce((s, r) => s + r.gross, 0),
       outsideNet: fora.reduce((s, r) => s + r.net, 0),
     };
-  }, [transactions, atribuicaoMap, globalFirstIds]);
+  }, [transactions, atribuicaoMap, pagamentosMap, globalFirstIds]);
   const showVendas = !isUnassigned && vendas.rows.length > 0;
 
   const atribuicaoBadge = (a?: Atribuicao) => {
@@ -333,6 +341,9 @@ export function CloserRevenueDetailDialog({
               <p className="text-lg font-bold">{metrics.vendasMcf.count}</p>
               <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.vendasMcf.gross)}</p>
               <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.vendasMcf.net)}</p>
+              {vendas.vendasMcfAReceber > 0 && (
+                <p className="text-xs text-amber-500 font-mono">A receber {formatCurrency(vendas.vendasMcfAReceber)}</p>
+              )}
             </CardContent>
           </Card>
 
@@ -416,12 +427,13 @@ export function CloserRevenueDetailDialog({
                     <TableHead className="text-xs w-20">Tipo</TableHead>
                     <TableHead className="text-xs">Produto</TableHead>
                     <TableHead className="text-xs text-right">Bruto</TableHead>
+                    <TableHead className="text-xs text-right">A receber</TableHead>
                     <TableHead className="text-xs text-right">Líquido</TableHead>
                     <TableHead className="text-xs">Atribuição</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vendas.rows.map(({ tx, a, gross, net }) => (
+                  {vendas.rows.map(({ tx, a, gross, net, aReceber }) => (
                     <TableRow key={tx.id}>
                       <TableCell className="py-1.5 whitespace-nowrap font-mono">{fmtDataHora(tx.sale_date)}</TableCell>
                       <TableCell className="py-1.5">
@@ -443,6 +455,9 @@ export function CloserRevenueDetailDialog({
                       </TableCell>
                       <TableCell className="py-1.5">{tx.product_name || '—'}</TableCell>
                       <TableCell className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(gross)}</TableCell>
+                      <TableCell className="py-1.5 text-right font-mono whitespace-nowrap text-amber-500">
+                        {aReceber > 0 ? formatCurrency(aReceber) : ''}
+                      </TableCell>
                       <TableCell className={`py-1.5 text-right font-mono whitespace-nowrap ${net < 0 ? 'text-destructive' : 'text-success'}`}>
                         {formatCurrency(net)}
                       </TableCell>
@@ -456,12 +471,18 @@ export function CloserRevenueDetailDialog({
               <div className="flex justify-end gap-4 font-semibold">
                 <span>Total</span>
                 <span className="font-mono">{formatCurrency(vendas.totalGross)}</span>
+                {vendas.totalAReceber > 0 && (
+                  <span className="font-mono text-amber-500">A receber {formatCurrency(vendas.totalAReceber)}</span>
+                )}
                 <span className="font-mono text-success">{formatCurrency(vendas.totalNet)}</span>
               </div>
               {vendas.outsideCount > 0 && (
                 <div className="flex justify-end gap-4 text-muted-foreground">
                   <span>Outside (fora do total) · {vendas.outsideCount}</span>
                   <span className="font-mono">{formatCurrency(vendas.outsideGross)}</span>
+                  {vendas.outsideAReceber > 0 && (
+                    <span className="font-mono">A receber {formatCurrency(vendas.outsideAReceber)}</span>
+                  )}
                   <span className="font-mono">{formatCurrency(vendas.outsideNet)}</span>
                 </div>
               )}
