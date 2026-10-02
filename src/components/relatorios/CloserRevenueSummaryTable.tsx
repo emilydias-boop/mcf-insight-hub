@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChevronDown, Users, Info } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCanalEntrada } from '@/hooks/useCanalEntrada';
+import { useCanalEntrada, useCanaisEntradaLista } from '@/hooks/useCanalEntrada';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
@@ -75,6 +76,7 @@ const MODO_TITULO: Record<ModoAgrupamento, string> = {
   canal: 'Faturamento por Canal de Entrada',
 };
 const CANAL_DIRETO = 'Direto (sem entrada)';
+const MOSTRAR_SEM_VENDA_KEY = 'canal-mostrar-sem-venda';
 
 interface CloserRow {
   id: string;
@@ -112,6 +114,16 @@ export function CloserRevenueSummaryTable({
     setSelectedCloser(null);
     try { localStorage.setItem(MODO_KEY, v); } catch { /* ignore */ }
   };
+  const [mostrarSemVenda, setMostrarSemVendaState] = useState<boolean>(() => {
+    try {
+      if (localStorage.getItem(MOSTRAR_SEM_VENDA_KEY) === 'false') return false;
+    } catch { /* ignore */ }
+    return true;
+  });
+  const setMostrarSemVenda = (v: boolean) => {
+    setMostrarSemVendaState(v);
+    try { localStorage.setItem(MOSTRAR_SEM_VENDA_KEY, String(v)); } catch { /* ignore */ }
+  };
 
   // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
   const filteredTxs = useMemo(() => (
@@ -130,6 +142,7 @@ export function CloserRevenueSummaryTable({
   );
   const { map: pagamentosMap } = usePagamentosDaVenda(pagamentoIds);
   const { map: canalMap, isLoading: loadingCanal } = useCanalEntrada(filteredIds, modo === 'canal');
+  const { data: canaisLista, isLoading: loadingLista } = useCanaisEntradaLista();
 
   const sdrIds = useMemo(() => {
     if (modo !== 'sdr') return [] as string[];
@@ -183,11 +196,30 @@ export function CloserRevenueSummaryTable({
         arr.push(tx);
         txMap.set(id, arr);
       }
-      const rows = Array.from(canalTotals.values()).sort((a, b) => {
-        const da = a.name === CANAL_DIRETO ? 1 : 0;
-        const db = b.name === CANAL_DIRETO ? 1 : 0;
-        return da - db || b.gross - a.gross;
-      });
+      // Monta a lista a partir da ordem oficial de `canais_entrada_lista`; canais fora da lista
+      // (que vieram das vendas) entram no fim, antes de "Direto (sem entrada)".
+      const lista = canaisLista || [];
+      const listaSet = new Set(lista);
+      const comVendaLista: CloserRow[] = [];
+      const zeradas: CloserRow[] = [];
+      for (const canal of lista) {
+        const row = canalTotals.get(`canal:${canal}`);
+        if (row) {
+          if (row.count > 0) comVendaLista.push(row);
+          else zeradas.push(row);
+        } else {
+          zeradas.push({ id: `canal:${canal}`, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 });
+        }
+      }
+      comVendaLista.sort((a, b) => b.gross - a.gross);
+      const extras = Array.from(canalTotals.values())
+        .filter((r) => !listaSet.has(r.name))
+        .sort((a, b) => b.gross - a.gross);
+      let rows = [...comVendaLista, ...extras, ...zeradas];
+      // "Direto (sem entrada)" sempre por último
+      const diretoRow = rows.find((r) => r.name === CANAL_DIRETO);
+      if (diretoRow) rows = [...rows.filter((r) => r !== diretoRow), diretoRow];
+      if (!mostrarSemVenda) rows = rows.filter((r) => r.count > 0);
       return {
         summaryData: {
           rows,
@@ -331,11 +363,11 @@ export function CloserRevenueSummaryTable({
       summaryData: { rows, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
-  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames]);
+  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, canaisLista, mostrarSemVenda]);
 
   if (isLoading || loadingAtribuicao) return null;
   if (modo === 'closer' && summaryData.rows.length === 0) return null;
-  const modoCarregando = loadingCanal || (modo === 'sdr' && loadingSdrNames);
+  const modoCarregando = loadingCanal || (modo === 'canal' && loadingLista) || (modo === 'sdr' && loadingSdrNames);
 
   const selectedTxs = selectedCloser ? (closerTransactionsMap.get(selectedCloser.id) || []) : [];
 
@@ -375,6 +407,17 @@ export function CloserRevenueSummaryTable({
                       <ToggleGroupItem value="canal" className="h-7 px-2 text-xs">Canal de entrada</ToggleGroupItem>
                     </ToggleGroup>
                   </span>
+                  {modo === 'canal' && (
+                    <span className="ml-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <Switch
+                        checked={mostrarSemVenda}
+                        onCheckedChange={setMostrarSemVenda}
+                        className="scale-90"
+                        aria-label="Mostrar canais sem venda"
+                      />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Mostrar canais sem venda</span>
+                    </span>
+                  )}
                 </span>
                 <span className="flex items-center gap-2">
                   <Badge variant="secondary" className="font-mono text-xs">
@@ -408,55 +451,62 @@ export function CloserRevenueSummaryTable({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {summaryData.rows.map((row) => (
-                    <TableRow key={row.name}>
-                      <TableCell>
-                        <button
-                          className={`font-medium text-left hover:underline cursor-pointer ${
-                            row.id === '__unassigned__' || row.id === '__sem_sdr__' || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 
-                            row.id === '__launch__' ? 'text-amber-500' :
-                            row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
-                            row.id === '__renovacao__' ? 'text-teal-400' :
-                            row.id === '__vitalicio__' ? 'text-purple-400' :
-                            'text-primary'
-                          }`}
-                          onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
-                        >
-                          {row.id === '__launch__' ? '🚀 ' : 
-                           row.id === '__a010__' ? '📊 ' : 
-                           row.id === '__renovacao__' ? '🔄 ' :
-                           row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
-                        </button>
-                        {row.outraBu && (
-                          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">{row.count}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(row.gross)}
-                      </TableCell>
-                      <TableCell className={`text-right font-mono ${(row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                        {(row.aReceber || 0) > 0 ? formatCurrency(row.aReceber || 0) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-success">
-                        {formatCurrency(row.net)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(row.count > 0 ? row.net / row.count : 0)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {summaryData.totalGross > 0
-                          ? ((row.gross / summaryData.totalGross) * 100).toFixed(1)
-                          : '0.0'}%
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {row.outsideCount > 0 ? row.outsideCount : '-'}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {summaryData.rows.map((row) => {
+                    const zerada = row.count === 0;
+                    return (
+                      <TableRow key={row.name} className={zerada ? 'text-muted-foreground' : undefined}>
+                        <TableCell>
+                          {zerada ? (
+                            <span className="font-medium">{row.name}</span>
+                          ) : (
+                            <button
+                              className={`font-medium text-left hover:underline cursor-pointer ${
+                                row.id === '__unassigned__' || row.id === '__sem_sdr__' || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 
+                                row.id === '__launch__' ? 'text-amber-500' :
+                                row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
+                                row.id === '__renovacao__' ? 'text-teal-400' :
+                                row.id === '__vitalicio__' ? 'text-purple-400' :
+                                'text-primary'
+                              }`}
+                              onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
+                            >
+                              {row.id === '__launch__' ? '🚀 ' : 
+                               row.id === '__a010__' ? '📊 ' : 
+                               row.id === '__renovacao__' ? '🔄 ' :
+                               row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
+                            </button>
+                          )}
+                          {row.outraBu && (
+                            <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{zerada ? '-' : row.count}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {zerada ? '-' : formatCurrency(row.gross)}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono ${!zerada && (row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                          {!zerada && (row.aReceber || 0) > 0 ? formatCurrency(row.aReceber || 0) : '-'}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono ${zerada ? '' : 'text-success'}`}>
+                          {zerada ? '-' : formatCurrency(row.net)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {zerada ? '-' : formatCurrency(row.count > 0 ? row.net / row.count : 0)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {zerada ? '-' : (summaryData.totalGross > 0
+                            ? ((row.gross / summaryData.totalGross) * 100).toFixed(1)
+                            : '0.0') + '%'}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {row.outsideCount > 0 ? row.outsideCount : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">
+                          {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
                 <TableFooter>
                   <TableRow>
