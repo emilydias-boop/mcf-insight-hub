@@ -515,7 +515,7 @@ export default function PainelComercialCredito() {
 
       {data && !isLoading && (
         <>
-          <TeamKPICards kpis={{} as any} customCards={customCards} isLoading={isLoading} />
+          <TeamKPICards kpis={EMPTY_TEAM_KPIS} customCards={customCards} isLoading={isLoading} />
 
           <Card className="bg-card border-border overflow-hidden">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
