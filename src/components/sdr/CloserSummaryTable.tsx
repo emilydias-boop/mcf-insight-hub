@@ -91,13 +91,14 @@ export function CloserSummaryTable({
   const segBMap = byId(segmentBData);
   const segCMap = byId(segmentCData);
 
-  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_pago' | 'r2_agendada';
+  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_pago' | 'venda_direta' | 'r2_agendada';
   const SEG_COLS: { key: SegKey; label: string; cls: string }[] = [
     { key: 'r1_agendada', label: 'R1 Agendada', cls: 'text-blue-400' },
     { key: 'outside', label: 'Outside', cls: 'text-orange-400' },
     { key: 'r1_realizada', label: 'R1 Realizada', cls: 'text-green-400' },
     { key: 'noshow', label: 'No-show', cls: 'text-red-400' },
     { key: 'contrato_pago', label: 'Contrato Pago', cls: 'text-amber-400' },
+    { key: 'venda_direta', label: 'Venda direta', cls: 'text-violet-400' },
     { key: 'r2_agendada', label: 'R2 Agendada', cls: 'text-purple-400' },
   ];
   const segValue = (map: Map<string, R1CloserMetric>, closerId: string, key: SegKey) =>
@@ -105,6 +106,9 @@ export function CloserSummaryTable({
   const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
     (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
   const segmentedKeys = new Set<SegKey>(['r1_agendada', 'r1_realizada', 'noshow', 'contrato_pago', 'r2_agendada']);
+  // Venda direta não tem segmento ICP → uma coluna só (total), mesmo com A/B/C.
+  const totalOnlyKeys = new Set<SegKey>(['venda_direta']);
+  const segLabels = (k: SegKey) => totalOnlyKeys.has(k) ? ['Total'] : segmentedKeys.has(k) ? ['A', 'B', 'C', 's/ICP'] : ['A', 'B'];
   const segmentsForRow = (row: R1CloserMetric, key: SegKey) => {
     const a = segValue(segAMap, row.closer_id, key);
     const b = segValue(segBMap, row.closer_id, key);
@@ -125,7 +129,7 @@ export function CloserSummaryTable({
               <TableHead rowSpan={showSegments ? 2 : 1} className="text-muted-foreground font-medium align-middle">Closer</TableHead>
               {showSegments
                 ? SEG_COLS.map((c) => (
-                    <TableHead key={c.key} colSpan={segmentedKeys.has(c.key) ? 4 : 2} className="text-muted-foreground text-center font-medium whitespace-nowrap border-l border-border/60">
+                    <TableHead key={c.key} colSpan={segLabels(c.key).length} className="text-muted-foreground text-center font-medium whitespace-nowrap border-l border-border/60">
                       {c.label}
                     </TableHead>
                   ))
@@ -140,7 +144,7 @@ export function CloserSummaryTable({
             </TableRow>
             {showSegments && (
               <TableRow className="hover:bg-muted/50">
-                {SEG_COLS.flatMap((c) => (segmentedKeys.has(c.key) ? ['A', 'B', 'C', 's/ICP'] : ['A', 'B']).map((segment) => (
+                {SEG_COLS.flatMap((c) => segLabels(c.key).map((segment) => (
                   <TableHead key={`${c.key}-${segment}`} className="min-w-14 text-muted-foreground text-center font-medium whitespace-nowrap first:border-l first:border-border/60">
                     {segment}
                   </TableHead>
@@ -188,7 +192,9 @@ export function CloserSummaryTable({
                   {showSegments
                     ? SEG_COLS.flatMap((c) => {
                         const segments = segmentsForRow(row, c.key);
-                        const values = segmentedKeys.has(c.key)
+                        const values = totalOnlyKeys.has(c.key)
+                          ? [(row[c.key] as number) || 0]
+                          : segmentedKeys.has(c.key)
                           ? [segments.a, segments.b, segments.c, segments.noIcp]
                           : [segments.a, segments.b];
                         return values.map((value, index) => (
@@ -234,6 +240,9 @@ export function CloserSummaryTable({
                   ? SEG_COLS.flatMap((c) => {
                       const a = unFor(c.key, 'a');
                       const b = unFor(c.key, 'b');
+                      if (totalOnlyKeys.has(c.key)) {
+                        return [<TableCell key={`un-${c.key}-0`} className="text-center border-l border-border/60">—</TableCell>];
+                      }
                       const values = segmentedKeys.has(c.key)
                         ? [a, b, 0, unFor(c.key) - a - b]
                         : [a, b];
@@ -271,7 +280,9 @@ export function CloserSummaryTable({
                     const b = segTotal(segmentBData, c.key);
                     const cTotal = segTotal(segmentCData, c.key);
                     const total = segTotal(data, c.key);
-                    const values = segmentedKeys.has(c.key)
+                    const values = totalOnlyKeys.has(c.key)
+                      ? [total]
+                      : segmentedKeys.has(c.key)
                       ? [a, b, cTotal, total - a - b - cTotal]
                       : [a, b];
                     return values.map((value, index) => (

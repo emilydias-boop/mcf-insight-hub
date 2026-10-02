@@ -18821,6 +18821,10 @@ export type Database = {
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
+      desvincular_venda_direta: {
+        Args: { p_transaction_id: string }
+        Returns: Json
+      }
       desvincular_venda_do_participante: {
         Args: { p_transaction_id: string }
         Returns: Json
@@ -19645,6 +19649,37 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      get_vendas_diretas_do_participante: {
+        Args: { p_attendee_id: string }
+        Returns: {
+          bruto: number
+          comprador_email: string
+          comprador_nome: string
+          gateway: string
+          id: string
+          liquido: number
+          metodo: string
+          produto: string
+          sale_date: string
+          vinculada_em: string
+          vinculada_por: string
+        }[]
+      }
+      get_vendas_diretas_sem_vinculo: {
+        Args: { p_attendee_id: string; p_busca?: string; p_limit?: number }
+        Returns: {
+          bruto: number
+          comprador_email: string
+          comprador_nome: string
+          comprador_telefone: string
+          gateway: string
+          id: string
+          liquido: number
+          produto: string
+          sale_date: string
+          score: number
+        }[]
+      }
       get_vendas_do_participante: {
         Args: { p_attendee_id: string }
         Returns: {
@@ -20291,6 +20326,30 @@ export type Database = {
         }
         Returns: boolean
       }
+      vendas_diretas_efetivas: {
+        Args: { p_bu?: string; p_from: string; p_to: string }
+        Returns: {
+          attendee_id: string
+          bruto: number
+          closer_bu: string
+          closer_id: string
+          closer_name: string
+          comprador_nome: string
+          deal_id: string
+          eff_date: string
+          gateway: string
+          lead_name: string
+          liquido: number
+          origin_id: string
+          produto: string
+          sale_date: string
+          sdr_email: string
+          sdr_id: string
+          sdr_name: string
+          transaction_id: string
+          vinculada_em: string
+        }[]
+      }
       vendas_parceria: {
         Args: {
           p_emails?: string[]
@@ -20320,6 +20379,10 @@ export type Database = {
         }[]
       }
       vincular_venda_ao_participante: {
+        Args: { p_attendee_id: string; p_transaction_id: string }
+        Returns: Json
+      }
+      vincular_venda_direta_r1: {
         Args: { p_attendee_id: string; p_transaction_id: string }
         Returns: Json
       }

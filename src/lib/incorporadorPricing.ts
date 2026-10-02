@@ -91,8 +91,14 @@ export const getDeduplicatedGross = (
     return 0;
   }
   
-  // Regra 4: Se product_name é "Parceria" (genérico), usar product_price real
-  if (transaction.product_name?.toLowerCase().trim() === 'parceria') {
+  // Regra 4: produtos de preço variável usam o valor real do gateway (product_price),
+  // não o reference_price do cadastro:
+  //  - "Parceria" (genérico): cada parceria é negociada com valor próprio;
+  //  - A003 - Anticrise Completo: o cadastro tem um preço só, mas o produto é
+  //    vendido a valores diferentes no mesmo período (ex.: R$ 1.500 e R$ 2.500),
+  //    e o gateway já manda o valor certo.
+  const nomeProduto = transaction.product_name?.toLowerCase().trim() || '';
+  if (nomeProduto === 'parceria' || nomeProduto.includes('a003')) {
     return transaction.product_price || 0;
   }
   
