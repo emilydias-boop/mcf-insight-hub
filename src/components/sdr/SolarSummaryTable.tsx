@@ -51,10 +51,9 @@ interface SolarSdrSummaryTableProps {
   data: SolarSdrRow[];
   isLoading?: boolean;
   metaAgendamentoDia: number | null;
-  onRowClick?: (row: SolarSdrRow) => void;
 }
 
-export function SolarSdrSummaryTable({ data, isLoading, metaAgendamentoDia, onRowClick }: SolarSdrSummaryTableProps) {
+export function SolarSdrSummaryTable({ data, isLoading, metaAgendamentoDia }: SolarSdrSummaryTableProps) {
   if (isLoading) return <TableLoading />;
   if (data.length === 0) return <EmptyTable label="Nenhum SDR com atividade no período." />;
 
