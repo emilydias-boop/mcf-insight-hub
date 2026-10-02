@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Handshake, RotateCcw, Trophy, TrendingDown, TrendingUp, CalendarCheck, CalendarX, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { FileText, RotateCcw, Trophy, TrendingDown, TrendingUp, CalendarCheck, CalendarX, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { useAllHublaTransactions } from '@/hooks/useAllHublaTransactions';
@@ -61,7 +61,42 @@ interface CloserRevenueDetailDialogProps {
   bu?: string;
 }
 
-const CONTRACT_CATEGORIES = ['incorporador', 'contrato', 'contrato-anticrise'];
+// ============= Classificador único (cards + breakdown + coluna Tipo) =============
+type GrupoVenda = 'contrato' | 'p2' | 'parceria' | 'a010' | 'outros' | 'venda';
+
+/** Olha primeiro o código do produto (product_name, trim, case-insensitive) e depois a categoria. */
+export function grupoVenda(tx: Pick<Transaction, 'product_name' | 'product_category'>): GrupoVenda {
+  const nome = (tx.product_name || '').trim().toLowerCase();
+  const cat = (tx.product_category || '').trim().toLowerCase();
+  // "A000 - Contrato" costuma vir gravado com categoria 'incorporador', por isso o nome vem antes.
+  if (nome.startsWith('a000') || nome.includes('contrato mcf') || cat === 'contrato' || cat === 'contrato-anticrise') return 'contrato';
+  if (nome.startsWith('a005') || cat === 'p2') return 'p2';
+  if (cat === 'parceria' || cat === 'renovacao' || nome.includes('renovação') || nome.includes('renovacao') || /^r0/.test(nome)) return 'parceria';
+  if (cat === 'a010' || nome.startsWith('a010')) return 'a010';
+  if (nome.includes('lucrômetro') || nome.includes('lucrometro') || cat === 'ob_vitalicio') return 'outros';
+  if (/^a001/.test(nome) || /^a003/.test(nome) || /^a004/.test(nome) || /^a009/.test(nome) || cat === 'incorporador') return 'venda';
+  return 'outros';
+}
+
+const GRUPO_LABEL: Record<GrupoVenda, string> = {
+  contrato: 'Contratos (caução)',
+  venda: 'Vendas MCF',
+  p2: 'P2',
+  parceria: 'Parcerias / Recorrência',
+  a010: 'A010',
+  outros: 'Outros',
+};
+
+const GRUPO_CURTO: Record<GrupoVenda, string> = {
+  contrato: 'Contrato',
+  venda: 'Venda MCF',
+  p2: 'P2',
+  parceria: 'Parceria',
+  a010: 'A010',
+  outros: 'Outros',
+};
+
+const GRUPO_ORDEM: GrupoVenda[] = ['contrato', 'venda', 'p2', 'parceria', 'a010', 'outros'];
 
 export function CloserRevenueDetailDialog({
   open,
@@ -162,26 +197,30 @@ export function CloserRevenueDetailDialog({
   };
 
   const metrics = useMemo(() => {
-    // Current period
-    const contracts = transactions.filter((t) =>
-      CONTRACT_CATEGORIES.includes(t.product_category || '')
-    );
-    const parcerias = transactions.filter(
-      (t) => t.product_category === 'parceria' || t.product_category === 'renovacao'
-    );
+    const calcGross = (txs: Transaction[], forceFirst = false) =>
+      txs.reduce((s, t) => s + getDeduplicatedGross(t as any, forceFirst || globalFirstIds.has(t.id)), 0);
+    const calcNet = (txs: Transaction[]) =>
+      txs.reduce((s, t) => s + (t.net_value || 0), 0);
+
+    const grupoOf = (t: Transaction) => grupoVenda(t);
+    const byGrupo = (g: GrupoVenda) => transactions.filter((t) => grupoOf(t) === g);
+
+    const grupoStats = (g: GrupoVenda) => {
+      const txs = byGrupo(g);
+      return { count: txs.length, gross: calcGross(txs, g === 'parceria'), net: calcNet(txs) };
+    };
+
+    const contracts = grupoStats('contrato');
+    const vendasMcf = grupoStats('venda');
+    const p2 = grupoStats('p2');
+    const parcerias = grupoStats('parceria');
+    const a010 = grupoStats('a010');
+    const outrosGrupo = grupoStats('outros');
+
     const refunds = transactions.filter(
       (t) => t.sale_status === 'refunded' || (t.net_value !== null && t.net_value < 0)
     );
 
-    const calcGross = (txs: Transaction[]) =>
-      txs.reduce((s, t) => s + getDeduplicatedGross(t as any, globalFirstIds.has(t.id)), 0);
-    const calcNet = (txs: Transaction[]) =>
-      txs.reduce((s, t) => s + (t.net_value || 0), 0);
-
-    const contractsGross = calcGross(contracts);
-    const parceriasGross = parcerias.reduce(
-      (s, t) => s + getDeduplicatedGross(t as any, true), 0
-    );
     const refundsNet = Math.abs(calcNet(refunds));
     const totalGross = calcGross(transactions);
     const totalNet = calcNet(transactions);
@@ -198,24 +237,14 @@ export function CloserRevenueDetailDialog({
     const bestDay = days[0] || null;
     const worstDay = days[days.length - 1] || null;
 
-    // By category breakdown
-    const catMap = new Map<string, { count: number; gross: number; net: number }>();
-    for (const tx of transactions) {
-      let cat = tx.product_category || 'outros';
-      if (cat === 'a010' || cat === 'renovacao') cat = 'parceria';
-      const existing = catMap.get(cat) || { count: 0, gross: 0, net: 0 };
-      existing.count++;
-      existing.gross += getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
-      existing.net += tx.net_value || 0;
-      catMap.set(cat, existing);
-    }
-    const categories = Array.from(catMap.entries())
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.gross - a.gross);
+    // Breakdown por grupo (classificador único)
+    const categories = GRUPO_ORDEM
+      .map((g) => ({ name: g, label: GRUPO_LABEL[g], ...grupoStats(g) }))
+      .filter((c) => c.count > 0);
 
     // Parceria breakdown (by product_name)
     const parceriaMap = new Map<string, { count: number; gross: number; net: number }>();
-    for (const tx of parcerias) {
+    for (const tx of byGrupo('parceria')) {
       const name = tx.product_name || 'Parceria';
       const existing = parceriaMap.get(name) || { count: 0, gross: 0, net: 0 };
       existing.count++;
@@ -236,12 +265,13 @@ export function CloserRevenueDetailDialog({
     const grossChange = prevGross > 0 ? ((totalGross - prevGross) / prevGross) * 100 : null;
     const countChange = prevCount > 0 ? ((transactions.length - prevCount) / prevCount) * 100 : null;
 
-    const contractsNet = calcNet(contracts);
-    const parceriasNet = calcNet(parcerias);
-
     return {
-      contracts: { count: contracts.length, gross: contractsGross, net: contractsNet },
-      parcerias: { count: parcerias.length, gross: parceriasGross, net: parceriasNet },
+      contracts,
+      vendasMcf,
+      p2,
+      parcerias,
+      a010,
+      outrosGrupo,
       refunds: { count: refunds.length, value: refundsNet },
       totalGross,
       totalNet,
@@ -280,12 +310,12 @@ export function CloserRevenueDetailDialog({
         <>
 
         {/* KPI Grid */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Card className="bg-card border-border">
             <CardContent className="p-3">
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="h-4 w-4 text-primary" />
-                <span className="text-xs font-medium text-muted-foreground">Contratos</span>
+                <span className="text-xs font-medium text-muted-foreground">Contratos (caução)</span>
               </div>
               <p className="text-lg font-bold">{metrics.contracts.count}</p>
               <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.contracts.gross)}</p>
@@ -296,25 +326,70 @@ export function CloserRevenueDetailDialog({
           <Card className="bg-card border-border">
             <CardContent className="p-3">
               <div className="flex items-center gap-2 mb-1">
-                <Handshake className="h-4 w-4 text-accent-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">Parcerias</span>
+                <Trophy className="h-4 w-4 text-primary" />
+                <span className="text-xs font-medium text-muted-foreground">Vendas MCF</span>
               </div>
-              <p className="text-lg font-bold">{metrics.parcerias.count}</p>
-              <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.parcerias.gross)}</p>
-              <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.parcerias.net)}</p>
+              <p className="text-[10px] text-muted-foreground leading-none mb-0.5">A001 · A003 · A009</p>
+              <p className="text-lg font-bold">{metrics.vendasMcf.count}</p>
+              <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.vendasMcf.gross)}</p>
+              <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.vendasMcf.net)}</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-card border-border">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <RotateCcw className="h-4 w-4 text-destructive" />
-                <span className="text-xs font-medium text-muted-foreground">Reembolsos</span>
-              </div>
-              <p className="text-lg font-bold">{metrics.refunds.count}</p>
-              <p className="text-xs text-destructive font-mono">-{formatCurrency(metrics.refunds.value)}</p>
-            </CardContent>
-          </Card>
+          {metrics.p2.count > 0 && (
+            <Card className="bg-card border-border">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-medium text-muted-foreground">P2</span>
+                </div>
+                <p className="text-lg font-bold">{metrics.p2.count}</p>
+                <p className="text-xs text-muted-foreground font-mono">Bruto R$ 0 (regra P2)</p>
+                <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.p2.net)}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {metrics.parcerias.count > 0 && (
+            <Card className="bg-card border-border">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-medium text-muted-foreground">Parcerias / Recorrência</span>
+                </div>
+                <p className="text-lg font-bold">{metrics.parcerias.count}</p>
+                <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.parcerias.gross)}</p>
+                <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.parcerias.net)}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {metrics.refunds.count > 0 && (
+            <Card className="bg-card border-border">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <RotateCcw className="h-4 w-4 text-destructive" />
+                  <span className="text-xs font-medium text-muted-foreground">Reembolsos</span>
+                </div>
+                <p className="text-lg font-bold">{metrics.refunds.count}</p>
+                <p className="text-xs text-destructive font-mono">-{formatCurrency(metrics.refunds.value)}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {(metrics.a010.count > 0 || metrics.outrosGrupo.count > 0) && (
+            <Card className="bg-card border-border">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingDown className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">Outros</span>
+                </div>
+                <p className="text-lg font-bold">{metrics.a010.count + metrics.outrosGrupo.count}</p>
+                <p className="text-xs text-muted-foreground font-mono">Bruto {formatCurrency(metrics.a010.gross + metrics.outrosGrupo.gross)}</p>
+                <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.a010.net + metrics.outrosGrupo.net)}</p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="bg-card border-border">
             <CardContent className="p-3">
@@ -338,6 +413,7 @@ export function CloserRevenueDetailDialog({
                   <TableRow>
                     <TableHead className="text-xs">Data</TableHead>
                     <TableHead className="text-xs">Comprador</TableHead>
+                    <TableHead className="text-xs w-20">Tipo</TableHead>
                     <TableHead className="text-xs">Produto</TableHead>
                     <TableHead className="text-xs text-right">Bruto</TableHead>
                     <TableHead className="text-xs text-right">Líquido</TableHead>
@@ -359,6 +435,11 @@ export function CloserRevenueDetailDialog({
                         {tx.customer_email && (
                           <div className="text-muted-foreground">{tx.customer_email}</div>
                         )}
+                      </TableCell>
+                      <TableCell className="py-1.5">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap">
+                          {GRUPO_CURTO[grupoVenda(tx)]}
+                        </Badge>
                       </TableCell>
                       <TableCell className="py-1.5">{tx.product_name || '—'}</TableCell>
                       <TableCell className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(gross)}</TableCell>
@@ -491,32 +572,34 @@ export function CloserRevenueDetailDialog({
           </div>
         )}
 
-        {/* Category breakdown */}
-        <div>
-          <p className="text-sm font-semibold mb-2">Breakdown por Categoria</p>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Categoria</TableHead>
-                <TableHead className="text-xs text-right">Transações</TableHead>
-                <TableHead className="text-xs text-right">Bruto</TableHead>
-                <TableHead className="text-xs text-right">Líquido</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {metrics.categories.map((cat) => (
-                <TableRow key={cat.name}>
-                  <TableCell className="text-xs">
-                    <Badge variant="outline" className="text-xs">{cat.name}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-right">{cat.count}</TableCell>
-                  <TableCell className="text-xs text-right font-mono">{formatCurrency(cat.gross)}</TableCell>
-                  <TableCell className="text-xs text-right font-mono">{formatCurrency(cat.net)}</TableCell>
+        {/* Category breakdown (por grupo do classificador) */}
+        {metrics.categories.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold mb-2">Breakdown por Categoria</p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Categoria</TableHead>
+                  <TableHead className="text-xs text-right">Transações</TableHead>
+                  <TableHead className="text-xs text-right">Bruto</TableHead>
+                  <TableHead className="text-xs text-right">Líquido</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {metrics.categories.map((cat) => (
+                  <TableRow key={cat.name}>
+                    <TableCell className="text-xs">
+                      <Badge variant="outline" className="text-xs">{cat.label}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-right">{cat.count}</TableCell>
+                    <TableCell className="text-xs text-right font-mono">{formatCurrency(cat.gross)}</TableCell>
+                    <TableCell className="text-xs text-right font-mono">{formatCurrency(cat.net)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
         </>
         )}
       </DialogContent>
