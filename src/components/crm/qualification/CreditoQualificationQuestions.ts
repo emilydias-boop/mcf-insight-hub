@@ -206,7 +206,10 @@ export function creditoAnswersToSummary(answers: CreditoAnswers, sdrName?: strin
   if (renda > 0) lines.push(`Renda considerada: R$ ${renda.toLocaleString('pt-BR')}`);
   lines.push('');
   for (const q of creditoVisibleQuestions(answers)) {
+    // O marcador de dados restritos nunca é impresso.
+    if (q.key === MARCADOR_RESTRITOS) continue;
     const a = (answers[q.key] || '').trim();
+    // Campos restritos reabertos chegam vazios (já estão na área restrita) → linha omitida.
     if (!a) continue;
     if (q.section) lines.push(`— ${q.section.toUpperCase()} —`);
     lines.push(`▸ ${q.label}`);
