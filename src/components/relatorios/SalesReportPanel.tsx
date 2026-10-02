@@ -19,6 +19,7 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+import { usePagamentosDaVenda, calcRecebimento } from '@/hooks/usePagamentosDaVenda';
 import { useAcquisitionReport } from '@/hooks/useAcquisitionReport';
 
 interface SalesReportPanelProps {
