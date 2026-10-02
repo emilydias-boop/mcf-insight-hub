@@ -6,7 +6,7 @@ import {
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
   Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video, Link2, MessageSquareReply,
-  Loader2, PlayCircle, Download, Minus, Sparkles
+  Loader2, PlayCircle, Download, Minus, Sparkles, Tag, Unlink
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
@@ -67,6 +67,9 @@ import { MovementHistorySection } from '@/components/sdr/MovementHistorySection'
 import { LeadProfileSection } from '@/components/crm/LeadProfileSection';
 import { LinkContractDialog } from './LinkContractDialog';
 import { LinkedContractCard } from './LinkedContractCard';
+import { VincularVendaDiretaDialog } from './VincularVendaDiretaDialog';
+import { useVendasDiretasDoParticipante, useDesvincularVendaDireta } from '@/hooks/useVendaDiretaR1';
+import { formatCurrency } from '@/lib/formatters';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
 import { NoShowReasonPicker } from './NoShowReasonPicker';
@@ -168,6 +171,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [showMoveEntireModal, setShowMoveEntireModal] = useState(false);
   const [showR2PromptDialog, setShowR2PromptDialog] = useState(false);
   const [showLinkContractDialog, setShowLinkContractDialog] = useState(false);
+  const [showVendaDiretaDialog, setShowVendaDiretaDialog] = useState(false);
   const [contractPaidParticipant, setContractPaidParticipant] = useState<{ id: string; name: string; dealId: string | null } | null>(null);
   const [outcomeModalDeal, setOutcomeModalDeal] = useState<{ dealId: string; dealName: string; contactName: string; originId: string } | null>(null);
   
@@ -1215,6 +1219,19 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </Button>
                     )}
 
+                    {/* Vincular venda direta (A003) — NÃO é contrato pago; qualquer status */}
+                    {(canLinkContract || !isSdr) && activeBU !== 'consorcio' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-col h-14 gap-1 text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/20"
+                        onClick={() => setShowVendaDiretaDialog(true)}
+                      >
+                        <Tag className="h-4 w-4" />
+                        <span className="text-xs">Vincular venda direta</span>
+                      </Button>
+                    )}
+
                   </div>
                 </div>
 
@@ -1228,13 +1245,21 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Link2 className="h-4 w-4 text-emerald-600" />
-                      <h4 className="font-medium text-sm">Contrato Vinculado</h4>
+                      <h4 className="font-medium text-sm">Contrato vinculado (A000 — contrato pago)</h4>
                     </div>
                     <LinkedContractCard
                       attendeeId={selectedParticipant.id}
                       canUnlink={canLinkContract || !isSdr}
                     />
                   </div>
+                )}
+
+                {/* Venda direta vinculada (A003) — separada do contrato */}
+                {activeBU !== 'consorcio' && (
+                  <VendaDiretaVinculadaBlock
+                    attendeeId={selectedParticipant.id}
+                    canUnlink={canLinkContract || !isSdr}
+                  />
                 )}
 
                 {/* Alerta Pós-Reunião para Consórcio */}
@@ -1495,6 +1520,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selectedParticipant && (
+        <VincularVendaDiretaDialog
+          open={showVendaDiretaDialog}
+          onOpenChange={setShowVendaDiretaDialog}
+          attendeeId={selectedParticipant.id}
+          attendeeName={selectedParticipant.name}
+        />
+      )}
 
       {/* Link Contract Dialog */}
       {selectedParticipant && (
@@ -1870,5 +1904,52 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
         )}
       </div>
     </>
+  );
+}
+
+/** Venda direta (A003) vinculada ao participante. NÃO é contrato pago. */
+function VendaDiretaVinculadaBlock({ attendeeId, canUnlink }: { attendeeId: string; canUnlink: boolean }) {
+  const { data: vendas = [] } = useVendasDiretasDoParticipante(attendeeId);
+  const desvincular = useDesvincularVendaDireta();
+  if (vendas.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Tag className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+        <h4 className="font-medium text-sm">Venda direta vinculada (A003 — não é contrato pago)</h4>
+      </div>
+      {vendas.map((v) => (
+        <div key={v.id} className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 text-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="font-medium truncate">{v.produto}</div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="font-bold">{formatCurrency(v.liquido)}</span>
+                <span className="text-[10px] text-muted-foreground">líquido</span>
+                <span className="text-[11px] text-muted-foreground">· bruto {formatCurrency(v.bruto)}</span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                {v.gateway} · {format(parseISO(v.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                {v.comprador_nome ? ` · pago por ${v.comprador_nome}` : ''}
+              </div>
+              {v.vinculada_por && (
+                <div className="text-[10px] text-muted-foreground">vinculado por {v.vinculada_por}</div>
+              )}
+            </div>
+            {canUnlink && (
+              <Button variant="ghost" size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                title="Desvincular venda direta"
+                disabled={desvincular.isPending}
+                onClick={() => {
+                  if (confirm('Desvincular esta venda direta do participante?')) desvincular.mutate(v.id);
+                }}>
+                <Unlink className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
