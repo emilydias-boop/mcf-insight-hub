@@ -73,6 +73,10 @@ export interface R1CloserMetric {
   pendentes: number;
 
   contrato_pago: number;
+  /** Contrato pago BRUTO = líquido + reembolsados. É o que a coluna "Contrato Pago"
+   *  da tabela e o card "Contratos" exibem. `contrato_pago` segue sendo o LÍQUIDO
+   *  e continua alimentando a taxa de conversão líquida. */
+  contrato_bruto: number;
   outside: number;
   r2_agendada: number;
   reembolsos: number;
@@ -771,6 +775,7 @@ export function useR1CloserMetrics(
 
           // caucoes_efetivas já exclui reembolsados (refunded_at) → não subtrair de novo
           contrato_pago: (contractsByCloser.get(closer.id) || 0) + (manualByCloser.get(closer.id) || 0),
+          contrato_bruto: (contractsByCloser.get(closer.id) || 0) + (manualByCloser.get(closer.id) || 0) + (refundByCloser.get(closer.id) || 0),
           outside: outsideByCloser.get(closer.id) || 0,
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
           reembolsos: refundByCloser.get(closer.id) || 0,
@@ -807,6 +812,7 @@ export function useR1CloserMetrics(
           pendentes: 0,
 
           contrato_pago: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0),
+          contrato_bruto: (contractsByCloser.get(closerId) || 0) + (manualByCloser.get(closerId) || 0) + (refundByCloser.get(closerId) || 0),
           outside: outsideByCloser.get(closerId) || 0,
           r2_agendada: r2CountByCloser.get(closerId) || 0,
           reembolsos: refundByCloser.get(closerId) || 0,
@@ -876,6 +882,7 @@ export function useR1CloserMetrics(
             noshow: 0,
             pendentes: 0,
             contrato_pago: (contractsByCloser.get(closerId!) || 0) + (manualByCloser.get(closerId!) || 0),
+            contrato_bruto: (contractsByCloser.get(closerId!) || 0) + (manualByCloser.get(closerId!) || 0) + (refundByCloser.get(closerId!) || 0),
             outside: outsideByCloser.get(closerId!) || 0,
             r2_agendada: r2CountByCloser.get(closerId!) || 0,
             reembolsos: refundByCloser.get(closerId!) || 0,
@@ -942,6 +949,7 @@ export function useR1CloserMetrics(
           pendentes: unassigned.pendentes,
 
           contrato_pago: 0,
+          contrato_bruto: 0,
           outside: 0,
           r2_agendada: 0,
           reembolsos: 0,
