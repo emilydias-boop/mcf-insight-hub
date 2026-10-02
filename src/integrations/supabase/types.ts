@@ -18500,6 +18500,16 @@ export type Database = {
         Args: { numero_parcela: number; tipo_produto: string }
         Returns: number
       }
+      _rdo_m: {
+        Args: {
+          p_agregacao: string
+          p_dia: number
+          p_mes: number
+          p_meta: number
+          p_obs?: string
+        }
+        Returns: Json
+      }
       _wa_aplicar_pausa: {
         Args: {
           p_motivo: string
@@ -19752,6 +19762,10 @@ export type Database = {
           total_parcelas: number
         }[]
       }
+      gravar_snapshot_relatorio_diario: {
+        Args: { p_data: string }
+        Returns: number
+      }
       has_agenda_capability: {
         Args: { _capability: string; _user_id: string }
         Returns: boolean
@@ -20181,6 +20195,7 @@ export type Database = {
           valor: number
         }[]
       }
+      relatorio_diario_operacoes: { Args: { p_data: string }; Returns: Json }
       reset_distribution_counters: {
         Args: { p_origin_id: string }
         Returns: undefined
