@@ -363,11 +363,11 @@ export function CloserRevenueSummaryTable({
       summaryData: { rows, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
-  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames]);
+  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, canaisLista, mostrarSemVenda]);
 
   if (isLoading || loadingAtribuicao) return null;
   if (modo === 'closer' && summaryData.rows.length === 0) return null;
-  const modoCarregando = loadingCanal || (modo === 'sdr' && loadingSdrNames);
+  const modoCarregando = loadingCanal || (modo === 'canal' && loadingLista) || (modo === 'sdr' && loadingSdrNames);
 
   const selectedTxs = selectedCloser ? (closerTransactionsMap.get(selectedCloser.id) || []) : [];
 
