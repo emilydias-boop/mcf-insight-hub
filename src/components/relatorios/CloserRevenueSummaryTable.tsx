@@ -50,7 +50,7 @@ interface CloserRevenueSummaryTableProps {
 }
 
 // Categorias permitidas da BU Incorporador (allowlist — nível de módulo)
-const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
+export const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
   'contrato',
   'incorporador',
   'parceria',
@@ -360,6 +360,8 @@ export function CloserRevenueSummaryTable({
           closers={closers}
           startDate={startDate}
           endDate={endDate}
+          atribuicaoMap={atribuicaoMap}
+          bu={bu}
         />
       )}
     </>
