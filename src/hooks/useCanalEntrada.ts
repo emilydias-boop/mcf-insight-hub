@@ -46,3 +46,16 @@ export function useCanalEntrada(transactionIds: string[], enabled: boolean) {
 
   return { map, isLoading: enabled && ids.length > 0 && isLoading };
 }
+
+/** Lista oficial e ordem de exibição dos canais de entrada via RPC `canais_entrada_lista`. */
+export function useCanaisEntradaLista() {
+  return useQuery<string[]>({
+    queryKey: ['canais-entrada-lista'],
+    staleTime: 60 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('canais_entrada_lista');
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []) as string[];
+    },
+  });
+}
