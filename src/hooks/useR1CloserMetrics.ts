@@ -882,8 +882,6 @@ export function useR1CloserMetrics(
             reembolsos_valor: refundValueByCloser.get(closerId!) || 0,
             venda_direta: vendaDiretaByCloser.get(closerId!) || 0,
             venda_direta_valor: vendaDiretaValorByCloser.get(closerId!) || 0,
-          venda_direta: vendaDiretaByCloser.get(closerId!) || 0,
-          venda_direta_valor: vendaDiretaValorByCloser.get(closerId!) || 0,
           };
           metricsMap.set(closerId!, metric);
         }
