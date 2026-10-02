@@ -113,7 +113,7 @@ export default function PainelComercialSolar() {
   const closers = data?.closers ?? [];
   const totals = data?.totais;
   const meta = data?.meta ?? null;
-  const pendentes = numberValue(totals?.pendentes_futuras) + numberValue(totals?.pendentes_vencidas) + numberValue(totals?.remarcadas);
+  const pendentes = numberValue(totals?.pendentes_futuras) + numberValue(totals?.pendentes_vencidas);
   const realizadas = numberValue(totals?.realizadas);
   const agendadas = numberValue(totals?.agendadas);
   const vendas = numberValue(totals?.vendas);
