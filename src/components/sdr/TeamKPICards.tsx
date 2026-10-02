@@ -65,6 +65,9 @@ export interface TeamKpiCardDefinition {
   bgColor: string;
   tooltip: string;
   subline?: string;
+  segLine?: string;
+  bucket?: KpiBucket;
+  customOnClick?: () => void;
 }
 
 export function TeamKPICards({
