@@ -8177,6 +8177,39 @@ export type Database = {
           },
         ]
       }
+      credito_dados_pessoais: {
+        Row: {
+          created_at: string
+          data_nascimento: string | null
+          deal_id: string
+          doc_cpf: string | null
+          doc_rg: string | null
+          estado_civil: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_nascimento?: string | null
+          deal_id: string
+          doc_cpf?: string | null
+          doc_rg?: string | null
+          estado_civil?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_nascimento?: string | null
+          deal_id?: string
+          doc_cpf?: string | null
+          doc_rg?: string | null
+          estado_civil?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       credito_vendas: {
         Row: {
           banco: string
@@ -18774,6 +18807,11 @@ export type Database = {
       }
       credito_avancar_etapa: {
         Args: { p_acao: string; p_deal_id: string; p_motivo?: string }
+        Returns: Json
+      }
+      credito_e_do_time: { Args: { p_uid: string }; Returns: boolean }
+      credito_extrair_dados_pessoais: {
+        Args: { p_answers: Json; p_deal_id: string }
         Returns: Json
       }
       credito_renda_total: { Args: { p_answers: Json }; Returns: number }
