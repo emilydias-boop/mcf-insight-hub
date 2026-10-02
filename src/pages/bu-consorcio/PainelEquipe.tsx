@@ -4,20 +4,12 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, e
 import { ptBR } from "date-fns/locale";
 import { loadXLSX } from '@/lib/lazyExport';
 import { CONSORCIO_WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
-import { Calendar, Users, Download, Briefcase, TrendingUp, Info } from "lucide-react";
+import { Users, Briefcase } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
+import { TeamCommercialFilters, type TeamCommercialDatePreset } from "@/components/sdr/TeamCommercialFilters";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
@@ -63,7 +55,7 @@ const BU_SQUAD = "consorcio";
 const BU_PREFIX = "consorcio_sdr_";
 const EMPTY_FATOS: ConsorcioFatoRow[] = [];
 
-type DatePreset = "today" | "week" | "month" | "custom";
+type DatePreset = TeamCommercialDatePreset;
 
 export default function ConsorcioPainelEquipe() {
   const { role, user } = useAuth();
@@ -561,63 +553,26 @@ export default function ConsorcioPainelEquipe() {
       {/* Filters */}
       <Card className="bg-card border-border">
         <CardContent className="p-3 sm:p-4">
-          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-full sm:w-auto">
-              <Button variant={datePreset === "today" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("today")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Hoje</Button>
-              <Button variant={datePreset === "week" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("week")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Semana</Button>
-              <Button variant={datePreset === "month" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("month")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Mês</Button>
-              <Button variant={datePreset === "custom" ? "secondary" : "ghost"} size="sm" onClick={() => handlePresetChange("custom")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Custom</Button>
-            </div>
-
-            {datePreset === "month" && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => handleMonthChange(-1)}>
-                  <Calendar className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium min-w-[120px] text-center">
-                  {format(selectedMonth, "MMMM yyyy", { locale: ptBR })}
-                </span>
-                <Button variant="outline" size="icon" onClick={() => handleMonthChange(1)}>
-                  <Calendar className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-
-            {datePreset === "custom" && (
-              <div className="flex items-center gap-2">
-                <DatePickerCustom selected={customStartDate || undefined} onSelect={(date) => handleCustomStartChange(date as Date | null)} placeholder="Data início" />
-                <span className="text-muted-foreground">até</span>
-                <DatePickerCustom selected={customEndDate || undefined} onSelect={(date) => handleCustomEndChange(date as Date | null)} placeholder="Data fim" />
-              </div>
-            )}
-
-            <PipelineSelector
-              selectedPipelineId={selectedPipelineId}
-              onSelectPipeline={handleSelectPipeline}
-              allowedGroupIds={allowedGroupIds}
-            />
-
-            <Select value={sdrFilter} onValueChange={setSdrFilter}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Filtrar por SDR" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os SDRs</SelectItem>
-                {sdrSelectOptions.map(opt => (
-                  <SelectItem key={opt.email} value={opt.email}>{opt.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={isLoading} className="w-full sm:w-auto">
-              <Download className="h-4 w-4 mr-1" />
-              <span className="sm:inline">Exportar</span>
-            </Button>
-          </div>
-
-          <div className="mt-3 text-xs text-muted-foreground">
-            Período: {format(start, "dd/MM/yyyy")} - {format(end, "dd/MM/yyyy")}
-          </div>
+          <TeamCommercialFilters
+            datePreset={datePreset}
+            selectedMonth={selectedMonth}
+            start={start}
+            end={end}
+            customStartDate={customStartDate}
+            customEndDate={customEndDate}
+            selectedPipelineId={selectedPipelineId}
+            allowedGroupIds={allowedGroupIds}
+            sdrFilter={sdrFilter}
+            sdrOptions={sdrSelectOptions.map((option) => ({ value: option.email, label: option.name }))}
+            isLoading={isLoading}
+            onPresetChange={handlePresetChange}
+            onMonthChange={handleMonthChange}
+            onCustomStartChange={handleCustomStartChange}
+            onCustomEndChange={handleCustomEndChange}
+            onSelectPipeline={handleSelectPipeline}
+            onSdrFilterChange={setSdrFilter}
+            onExport={handleExportExcel}
+          />
         </CardContent>
       </Card>
 

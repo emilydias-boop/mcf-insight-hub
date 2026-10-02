@@ -54,6 +54,17 @@ interface TeamKPICardsProps {
     b: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
     c?: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
   } | null;
+  customCards?: TeamKpiCardDefinition[];
+}
+
+export interface TeamKpiCardDefinition {
+  title: string;
+  value: string | number;
+  icon: typeof Calendar;
+  color: string;
+  bgColor: string;
+  tooltip: string;
+  subline?: string;
 }
 
 export function TeamKPICards({
@@ -73,6 +84,7 @@ export function TeamKPICards({
   hideAgendamentos = false,
   totalVendasRealizadas,
   segmentTotals = null,
+  customCards,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";
@@ -107,7 +119,7 @@ export function TeamKPICards({
   const contratosSegLine = segLineFor('contratos', kpis.totalContratos || 0);
 
 
-  const cards: Array<{
+  const defaultCards: Array<{
     title: string;
     value: string | number;
     icon: typeof Calendar;
@@ -251,6 +263,7 @@ export function TeamKPICards({
       tooltip: `Global agregada: Σ No-Shows / Σ ${isConsorcio ? CONSORCIO_LABELS.reunioesAgendadas : "R1 Agendada"} × 100.`,
     },
   ];
+  const cards = customCards ?? defaultCards;
 
   // Tailwind precisa de classes estáticas — mapa seguro por contagem
   const lgColsClass: Record<number, string> = {
