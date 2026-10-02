@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { CloserRevenueDetailDialog } from './CloserRevenueDetailDialog';
+import { useAtribuicaoCloser } from '@/hooks/useAtribuicaoCloser';
 
 interface Closer {
   id: string;
@@ -48,11 +49,6 @@ interface CloserRevenueSummaryTableProps {
   bu?: string;
 }
 
-const phoneSuffix = (phone: string | null | undefined): string => {
-  const digits = (phone || '').replace(/\D/g, '');
-  return digits.length >= 9 ? digits.slice(-9) : digits;
-};
-
 // Categorias permitidas da BU Incorporador (allowlist — nível de módulo)
 const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
   'contrato',
@@ -73,6 +69,7 @@ interface CloserRow {
   net: number;
   outsideCount: number;
   outsideGross: number;
+  outraBu?: boolean;
 }
 
 export function CloserRevenueSummaryTable({
@@ -88,70 +85,27 @@ export function CloserRevenueSummaryTable({
   const [selectedCloser, setSelectedCloser] = useState<{ id: string; name: string } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
-  const { summaryData, closerTransactionsMap } = useMemo(() => {
-    // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
-    const filteredTxs = bu === 'incorporador'
+  // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
+  const filteredTxs = useMemo(() => (
+    bu === 'incorporador'
       ? transactions.filter(tx => {
           const cat = tx.product_category || '';
           return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
         })
-      : transactions;
+      : transactions
+  ), [transactions, bu]);
+  const filteredIds = useMemo(() => filteredTxs.map(t => t.id), [filteredTxs]);
+  const { map: atribuicaoMap, isLoading: loadingAtribuicao } = useAtribuicaoCloser(filteredIds, bu);
 
-    console.log(`[CloserRevenueSummaryTable] bu=${bu}, total=${transactions.length}, afterFilter=${filteredTxs.length}`);
-
-    // Build contact map with earliest scheduled_at per closer+contact
-    const closerContactMap = new Map<string, { emails: Set<string>; phones: Set<string> }>();
-    // Map: closerId -> email/phone -> earliest scheduled_at
-    const closerEarliestMeeting = new Map<string, Map<string, string>>();
-    
-    for (const closer of closers) {
-      const closerAttendees = attendees.filter(
-        (a) => a.meeting_slots?.closer_id === closer.id
-      );
-      const emails = new Set<string>();
-      const phones = new Set<string>();
-      const earliestMap = new Map<string, string>();
-      
-      for (const a of closerAttendees) {
-        const scheduledAt = a.meeting_slots?.scheduled_at;
-        const email = a.crm_deals?.crm_contacts?.email?.toLowerCase();
-        if (email) {
-          emails.add(email);
-          if (scheduledAt) {
-            const prev = earliestMap.get(`e:${email}`);
-            if (!prev || scheduledAt < prev) earliestMap.set(`e:${email}`, scheduledAt);
-          }
-        }
-        // Index crm_contacts phone
-        const phone = phoneSuffix(a.crm_deals?.crm_contacts?.phone);
-        if (phone.length >= 8) {
-          phones.add(phone);
-          if (scheduledAt) {
-            const prev = earliestMap.get(`p:${phone}`);
-            if (!prev || scheduledAt < prev) earliestMap.set(`p:${phone}`, scheduledAt);
-          }
-        }
-        // Index attendee_phone as well
-        const aPhone = phoneSuffix(a.attendee_phone);
-        if (aPhone.length >= 8 && aPhone !== phone) {
-          phones.add(aPhone);
-          if (scheduledAt) {
-            const prev = earliestMap.get(`p:${aPhone}`);
-            if (!prev || scheduledAt < prev) earliestMap.set(`p:${aPhone}`, scheduledAt);
-          }
-        }
-      }
-      
-      closerContactMap.set(closer.id, { emails, phones });
-      closerEarliestMeeting.set(closer.id, earliestMap);
-    }
-    
+  const { summaryData, closerTransactionsMap } = useMemo(() => {
     const closerTotals = new Map<string, CloserRow>();
     const txMap = new Map<string, Transaction[]>();
     let unassigned: CloserRow = { id: '__unassigned__', name: 'Sem closer', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const unassignedTxs: Transaction[] = [];
     let launch: CloserRow = { id: '__launch__', name: 'Lançamento', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const launchTxs: Transaction[] = [];
+    let lucrometro: CloserRow = { id: '__lucrometro__', name: 'Lucrômetro - Funil', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    const lucrometroTxs: Transaction[] = [];
     let a010: CloserRow = { id: '__a010__', name: 'A010 - Funil', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
     const a010Txs: Transaction[] = [];
     let renovacao: CloserRow = { id: '__renovacao__', name: 'Renovação', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
@@ -160,8 +114,6 @@ export function CloserRevenueSummaryTable({
     const vitalicioTxs: Transaction[] = [];
     
     for (const tx of filteredTxs) {
-      const txEmail = (tx.customer_email || '').toLowerCase();
-      const txPhone = phoneSuffix(tx.customer_phone);
       const isFirst = globalFirstIds.has(tx.id);
       const gross = getDeduplicatedGross(tx as any, isFirst);
       const net = tx.net_value || 0;
@@ -169,17 +121,7 @@ export function CloserRevenueSummaryTable({
       // 1. Launch sales — but only if no R1 match (Inside Sales override)
       if (tx.sale_origin === 'launch' || 
           (tx.product_name && tx.product_name.toLowerCase().includes('contrato mcf'))) {
-        // Check if this customer went through Inside Sales (has R1 meeting with a closer)
-        let hasR1Match = false;
-        for (const closer of closers) {
-          const contacts = closerContactMap.get(closer.id);
-          if (!contacts) continue;
-          if ((txEmail && contacts.emails.has(txEmail)) ||
-              (txPhone.length >= 8 && contacts.phones.has(txPhone))) {
-            hasR1Match = true;
-            break;
-          }
-        }
+        const hasR1Match = atribuicaoMap.has(tx.id);
         
         if (!hasR1Match) {
           // Pure launch — isolate
@@ -219,53 +161,40 @@ export function CloserRevenueSummaryTable({
         continue;
       }
       
-      // 5. Match com closer
-      let matched = false;
-      for (const closer of closers) {
-        const contacts = closerContactMap.get(closer.id);
-        if (!contacts) continue;
-        
-        if (
-          (txEmail && contacts.emails.has(txEmail)) ||
-          (txPhone.length >= 8 && contacts.phones.has(txPhone))
-        ) {
-          const earliestMap = closerEarliestMeeting.get(closer.id);
-          let earliestMeeting: string | undefined;
-          if (earliestMap) {
-            if (txEmail) earliestMeeting = earliestMap.get(`e:${txEmail}`);
-            if (!earliestMeeting && txPhone.length >= 8) earliestMeeting = earliestMap.get(`p:${txPhone}`);
-          }
-          
-          const isOutside = !!(earliestMeeting && tx.sale_date && tx.sale_date < earliestMeeting);
-          
-          const existing = closerTotals.get(closer.id) || { id: closer.id, name: closer.name, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
-          
-          if (isOutside) {
-            existing.outsideCount++;
-            existing.outsideGross += gross;
-          } else {
-            existing.count++;
-            existing.gross += gross;
-            existing.net += net;
-          }
-          closerTotals.set(closer.id, existing);
-          
-          const arr = txMap.get(closer.id) || [];
-          arr.push(tx);
-          txMap.set(closer.id, arr);
-          
-          matched = true;
-          break;
+      // 5. Match com closer (RPC atribuicao_closer_vendas)
+      const atr = atribuicaoMap.get(tx.id);
+      if (atr) {
+        const existing = closerTotals.get(atr.closer_id) || { id: atr.closer_id, name: atr.closer_nome, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, outraBu: atr.outra_bu };
+        if (atr.is_outside) {
+          existing.outsideCount++;
+          existing.outsideGross += gross;
+        } else {
+          existing.count++;
+          existing.gross += gross;
+          existing.net += net;
         }
+        closerTotals.set(atr.closer_id, existing);
+        const arr = txMap.get(atr.closer_id) || [];
+        arr.push(tx);
+        txMap.set(atr.closer_id, arr);
+        continue;
       }
-      
-      // 6. Sem closer
-      if (!matched) {
-        unassigned.count++;
-        unassigned.gross += gross;
-        unassigned.net += net;
-        unassignedTxs.push(tx);
+
+      // 6. Lucrômetro - Funil (sem atribuição)
+      const pnLower = (tx.product_name || '').toLowerCase();
+      if (pnLower.includes('lucrômetro') || pnLower.includes('lucrometro')) {
+        lucrometro.count++;
+        lucrometro.gross += gross;
+        lucrometro.net += net;
+        lucrometroTxs.push(tx);
+        continue;
       }
+
+      // 7. Sem closer
+      unassigned.count++;
+      unassigned.gross += gross;
+      unassigned.net += net;
+      unassignedTxs.push(tx);
     }
     
     const rows: CloserRow[] = Array.from(closerTotals.values())
@@ -278,6 +207,7 @@ export function CloserRevenueSummaryTable({
       { row: a010, txs: a010Txs, key: '__a010__' },
       { row: renovacao, txs: renovacaoTxs, key: '__renovacao__' },
       { row: vitalicio, txs: vitalicioTxs, key: '__vitalicio__' },
+      { row: lucrometro, txs: lucrometroTxs, key: '__lucrometro__' },
       { row: unassigned, txs: unassignedTxs, key: '__unassigned__' },
     ];
     
@@ -298,9 +228,9 @@ export function CloserRevenueSummaryTable({
       summaryData: { rows, totalGross, totalNet, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
-  }, [transactions, closers, attendees, globalFirstIds, bu]);
+  }, [filteredTxs, atribuicaoMap, globalFirstIds, bu]);
 
-  if (isLoading || summaryData.rows.length === 0) return null;
+  if (isLoading || loadingAtribuicao || summaryData.rows.length === 0) return null;
 
   const selectedTxs = selectedCloser ? (closerTransactionsMap.get(selectedCloser.id) || []) : [];
 
@@ -350,7 +280,7 @@ export function CloserRevenueSummaryTable({
                           className={`font-medium text-left hover:underline cursor-pointer ${
                             row.id === '__unassigned__' ? 'text-muted-foreground' : 
                             row.id === '__launch__' ? 'text-amber-500' :
-                            row.id === '__a010__' ? 'text-blue-400' :
+                            row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
                             row.id === '__renovacao__' ? 'text-teal-400' :
                             row.id === '__vitalicio__' ? 'text-purple-400' :
                             'text-primary'
@@ -362,6 +292,9 @@ export function CloserRevenueSummaryTable({
                            row.id === '__renovacao__' ? '🔄 ' :
                            row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
                         </button>
+                        {row.outraBu && (
+                          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">{row.count}</TableCell>
                       <TableCell className="text-right font-mono">
