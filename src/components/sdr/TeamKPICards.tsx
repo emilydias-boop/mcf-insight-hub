@@ -5,7 +5,7 @@ import {
   CalendarCheck,
   CheckCircle, 
   XCircle, 
-  FileText, 
+  FileText, Tag, 
   TrendingUp, 
   AlertTriangle,
   Clock,
@@ -55,6 +55,9 @@ interface TeamKPICardsProps {
     c?: { agendamentos: number; r1Agendada: number; r1Realizada: number; noShows: number; contratos: number };
   } | null;
   customCards?: TeamKpiCardDefinition[];
+  /** Venda direta (A003) — métrica irmã de Contratos, NÃO soma nele.
+   *  Card só aparece quando informado. */
+  vendaDireta?: { count: number; valor: number } | null;
 }
 
 export interface TeamKpiCardDefinition {
@@ -221,6 +224,15 @@ export function TeamKPICards({
       bucket: "contratos" as KpiBucket,
       segLine: contratosSegLine,
     },
+    ...(vendaDireta && !isConsorcio ? [{
+      title: "Venda direta",
+      value: vendaDireta.count,
+      subline: vendaDireta.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      icon: Tag,
+      color: "text-violet-500",
+      bgColor: "bg-violet-500/10",
+      tooltip: "Vendas de A003 - Anticrise Completo vinculadas manualmente a uma R1 do período. Não é contrato pago e não entra no total de Contratos.",
+    }] : []),
     ...(isConsorcio ? [] : [{
       title: "Outside",
       value: kpis.totalOutside || 0,

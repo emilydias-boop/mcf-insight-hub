@@ -77,6 +77,12 @@ export interface R1CloserMetric {
   r2_agendada: number;
   reembolsos: number;
   reembolsos_valor: number;
+  /** Venda direta (A003 - Anticrise Completo) vinculada manualmente a uma R1.
+   *  Métrica irmã de contrato_pago — NÃO é contrato pago e não entra nele.
+   *  Fonte: RPC vendas_diretas_efetivas. Sem segmento ICP: com filtro A/B/C fica 0. */
+  venda_direta: number;
+  /** Soma do líquido das vendas diretas. */
+  venda_direta_valor: number;
   /** Linha sintética "Não atribuído" (não é um closer real). */
   is_unassigned?: boolean;
   /** Quebra por motivo do descarte (só na linha "Não atribuído"). */
@@ -509,6 +515,26 @@ export function useR1CloserMetrics(
         contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
       });
 
+      // ========== VENDA DIRETA (A003) — métrica irmã, NÃO é contrato pago ==========
+      // Fonte própria: RPC vendas_diretas_efetivas. Não lê contract_paid_at nem
+      // caucoes_efetivas. A RPC não traz segmento ICP → só conta sem filtro A/B/C.
+      const vendaDiretaByCloser = new Map<string, number>();
+      const vendaDiretaValorByCloser = new Map<string, number>();
+      if (!segmentActive) {
+        const { data: vdRows, error: vdError } = await (supabase as any).rpc('vendas_diretas_efetivas', {
+          p_from: format(startDate, 'yyyy-MM-dd'),
+          p_to: format(endDate, 'yyyy-MM-dd'),
+          p_bu: bu,
+        });
+        if (vdError) throw vdError;
+        ((vdRows as any[]) || []).forEach((row: any) => {
+          const cid = row.closer_id as string | null;
+          if (!cid) return;
+          vendaDiretaByCloser.set(cid, (vendaDiretaByCloser.get(cid) || 0) + 1);
+          vendaDiretaValorByCloser.set(cid, (vendaDiretaValorByCloser.get(cid) || 0) + Number(row.liquido || 0));
+        });
+      }
+
       // ========== OUTSIDE DETECTION (attributed by SALE DATE) ==========
       // Outside detection only applies to 'incorporador' BU
       // For consorcio, the concept doesn't apply — skip entirely
@@ -749,6 +775,8 @@ export function useR1CloserMetrics(
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
           reembolsos: refundByCloser.get(closer.id) || 0,
           reembolsos_valor: refundValueByCloser.get(closer.id) || 0,
+          venda_direta: vendaDiretaByCloser.get(closer.id) || 0,
+          venda_direta_valor: vendaDiretaValorByCloser.get(closer.id) || 0,
         });
       });
 
@@ -762,6 +790,7 @@ export function useR1CloserMetrics(
         ...manualByCloser.keys(),
         ...refundByCloser.keys(),
         ...agendamentosByCloser.keys(),
+        ...vendaDiretaByCloser.keys(),
       ]);
       closersWithProduction.forEach(closerId => {
         if (metricsMap.has(closerId)) return;
@@ -782,6 +811,8 @@ export function useR1CloserMetrics(
           r2_agendada: r2CountByCloser.get(closerId) || 0,
           reembolsos: refundByCloser.get(closerId) || 0,
           reembolsos_valor: refundValueByCloser.get(closerId) || 0,
+          venda_direta: vendaDiretaByCloser.get(closerId) || 0,
+          venda_direta_valor: vendaDiretaValorByCloser.get(closerId) || 0,
         });
       });
 
@@ -849,6 +880,10 @@ export function useR1CloserMetrics(
             r2_agendada: r2CountByCloser.get(closerId!) || 0,
             reembolsos: refundByCloser.get(closerId!) || 0,
             reembolsos_valor: refundValueByCloser.get(closerId!) || 0,
+            venda_direta: vendaDiretaByCloser.get(closerId!) || 0,
+            venda_direta_valor: vendaDiretaValorByCloser.get(closerId!) || 0,
+          venda_direta: vendaDiretaByCloser.get(closerId!) || 0,
+          venda_direta_valor: vendaDiretaValorByCloser.get(closerId!) || 0,
           };
           metricsMap.set(closerId!, metric);
         }
@@ -913,6 +948,8 @@ export function useR1CloserMetrics(
           r2_agendada: 0,
           reembolsos: 0,
           reembolsos_valor: 0,
+          venda_direta: 0,
+          venda_direta_valor: 0,
           is_unassigned: true,
           unassigned_reasons: unassignedReasons,
         });
