@@ -451,55 +451,62 @@ export function CloserRevenueSummaryTable({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {summaryData.rows.map((row) => (
-                    <TableRow key={row.name}>
-                      <TableCell>
-                        <button
-                          className={`font-medium text-left hover:underline cursor-pointer ${
-                            row.id === '__unassigned__' || row.id === '__sem_sdr__' || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 
-                            row.id === '__launch__' ? 'text-amber-500' :
-                            row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
-                            row.id === '__renovacao__' ? 'text-teal-400' :
-                            row.id === '__vitalicio__' ? 'text-purple-400' :
-                            'text-primary'
-                          }`}
-                          onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
-                        >
-                          {row.id === '__launch__' ? '🚀 ' : 
-                           row.id === '__a010__' ? '📊 ' : 
-                           row.id === '__renovacao__' ? '🔄 ' :
-                           row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
-                        </button>
-                        {row.outraBu && (
-                          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">{row.count}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(row.gross)}
-                      </TableCell>
-                      <TableCell className={`text-right font-mono ${(row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                        {(row.aReceber || 0) > 0 ? formatCurrency(row.aReceber || 0) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-success">
-                        {formatCurrency(row.net)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(row.count > 0 ? row.net / row.count : 0)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {summaryData.totalGross > 0
-                          ? ((row.gross / summaryData.totalGross) * 100).toFixed(1)
-                          : '0.0'}%
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {row.outsideCount > 0 ? row.outsideCount : '-'}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {summaryData.rows.map((row) => {
+                    const zerada = row.count === 0;
+                    return (
+                      <TableRow key={row.name} className={zerada ? 'text-muted-foreground' : undefined}>
+                        <TableCell>
+                          {zerada ? (
+                            <span className="font-medium">{row.name}</span>
+                          ) : (
+                            <button
+                              className={`font-medium text-left hover:underline cursor-pointer ${
+                                row.id === '__unassigned__' || row.id === '__sem_sdr__' || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 
+                                row.id === '__launch__' ? 'text-amber-500' :
+                                row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
+                                row.id === '__renovacao__' ? 'text-teal-400' :
+                                row.id === '__vitalicio__' ? 'text-purple-400' :
+                                'text-primary'
+                              }`}
+                              onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
+                            >
+                              {row.id === '__launch__' ? '🚀 ' : 
+                               row.id === '__a010__' ? '📊 ' : 
+                               row.id === '__renovacao__' ? '🔄 ' :
+                               row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
+                            </button>
+                          )}
+                          {row.outraBu && (
+                            <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{zerada ? '-' : row.count}</TableCell>
+                        <TableCell className={`text-right font-mono ${zerada ? '' : ''}`}>
+                          {zerada ? '-' : formatCurrency(row.gross)}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono ${!zerada && (row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                          {!zerada && (row.aReceber || 0) > 0 ? formatCurrency(row.aReceber || 0) : '-'}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono ${zerada ? '' : 'text-success'}`}>
+                          {zerada ? '-' : formatCurrency(row.net)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {zerada ? '-' : formatCurrency(row.count > 0 ? row.net / row.count : 0)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {zerada ? '-' : (summaryData.totalGross > 0
+                            ? ((row.gross / summaryData.totalGross) * 100).toFixed(1)
+                            : '0.0') + '%'}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {row.outsideCount > 0 ? row.outsideCount : '-'}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">
+                          {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
                 <TableFooter>
                   <TableRow>
