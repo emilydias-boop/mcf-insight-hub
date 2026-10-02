@@ -196,11 +196,30 @@ export function CloserRevenueSummaryTable({
         arr.push(tx);
         txMap.set(id, arr);
       }
-      const rows = Array.from(canalTotals.values()).sort((a, b) => {
-        const da = a.name === CANAL_DIRETO ? 1 : 0;
-        const db = b.name === CANAL_DIRETO ? 1 : 0;
-        return da - db || b.gross - a.gross;
-      });
+      // Monta a lista a partir da ordem oficial de `canais_entrada_lista`; canais fora da lista
+      // (que vieram das vendas) entram no fim, antes de "Direto (sem entrada)".
+      const lista = canaisLista || [];
+      const listaSet = new Set(lista);
+      const comVendaLista: CloserRow[] = [];
+      const zeradas: CloserRow[] = [];
+      for (const canal of lista) {
+        const row = canalTotals.get(`canal:${canal}`);
+        if (row) {
+          if (row.count > 0) comVendaLista.push(row);
+          else zeradas.push(row);
+        } else {
+          zeradas.push({ id: `canal:${canal}`, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 });
+        }
+      }
+      comVendaLista.sort((a, b) => b.gross - a.gross);
+      const extras = Array.from(canalTotals.values())
+        .filter((r) => !listaSet.has(r.name))
+        .sort((a, b) => b.gross - a.gross);
+      let rows = [...comVendaLista, ...extras, ...zeradas];
+      // "Direto (sem entrada)" sempre por último
+      const diretoRow = rows.find((r) => r.name === CANAL_DIRETO);
+      if (diretoRow) rows = [...rows.filter((r) => r !== diretoRow), diretoRow];
+      if (!mostrarSemVenda) rows = rows.filter((r) => r.count > 0);
       return {
         summaryData: {
           rows,
