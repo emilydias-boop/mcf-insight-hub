@@ -439,13 +439,13 @@ export default function PainelComercialCredito() {
             {datePreset === 'month' && (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="icon" onClick={() => handleMonthChange(-1)} aria-label="Mês anterior">
-                  <Calendar className="h-4 w-4" />
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-sm font-medium min-w-[120px] text-center capitalize">
                   {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
                 </span>
                 <Button variant="outline" size="icon" onClick={() => handleMonthChange(1)} aria-label="Próximo mês">
-                  <Calendar className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             )}
