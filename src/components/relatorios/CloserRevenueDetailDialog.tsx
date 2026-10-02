@@ -9,6 +9,17 @@ import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { useAllHublaTransactions } from '@/hooks/useAllHublaTransactions';
 import { subMonths } from 'date-fns';
 import { UnassignedTransactionsDetailPanel } from './UnassignedTransactionsDetailPanel';
+import { useAtribuicaoCloser, type Atribuicao } from '@/hooks/useAtribuicaoCloser';
+import { ALLOWED_INCORPORADOR_CATEGORIES } from './CloserRevenueSummaryTable';
+
+const SP_DATETIME = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+});
+const SP_DATE = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit',
+});
+const fmtDataHora = (iso: string | null | undefined) => (iso ? SP_DATETIME.format(new Date(iso)).replace(',', '') : '—');
+const fmtDiaMes = (iso: string | null | undefined) => (iso ? SP_DATE.format(new Date(iso)) : '—');
 
 interface Transaction {
   id: string;
@@ -24,6 +35,7 @@ interface Transaction {
   gross_override?: number | null;
   reference_price?: number | null;
   sale_origin?: string | null;
+  customer_name?: string | null;
 }
 
 interface AttendeeMatch {
@@ -45,11 +57,9 @@ interface CloserRevenueDetailDialogProps {
   closers?: { id: string; name: string }[];
   startDate?: Date;
   endDate?: Date;
+  atribuicaoMap?: Map<string, Atribuicao>;
+  bu?: string;
 }
-
-const normalizePhone = (phone: string | null | undefined): string => {
-  return (phone || '').replace(/\D/g, '');
-};
 
 const CONTRACT_CATEGORIES = ['incorporador', 'contrato', 'contrato-anticrise'];
 
@@ -64,7 +74,10 @@ export function CloserRevenueDetailDialog({
   closers = [],
   startDate,
   endDate,
+  atribuicaoMap,
+  bu,
 }: CloserRevenueDetailDialogProps) {
+  const isAutomaticRow = closerId.startsWith('__');
   const isUnassigned = closerId === '__unassigned__';
   const isLaunch = closerId === '__launch__';
   // Previous month data for comparison
@@ -81,31 +94,72 @@ export function CloserRevenueDetailDialog({
     endDate: prevMonthFilters.endDate,
   });
 
-  // Build closer contact set for prev month matching
-  const closerContacts = useMemo(() => {
-    const emails = new Set<string>();
-    const phones = new Set<string>();
-    for (const a of attendees) {
-      if (a.meeting_slots?.closer_id !== closerId) continue;
-      const email = a.crm_deals?.crm_contacts?.email?.toLowerCase();
-      if (email) emails.add(email);
-      const phone = normalizePhone(a.crm_deals?.crm_contacts?.phone);
-      if (phone.length >= 8) phones.add(phone);
-    }
-    return { emails, phones };
-  }, [attendees, closerId]);
+  // Mês anterior: mesma allowlist de categorias da tabela principal + atribuição pela RPC
+  const prevScopedTxs = useMemo(() => {
+    if (isAutomaticRow) return [];
+    return bu === 'incorporador'
+      ? prevMonthTransactions.filter((tx) => {
+          const cat = tx.product_category || '';
+          return ALLOWED_INCORPORADOR_CATEGORIES.has(cat) || cat === '';
+        })
+      : prevMonthTransactions;
+  }, [prevMonthTransactions, bu, isAutomaticRow]);
+  const prevIds = useMemo(() => prevScopedTxs.map((t) => t.id), [prevScopedTxs]);
+  const { map: prevAtribuicaoMap } = useAtribuicaoCloser(prevIds, bu);
 
-  // Filter prev month transactions for this closer
   const prevCloserTxs = useMemo(() => {
-    return prevMonthTransactions.filter((tx) => {
-      const txEmail = (tx.customer_email || '').toLowerCase();
-      const txPhone = normalizePhone(tx.customer_phone);
-      return (
-        (txEmail && closerContacts.emails.has(txEmail)) ||
-        (txPhone.length >= 8 && closerContacts.phones.has(txPhone))
-      );
+    return prevScopedTxs.filter((tx) => {
+      const a = prevAtribuicaoMap.get(tx.id);
+      return !!a && a.closer_id === closerId && !a.is_outside;
     });
-  }, [prevMonthTransactions, closerContacts]);
+  }, [prevScopedTxs, prevAtribuicaoMap, closerId]);
+
+  // Lista de vendas do período
+  const vendas = useMemo(() => {
+    const rows = transactions.map((tx) => {
+      const a = atribuicaoMap?.get(tx.id);
+      return {
+        tx,
+        a,
+        gross: getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id)),
+        net: tx.net_value || 0,
+        outside: !!a?.is_outside,
+      };
+    });
+    rows.sort((x, y) => (y.tx.sale_date || '').localeCompare(x.tx.sale_date || ''));
+    const dentro = rows.filter((r) => !r.outside);
+    const fora = rows.filter((r) => r.outside);
+    return {
+      rows,
+      totalGross: dentro.reduce((s, r) => s + r.gross, 0),
+      totalNet: dentro.reduce((s, r) => s + r.net, 0),
+      outsideCount: fora.length,
+      outsideGross: fora.reduce((s, r) => s + r.gross, 0),
+      outsideNet: fora.reduce((s, r) => s + r.net, 0),
+    };
+  }, [transactions, atribuicaoMap, globalFirstIds]);
+  const showVendas = !isUnassigned && vendas.rows.length > 0;
+
+  const atribuicaoBadge = (a?: Atribuicao) => {
+    if (!a) return null;
+    const sufixo = a.outra_bu ? ' · outra BU' : '';
+    if (a.is_outside) {
+      return (
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap border-amber-500/60 text-amber-500">
+          Outside · R1 {fmtDiaMes(a.r1_at)}{sufixo}
+        </Badge>
+      );
+    }
+    let label = '';
+    if (a.regra === 'vinculo') label = 'Vínculo manual';
+    else if (a.regra === 'r1_contrato_pago') label = `R1 c/ contrato · ${fmtDiaMes(a.r1_at)}`;
+    else label = `R1 · ${fmtDiaMes(a.r1_at)}`;
+    return (
+      <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap">
+        {label}{sufixo}
+      </Badge>
+    );
+  };
 
   const metrics = useMemo(() => {
     // Current period
@@ -203,7 +257,7 @@ export function CloserRevenueDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-       <DialogContent className={isUnassigned ? "max-w-4xl max-h-[90vh] overflow-y-auto" : "max-w-2xl max-h-[85vh] overflow-y-auto"}>
+       <DialogContent className={isUnassigned || showVendas ? "max-w-4xl max-h-[90vh] overflow-y-auto" : "max-w-2xl max-h-[85vh] overflow-y-auto"}>
         <DialogHeader>
           <DialogTitle className="text-lg">{closerName}</DialogTitle>
           <DialogDescription>
@@ -274,8 +328,68 @@ export function CloserRevenueDetailDialog({
           </Card>
         </div>
 
+        {/* Vendas do período */}
+        {showVendas && (
+          <div>
+            <p className="text-sm font-medium mb-2">Vendas do período</p>
+            <div className={vendas.rows.length > 15 ? 'max-h-[360px] overflow-y-auto rounded-md border border-border' : 'rounded-md border border-border'}>
+              <Table className="text-xs">
+                <TableHeader className={vendas.rows.length > 15 ? 'sticky top-0 z-10 bg-background' : undefined}>
+                  <TableRow>
+                    <TableHead className="text-xs">Data</TableHead>
+                    <TableHead className="text-xs">Comprador</TableHead>
+                    <TableHead className="text-xs">Produto</TableHead>
+                    <TableHead className="text-xs text-right">Bruto</TableHead>
+                    <TableHead className="text-xs text-right">Líquido</TableHead>
+                    <TableHead className="text-xs">Atribuição</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vendas.rows.map(({ tx, a, gross, net }) => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="py-1.5 whitespace-nowrap font-mono">{fmtDataHora(tx.sale_date)}</TableCell>
+                      <TableCell className="py-1.5">
+                        {a?.deal_id ? (
+                          <a href={`/crm/negocios?deal=${a.deal_id}`} className="font-semibold text-primary hover:underline">
+                            {tx.customer_name || '—'}
+                          </a>
+                        ) : (
+                          <span className="font-semibold">{tx.customer_name || '—'}</span>
+                        )}
+                        {tx.customer_email && (
+                          <div className="text-muted-foreground">{tx.customer_email}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-1.5">{tx.product_name || '—'}</TableCell>
+                      <TableCell className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(gross)}</TableCell>
+                      <TableCell className={`py-1.5 text-right font-mono whitespace-nowrap ${net < 0 ? 'text-destructive' : 'text-success'}`}>
+                        {formatCurrency(net)}
+                      </TableCell>
+                      <TableCell className="py-1.5">{atribuicaoBadge(a)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="mt-2 space-y-0.5 text-xs">
+              <div className="flex justify-end gap-4 font-semibold">
+                <span>Total</span>
+                <span className="font-mono">{formatCurrency(vendas.totalGross)}</span>
+                <span className="font-mono text-success">{formatCurrency(vendas.totalNet)}</span>
+              </div>
+              {vendas.outsideCount > 0 && (
+                <div className="flex justify-end gap-4 text-muted-foreground">
+                  <span>Outside (fora do total) · {vendas.outsideCount}</span>
+                  <span className="font-mono">{formatCurrency(vendas.outsideGross)}</span>
+                  <span className="font-mono">{formatCurrency(vendas.outsideNet)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Comparison with previous month */}
-        {(metrics.grossChange !== null || metrics.countChange !== null) && (
+        {!isAutomaticRow && (metrics.grossChange !== null || metrics.countChange !== null) && (
           <Card className="bg-muted/30 border-border">
             <CardContent className="p-3">
               <p className="text-xs font-medium text-muted-foreground mb-2">Comparativo com mês anterior</p>
