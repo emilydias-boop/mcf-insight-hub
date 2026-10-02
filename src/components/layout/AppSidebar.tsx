@@ -209,6 +209,7 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "manager", "coordenador"],
     items: [
       { title: "CRM", url: "/solar/crm" },
+      { title: "Painel Comercial", url: "/solar/painel-comercial" },
     ],
   },
 
