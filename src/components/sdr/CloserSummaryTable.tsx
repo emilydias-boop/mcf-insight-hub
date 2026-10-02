@@ -103,7 +103,7 @@ export function CloserSummaryTable({
     { key: 'outside', label: 'Outside', cls: 'text-orange-400' },
     { key: 'r1_realizada', label: 'R1 Realizada', cls: 'text-green-400' },
     { key: 'noshow', label: 'No-show', cls: 'text-red-400' },
-    { key: 'contrato_pago', label: 'Contrato Pago', cls: 'text-amber-400' },
+    { key: 'contrato_bruto', label: 'Contrato Pago', cls: 'text-amber-400' },
     { key: 'venda_direta', label: 'Venda direta', cls: 'text-violet-400' },
     { key: 'r2_agendada', label: 'R2 Agendada', cls: 'text-purple-400' },
   ];
@@ -111,7 +111,7 @@ export function CloserSummaryTable({
     (map.get(closerId)?.[key] as number | undefined) ?? 0;
   const segTotal = (rows: R1CloserMetric[] | undefined, key: SegKey) =>
     (rows || []).reduce((sum, r) => sum + ((r[key] as number) || 0), 0);
-  const segmentedKeys = new Set<SegKey>(['r1_agendada', 'r1_realizada', 'noshow', 'contrato_pago', 'r2_agendada']);
+  const segmentedKeys = new Set<SegKey>(['r1_agendada', 'r1_realizada', 'noshow', 'contrato_bruto', 'r2_agendada']);
   // Venda direta não tem segmento ICP → uma coluna só (total), mesmo com A/B/C.
   const totalOnlyKeys = new Set<SegKey>(['venda_direta']);
   const segLabels = (k: SegKey) => totalOnlyKeys.has(k) ? ['Total'] : segmentedKeys.has(k) ? ['A', 'B', 'C', 's/ICP'] : ['A', 'B'];
@@ -124,7 +124,7 @@ export function CloserSummaryTable({
 
   const un = unassigned && unassigned.total > 0 ? unassigned : null;
   const unFor = (key: SegKey, seg?: 'a' | 'b') =>
-    key === 'contrato_pago' ? (seg ? (un?.[seg] ?? 0) : (un?.total ?? 0)) : 0;
+    key === 'contrato_bruto' ? (seg ? (un?.[seg] ?? 0) : (un?.total ?? 0)) : 0;
 
   return (
     <div className="rounded-md border border-border overflow-hidden">
@@ -160,11 +160,16 @@ export function CloserSummaryTable({
           </TableHeader>
           <TableBody>
             {data.map((row) => {
-              // Calculate taxa de conversão (Contrato Pago / R1 Realizada)
-              const taxaConversao = row.r1_realizada > 0 
+              // Taxa de conversão: a BRUTA (contrato_bruto) é a grande e manda na
+              // cor; a LÍQUIDA (contrato_pago) vai pequena embaixo, "líq. X,X%".
+              const taxaBruta = row.r1_realizada > 0
+                ? ((row.contrato_bruto / row.r1_realizada) * 100)
+                : 0;
+              const taxaLiquida = row.r1_realizada > 0
                 ? ((row.contrato_pago / row.r1_realizada) * 100)
                 : 0;
-              const taxaConversaoFormatted = taxaConversao.toFixed(1);
+              const taxaConversaoFormatted = taxaBruta.toFixed(1);
+              const taxaLiquidaFormatted = taxaLiquida.toFixed(1);
 
               // Calculate taxa de no-show (No-Show / R1 Agendada)
               const taxaNoShow = row.r1_agendada > 0 
@@ -172,10 +177,10 @@ export function CloserSummaryTable({
                 : 0;
               const taxaNoShowFormatted = taxaNoShow.toFixed(1);
 
-              // Taxa conversão color: green >= 20%, amber >= 10%, red < 10%
-              const taxaColorClass = taxaConversao >= 20 
+              // Taxa conversão (bruta) color: green >= 20%, amber >= 10%, red < 10%
+              const taxaColorClass = taxaBruta >= 20 
                 ? 'text-green-400' 
-                : taxaConversao >= 10 
+                : taxaBruta >= 10 
                   ? 'text-amber-400' 
                   : 'text-red-400';
 
@@ -229,6 +234,7 @@ export function CloserSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
+                    <div className="text-[11px] text-muted-foreground">líq. {taxaLiquidaFormatted}%</div>
                   </TableCell>
                 </TableRow>
                 </Fragment>
