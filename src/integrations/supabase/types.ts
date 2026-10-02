@@ -2552,6 +2552,45 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_a005_hubla_eco_restaurado: {
+        Row: {
+          backup_at: string | null
+          count_in_dashboard: boolean | null
+          customer_email: string | null
+          customer_name: string | null
+          dedupe_reason: string | null
+          id: string | null
+          net_value: number | null
+          product_name: string | null
+          sale_date: string | null
+          source: string | null
+        }
+        Insert: {
+          backup_at?: string | null
+          count_in_dashboard?: boolean | null
+          customer_email?: string | null
+          customer_name?: string | null
+          dedupe_reason?: string | null
+          id?: string | null
+          net_value?: number | null
+          product_name?: string | null
+          sale_date?: string | null
+          source?: string | null
+        }
+        Update: {
+          backup_at?: string | null
+          count_in_dashboard?: boolean | null
+          customer_email?: string | null
+          customer_name?: string | null
+          dedupe_reason?: string | null
+          id?: string | null
+          net_value?: number | null
+          product_name?: string | null
+          sale_date?: string | null
+          source?: string | null
+        }
+        Relationships: []
+      }
       backup_caucao_venda_direta: {
         Row: {
           attendee_id: string
