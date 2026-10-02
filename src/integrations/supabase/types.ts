@@ -2846,6 +2846,39 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_venda_direta_backfill_set2026: {
+        Row: {
+          backup_at: string | null
+          customer_name: string | null
+          linked_at: string | null
+          linked_attendee_id: string | null
+          linked_by_user_id: string | null
+          linked_method: string | null
+          sale_date: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          backup_at?: string | null
+          customer_name?: string | null
+          linked_at?: string | null
+          linked_attendee_id?: string | null
+          linked_by_user_id?: string | null
+          linked_method?: string | null
+          sale_date?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          backup_at?: string | null
+          customer_name?: string | null
+          linked_at?: string | null
+          linked_attendee_id?: string | null
+          linked_by_user_id?: string | null
+          linked_method?: string | null
+          sale_date?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: []
+      }
       bi_public_tokens: {
         Row: {
           active: boolean
