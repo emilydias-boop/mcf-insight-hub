@@ -23,7 +23,7 @@ import { InvestigationComparisonTable } from '@/components/relatorios/Investigat
 import { MetricProgressCell } from '@/components/sdr/MetricProgressCell';
 import { formatMeetingStatus } from '@/utils/formatMeetingStatus';
 import { BusinessUnit } from '@/hooks/useMyBU';
-import { format, startOfMonth, endOfMonth, differenceInCalendarDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import { loadXLSX } from '@/lib/lazyExport';
@@ -95,13 +95,13 @@ function LeadProfileCard({ profile }: { profile: LeadProfile }) {
 }
 
 function FinancialsCard({ financials }: { financials: LeadFinancials }) {
-  const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(financials.total_invested / 100);
+  const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(financials.total_invested);
   return (
     <Card>
       <CardContent className="pt-4 pb-4 space-y-2">
         <div className="flex items-center gap-2 mb-2">
           <ShoppingCart className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">Histórico Financeiro (Hubla)</span>
+          <span className="font-semibold text-sm">Histórico Financeiro (todas as vendas)</span>
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <div><span className="text-muted-foreground">Compras:</span> <span className="font-bold">{financials.purchase_count}</span></div>
@@ -313,7 +313,8 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
   // Calculate days in period for target scaling
   const daysInPeriod = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return 1;
-    return differenceInCalendarDays(dateRange.to, dateRange.from) + 1;
+    const uteis = eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).filter(d => d.getDay() !== 0 && d.getDay() !== 6).length;
+    return uteis;
   }, [dateRange]);
 
   // Period target = daily target * days
@@ -328,20 +329,22 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
     tab === 'closer' && selectedType === 'closer' && !isAll ? selectedId : null,
     tab === 'closer' && !isAll ? singleDate : null
   );
-  const leadQuery = useInvestigationByLead(tab === 'lead' ? searchTerm : '');
+  const leadQuery = useInvestigationByLead(tab === 'lead' ? searchTerm : '', bu);
 
   // Period-based queries for charts
   const periodQuery = useInvestigationByPeriod(
     tab === 'closer' ? selectedId : null,
     selectedType,
     dateRange?.from || null,
-    dateRange?.to || null
+    dateRange?.to || null,
+    bu
   );
   const comparisonQuery = useCloserComparison(
     tab === 'closer' ? dateRange?.from || null : null,
     tab === 'closer' ? dateRange?.to || null : null,
     selectedId,
-    selectedType
+    selectedType,
+    bu
   );
 
   const activeData = tab === 'closer' ? closerQuery.data : leadQuery.data;
@@ -459,7 +462,7 @@ export function InvestigationReportPanel({ bu }: InvestigationReportPanelProps) 
               <div className="flex-1">
                 <label className="text-sm font-medium text-muted-foreground mb-1 block">Buscar lead (nome ou telefone)</label>
                 <Input
-                  placeholder="Digite o nome ou telefone do lead..."
+                  placeholder="Nome, telefone ou e-mail"
                   value={searchInput}
                   onChange={e => setSearchInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleLeadSearch()}

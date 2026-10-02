@@ -161,113 +161,35 @@ export function useInvestigationByCloser(closerId: string | null, date: Date | n
   });
 }
 
-export function useInvestigationByLead(searchTerm: string) {
+export function useInvestigationByLead(searchTerm: string, bu: string) {
   return useQuery({
-    queryKey: ['investigation-lead', searchTerm],
+    queryKey: ['investigation-lead', searchTerm, bu],
     queryFn: async () => {
-      if (!searchTerm || searchTerm.length < 3) return { attendees: [], metrics: computeMetrics([]), leadProfile: null, financials: null };
+      if (!searchTerm || searchTerm.length < 3) return { attendees: [], metrics: computeMetrics([]), leadProfile: null as LeadProfile | null, financials: null as LeadFinancials | null };
 
-      // Search attendees by name or phone
-      const { data: attendees, error } = await supabase
-        .from('meeting_slot_attendees')
-        .select('id, attendee_name, attendee_phone, status, contract_paid_at, is_partner, notes, closer_notes, booked_by, booked_at, deal_id, contact_id, meeting_slot_id')
-        .or(`attendee_name.ilike.%${searchTerm}%,attendee_phone.ilike.%${searchTerm}%`)
-        .order('booked_at', { ascending: false })
-        .limit(100);
-
+      const { data, error } = await (supabase.rpc as any)('investigacao_lead', { p_termo: searchTerm, p_bu: bu });
       if (error) throw error;
-      if (!attendees || attendees.length === 0) return { attendees: [], metrics: computeMetrics([]), leadProfile: null, financials: null };
+      const payload = (data || {}) as {
+        attendees?: Partial<InvestigationAttendee>[];
+        lead_profile?: LeadProfile | null;
+        financials?: LeadFinancials | null;
+      };
 
-      // Get all related data in parallel
-      const slotIds = [...new Set(attendees.map(a => a.meeting_slot_id))];
-      const dealIds = attendees.map(a => a.deal_id).filter(Boolean) as string[];
-      const contactIds = [...new Set(attendees.map(a => a.contact_id).filter(Boolean) as string[])];
-      const bookedByIds = attendees.map(a => a.booked_by).filter(Boolean) as string[];
-
-      const [slotsResult, dealsMap, bookedByMap, contactsMap] = await Promise.all([
-        supabase.from('meeting_slots').select('id, scheduled_at, status, lead_type, closer_id').in('id', slotIds),
-        fetchDealsEnriched(dealIds),
-        fetchProfileNames(bookedByIds),
-        fetchContacts(contactIds),
-      ]);
-
-      const slots = slotsResult.data || [];
-      const slotMap = Object.fromEntries(slots.map(s => [s.id, s]));
-
-      // Get closer names
-      const closerIds = [...new Set(slots.map(s => s.closer_id))];
-      const { data: closers } = await supabase.from('closers').select('id, name').in('id', closerIds);
-      const closerMap = Object.fromEntries((closers || []).map(c => [c.id, c.name]));
-
-      // Build lead profile from first contact found
-      let leadProfile: LeadProfile | null = null;
-      if (contactIds.length > 0) {
-        const firstContact = contactsMap[contactIds[0]];
-        if (firstContact) {
-          // Get origin name for contact
-          let originName: string | null = null;
-          if (firstContact.origin_id) {
-            const { data: origin } = await supabase.from('crm_origins').select('name').eq('id', firstContact.origin_id).single();
-            originName = origin?.name || null;
-          }
-          leadProfile = {
-            name: firstContact.name,
-            email: firstContact.email,
-            phone: firstContact.phone,
-            organization: firstContact.organization_name,
-            tags: firstContact.tags,
-            created_at: firstContact.created_at,
-            origin_name: originName,
-          };
-        }
-      }
-
-      // Get Hubla financials by email/phone
-      const financials = await fetchHublaFinancials(leadProfile?.email || null, leadProfile?.phone || null);
-
-      const result: InvestigationAttendee[] = attendees.map(att => {
-        const slot = slotMap[att.meeting_slot_id];
-        const deal = att.deal_id ? dealsMap[att.deal_id] : null;
-        const sdrFromBookedBy = att.booked_by ? bookedByMap[att.booked_by] : null;
-        const contact = att.contact_id ? contactsMap[att.contact_id] : null;
-
-        return {
-          id: att.id,
-          attendee_name: att.attendee_name,
-          attendee_phone: att.attendee_phone,
-          status: att.status,
-          contract_paid_at: att.contract_paid_at,
-          is_partner: att.is_partner,
-          notes: att.notes,
-          closer_notes: att.closer_notes,
-          booked_by: att.booked_by,
-          booked_at: att.booked_at,
-          deal_id: att.deal_id,
-          scheduled_at: slot?.scheduled_at || '',
-          closer_name: slot ? (closerMap[slot.closer_id] || '') : '',
-          closer_id: slot?.closer_id || '',
-          slot_status: slot?.status || null,
-          contact_email: deal?.contact_email || contact?.email || null,
-          sdr_name: sdrFromBookedBy || deal?.sdr_name || null,
-          lead_type: slot?.lead_type || null,
-          deal_name: deal?.deal_name || null,
-          deal_stage: deal?.deal_stage || null,
-          deal_stage_color: deal?.deal_stage_color || null,
-          deal_created_at: deal?.deal_created_at || null,
-          origin_name: deal?.origin_name || null,
-          contact_tags: contact?.tags || null,
-          contact_organization: contact?.organization_name || null,
-          contact_created_at: contact?.created_at || null,
-        };
-      });
-
-      result.sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
+      const result: InvestigationAttendee[] = (payload.attendees || []).map(a => ({
+        contact_tags: null,
+        contact_organization: null,
+        contact_created_at: null,
+        ...a,
+        scheduled_at: a.scheduled_at || '',
+        closer_name: a.closer_name || '',
+        closer_id: a.closer_id || '',
+      } as InvestigationAttendee));
 
       return {
         attendees: result,
         metrics: computeMetrics(result),
-        leadProfile,
-        financials,
+        leadProfile: payload.lead_profile ?? null,
+        financials: payload.financials ?? null,
       };
     },
     enabled: searchTerm.length >= 3,
@@ -321,64 +243,4 @@ async function fetchProfileNames(ids: string[]): Promise<Record<string, string>>
     }
   }
   return map;
-}
-
-interface ContactInfo {
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  organization_name: string | null;
-  tags: string[] | null;
-  created_at: string | null;
-  origin_id: string | null;
-}
-
-async function fetchContacts(contactIds: string[]): Promise<Record<string, ContactInfo>> {
-  if (contactIds.length === 0) return {};
-  const { data } = await supabase
-    .from('crm_contacts')
-    .select('id, name, email, phone, organization_name, tags, created_at, origin_id')
-    .in('id', contactIds);
-  const map: Record<string, ContactInfo> = {};
-  if (data) {
-    for (const c of data) {
-      map[c.id] = {
-        name: c.name,
-        email: c.email,
-        phone: c.phone,
-        organization_name: c.organization_name,
-        tags: c.tags,
-        created_at: c.created_at,
-        origin_id: c.origin_id,
-      };
-    }
-  }
-  return map;
-}
-
-async function fetchHublaFinancials(email: string | null, phone: string | null): Promise<LeadFinancials | null> {
-  if (!email && !phone) return null;
-
-  const conditions: string[] = [];
-  if (email) conditions.push(`customer_email.ilike.${email}`);
-  if (phone) {
-    const phoneSuffix = phone.replace(/\D/g, '').slice(-9);
-    if (phoneSuffix.length >= 9) conditions.push(`customer_phone.ilike.%${phoneSuffix}`);
-  }
-
-  if (conditions.length === 0) return null;
-
-  const { data } = await supabase
-    .from('hubla_transactions')
-    .select('product_price, product_name')
-    .or(conditions.join(','));
-
-  if (!data || data.length === 0) return null;
-
-  const products = [...new Set(data.map(t => t.product_name).filter(Boolean))];
-  return {
-    purchase_count: data.length,
-    total_invested: data.reduce((sum, t) => sum + (t.product_price || 0), 0),
-    products,
-  };
 }
