@@ -19828,6 +19828,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      investigacao_lead: {
+        Args: { p_bu?: string; p_termo: string }
+        Returns: Json
+      }
+      investigacao_reunioes: {
+        Args: { p_bu?: string; p_from: string; p_to: string }
+        Returns: Json
+      }
       is_bu_manager: { Args: { _user_id: string }; Returns: boolean }
       is_closer_do_usuario: { Args: { _closer_id: string }; Returns: boolean }
       is_fechamento_leader: { Args: never; Returns: boolean }
@@ -20130,6 +20138,37 @@ export type Database = {
         }
         Returns: Json
       }
+      r2_desfecho: {
+        Args: { p_bu?: string; p_from: string; p_to: string }
+        Returns: {
+          attendee_id: string
+          closer_r1_name: string
+          closer_r2_id: string
+          closer_r2_name: string
+          deal_id: string
+          desfecho: string
+          email: string
+          estimado: boolean
+          lead_name: string
+          parceria_data: string
+          parceria_liquido: number
+          parceria_produto: string
+          phone: string
+          r1_at: string
+          r2_at: string
+          status_final: string
+        }[]
+      }
+      r2_desfecho_extras: {
+        Args: { p_attendee_ids: string[] }
+        Returns: {
+          attendee_id: string
+          closer_notes: string
+          r2_observations: string
+          tentativas_pos_r2: number
+          ultima_tentativa: string
+        }[]
+      }
       recalc_automation_queue_for_deal: {
         Args: {
           p_anchor_kind: string
@@ -20413,6 +20452,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      usuario_bus_permitidas: { Args: never; Returns: string[] }
+      usuario_pode_ver_bu: { Args: { p_bu: string }; Returns: boolean }
       vendas_diretas_efetivas: {
         Args: { p_bu?: string; p_from: string; p_to: string }
         Returns: {
