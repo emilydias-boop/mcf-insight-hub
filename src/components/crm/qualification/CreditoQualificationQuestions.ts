@@ -105,18 +105,35 @@ export const CREDITO_QUALIFICATION_QUESTIONS: CreditoQuestion[] = [
     placeholder: 'Ex: quer começar a obra em 6 meses, já conversou com a Caixa...' },
 ];
 
+/**
+ * Campos que o banco retira das respostas e guarda em área restrita (LGPD).
+ * Ao reabrir a qualificação eles voltam vazios — por isso deixam de ser obrigatórios.
+ */
+export const CREDITO_CAMPOS_RESTRITOS = ['cpf', 'rg', 'data_nascimento', 'estado_civil'];
+const HELP_CAMPOS_RESTRITOS = 'Já guardado na área restrita do Crédito — preencha só se quiser alterar.';
+const MARCADOR_RESTRITOS = 'dados_pessoais_restritos';
+
+const isCampoRestrito = (key: string) => CREDITO_CAMPOS_RESTRITOS.includes(key);
+
 export function creditoVisibleQuestions(answers: CreditoAnswers): CreditoQuestion[] {
   const mod = (answers.modalidade || '') as CreditoModalidade;
-  return CREDITO_QUALIFICATION_QUESTIONS.filter(q =>
-    (!q.showWhen || (mod && q.showWhen.includes(mod))) && (!q.showIf || q.showIf(answers))
-  );
+  const reaberto = answers[MARCADOR_RESTRITOS] === 'sim';
+  return CREDITO_QUALIFICATION_QUESTIONS
+    .filter(q =>
+      (!q.showWhen || (mod && q.showWhen.includes(mod))) && (!q.showIf || q.showIf(answers))
+    )
+    // Cópia do objeto: a constante compartilhada nunca é mutada.
+    .map(q => (reaberto && isCampoRestrito(q.key) ? { ...q, optional: true, help: HELP_CAMPOS_RESTRITOS } : q));
 }
 
 /** Remove respostas de perguntas que deixaram de valer (troca de modalidade ou condição). */
 export function pruneCreditoAnswers(answers: CreditoAnswers): CreditoAnswers {
   const keys = new Set(creditoVisibleQuestions(answers).map(q => q.key));
   const next: CreditoAnswers = {};
-  for (const [k, v] of Object.entries(answers)) if (keys.has(k)) next[k] = v;
+  for (const [k, v] of Object.entries(answers)) {
+    // O marcador de dados restritos não é pergunta, mas precisa sobreviver à poda.
+    if (keys.has(k) || k === MARCADOR_RESTRITOS) next[k] = v;
+  }
   return next;
 }
 
