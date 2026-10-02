@@ -407,6 +407,17 @@ export function CloserRevenueSummaryTable({
                       <ToggleGroupItem value="canal" className="h-7 px-2 text-xs">Canal de entrada</ToggleGroupItem>
                     </ToggleGroup>
                   </span>
+                  {modo === 'canal' && (
+                    <span className="ml-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <Switch
+                        checked={mostrarSemVenda}
+                        onCheckedChange={setMostrarSemVenda}
+                        className="scale-90"
+                        aria-label="Mostrar canais sem venda"
+                      />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Mostrar canais sem venda</span>
+                    </span>
+                  )}
                 </span>
                 <span className="flex items-center gap-2">
                   <Badge variant="secondary" className="font-mono text-xs">
