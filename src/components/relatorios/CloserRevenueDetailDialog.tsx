@@ -10,6 +10,7 @@ import { useAllHublaTransactions } from '@/hooks/useAllHublaTransactions';
 import { subMonths } from 'date-fns';
 import { UnassignedTransactionsDetailPanel } from './UnassignedTransactionsDetailPanel';
 import { useAtribuicaoCloser, type Atribuicao } from '@/hooks/useAtribuicaoCloser';
+import type { CanalEntrada } from '@/hooks/useCanalEntrada';
 import { ALLOWED_INCORPORADOR_CATEGORIES } from './CloserRevenueSummaryTable';
 import { calcRecebimento, type PagamentoDaVenda } from '@/hooks/usePagamentosDaVenda';
 
@@ -61,6 +62,20 @@ interface CloserRevenueDetailDialogProps {
   atribuicaoMap?: Map<string, Atribuicao>;
   pagamentosMap?: Map<string, PagamentoDaVenda>;
   bu?: string;
+  modo?: 'closer' | 'sdr' | 'canal';
+  canalMap?: Map<string, CanalEntrada>;
+}
+
+function fmtEntrada(c?: CanalEntrada) {
+  if (!c) return '—';
+  if (c.fonte === 'tag') return `${c.canal} · etiqueta do CRM`;
+  if (!c.produto_entrada) return c.canal || '—';
+  let d = '';
+  if (c.data_entrada) {
+    const dt = new Date(c.data_entrada.length <= 10 ? `${c.data_entrada}T12:00:00` : c.data_entrada);
+    if (!isNaN(dt.getTime())) d = ' · ' + dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'America/Sao_Paulo' });
+  }
+  return `${c.produto_entrada}${d}`;
 }
 
 // ============= Classificador único (cards + breakdown + coluna Tipo) =============
@@ -114,8 +129,11 @@ export function CloserRevenueDetailDialog({
   atribuicaoMap,
   pagamentosMap,
   bu,
+  modo = 'closer',
+  canalMap,
 }: CloserRevenueDetailDialogProps) {
-  const isAutomaticRow = closerId.startsWith('__');
+  const isAutomaticRow = closerId.startsWith('__') || modo !== 'closer';
+  const showCloserCol = modo !== 'closer';
   const isUnassigned = closerId === '__unassigned__';
   const isLaunch = closerId === '__launch__';
   // Previous month data for comparison
@@ -163,7 +181,7 @@ export function CloserRevenueDetailDialog({
         gross,
         aReceber: calcRecebimento(gross, pagamentosMap?.get(tx.id)?.pago).aReceber,
         net: tx.net_value || 0,
-        outside: !!a?.is_outside,
+        outside: modo === 'canal' ? false : !!a?.is_outside,
       };
     });
     rows.sort((x, y) => (y.tx.sale_date || '').localeCompare(x.tx.sale_date || ''));
@@ -180,7 +198,7 @@ export function CloserRevenueDetailDialog({
       outsideGross: fora.reduce((s, r) => s + r.gross, 0),
       outsideNet: fora.reduce((s, r) => s + r.net, 0),
     };
-  }, [transactions, atribuicaoMap, pagamentosMap, globalFirstIds]);
+  }, [transactions, atribuicaoMap, pagamentosMap, globalFirstIds, modo]);
   const showVendas = !isUnassigned && vendas.rows.length > 0;
 
   const atribuicaoBadge = (a?: Atribuicao) => {
@@ -429,7 +447,8 @@ export function CloserRevenueDetailDialog({
                     <TableHead className="text-xs text-right">Bruto</TableHead>
                     <TableHead className="text-xs text-right">A receber</TableHead>
                     <TableHead className="text-xs text-right">Líquido</TableHead>
-                    <TableHead className="text-xs">Atribuição</TableHead>
+                    {showCloserCol && <TableHead className="text-xs">Closer</TableHead>}
+                    <TableHead className="text-xs">{modo === 'canal' ? 'Entrada' : 'Atribuição'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -461,7 +480,10 @@ export function CloserRevenueDetailDialog({
                       <TableCell className={`py-1.5 text-right font-mono whitespace-nowrap ${net < 0 ? 'text-destructive' : 'text-success'}`}>
                         {formatCurrency(net)}
                       </TableCell>
-                      <TableCell className="py-1.5">{atribuicaoBadge(a)}</TableCell>
+                      {showCloserCol && <TableCell className="py-1.5 whitespace-nowrap">{a?.closer_nome || '—'}</TableCell>}
+                      <TableCell className="py-1.5">
+                        {modo === 'canal' ? <span className="whitespace-nowrap">{fmtEntrada(canalMap?.get(tx.id))}</span> : atribuicaoBadge(a)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
