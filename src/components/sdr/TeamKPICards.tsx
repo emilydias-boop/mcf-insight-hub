@@ -91,6 +91,7 @@ export function TeamKPICards({
   totalVendasRealizadas,
   segmentTotals = null,
   customCards,
+  vendaDireta,
 }: TeamKPICardsProps) {
   const isConsorcio = (bu || '').toLowerCase() === 'consorcio';
   const semStatusLabel = isFutureWindow ? "Sem Status" : "Backlog Histórico";

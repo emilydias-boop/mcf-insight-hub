@@ -400,6 +400,12 @@ export default function ReunioesEquipe() {
   // Fetch Outside metrics for the selected period
   
 
+  // Venda direta (A003): métrica irmã — NÃO entra em contractsFromClosers.
+  const vendaDiretaTotais = useMemo(() => ({
+    count: closerMetrics?.reduce((sum, c) => sum + (c.venda_direta || 0), 0) || 0,
+    valor: closerMetrics?.reduce((sum, c) => sum + (c.venda_direta_valor || 0), 0) || 0,
+  }), [closerMetrics]);
+
   // Calculate contract totals from closerMetrics (source of truth - deduplicated, consistent with Closer table)
   const contractsFromClosers = useMemo(() => {
     const contratoPago = closerMetrics?.reduce((sum, c) => sum + c.contrato_pago, 0) || 0;
@@ -1007,6 +1013,7 @@ export default function ReunioesEquipe() {
         onRefundClick={() => setRefundDialogOpen(true)}
         orphanRefundsCount={refundDetails?.orphans.length || 0}
         segmentTotals={segmentTotals}
+        vendaDireta={vendaDiretaTotais}
       />
 
       <RefundDetailsDialog
