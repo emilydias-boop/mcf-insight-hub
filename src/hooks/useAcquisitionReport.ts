@@ -6,13 +6,9 @@ import { useTransactionsByBU } from './useTransactionsByBU';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { DateRange } from 'react-day-picker';
 import { BusinessUnit } from '@/hooks/useMyBU';
+import { useAtribuicaoCloser } from './useAtribuicaoCloser';
 
 // ---- helpers ----
-const phoneSuffix = (phone: string | null | undefined): string => {
-  const digits = (phone || '').replace(/\D/g, '');
-  return digits.length >= 9 ? digits.slice(-9) : digits;
-};
-
 const VALID_CHANNELS = new Set(['A010', 'LIVE', 'ANAMNESE', 'ANAMNESE-INSTA', 'OUTSIDE', 'LANÇAMENTO']);
 
 function detectChannel(opts: {
@@ -68,21 +64,7 @@ const classifyOrigin = (tx: HublaTransaction): string => {
 };
 
 // Origins that are automatic (no R1 meeting expected)
-const AUTOMATIC_ORIGINS = new Set(['Lançamento', 'A010', 'Renovação', 'Vitalício']);
-
-// ---- attendee type ----
-interface AttendeeWithSDR {
-  id: string;
-  attendee_phone: string | null;
-  deal_id: string | null;
-  meeting_slots: { closer_id: string | null; scheduled_at: string | null; booked_by: string | null } | null;
-  crm_deals: {
-    owner_id: string | null;
-    owner_profile_id: string | null;
-    tags: any[] | null;
-    crm_contacts: { email: string | null; phone: string | null } | null;
-  } | null;
-}
+const AUTOMATIC_ORIGINS = new Set(['Lançamento', 'A010', 'Renovação', 'Vitalício', 'Lucrômetro - Funil']);
 
 // ---- aggregation row ----
 export interface DimensionRow {
@@ -151,9 +133,6 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
     staleTime: 5 * 60 * 1000,
   });
 
-  // Set of valid closer IDs for BU filtering
-  const closerIdSet = useMemo(() => new Set(closers.map(c => c.id)), [closers]);
-
   // 2b. Valid SDRs for this BU
   const { data: buSdrs = [] } = useQuery<{ email: string; name: string }[]>({
     queryKey: ['acquisition-bu-sdrs', bu],
@@ -217,54 +196,18 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
     staleTime: 1000 * 60 * 5,
   });
 
-  // 4. Attendees with SDR (owner)
-  const { data: attendees = [], isLoading: loadingAtt } = useQuery<AttendeeWithSDR[]>({
-    queryKey: ['attendees-acquisition-sdr', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
-    queryFn: async (): Promise<AttendeeWithSDR[]> => {
-      if (!dateRange?.from) return [];
-      const lookback = new Date(dateRange.from);
-      lookback.setDate(lookback.getDate() - 30);
-      const startDate = lookback.toISOString();
-      const endDate = dateRange.to
-        ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
-        : new Date(new Date(dateRange.from).setHours(23, 59, 59, 999)).toISOString();
-
-      const all: AttendeeWithSDR[] = [];
-      let offset = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('meeting_slot_attendees')
-          .select(`
-            id, attendee_phone, deal_id,
-            meeting_slots!inner(closer_id, scheduled_at, booked_by),
-            crm_deals!deal_id(owner_id, owner_profile_id, tags, crm_contacts!contact_id(email, phone))
-          `)
-          .eq('meeting_slots.meeting_type', 'r1')
-          .gte('meeting_slots.scheduled_at', startDate)
-          .lte('meeting_slots.scheduled_at', endDate)
-          .range(offset, offset + pageSize - 1);
-        if (error) throw error;
-        const batch = (data || []) as unknown as AttendeeWithSDR[];
-        all.push(...batch);
-        hasMore = batch.length >= pageSize;
-        offset += pageSize;
-      }
-      return all;
-    },
-    enabled: !!dateRange?.from,
-  });
+  // 4. Atribuição de closer por venda (RPC atribuicao_closer_vendas)
+  const txIds = useMemo(() => transactions.map(t => t.id), [transactions]);
+  const { map: atribuicaoMap, isLoading: loadingAtribuicao } = useAtribuicaoCloser(txIds, bu);
 
   // 5. SDR names (profile full_name by user_id)
   const sdrIds = useMemo(() => {
     const ids = new Set<string>();
-    attendees.forEach(a => {
-      if (a.crm_deals?.owner_profile_id) ids.add(a.crm_deals.owner_profile_id);
-      if (a.meeting_slots?.booked_by) ids.add(a.meeting_slots.booked_by);
+    atribuicaoMap.forEach(a => {
+      if (a.sdr_profile_id) ids.add(a.sdr_profile_id);
     });
     return Array.from(ids);
-  }, [attendees]);
+  }, [atribuicaoMap]);
 
   const { data: sdrProfiles = [] } = useQuery<ProfileName[]>({
     queryKey: ['sdr-profile-names', sdrIds],
@@ -287,85 +230,39 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
     return m;
   }, [sdrProfiles]);
 
-  // 6. Build attendee lookup maps — only include attendees whose closer belongs to this BU
-  const { emailToAttendees, phoneToAttendees } = useMemo(() => {
-    const emailMap = new Map<string, AttendeeWithSDR[]>();
-    const phoneMap = new Map<string, AttendeeWithSDR[]>();
-    attendees.forEach(a => {
-      // Filter: only accept attendees with a closer from the current BU
-      const closerId = a.meeting_slots?.closer_id;
-      if (bu && closerId && !closerIdSet.has(closerId)) return;
-
-      const email = (a.crm_deals?.crm_contacts?.email || '').toLowerCase().trim();
-      if (email) {
-        if (!emailMap.has(email)) emailMap.set(email, []);
-        emailMap.get(email)!.push(a);
-      }
-      const phone = phoneSuffix(a.crm_deals?.crm_contacts?.phone);
-      if (phone.length >= 8) {
-        if (!phoneMap.has(phone)) phoneMap.set(phone, []);
-        phoneMap.get(phone)!.push(a);
-      }
-      const aPhone = phoneSuffix(a.attendee_phone);
-      if (aPhone.length >= 8 && aPhone !== phone) {
-        if (!phoneMap.has(aPhone)) phoneMap.set(aPhone, []);
-        phoneMap.get(aPhone)!.push(a);
-      }
-    });
-    return { emailToAttendees: emailMap, phoneToAttendees: phoneMap };
-  }, [attendees, bu, closerIdSet]);
-
-  // 7. Closer name map
-  const closerNameMap = useMemo(() => {
-    const m = new Map<string, string>();
-    closers.forEach(c => m.set(c.id, c.name));
-    return m;
-  }, [closers]);
-
   // 8. Classify transactions
   const classified = useMemo(() => {
     return transactions.map(tx => {
-      const txEmail = (tx.customer_email || '').toLowerCase().trim();
-      const txPhone = phoneSuffix(tx.customer_phone);
       let origin = classifyOrigin(tx);
-      
+      const atr = atribuicaoMap.get(tx.id);
+
       // Launch override: if customer has R1 meeting (Inside Sales), don't treat as automatic
-      if (origin === 'Lançamento') {
-        const emailMatches = emailToAttendees.get(txEmail);
-        const phoneMatches = txPhone.length >= 8 ? phoneToAttendees.get(txPhone) : undefined;
-        if (emailMatches?.length || phoneMatches?.length) {
-          origin = 'Outros'; // Reclassify so it flows through closer attribution
-        }
+      if (origin === 'Lançamento' && atribuicaoMap.has(tx.id)) {
+        origin = 'Outros'; // Reclassify so it flows through closer attribution
       }
-      
-      const isAutomatic = AUTOMATIC_ORIGINS.has(origin);
 
-      // find matching attendee
-      let matchedAttendee: AttendeeWithSDR | null = null;
-      if (!isAutomatic) {
-        const emailMatches = emailToAttendees.get(txEmail);
-        if (emailMatches?.length) matchedAttendee = emailMatches[0];
-        if (!matchedAttendee && txPhone.length >= 8) {
-          const phoneMatches = phoneToAttendees.get(txPhone);
-          if (phoneMatches?.length) matchedAttendee = phoneMatches[0];
+      let isAutomatic = AUTOMATIC_ORIGINS.has(origin);
+      const a = isAutomatic ? undefined : atr;
+
+      // Lucrômetro sem closer → origem automática própria
+      if (!a && !isAutomatic) {
+        const pn = (tx.product_name || '').toLowerCase();
+        if (pn.includes('lucrômetro') || pn.includes('lucrometro')) {
+          origin = 'Lucrômetro - Funil';
+          isAutomatic = true;
         }
       }
 
-      const closerId = matchedAttendee?.meeting_slots?.closer_id || null;
-      // For automatic origins, use origin name instead of "Sem Closer"
-      const closerName = closerId
-        ? (closerNameMap.get(closerId) || 'Closer Desconhecido')
+      const closerName = a?.closer_nome
+        ? a.closer_nome
         : (isAutomatic ? origin : 'Sem Closer');
-      const scheduledAt = matchedAttendee?.meeting_slots?.scheduled_at || null;
-      const isOutside = !!(scheduledAt && tx.sale_date && new Date(tx.sale_date) < new Date(scheduledAt));
-      const rawSdrId = matchedAttendee?.meeting_slots?.booked_by
-        || matchedAttendee?.crm_deals?.owner_profile_id
-        || null;
+      const isOutside = a?.is_outside ?? false;
+      const rawSdrId = a?.sdr_profile_id || null;
       const sdrId = rawSdrId && (!bu || sdrProfileIds.has(rawSdrId)) ? rawSdrId : null;
       const sdrName = sdrId
         ? (sdrProfileMap.get(sdrId) || sdrNameMap.get(sdrId) || 'SDR Desconhecido')
         : (isAutomatic ? origin : 'Sem SDR');
-      const dealTags: string[] = (matchedAttendee?.crm_deals?.tags as any[] || []);
+      const dealTags: string[] = a?.deal_tags ?? [];
       const channel = detectChannel({
         productName: tx.product_name,
         saleOrigin: tx.sale_origin,
@@ -379,7 +276,7 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
 
       return { tx, closerName, sdrName, channel, origin, isOutside, gross, net };
     });
-  }, [transactions, emailToAttendees, phoneToAttendees, closerNameMap, sdrNameMap, sdrProfileMap, globalFirstIds, bu, sdrProfileIds]);
+  }, [transactions, atribuicaoMap, sdrNameMap, sdrProfileMap, globalFirstIds, bu, sdrProfileIds, shouldUseBUFilter]);
 
   // 9. Aggregate helper
   const aggregate = (
@@ -478,6 +375,6 @@ export function useAcquisitionReport(dateRange: DateRange | undefined, bu?: Busi
     classified,
     closers,
     globalFirstIds,
-    isLoading: loadingTx || loadingClosers || loadingAtt,
+    isLoading: loadingTx || loadingClosers || loadingAtribuicao,
   };
 }

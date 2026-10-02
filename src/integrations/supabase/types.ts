@@ -18717,6 +18717,10 @@ export type Database = {
         }
         Returns: string
       }
+      atribuicao_closer_vendas: {
+        Args: { p_bu?: string; p_ids: string[] }
+        Returns: Json
+      }
       auto_move_deal_to_em_contato: {
         Args: {
           p_deal_id: string
