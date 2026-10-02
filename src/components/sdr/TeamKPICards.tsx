@@ -221,7 +221,7 @@ export function TeamKPICards({
       bgColor: "bg-amber-500/10",
       tooltip: isConsorcio
         ? "Cotas efetivamente contratadas no período (Controle Consórcio, tipo de registro 'contratação', eixo data de contratação). É a mesma base do Total das tabelas de SDRs e Closers."
-        : "Cauções do período com negócio no CRM (régua caucoes_efetivas), somando Lead A + Lead B. Transações sem negócio vinculado NÃO entram neste total — ficam apenas no diagnóstico 'Não atribuído' da tabela.",
+        : "Cauções do período com negócio no CRM (régua caucoes_efetivas), somando Lead A + Lead B + Lead C. Número BRUTO: inclui as que foram reembolsadas depois — o que voltou está no card Reembolsos, ao lado. Transações sem negócio vinculado NÃO entram neste total.",
       bucket: "contratos" as KpiBucket,
       segLine: contratosSegLine,
     },
@@ -262,7 +262,7 @@ export function TeamKPICards({
       bgColor: "bg-purple-500/10",
       tooltip: isConsorcio
         ? "Conversão Bruta = Vendas Realizadas ÷ Reuniões Realizadas × 100 (o que gera de venda).\nConversão Líquida = (Vendas − Reembolsos) ÷ Reuniões Realizadas × 100 (o que vai até o final)."
-        : "Conversão Bruta = Σ Contratos ÷ Σ R1 Realizada × 100 (o que gera de venda).\nConversão Líquida = (Σ Contratos − Σ Reembolsos) ÷ Σ R1 Realizada × 100 (o que vai até o final).",
+        : "Conversão Bruta = Σ Contratos (bruto) ÷ Σ R1 Realizada × 100 — o que o time gera de venda.\nConversão Líquida = (Σ Contratos − Σ Reembolsos) ÷ Σ R1 Realizada × 100 — o que fica depois dos estornos.",
       subline: (() => {
         const realizadas = kpis.totalRealizadas || 0;
         if (realizadas === 0) return undefined;

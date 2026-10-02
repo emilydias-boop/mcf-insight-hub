@@ -263,18 +263,18 @@ export function CloserSummaryTable({
                           key={`un-${c.key}-${index}`}
                           className={`text-center ${index === 0 ? 'border-l border-border/60' : ''}`}
                           onClick={
-                            onUnassignedClick && c.key === 'contrato_pago' && index < 2
+                            onUnassignedClick && c.key === 'contrato_bruto' && index < 2
                               ? (e) => { e.stopPropagation(); onUnassignedClick(index === 0 ? 'A' : 'B'); }
                               : undefined
                           }
                         >
-                          {c.key === 'contrato_pago' ? value : '—'}
+                          {c.key === 'contrato_bruto' ? value : '—'}
                         </TableCell>
                       ));
                     })
                   : SEG_COLS.map((c) => (
                       <TableCell key={`un-${c.key}`} className="text-center">
-                        {c.key === 'contrato_pago' ? unFor(c.key) : '—'}
+                        {c.key === 'contrato_bruto' ? unFor(c.key) : '—'}
                       </TableCell>
                     ))}
                 <TableCell className="text-center">—</TableCell>
@@ -331,14 +331,15 @@ export function CloserSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 <span className={`font-medium ${
-                  totalTaxaConversao >= 20 
+                  totalTaxaBruta >= 20 
                     ? 'text-green-400' 
-                    : totalTaxaConversao >= 10 
+                    : totalTaxaBruta >= 10 
                       ? 'text-amber-400' 
                       : 'text-red-400'
                 }`}>
-                  {totalTaxaConversao.toFixed(1)}%
+                  {totalTaxaBruta.toFixed(1)}%
                 </span>
+                <div className="text-[11px] text-muted-foreground">líq. {totalTaxaLiquida.toFixed(1)}%</div>
               </TableCell>
             </TableRow>
           </TableBody>
