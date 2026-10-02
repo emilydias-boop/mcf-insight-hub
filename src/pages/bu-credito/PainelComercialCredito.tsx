@@ -30,9 +30,28 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { TeamKPICards, type TeamKpiCardDefinition } from '@/components/sdr/TeamKPICards';
+import type { TeamKPIs } from '@/hooks/useTeamMeetingsData';
 import { getWeekStartsOn } from '@/lib/businessDays';
 import { parseYearMonthLocal, parseYmdLocal } from '@/lib/dateHelpers';
 import { loadXLSX } from '@/lib/lazyExport';
+
+// TeamKPICards monta também os cards padrão (que leem kpis.taxaConversao.toFixed
+// e kpis.taxaNoShow.toFixed) mesmo quando recebe customCards. O painel do Crédito
+// exibe somente os seus próprios cards, então passamos um objeto zerado — nunca
+// um objeto vazio, que quebraria a página com "reading 'toFixed'".
+const EMPTY_TEAM_KPIS = {
+  sdrCount: 0,
+  totalAgendamentos: 0,
+  totalRealizadas: 0,
+  totalNoShows: 0,
+  totalContratos: 0,
+  totalOutside: 0,
+  totalReembolsos: 0,
+  totalR1Agendada: 0,
+  totalSemStatus: 0,
+  taxaConversao: 0,
+  taxaNoShow: 0,
+} as unknown as TeamKPIs;
 
 // ============= Tipos do retorno da RPC painel_comercial_credito =============
 
@@ -515,7 +534,7 @@ export default function PainelComercialCredito() {
 
       {data && !isLoading && (
         <>
-          <TeamKPICards kpis={{} as any} customCards={customCards} isLoading={isLoading} />
+          <TeamKPICards kpis={EMPTY_TEAM_KPIS} customCards={customCards} isLoading={isLoading} />
 
           <Card className="bg-card border-border overflow-hidden">
             <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
