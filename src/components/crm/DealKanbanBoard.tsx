@@ -265,6 +265,17 @@ export const DealKanbanBoard = ({
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
 
+    // Crédito: etapas da esteira só via botões (o banco também bloqueia)
+    if (
+      (deal as any)?.origin_id === 'c4ed1700-0000-4000-8000-000000000002' &&
+      ['12', '13', '14', '07', '08', '15', '16', '09'].some(
+        (n) => newStageId === `c4ed1701-0000-4000-8000-0000000000${n}`
+      )
+    ) {
+      toast.info('Use os botões da esteira no painel do negócio para avançar esta etapa.');
+      return;
+    }
+
     if (isSemInteresseStageName(newStage?.stage_name) && !isSemInteresseStageName(oldStage?.stage_name)) {
       setPendingLossMove({ dealId, newStageId, oldStageId, dealName: deal?.name || '' });
       return;
@@ -301,7 +312,7 @@ export const DealKanbanBoard = ({
           if (isMotivoObrigatorioError(err)) {
             toast.error('Informe o motivo para mover para Sem Interesse.');
           } else {
-            toast.error('Erro ao mover negócio');
+            toast.error(err?.message || 'Erro ao mover negócio');
           }
         },
       }

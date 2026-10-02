@@ -80,7 +80,7 @@ export const CREDITO_QUALIFICATION_QUESTIONS: CreditoQuestion[] = [
 
   // ───────── IMÓVEL PRONTO ─────────
   { key: 'nome_completo', label: 'Nome completo', type: 'short', showWhen: IP, section: 'Dados do proponente' },
-  { key: 'cpf', label: 'CPF', type: 'short', showWhen: IP, placeholder: '000.000.000-00' },
+  { key: 'cpf', label: 'CPF', type: 'short', showWhen: IP, placeholder: '000.000.000-00', help: 'CPF, RG, nascimento e estado civil ficam guardados em área restrita ao time do Crédito (LGPD).' },
   { key: 'rg', label: 'RG', type: 'short', showWhen: IP },
   { key: 'data_nascimento', label: 'Data de nascimento', type: 'short', showWhen: IP, placeholder: 'dd/mm/aaaa' },
   { key: 'estado_civil', label: 'Estado civil e regime de bens', type: 'short', showWhen: IP, placeholder: 'Ex: Casado, comunhão parcial' },

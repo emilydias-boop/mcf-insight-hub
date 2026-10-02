@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { ClipboardList, Sparkles, MessageCircle, Phone } from 'lucide-react';
+import { ClipboardList, Sparkles, MessageCircle, Phone, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { QUALIFICATION_QUESTIONS } from './QualificationQuestions';
@@ -78,6 +78,26 @@ export function QualificationHistorySection({ dealId }: Props) {
       return data || [];
     },
     enabled: !!dealId,
+  });
+
+  const precisaDadosPessoais = (data || []).some((act: any) => {
+    const a = ((act.metadata || {}) as any).answers || {};
+    return typeof a.modalidade === 'string' && a.modalidade.trim().length > 0 && a.dados_pessoais_restritos === 'sim';
+  });
+  const { data: dadosPessoais } = useQuery({
+    queryKey: ['credito-dados-pessoais', dealId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('credito_dados_pessoais')
+        .select('doc_cpf, doc_rg, data_nascimento, estado_civil')
+        .eq('deal_id', dealId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as
+        | { doc_cpf: string | null; doc_rg: string | null; data_nascimento: string | null; estado_civil: string | null }
+        | null;
+    },
+    enabled: !!dealId && precisaDadosPessoais,
   });
 
   if (!dealId || isLoading) return null;
@@ -166,7 +186,7 @@ export function QualificationHistorySection({ dealId }: Props) {
                         : QUALIFICATION_QUESTIONS;
                       return questions.map((q) => {
                         const a = (answers[q.key] || '').trim();
-                        if (!a) return null;
+                        if (!a || q.key === 'dados_pessoais_restritos') return null;
                         return (
                           <div key={q.key} className="text-xs">
                             <p className="font-medium text-foreground/80">▸ {q.label}</p>
@@ -176,6 +196,24 @@ export function QualificationHistorySection({ dealId }: Props) {
                       });
                     })()}
                   </div>
+                )}
+
+                {isCreditoAnswers && answers.dados_pessoais_restritos === 'sim' && (
+                  dadosPessoais ? (
+                    <div className="mt-2 rounded border border-border p-2 text-xs space-y-0.5">
+                      <p className="flex items-center gap-1 font-medium text-foreground/80">
+                        <Lock className="h-3 w-3" /> Dados pessoais (restrito ao time do Crédito)
+                      </p>
+                      <p className="text-muted-foreground">CPF: {dadosPessoais.doc_cpf || '—'}</p>
+                      <p className="text-muted-foreground">RG: {dadosPessoais.doc_rg || '—'}</p>
+                      <p className="text-muted-foreground">Data de nascimento: {dadosPessoais.data_nascimento || '—'}</p>
+                      <p className="text-muted-foreground">Estado civil: {dadosPessoais.estado_civil || '—'}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Dados pessoais restritos ao time do Crédito.
+                    </p>
+                  )
                 )}
 
                 {/* Transcrição/descrição (Resumo IA ou fallback) */}

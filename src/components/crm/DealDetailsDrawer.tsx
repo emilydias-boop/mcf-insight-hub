@@ -31,6 +31,7 @@ import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package 
 import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
+import { CreditoEsteiraActions } from '@/components/crm/credito/CreditoEsteiraActions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBUContext } from '@/contexts/BUContext';
 import { CONSORCIO_ORIGIN_IDS } from '@/hooks/useConsorcioPostMeeting';
@@ -148,6 +149,11 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                     )}
                   </AlertDescription>
                 </Alert>
+              )}
+
+              {/* ===== ESTEIRA DO CRÉDITO (somente BU Crédito) ===== */}
+              {(deal.origin_id === 'c4ed1700-0000-4000-8000-000000000002' || activeBU === 'credito') && (
+                <CreditoEsteiraActions dealId={deal.id} />
               )}
 
               {/* ===== 2. AÇÕES RÁPIDAS (acima da dobra) ===== */}
