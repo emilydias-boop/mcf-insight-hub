@@ -15635,6 +15635,42 @@ export type Database = {
         }
         Relationships: []
       }
+      solar_bi_metas: {
+        Row: {
+          closer_targets: Json
+          created_at: string
+          created_by: string | null
+          dias_uteis_override: Json | null
+          id: string
+          meta_agendamento_dia: number | null
+          meta_valor: number | null
+          month_ref: string
+          updated_at: string
+        }
+        Insert: {
+          closer_targets?: Json
+          created_at?: string
+          created_by?: string | null
+          dias_uteis_override?: Json | null
+          id?: string
+          meta_agendamento_dia?: number | null
+          meta_valor?: number | null
+          month_ref: string
+          updated_at?: string
+        }
+        Update: {
+          closer_targets?: Json
+          created_at?: string
+          created_by?: string | null
+          dias_uteis_override?: Json | null
+          id?: string
+          meta_agendamento_dia?: number | null
+          meta_valor?: number | null
+          month_ref?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sonax_bu_filas: {
         Row: {
           ativo: boolean
@@ -18606,6 +18642,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      can_edit_bi_solar_meta: { Args: { _user_id: string }; Returns: boolean }
       can_manage_ar: { Args: { _user_id: string }; Returns: boolean }
       can_reverter_etapa_consorcio: {
         Args: { _user_id: string }
@@ -19911,6 +19948,10 @@ export type Database = {
         }[]
       }
       painel_comercial_credito: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
+      painel_comercial_solar: {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
