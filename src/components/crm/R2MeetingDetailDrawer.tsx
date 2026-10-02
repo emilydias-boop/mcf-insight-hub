@@ -15,6 +15,12 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue
+} from '@/components/ui/select';
+import { useR2StatusOptions } from '@/hooks/useR2StatusOptions';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatters';
 import { VincularVendaR2Dialog } from './VincularVendaR2Dialog';
@@ -60,6 +66,7 @@ const MEETING_STATUS_LABELS: Record<string, { label: string; color: string }> = 
 
 export function R2MeetingDetailDrawer({
   meeting,
+  statusOptions,
   open,
   onOpenChange,
   onReschedule
@@ -90,6 +97,22 @@ export function R2MeetingDetailDrawer({
   const updateCRMContact = useUpdateCRMContact();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
+
+  // Status final da R2 (meeting_slot_attendees.r2_status_id). O seletor que
+  // gravava este campo vivia na aba "Avaliação R2", apagada em 13/07 (commit
+  // 072a1317). Desde então nada mais escrevia o campo — o Carrinho R2
+  // (Aprovados, Vendas e KPIs) depende dele.
+  const { data: fetchedStatusOptions } = useR2StatusOptions();
+  const resolvedStatusOptions = (statusOptions && statusOptions.length > 0)
+    ? statusOptions
+    : (fetchedStatusOptions ?? []);
+  const [localR2StatusId, setLocalR2StatusId] = useState<string | null>(attendee?.r2_status_id ?? null);
+
+  // Mantém o estado otimista sincronizado quando o participante selecionado
+  // muda ou quando o servidor devolve o novo valor.
+  useEffect(() => {
+    setLocalR2StatusId(attendee?.r2_status_id ?? null);
+  }, [attendee?.id, attendee?.r2_status_id]);
 
   // Initialize selection when meeting changes
   useEffect(() => {
@@ -674,6 +697,66 @@ export function R2MeetingDetailDrawer({
             <LeadProfileSection contactId={contactId} />
 
             <Separator />
+
+            {/* Status final da R2 */}
+            {attendee && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Status final da R2</Label>
+                {canManage ? (
+                  <Select
+                    value={localR2StatusId || '__none__'}
+                    onValueChange={(v) => {
+                      const next = v === '__none__' ? null : v;
+                      setLocalR2StatusId(next);
+                      updateR2Attendee.mutate({
+                        attendeeId: attendee.id,
+                        updates: { r2_status_id: next },
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Sem status —</SelectItem>
+                      {resolvedStatusOptions.map((opt) => (
+                        <SelectItem key={opt.id} value={opt.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: opt.color }}
+                            />
+                            {opt.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const current = resolvedStatusOptions.find(
+                        (o) => o.id === (localR2StatusId ?? attendee.r2_status_id)
+                      );
+                      return current ? (
+                        <Badge variant="outline" className="gap-1.5">
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: current.color }}
+                          />
+                          {current.name}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">— Sem status —</span>
+                      );
+                    })()}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Usado no Carrinho R2 (Aprovados e Vendas).
+                </p>
+              </div>
+            )}
 
             {/* Tabbed Content */}
             {attendee && (
