@@ -62,17 +62,23 @@ export function CloserSummaryTable({
       r1_realizada: acc.r1_realizada + row.r1_realizada,
       noshow: acc.noshow + row.noshow,
       contrato_pago: acc.contrato_pago + row.contrato_pago,
+      contrato_bruto: acc.contrato_bruto + row.contrato_bruto,
       outside: acc.outside + row.outside,
       r2_agendada: acc.r2_agendada + row.r2_agendada,
       reembolsos: acc.reembolsos + (row.reembolsos || 0),
       reembolsos_valor: acc.reembolsos_valor + (row.reembolsos_valor || 0),
     }),
-    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0, reembolsos: 0, reembolsos_valor: 0 }
+    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, contrato_bruto: 0, outside: 0, r2_agendada: 0, reembolsos: 0, reembolsos_valor: 0 }
   );
 
   // Taxa de conversão considera apenas cauções com negócio no CRM (órfãos ficam
   // fora de qualquer total/KPI — só aparecem na linha de diagnóstico).
-  const totalTaxaConversao = totals.r1_realizada > 0 
+  // A BRUTA (contrato_bruto = líquido + reembolsados) manda na cor; a líquida
+  // (contrato_pago) fica embaixo, no formato "líq. X,X%".
+  const totalTaxaBruta = totals.r1_realizada > 0
+    ? ((totals.contrato_bruto / totals.r1_realizada) * 100)
+    : 0;
+  const totalTaxaLiquida = totals.r1_realizada > 0
     ? ((totals.contrato_pago / totals.r1_realizada) * 100)
     : 0;
 
@@ -91,7 +97,7 @@ export function CloserSummaryTable({
   const segBMap = byId(segmentBData);
   const segCMap = byId(segmentCData);
 
-  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_pago' | 'venda_direta' | 'r2_agendada';
+  type SegKey = 'r1_agendada' | 'outside' | 'r1_realizada' | 'noshow' | 'contrato_bruto' | 'venda_direta' | 'r2_agendada';
   const SEG_COLS: { key: SegKey; label: string; cls: string }[] = [
     { key: 'r1_agendada', label: 'R1 Agendada', cls: 'text-blue-400' },
     { key: 'outside', label: 'Outside', cls: 'text-orange-400' },
