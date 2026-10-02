@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChevronDown, Users, Info } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCanalEntrada } from '@/hooks/useCanalEntrada';
+import { useCanalEntrada, useCanaisEntradaLista } from '@/hooks/useCanalEntrada';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
@@ -75,6 +76,7 @@ const MODO_TITULO: Record<ModoAgrupamento, string> = {
   canal: 'Faturamento por Canal de Entrada',
 };
 const CANAL_DIRETO = 'Direto (sem entrada)';
+const MOSTRAR_SEM_VENDA_KEY = 'canal-mostrar-sem-venda';
 
 interface CloserRow {
   id: string;
@@ -112,6 +114,16 @@ export function CloserRevenueSummaryTable({
     setSelectedCloser(null);
     try { localStorage.setItem(MODO_KEY, v); } catch { /* ignore */ }
   };
+  const [mostrarSemVenda, setMostrarSemVendaState] = useState<boolean>(() => {
+    try {
+      if (localStorage.getItem(MOSTRAR_SEM_VENDA_KEY) === 'false') return false;
+    } catch { /* ignore */ }
+    return true;
+  });
+  const setMostrarSemVenda = (v: boolean) => {
+    setMostrarSemVendaState(v);
+    try { localStorage.setItem(MOSTRAR_SEM_VENDA_KEY, String(v)); } catch { /* ignore */ }
+  };
 
   // Filtrar apenas transações que pertencem à BU Incorporador (allowlist)
   const filteredTxs = useMemo(() => (
@@ -130,6 +142,7 @@ export function CloserRevenueSummaryTable({
   );
   const { map: pagamentosMap } = usePagamentosDaVenda(pagamentoIds);
   const { map: canalMap, isLoading: loadingCanal } = useCanalEntrada(filteredIds, modo === 'canal');
+  const { data: canaisLista, isLoading: loadingLista } = useCanaisEntradaLista();
 
   const sdrIds = useMemo(() => {
     if (modo !== 'sdr') return [] as string[];
