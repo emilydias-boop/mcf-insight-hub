@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Fragment } from "react";
 import { Calendar, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
@@ -56,7 +57,8 @@ export function TeamCommercialFilters({
   onExport,
 }: TeamCommercialFiltersProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+    <Fragment>
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
       <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-full sm:w-auto">
         <Button variant={datePreset === "today" ? "secondary" : "ghost"} size="sm" onClick={() => onPresetChange("today")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Hoje</Button>
         <Button variant={datePreset === "week" ? "secondary" : "ghost"} size="sm" onClick={() => onPresetChange("week")} className="flex-1 sm:flex-initial text-xs sm:text-sm">Semana</Button>
@@ -109,9 +111,10 @@ export function TeamCommercialFilters({
         <span className="sm:inline">Exportar</span>
       </Button>
 
-      <div className="basis-full text-xs text-muted-foreground">
+      </div>
+      <div className="mt-3 text-xs text-muted-foreground">
         Período: {format(start, "dd/MM/yyyy")} - {format(end, "dd/MM/yyyy")}
       </div>
-    </div>
+    </Fragment>
   );
 }

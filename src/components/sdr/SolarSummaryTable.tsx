@@ -99,7 +99,7 @@ export function SolarSdrSummaryTable({ data, isLoading, metaAgendamentoDia, onRo
                   <TableCell className="text-center"><div className="flex flex-col items-center"><span className="text-red-400 font-medium">{noShow}</span>{agendadas > 0 && <span className="text-xs text-red-400">({rate(noShow, agendadas).toFixed(1)}%)</span>}</div></TableCell>
                   <TableCell className="text-center"><Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">{vendas}</Badge></TableCell>
                   <TableCell className="text-center"><span className="font-medium">{rate(vendas, realizadas).toFixed(1)}%</span></TableCell>
-                  <TableCell>{onRowClick && <ChevronRight className="h-4 w-4 text-muted-foreground" />}</TableCell>
+                  <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
                 </TableRow>
               );
             })}

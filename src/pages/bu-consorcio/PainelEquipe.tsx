@@ -1,20 +1,16 @@
 import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfYear, endOfYear, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { loadXLSX } from '@/lib/lazyExport';
 import { CONSORCIO_WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
 import { Users, Briefcase } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamCommercialFilters, type TeamCommercialDatePreset } from "@/components/sdr/TeamCommercialFilters";
 import { computePendentesBreakdown } from "@/lib/pendentesBreakdown";
 import { useSdrMeetingsFromAgenda } from "@/hooks/useSdrMeetingsFromAgenda";
 import { useSdrTeamTargets } from "@/hooks/useSdrTeamTargets";
-import { Target, Settings2 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ConsorcioSdrSummaryTable } from "@/components/sdr/ConsorcioSdrSummaryTable";
 import { CadastroSemLeadAlerta } from "@/components/sdr/CadastroSemLeadAlerta";
 import { useConsorcioPipelineMetricsBySdr } from "@/hooks/useConsorcioPipelineMetricsBySdr";
@@ -23,7 +19,6 @@ import { useConsorcioPipelineMetricsByCloser } from "@/hooks/useConsorcioPipelin
 import { useConsorcioProducaoGerada } from "@/hooks/useConsorcioProducaoGerada";
 
 import { ConsorcioCloserSummaryTable } from "@/components/sdr/ConsorcioCloserSummaryTable";
-import { PipelineSelector } from "@/components/crm/PipelineSelector";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import {
