@@ -20118,6 +20118,7 @@ export type Database = {
           transaction_id: string
         }[]
       }
+      pagamentos_da_venda: { Args: { p_ids: string[] }; Returns: Json }
       painel_comercial_credito: {
         Args: { p_from: string; p_to: string }
         Returns: Json
