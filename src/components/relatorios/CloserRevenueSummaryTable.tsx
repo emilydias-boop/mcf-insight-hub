@@ -481,7 +481,7 @@ export function CloserRevenueSummaryTable({
                           )}
                         </TableCell>
                         <TableCell className="text-right">{zerada ? '-' : row.count}</TableCell>
-                        <TableCell className={`text-right font-mono ${zerada ? '' : ''}`}>
+                        <TableCell className="text-right font-mono">
                           {zerada ? '-' : formatCurrency(row.gross)}
                         </TableCell>
                         <TableCell className={`text-right font-mono ${!zerada && (row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
