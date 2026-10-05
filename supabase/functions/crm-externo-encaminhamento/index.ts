@@ -485,7 +485,7 @@ Deno.serve(async (req) => {
           endereco,
           perfil,
           anamnese,
-          anamnese_v2: anamneseV2,
+          ...(isAdmissao ? {} : { anamnese_v2: anamneseV2 }),
 
           score,
           faixa_classificacao: faixa,
