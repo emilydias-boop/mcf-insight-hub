@@ -143,6 +143,79 @@ function temAnamnese(a: AnamneseV2) {
   );
 }
 
+// ---------- Admissão: pipeline/etapa explícitas + campos extras ----------
+function norm(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+async function resolverPipelineStage(supabase: any, pipelineNome: string, stageNome: string) {
+  const { data: origens, error } = await supabase
+    .from("crm_origins")
+    .select("id, name, display_name, is_archived");
+  if (error) throw error;
+  const alvo = norm(pipelineNome);
+  const ativas = (origens ?? []).filter((o: any) => !o.is_archived);
+  const nomes = (o: any) => [o.name, o.display_name].filter(Boolean).map((n: string) => norm(n));
+  let candidatas = ativas.filter((o: any) =>
+    nomes(o).some((n: string) => n === alvo || n === `pipeline ${alvo}`)
+  );
+  if (candidatas.length === 0) {
+    candidatas = ativas.filter((o: any) => nomes(o).some((n: string) => n.includes(alvo)));
+  }
+  if (candidatas.length === 0) return { erro: "pipeline_nao_encontrada", pipeline: pipelineNome };
+  if (candidatas.length > 1) {
+    return { erro: "pipeline_ambigua", pipeline: pipelineNome, opcoes: candidatas.map((o: any) => o.name) };
+  }
+  const origem = candidatas[0];
+  const { data: stages, error: stErr } = await supabase
+    .from("crm_stages")
+    .select("id, stage_name")
+    .eq("origin_id", origem.id);
+  if (stErr) throw stErr;
+  const st = (stages ?? []).find((s: any) => norm(s.stage_name ?? "") === norm(stageNome));
+  if (!st) return { erro: "stage_nao_encontrada", pipeline: origem.name, stage: stageNome };
+  return { origin_id: origem.id as string, origin_nome: origem.name as string, stage_id: st.id as string };
+}
+
+function extrairAdmissao(body: any) {
+  const c = body?.cliente ?? {};
+  const v = body?.venda ?? {};
+  const r = body?.registrado_por ?? {};
+  const g = body?.gerente ?? {};
+  const os = body?.credito_os;
+  const projetoStatus = texto(body?.projeto_status);
+  return {
+    motivo: texto(body?.motivo),
+    nota: texto(body?.nota),
+    projeto_status: projetoStatus,
+    projeto_status_descricao: texto(body?.projeto_status_descricao),
+    encaminhado_credito:
+      typeof body?.encaminhado_credito === "boolean"
+        ? body.encaminhado_credito
+        : projetoStatus ? projetoStatus !== "nenhum" : null,
+    credito_os: os && typeof os === "object" ? { id: os.id ?? null, numero: os.numero ?? null } : null,
+    cliente: {
+      nome: texto(c.nome),
+      email: texto(c.email),
+      telefone: texto(c.telefone),
+      documento: texto(c.documento),
+      tem_cadastro_app: typeof c.tem_cadastro_app === "boolean" ? c.tem_cadastro_app : null,
+    },
+    venda: {
+      produto: texto(v.produto),
+      produto_codigo: texto(v.produto_codigo),
+      valor: v.valor ?? null,
+      data_venda: texto(v.data_venda),
+      pedido_id: v.pedido_id ?? null,
+    },
+    contatado_em: texto(body?.contatado_em),
+    registrado_por: { nome: texto(r.nome), email: texto(r.email) },
+    gerente: { nome: texto(g.nome), email: texto(g.email), telefone: texto(g.telefone) },
+    pipeline: texto(body?.pipeline),
+    stage: texto(body?.stage),
+  };
+}
+
 
 
 Deno.serve(async (req) => {
