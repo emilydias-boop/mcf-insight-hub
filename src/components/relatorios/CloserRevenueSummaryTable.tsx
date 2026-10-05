@@ -79,6 +79,10 @@ const MODO_TITULO: Record<ModoAgrupamento, string> = {
 const CANAL_DIRETO = 'Direto (sem entrada)';
 const MOSTRAR_SEM_VENDA_KEY = 'canal-mostrar-sem-venda';
 
+/** P2 (A005) não é venda nova: continuação da parceria. Fica só no detalhe. */
+export const isP2 = (tx: { product_name?: string | null; product_category?: string | null }) =>
+  (tx.product_name || '').trim().toUpperCase().startsWith('A005') || tx.product_category === 'p2';
+
 export const vendaKey = (
   tx: { id?: string; customer_email?: string | null; customer_name?: string | null; product_name?: string | null },
   donoMap?: Map<string, string>,
@@ -100,6 +104,7 @@ interface CloserRow {
   aReceber?: number;
   outraBu?: boolean;
   vendas?: number;
+  p2Count?: number;
   vendasComBruto?: number;
   outsideVendas?: number;
 }
@@ -182,7 +187,10 @@ export function CloserRevenueSummaryTable({
     const outsidePorLinha = new Map<string, Set<string>>();
     const vendasTotal = new Map<string, number>();
     const outsideTotal = new Set<string>();
+    let p2Pagamentos = 0;
+    let p2Liquido = 0;
     const track = (rowId: string, tx: Transaction, gross: number, outside = false) => {
+      if (isP2(tx)) return;
       const k = vendaKey(tx, donoMap);
       if (outside) {
         const s = outsidePorLinha.get(rowId) || new Set<string>();
@@ -225,13 +233,15 @@ export function CloserRevenueSummaryTable({
     if (modo === 'canal') {
       const canalTotals = new Map<string, CloserRow>();
       for (const tx of filteredTxs) {
-        const gross = getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
-        const net = tx.net_value || 0;
-        const aRec = calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
+        const p2 = isP2(tx);
+        if (p2) { p2Pagamentos++; p2Liquido += tx.net_value || 0; }
+        const gross = p2 ? 0 : getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
+        const net = p2 ? 0 : (tx.net_value || 0);
+        const aRec = p2 ? 0 : calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
         const canal = canalMap.get(tx.id)?.canal || CANAL_DIRETO;
         const id = `canal:${canal}`;
         const row = canalTotals.get(id) || { id, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 };
-        row.count++;
+        if (p2) row.p2Count = (row.p2Count || 0) + 1; else row.count++;
         track(id, tx, gross);
         row.gross += gross;
         row.net += net;
@@ -250,7 +260,7 @@ export function CloserRevenueSummaryTable({
       for (const canal of lista) {
         const row = canalTotals.get(`canal:${canal}`);
         if (row) {
-          if (row.count > 0) comVendaLista.push(row);
+          if (row.count > 0 || (row.p2Count || 0) > 0) comVendaLista.push(row);
           else zeradas.push(row);
         } else {
           zeradas.push({ id: `canal:${canal}`, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 });
@@ -264,7 +274,7 @@ export function CloserRevenueSummaryTable({
       // "Direto (sem entrada)" sempre por último
       const diretoRow = rows.find((r) => r.name === CANAL_DIRETO);
       if (diretoRow) rows = [...rows.filter((r) => r !== diretoRow), diretoRow];
-      if (!mostrarSemVenda) rows = rows.filter((r) => r.count > 0);
+      if (!mostrarSemVenda) rows = rows.filter((r) => r.count > 0 || (r.p2Count || 0) > 0);
       const vt = finalize(rows);
       return {
         summaryData: {
@@ -276,6 +286,8 @@ export function CloserRevenueSummaryTable({
           totalCount: rows.reduce((s, r) => s + r.count, 0),
           totalOutsideCount: 0,
           totalOutsideGross: 0,
+          p2Pagamentos,
+          p2Liquido,
         },
         closerTransactionsMap: txMap,
       };
@@ -283,9 +295,11 @@ export function CloserRevenueSummaryTable({
 
     for (const tx of filteredTxs) {
       const isFirst = globalFirstIds.has(tx.id);
-      const gross = getDeduplicatedGross(tx as any, isFirst);
-      const net = tx.net_value || 0;
-      const aRec = calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
+      const p2 = isP2(tx);
+      if (p2) { p2Pagamentos++; p2Liquido += tx.net_value || 0; }
+      const gross = p2 ? 0 : getDeduplicatedGross(tx as any, isFirst);
+      const net = p2 ? 0 : (tx.net_value || 0);
+      const aRec = p2 ? 0 : calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
       
       // 1. Launch sales — but only if no R1 match (Inside Sales override)
       if (tx.sale_origin === 'launch' || 
@@ -294,7 +308,7 @@ export function CloserRevenueSummaryTable({
         
         if (!hasR1Match) {
           // Pure launch — isolate
-          launch.count++;
+          if (p2) launch.p2Count = (launch.p2Count || 0) + 1; else launch.count++;
         track('__launch__', tx, gross);
           launch.gross += gross;
         launch.aReceber = (launch.aReceber || 0) + aRec;
@@ -307,7 +321,7 @@ export function CloserRevenueSummaryTable({
       
       // 2. A010 - Funil de entrada automático
       if (tx.product_category === 'a010') {
-        a010.count++;
+        if (p2) a010.p2Count = (a010.p2Count || 0) + 1; else a010.count++;
         track('__a010__', tx, gross);
         a010.gross += gross;
         a010.aReceber = (a010.aReceber || 0) + aRec;
@@ -318,7 +332,7 @@ export function CloserRevenueSummaryTable({
       
       // 3. Renovação
       if (tx.product_category === 'renovacao') {
-        renovacao.count++;
+        if (p2) renovacao.p2Count = (renovacao.p2Count || 0) + 1; else renovacao.count++;
         track('__renovacao__', tx, gross);
         renovacao.gross += gross;
         renovacao.aReceber = (renovacao.aReceber || 0) + aRec;
@@ -329,7 +343,7 @@ export function CloserRevenueSummaryTable({
       
       // 4. Vitalício (order bump)
       if (tx.product_category === 'ob_vitalicio') {
-        vitalicio.count++;
+        if (p2) vitalicio.p2Count = (vitalicio.p2Count || 0) + 1; else vitalicio.count++;
         track('__vitalicio__', tx, gross);
         vitalicio.gross += gross;
         vitalicio.aReceber = (vitalicio.aReceber || 0) + aRec;
@@ -347,12 +361,12 @@ export function CloserRevenueSummaryTable({
           ? (atr.sdr_profile_id ? (sdrNames?.get(atr.sdr_profile_id) || 'SDR sem nome') : 'Sem SDR')
           : atr.closer_nome;
         const existing = closerTotals.get(key) || { id: key, name: nome, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, outraBu: modo === 'sdr' ? false : atr.outra_bu };
-        if (atr.is_outside) {
-          existing.outsideCount++;
+        if (atr.is_outside && !p2) {
+          if (!p2) existing.outsideCount++;
           track(key, tx, gross, true);
           existing.outsideGross += gross;
         } else {
-          existing.count++;
+          if (p2) existing.p2Count = (existing.p2Count || 0) + 1; else existing.count++;
           track(key, tx, gross);
           existing.gross += gross;
           existing.aReceber = (existing.aReceber || 0) + aRec;
@@ -368,7 +382,7 @@ export function CloserRevenueSummaryTable({
       // 6. Lucrômetro - Funil (sem atribuição)
       const pnLower = (tx.product_name || '').toLowerCase();
       if (pnLower.includes('lucrômetro') || pnLower.includes('lucrometro')) {
-        lucrometro.count++;
+        if (p2) lucrometro.p2Count = (lucrometro.p2Count || 0) + 1; else lucrometro.count++;
         track('__lucrometro__', tx, gross);
         lucrometro.gross += gross;
         lucrometro.aReceber = (lucrometro.aReceber || 0) + aRec;
@@ -378,7 +392,7 @@ export function CloserRevenueSummaryTable({
       }
 
       // 7. Sem closer
-      unassigned.count++;
+      if (p2) unassigned.p2Count = (unassigned.p2Count || 0) + 1; else unassigned.count++;
         track('__unassigned__', tx, gross);
       unassigned.gross += gross;
       unassigned.aReceber = (unassigned.aReceber || 0) + aRec;
@@ -387,7 +401,7 @@ export function CloserRevenueSummaryTable({
     }
     
     const rows: CloserRow[] = Array.from(closerTotals.values())
-      .filter((r) => r.count > 0 || r.outsideCount > 0)
+      .filter((r) => r.count > 0 || r.outsideCount > 0 || (r.p2Count || 0) > 0)
       .sort((a, b) => (a.id === '__sem_sdr__' ? 1 : 0) - (b.id === '__sem_sdr__' ? 1 : 0) || b.gross - a.gross);
     
     // Categorias automáticas no final
@@ -401,7 +415,7 @@ export function CloserRevenueSummaryTable({
     ];
     
     for (const cat of autoCategories) {
-      if (cat.row.count > 0) {
+      if (cat.row.count > 0 || (cat.row.p2Count || 0) > 0) {
         rows.push(cat.row);
         txMap.set(cat.key, cat.txs);
       }
@@ -416,7 +430,7 @@ export function CloserRevenueSummaryTable({
     const vt = finalize(rows);
     
     return {
-      summaryData: { rows, ...vt, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
+      summaryData: { rows, ...vt, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross, p2Pagamentos, p2Liquido },
       closerTransactionsMap: txMap,
     };
   }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, canaisLista, mostrarSemVenda, donoMap]);
@@ -519,7 +533,9 @@ export function CloserRevenueSummaryTable({
                 </TableHeader>
                 <TableBody>
                   {summaryData.rows.map((row) => {
-                    const zerada = row.count === 0;
+                    const soP2 = row.count === 0 && row.outsideCount === 0 && (row.p2Count || 0) > 0;
+                    const zerada = row.count === 0 && !soP2;
+                    const semValor = zerada || soP2;
                     return (
                       <TableRow key={row.name} className={zerada ? 'text-muted-foreground' : undefined}>
                         <TableCell>
