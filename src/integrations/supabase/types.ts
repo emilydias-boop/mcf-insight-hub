@@ -2885,6 +2885,36 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_recompra_a010_reativada: {
+        Row: {
+          backup_at: string | null
+          deal_id: string | null
+          owner_id: string | null
+          owner_profile_id: string | null
+          stage_id: string | null
+          stage_moved_at: string | null
+          ultima_compra: string | null
+        }
+        Insert: {
+          backup_at?: string | null
+          deal_id?: string | null
+          owner_id?: string | null
+          owner_profile_id?: string | null
+          stage_id?: string | null
+          stage_moved_at?: string | null
+          ultima_compra?: string | null
+        }
+        Update: {
+          backup_at?: string | null
+          deal_id?: string | null
+          owner_id?: string | null
+          owner_profile_id?: string | null
+          stage_id?: string | null
+          stage_moved_at?: string | null
+          ultima_compra?: string | null
+        }
+        Relationships: []
+      }
       backup_venda_direta_backfill_set2026: {
         Row: {
           backup_at: string | null
@@ -18916,6 +18946,14 @@ export type Database = {
         Returns: Json
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      decisao_recompra_a010: {
+        Args: { p_compra_em?: string; p_deal_id: string }
+        Returns: {
+          bloqueio: string
+          mover_para_novo_lead: boolean
+          precisa_dono: boolean
+        }[]
+      }
       delete_deal_cascade: { Args: { p_deal_id: string }; Returns: undefined }
       desvincular_venda_direta: {
         Args: { p_transaction_id: string }
@@ -18940,6 +18978,7 @@ export type Database = {
         }
         Returns: Json
       }
+      dono_esta_ativo: { Args: { p_email: string }; Returns: boolean }
       eh_produto_parceria: { Args: { p_nome: string }; Returns: boolean }
       embracon_indices_class: {
         Args: { p_fonte?: string; p_mes: string }
@@ -20183,6 +20222,10 @@ export type Database = {
           tentativas_pos_r2: number
           ultima_tentativa: string
         }[]
+      }
+      reativar_recompra_a010: {
+        Args: { p_compra_em?: string; p_deal_id: string; p_fonte?: string }
+        Returns: Json
       }
       recalc_automation_queue_for_deal: {
         Args: {

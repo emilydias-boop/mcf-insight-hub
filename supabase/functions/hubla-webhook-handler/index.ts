@@ -801,6 +801,26 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         .eq('id', existingDeal.id);
 
       console.log(`[CRM] Deal atualizado: ${existingDeal.id} - tags=${JSON.stringify(newTags)} - Valor: R$ ${newValue}${promotedStageId ? ' (movido para Novo Lead)' : ''}`);
+
+      // Recompra em deal antigo: redistribui dono inválido e reativa etapa parada (regra no banco).
+      // Abandono de carrinho ("A010 Em Aberto") não é compra: não reativa.
+      if (!isAbandoned) {
+        try {
+          const { data: reativacao, error: reativacaoError } = await supabase.rpc('reativar_recompra_a010', {
+            p_deal_id: existingDeal.id,
+            p_compra_em: new Date().toISOString(),
+            p_fonte: 'hubla-webhook',
+          });
+          if (reativacaoError) {
+            console.error('[CRM] reativar_recompra_a010 falhou:', reativacaoError.message);
+          } else {
+            console.log('[CRM] reativar_recompra_a010:', JSON.stringify(reativacao));
+          }
+        } catch (e) {
+          console.error('[CRM] reativar_recompra_a010 lançou:', (e as Error)?.message);
+        }
+      }
+
       return; // Não criar novo deal
     }
     
