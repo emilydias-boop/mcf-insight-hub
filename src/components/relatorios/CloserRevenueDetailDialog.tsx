@@ -66,6 +66,7 @@ interface CloserRevenueDetailDialogProps {
   bu?: string;
   modo?: 'closer' | 'sdr' | 'canal';
   canalMap?: Map<string, CanalEntrada>;
+  donoMap?: Map<string, string>;
 }
 
 function fmtEntrada(c?: CanalEntrada) {
@@ -133,6 +134,7 @@ export function CloserRevenueDetailDialog({
   bu,
   modo = 'closer',
   canalMap,
+  donoMap,
 }: CloserRevenueDetailDialogProps) {
   const isAutomaticRow = closerId.startsWith('__') || modo !== 'closer';
   const showCloserCol = modo !== 'closer';
@@ -190,7 +192,7 @@ export function CloserRevenueDetailDialog({
     const porVenda = new Map<string, typeof rows>();
     const pagamentos = rows;
     for (const r of [...pagamentos].sort((x, y) => (x.tx.sale_date || '').localeCompare(y.tx.sale_date || ''))) {
-      const k = vendaKey(r.tx);
+      const k = vendaKey(r.tx, donoMap);
       const arr = porVenda.get(k) || [];
       arr.push(r);
       porVenda.set(k, arr);
@@ -224,7 +226,7 @@ export function CloserRevenueDetailDialog({
       outsideGross: fora.reduce((s, r) => s + r.gross, 0),
       outsideNet: fora.reduce((s, r) => s + r.net, 0),
     };
-  }, [transactions, atribuicaoMap, pagamentosMap, globalFirstIds, modo]);
+  }, [transactions, atribuicaoMap, pagamentosMap, globalFirstIds, modo, donoMap]);
   const showVendas = !isUnassigned && vendas.rows.length > 0;
 
   const atribuicaoBadge = (a?: Atribuicao) => {
@@ -259,7 +261,7 @@ export function CloserRevenueDetailDialog({
 
     const grupoStats = (g: GrupoVenda) => {
       const txs = byGrupo(g);
-      return { count: new Set(txs.map(vendaKey)).size, gross: calcGross(txs, g === 'parceria'), net: calcNet(txs) };
+      return { count: new Set(txs.map((t) => vendaKey(t, donoMap))).size, gross: calcGross(txs, g === 'parceria'), net: calcNet(txs) };
     };
 
     const contracts = grupoStats('contrato');
@@ -299,7 +301,7 @@ export function CloserRevenueDetailDialog({
     for (const tx of byGrupo('parceria')) {
       const name = tx.product_name || 'Parceria';
       const existing = parceriaMap.get(name) || { count: 0, gross: 0, net: 0, keys: new Set<string>() };
-      existing.keys.add(vendaKey(tx));
+      existing.keys.add(vendaKey(tx, donoMap));
       existing.count = existing.keys.size;
       existing.gross += getDeduplicatedGross(tx as any, true);
       existing.net += tx.net_value || 0;
@@ -336,7 +338,7 @@ export function CloserRevenueDetailDialog({
       countChange,
       prevGross,
     };
-  }, [transactions, globalFirstIds, prevCloserTxs]);
+  }, [transactions, globalFirstIds, prevCloserTxs, donoMap]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -492,7 +494,7 @@ export function CloserRevenueDetailDialog({
                               <TooltipContent className="text-xs font-mono space-y-0.5">
                                 {pagamentos.map((p) => (
                                   <div key={p.id}>
-                                    {fmtDataHora(p.sale_date)} · {p.source || '—'} · {formatCurrency(p.product_price || 0)} · líq. {formatCurrency(p.net_value || 0)}
+                                    {fmtDataHora(p.sale_date)} · {p.customer_email || '—'} · {p.source || '—'} · {formatCurrency(p.product_price || 0)} · líq. {formatCurrency(p.net_value || 0)}
                                   </div>
                                 ))}
                               </TooltipContent>
