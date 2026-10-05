@@ -310,7 +310,8 @@ Deno.serve(async (req) => {
       .eq("external_id", externalId)
       .maybeSingle();
 
-    if (existente) {
+    // Admissão: reenvio segue adiante e reaproveita negócio/encaminhamento (atualiza nota, etapa e cliente).
+    if (existente && !isAdmissao) {
       // Reenvio: não cria segundo cartão, apenas atualiza os dados de anamnese.
       if (temAnamnese(anamneseV2)) {
         const { error: updErr } = await supabase
