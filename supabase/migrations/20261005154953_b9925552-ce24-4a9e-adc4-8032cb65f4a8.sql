@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.notify_crm_externo_admissao_status() FROM PUBLIC, anon, authenticated;
