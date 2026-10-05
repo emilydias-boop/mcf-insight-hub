@@ -331,6 +331,23 @@ async function createOrUpdateKiwifyCRMContact(
     console.log(
       `[CRM][Kiwify] Deal atualizado: ${existingDeal.id} - tags=${JSON.stringify(newTags)}${promotedStageId ? ' (promovido → Novo Lead)' : ''}`
     );
+
+    // Recompra em deal antigo: redistribui dono inválido e reativa etapa parada (regra no banco)
+    try {
+      const { data: reativacao, error: reativacaoError } = await supabase.rpc('reativar_recompra_a010', {
+        p_deal_id: existingDeal.id,
+        p_compra_em: new Date().toISOString(),
+        p_fonte: 'kiwify-webhook',
+      });
+      if (reativacaoError) {
+        console.error('[CRM][Kiwify] reativar_recompra_a010 falhou:', reativacaoError.message);
+      } else {
+        console.log('[CRM][Kiwify] reativar_recompra_a010:', JSON.stringify(reativacao));
+      }
+    } catch (e) {
+      console.error('[CRM][Kiwify] reativar_recompra_a010 lançou:', (e as Error)?.message);
+    }
+
     return { dealId: existingDeal.id };
   }
 
