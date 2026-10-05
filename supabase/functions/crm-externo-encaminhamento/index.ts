@@ -437,12 +437,24 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---------- Admissão: negócio já existente pela chave idempotente (clint_id) ----------
+    const clintId = `ext-gr-${sourceApp}-${externalId}`;
+    let dealExistenteId: string | null = null;
+    if (isAdmissao) {
+      if (existente?.deal_id) dealExistenteId = existente.deal_id;
+      if (!dealExistenteId) {
+        const { data: dx } = await supabase
+          .from("crm_deals").select("id").eq("clint_id", clintId).maybeSingle();
+        dealExistenteId = dx?.id ?? null;
+      }
+    }
+
     // ---------- Responsável: distribuição automática (Admin → Distribuição de Leads) ----------
     // Sem configuração ativa para a pipeline, fica sem dono (como antes). Nunca lança.
     let ownerEmail: string | null = null;
     let ownerProfileId: string | null = null;
     let ownerNome: string | null = null;
-    try {
+    if (!dealExistenteId) try {
       const { data: nextOwner, error: ownerErr } = await supabase.rpc("get_next_lead_owner", {
         p_origin_id: destino.origin_id,
       });
@@ -464,10 +476,8 @@ Deno.serve(async (req) => {
     }
 
     // ---------- Negócio na etapa ENCAMINHADO GR ----------
-    const { data: deal, error: dealErr } = await supabase
-      .from("crm_deals")
-      .insert({
-        clint_id: `ext-gr-${sourceApp}-${externalId}`,
+    const dealPayload: Record<string, any> = {
+        clint_id: clintId,
         name: nome,
         contact_id: contactId,
         origin_id: destino.origin_id,
@@ -496,15 +506,29 @@ Deno.serve(async (req) => {
           historico_externo: historico,
           ...(admissaoExtras ? { admissao: admissaoExtras } : {}),
         },
-      })
-      .select("id")
-      .single();
-    if (dealErr) throw dealErr;
+      };
+    let deal: { id: string };
+    if (dealExistenteId) {
+      // Reenvio: atualiza o mesmo negócio (nota, pipeline, etapa, cliente), sem criar outro; dono mantido.
+      const { data: atual } = await supabase
+        .from("crm_deals").select("custom_fields").eq("id", dealExistenteId).maybeSingle();
+      const { owner_id: _o, owner_profile_id: _p, clint_id: _c, ...upd } = dealPayload;
+      upd.custom_fields = { ...((atual?.custom_fields ?? {}) as Record<string, unknown>), ...dealPayload.custom_fields };
+      const { error: updErr } = await supabase.from("crm_deals").update(upd).eq("id", dealExistenteId);
+      if (updErr) throw updErr;
+      deal = { id: dealExistenteId };
+    } else {
+      const { data: novo, error: dealErr } = await supabase
+        .from("crm_deals")
+        .upsert(dealPayload, { onConflict: "clint_id" })
+        .select("id")
+        .single();
+      if (dealErr) throw dealErr;
+      deal = novo;
+    }
 
     // ---------- Registro do encaminhamento ----------
-    const { data: enc, error: encErr } = await supabase
-      .from("crm_externo_encaminhamentos")
-      .insert({
+    const encPayload: Record<string, any> = {
         external_id: externalId,
         source_app: sourceApp,
         area,
@@ -529,15 +553,29 @@ Deno.serve(async (req) => {
         status: "recebida",
         callback_url: callbackUrl,
         responsavel_nome: ownerNome ?? ownerEmail,
-      })
-      .select("id")
-      .single();
-    if (encErr) throw encErr;
+      };
+    let enc: { id: string };
+    if (existente) {
+      const { status: _s, responsavel_nome: _r, ...encUpd } = encPayload;
+      if (!encUpd.responsavel_nome && dealExistenteId) delete encUpd.responsavel_nome;
+      const { error: encErr } = await supabase
+        .from("crm_externo_encaminhamentos").update(encUpd).eq("id", existente.id);
+      if (encErr) throw encErr;
+      enc = { id: existente.id };
+    } else {
+      const { data: novoEnc, error: encErr } = await supabase
+        .from("crm_externo_encaminhamentos")
+        .upsert(encPayload, { onConflict: "source_app,external_id" })
+        .select("id")
+        .single();
+      if (encErr) throw encErr;
+      enc = novoEnc;
+    }
 
     // ---------- Histórico visível no negócio ----------
     const descricao = isAdmissao
       ? [
-          `Contato feito na Admissão de clientes.`,
+          dealExistenteId ? `Reenvio da Admissão de clientes (mesmo encaminhamento).` : `Contato feito na Admissão de clientes.`,
           admissaoExtras?.nota ? `Nota: ${admissaoExtras.nota}` : "",
           admissaoExtras?.projeto_status_descricao
             ? `Projeto: ${admissaoExtras.projeto_status_descricao}`
