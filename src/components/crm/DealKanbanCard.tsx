@@ -401,6 +401,31 @@ export const DealKanbanCard = ({
           {anamneseExterna && (
             <AnamneseExternaButton anamnese={anamneseExterna} clienteNome={deal.name} />
           )}
+          {/* Contato da Admissão de clientes (área "admissao") */}
+          {(() => {
+            const adm = (deal as any)?.custom_fields?.admissao;
+            if (!adm || typeof adm !== 'object') return null;
+            const linhas = [
+              adm.nota ? `Nota: ${adm.nota}` : null,
+              adm.projeto_status_descricao || adm.projeto_status ? `Projeto: ${adm.projeto_status_descricao || adm.projeto_status}` : null,
+              adm.credito_os?.numero ? `OS de crédito: ${adm.credito_os.numero}` : null,
+              adm.venda?.produto ? `Venda: ${adm.venda.produto}` : null,
+              adm.registrado_por?.nome ? `Registrado por: ${adm.registrado_por.nome}` : null,
+              adm.gerente?.nome ? `Gerente: ${adm.gerente.nome}` : null,
+            ].filter(Boolean).join('\n');
+            return (
+              <div className="w-full mt-1 space-y-0.5">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0" title={linhas}>
+                  Admissão{adm.projeto_status_descricao ? ` · ${adm.projeto_status_descricao}` : ''}
+                </Badge>
+                {adm.nota && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-2" title={adm.nota}>
+                    {adm.nota}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {isRescheduled && (
             <Badge 

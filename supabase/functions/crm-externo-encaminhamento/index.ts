@@ -143,6 +143,79 @@ function temAnamnese(a: AnamneseV2) {
   );
 }
 
+// ---------- Admissão: pipeline/etapa explícitas + campos extras ----------
+function norm(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+async function resolverPipelineStage(supabase: any, pipelineNome: string, stageNome: string) {
+  const { data: origens, error } = await supabase
+    .from("crm_origins")
+    .select("id, name, display_name, is_archived");
+  if (error) throw error;
+  const alvo = norm(pipelineNome);
+  const ativas = (origens ?? []).filter((o: any) => !o.is_archived);
+  const nomes = (o: any) => [o.name, o.display_name].filter(Boolean).map((n: string) => norm(n));
+  let candidatas = ativas.filter((o: any) =>
+    nomes(o).some((n: string) => n === alvo || n === `pipeline ${alvo}`)
+  );
+  if (candidatas.length === 0) {
+    candidatas = ativas.filter((o: any) => nomes(o).some((n: string) => n.includes(alvo)));
+  }
+  if (candidatas.length === 0) return { erro: "pipeline_nao_encontrada", pipeline: pipelineNome };
+  if (candidatas.length > 1) {
+    return { erro: "pipeline_ambigua", pipeline: pipelineNome, opcoes: candidatas.map((o: any) => o.name) };
+  }
+  const origem = candidatas[0];
+  const { data: stages, error: stErr } = await supabase
+    .from("crm_stages")
+    .select("id, stage_name")
+    .eq("origin_id", origem.id);
+  if (stErr) throw stErr;
+  const st = (stages ?? []).find((s: any) => norm(s.stage_name ?? "") === norm(stageNome));
+  if (!st) return { erro: "stage_nao_encontrada", pipeline: origem.name, stage: stageNome };
+  return { origin_id: origem.id as string, origin_nome: origem.name as string, stage_id: st.id as string };
+}
+
+function extrairAdmissao(body: any) {
+  const c = body?.cliente ?? {};
+  const v = body?.venda ?? {};
+  const r = body?.registrado_por ?? {};
+  const g = body?.gerente ?? {};
+  const os = body?.credito_os;
+  const projetoStatus = texto(body?.projeto_status);
+  return {
+    motivo: texto(body?.motivo),
+    nota: texto(body?.nota),
+    projeto_status: projetoStatus,
+    projeto_status_descricao: texto(body?.projeto_status_descricao),
+    encaminhado_credito:
+      typeof body?.encaminhado_credito === "boolean"
+        ? body.encaminhado_credito
+        : projetoStatus ? projetoStatus !== "nenhum" : null,
+    credito_os: os && typeof os === "object" ? { id: os.id ?? null, numero: os.numero ?? null } : null,
+    cliente: {
+      nome: texto(c.nome),
+      email: texto(c.email),
+      telefone: texto(c.telefone),
+      documento: texto(c.documento),
+      tem_cadastro_app: typeof c.tem_cadastro_app === "boolean" ? c.tem_cadastro_app : null,
+    },
+    venda: {
+      produto: texto(v.produto),
+      produto_codigo: texto(v.produto_codigo),
+      valor: v.valor ?? null,
+      data_venda: texto(v.data_venda),
+      pedido_id: v.pedido_id ?? null,
+    },
+    contatado_em: texto(body?.contatado_em),
+    registrado_por: { nome: texto(r.nome), email: texto(r.email) },
+    gerente: { nome: texto(g.nome), email: texto(g.email), telefone: texto(g.telefone) },
+    pipeline: texto(body?.pipeline),
+    stage: texto(body?.stage),
+  };
+}
+
 
 
 Deno.serve(async (req) => {
@@ -209,9 +282,22 @@ Deno.serve(async (req) => {
     if (!nome) faltando.push("cliente.nome");
     if (faltando.length) return json({ erro: "campos_obrigatorios", campos: faltando }, 400);
 
-    const destino = AREAS[area];
+    const isAdmissao = area === "admissao";
+    let destino = AREAS[area];
+    let stageIdExplicito: string | null = null;
+    if (isAdmissao) {
+      const pipelineNome = String(body.pipeline ?? "").trim();
+      const stageNome = String(body.stage ?? "").trim();
+      if (!pipelineNome || !stageNome) {
+        return json({ erro: "campos_obrigatorios", campos: [!pipelineNome && "pipeline", !stageNome && "stage"].filter(Boolean) }, 400);
+      }
+      const resolvido = await resolverPipelineStage(supabase, pipelineNome, stageNome);
+      if ("erro" in resolvido) return json(resolvido, 422);
+      destino = { origin_id: resolvido.origin_id, rota: "/credito/crm/negocios", label: resolvido.origin_nome };
+      stageIdExplicito = resolvido.stage_id;
+    }
     if (!destino) {
-      return json({ erro: "area_invalida", areas_suportadas: Object.keys(AREAS) }, 400);
+      return json({ erro: "area_invalida", areas_suportadas: [...Object.keys(AREAS), "admissao"] }, 400);
     }
 
     const anamneseV2 = extrairAnamneseV2(body);
@@ -251,13 +337,15 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         duplicado: true,
+        id: existente.deal_id,
+        cartao_id: existente.deal_id,
         anamnese_atualizada: temAnamnese(anamneseV2),
         encaminhamento_id: existente.id,
         negocio_id: existente.deal_id,
         status: existente.status,
         area: existente.area,
         rota: AREAS[existente.area]?.rota ?? destino.rota,
-      });
+      }, 200);
     }
 
 
@@ -274,15 +362,20 @@ Deno.serve(async (req) => {
     const faixa = body.faixa_classificacao ?? anamnese?.faixa ?? null;
     const gerente = body.gerente ?? {};
     const callbackUrl = String(body.callback_url ?? "").trim() || null;
+    const admissaoExtras = isAdmissao ? extrairAdmissao(body) : null;
 
     // ---------- Etapa de destino ----------
-    const { data: stage, error: stageErr } = await supabase
-      .from("crm_stages")
-      .select("id")
-      .eq("origin_id", destino.origin_id)
-      .eq("stage_name", STAGE_NAME)
-      .maybeSingle();
-    if (stageErr) throw stageErr;
+    let stage: { id: string } | null = stageIdExplicito ? { id: stageIdExplicito } : null;
+    if (!stage) {
+      const { data: st, error: stageErr } = await supabase
+        .from("crm_stages")
+        .select("id")
+        .eq("origin_id", destino.origin_id)
+        .eq("stage_name", STAGE_NAME)
+        .maybeSingle();
+      if (stageErr) throw stageErr;
+      stage = st;
+    }
     if (!stage) return json({ erro: "etapa_destino_ausente", area }, 500);
 
     // ---------- Contato: reaproveita existente por e-mail ou telefone ----------
@@ -379,7 +472,7 @@ Deno.serve(async (req) => {
         origin_id: destino.origin_id,
         stage_id: stage.id,
         data_source: "webhook",
-        product_name: destino.label,
+        product_name: isAdmissao ? (admissaoExtras?.venda?.produto ?? destino.label) : destino.label,
         owner_id: ownerEmail,
         owner_profile_id: ownerProfileId,
         custom_fields: {
@@ -392,13 +485,15 @@ Deno.serve(async (req) => {
           endereco,
           perfil,
           anamnese,
-          anamnese_v2: anamneseV2,
+          ...(isAdmissao ? {} : { anamnese_v2: anamneseV2 }),
 
           score,
           faixa_classificacao: faixa,
           gerente_nome: gerente.nome ?? gerente.name ?? null,
           gerente_email: gerente.email ?? null,
+          gerente_telefone: gerente.telefone ?? null,
           historico_externo: historico,
+          ...(admissaoExtras ? { admissao: admissaoExtras } : {}),
         },
       })
       .select("id")
@@ -439,7 +534,19 @@ Deno.serve(async (req) => {
     if (encErr) throw encErr;
 
     // ---------- Histórico visível no negócio ----------
-    const descricao = [
+    const descricao = isAdmissao
+      ? [
+          `Contato feito na Admissão de clientes.`,
+          admissaoExtras?.nota ? `Nota: ${admissaoExtras.nota}` : "",
+          admissaoExtras?.projeto_status_descricao
+            ? `Projeto: ${admissaoExtras.projeto_status_descricao}`
+            : admissaoExtras?.projeto_status ? `Projeto: ${admissaoExtras.projeto_status}` : "",
+          admissaoExtras?.credito_os?.numero ? `OS de crédito: ${admissaoExtras.credito_os.numero}` : "",
+          admissaoExtras?.venda?.produto ? `Venda: ${admissaoExtras.venda.produto}${admissaoExtras.venda.valor != null ? ` · R$ ${admissaoExtras.venda.valor}` : ""}` : "",
+          admissaoExtras?.registrado_por?.nome ? `Registrado por: ${admissaoExtras.registrado_por.nome}` : "",
+          ownerEmail ? `Distribuído automaticamente para ${ownerNome ?? ownerEmail}.` : "",
+        ].filter(Boolean).join("\n")
+      : [
       `Encaminhado pelo gerente de relacionamento (${destino.label}).`,
       `Motivo: ${motivo}`,
       score !== null && score !== undefined ? `Score: ${score}${faixa ? ` (${faixa})` : ""}` : "",
@@ -458,6 +565,8 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
+      id: deal.id,
+      cartao_id: deal.id,
       encaminhamento_id: enc.id,
       negocio_id: deal.id,
       contato_id: contactId,
@@ -465,7 +574,7 @@ Deno.serve(async (req) => {
       rota: destino.rota,
       status: "recebida",
       responsavel: ownerNome ?? ownerEmail,
-    }, 201);
+    }, isAdmissao ? 200 : 201);
   } catch (e) {
     console.error("[crm-externo-encaminhamento]", (e as Error).message);
     return json({ erro: "falha_ao_processar", detalhe: (e as Error).message }, 500);
