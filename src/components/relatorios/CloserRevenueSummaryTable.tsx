@@ -562,25 +562,28 @@ export function CloserRevenueSummaryTable({
                           {row.outraBu && (
                             <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
                           )}
+                          {soP2 && (
+                            <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">só P2</Badge>
+                          )}
                         </TableCell>
-                        <TableCell className="text-right">{zerada ? '-' : (row.vendas || 0)}</TableCell>
+                        <TableCell className="text-right">{semValor ? '-' : (row.vendas || 0)}</TableCell>
                         <TableCell className="text-right font-mono">
-                          {zerada ? '-' : formatCurrency(row.gross)}
+                          {semValor ? '-' : formatCurrency(row.gross)}
                         </TableCell>
-                        <TableCell className={`text-right font-mono ${!zerada && (row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                          {!zerada && (row.aReceber || 0) > 0 ? formatCurrency(row.aReceber || 0) : '-'}
+                        <TableCell className={`text-right font-mono ${!semValor && (row.aReceber || 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                          {!semValor && (row.aReceber || 0) > 0 ? formatCurrency(row.aReceber || 0) : '-'}
                         </TableCell>
-                        <TableCell className={`text-right font-mono ${zerada ? '' : 'text-success'}`}>
-                          {zerada ? '-' : formatCurrency(row.net)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {zerada ? '-' : formatCurrency((row.vendasComBruto || 0) > 0 ? row.gross / (row.vendasComBruto || 1) : 0)}
+                        <TableCell className={`text-right font-mono ${semValor ? '' : 'text-success'}`}>
+                          {semValor ? '-' : formatCurrency(row.net)}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {zerada ? '-' : formatCurrency((row.vendas || 0) > 0 ? row.net / (row.vendas || 1) : 0)}
+                          {semValor ? '-' : formatCurrency((row.vendasComBruto || 0) > 0 ? row.gross / (row.vendasComBruto || 1) : 0)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {semValor ? '-' : formatCurrency((row.vendas || 0) > 0 ? row.net / (row.vendas || 1) : 0)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {zerada ? '-' : (summaryData.totalGross > 0
+                          {semValor ? '-' : (summaryData.totalGross > 0
                             ? ((row.gross / summaryData.totalGross) * 100).toFixed(1)
                             : '0.0') + '%'}
                         </TableCell>
@@ -621,6 +624,13 @@ export function CloserRevenueSummaryTable({
                       {summaryData.totalOutsideGross > 0 ? formatCurrency(summaryData.totalOutsideGross) : '-'}
                     </TableCell>
                   </TableRow>
+                  {summaryData.p2Pagamentos > 0 && (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-xs text-muted-foreground font-normal">
+                        P2 fora da tabela: {summaryData.p2Pagamentos} pagamentos · líquido {formatCurrency(summaryData.p2Liquido)} — veja no detalhe de cada closer
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableFooter>
               </Table>
               )}
