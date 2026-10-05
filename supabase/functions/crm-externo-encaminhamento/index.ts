@@ -209,9 +209,22 @@ Deno.serve(async (req) => {
     if (!nome) faltando.push("cliente.nome");
     if (faltando.length) return json({ erro: "campos_obrigatorios", campos: faltando }, 400);
 
-    const destino = AREAS[area];
+    const isAdmissao = area === "admissao";
+    let destino = AREAS[area];
+    let stageIdExplicito: string | null = null;
+    if (isAdmissao) {
+      const pipelineNome = String(body.pipeline ?? "").trim();
+      const stageNome = String(body.stage ?? "").trim();
+      if (!pipelineNome || !stageNome) {
+        return json({ erro: "campos_obrigatorios", campos: [!pipelineNome && "pipeline", !stageNome && "stage"].filter(Boolean) }, 400);
+      }
+      const resolvido = await resolverPipelineStage(supabase, pipelineNome, stageNome);
+      if ("erro" in resolvido) return json(resolvido, 422);
+      destino = { origin_id: resolvido.origin_id, rota: "/credito/crm/negocios", label: resolvido.origin_nome };
+      stageIdExplicito = resolvido.stage_id;
+    }
     if (!destino) {
-      return json({ erro: "area_invalida", areas_suportadas: Object.keys(AREAS) }, 400);
+      return json({ erro: "area_invalida", areas_suportadas: [...Object.keys(AREAS), "admissao"] }, 400);
     }
 
     const anamneseV2 = extrairAnamneseV2(body);
