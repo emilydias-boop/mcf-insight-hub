@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      _snap_first_ids: {
+        Row: {
+          id: string | null
+        }
+        Insert: {
+          id?: string | null
+        }
+        Update: {
+          id?: string | null
+        }
+        Relationships: []
+      }
       a010_link_mappings: {
         Row: {
           channel: string
@@ -1344,6 +1356,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ar_titulos_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_venda_dono"
+            referencedColumns: ["venda_id"]
           },
           {
             foreignKeyName: "ar_titulos_hubla_transaction_id_fkey"
@@ -2885,6 +2904,33 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_parceria_backfill_venda_realizada: {
+        Row: {
+          backup_at: string | null
+          deal_id: string
+          owner_id: string | null
+          stage_id: string | null
+          stage_moved_at: string | null
+          tags: string[] | null
+        }
+        Insert: {
+          backup_at?: string | null
+          deal_id: string
+          owner_id?: string | null
+          stage_id?: string | null
+          stage_moved_at?: string | null
+          tags?: string[] | null
+        }
+        Update: {
+          backup_at?: string | null
+          deal_id?: string
+          owner_id?: string | null
+          stage_id?: string | null
+          stage_moved_at?: string | null
+          tags?: string[] | null
+        }
+        Relationships: []
+      }
       backup_recompra_a010_reativada: {
         Row: {
           backup_at: string | null
@@ -4377,6 +4423,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_venda_dono"
+            referencedColumns: ["venda_id"]
           },
           {
             foreignKeyName: "checkin_rooms_hubla_transaction_id_fkey"
@@ -7781,6 +7834,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_post_sale_tracking_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "vw_venda_dono"
+            referencedColumns: ["venda_id"]
           },
           {
             foreignKeyName: "contract_post_sale_tracking_transaction_id_fkey"
@@ -14170,6 +14230,13 @@ export type Database = {
             foreignKeyName: "r2_vendas_extras_hubla_transaction_id_fkey"
             columns: ["hubla_transaction_id"]
             isOneToOne: false
+            referencedRelation: "vw_venda_dono"
+            referencedColumns: ["venda_id"]
+          },
+          {
+            foreignKeyName: "r2_vendas_extras_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
             referencedRelation: "vw_vendas_base"
             referencedColumns: ["id"]
           },
@@ -15253,6 +15320,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_intermediacoes_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "vw_venda_dono"
+            referencedColumns: ["venda_id"]
           },
           {
             foreignKeyName: "sdr_intermediacoes_hubla_transaction_id_fkey"
@@ -18426,6 +18500,14 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_venda_dono: {
+        Row: {
+          dono_fonte: string | null
+          dono_key: string | null
+          venda_id: string | null
+        }
+        Relationships: []
+      }
       vw_venda_por_produto: {
         Row: {
           bruto_produto: number | null
@@ -18579,6 +18661,7 @@ export type Database = {
         }
         Returns: Json
       }
+      _tmp_prof: { Args: never; Returns: string }
       _wa_aplicar_pausa: {
         Args: {
           p_motivo: string
@@ -18979,6 +19062,7 @@ export type Database = {
         Returns: Json
       }
       dono_esta_ativo: { Args: { p_email: string }; Returns: boolean }
+      donos_das_vendas: { Args: { p_ids: string[] }; Returns: Json }
       e_produto_parceria: { Args: { p: string }; Returns: boolean }
       eh_produto_parceria: { Args: { p_nome: string }; Returns: boolean }
       embracon_indices_class: {
