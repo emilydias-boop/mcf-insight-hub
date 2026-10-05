@@ -187,7 +187,7 @@ export function CloserRevenueDetailDialog({
       };
     });
     // Consolida pagamentos do mesmo cliente+produto em UMA venda (valores somados)
-    const porVenda = new Map<string, typeof pagamentos>();
+    const porVenda = new Map<string, typeof rows>();
     const pagamentos = rows;
     for (const r of [...pagamentos].sort((x, y) => (x.tx.sale_date || '').localeCompare(y.tx.sale_date || ''))) {
       const k = vendaKey(r.tx);
