@@ -18979,6 +18979,7 @@ export type Database = {
         Returns: Json
       }
       dono_esta_ativo: { Args: { p_email: string }; Returns: boolean }
+      e_produto_parceria: { Args: { p: string }; Returns: boolean }
       eh_produto_parceria: { Args: { p_nome: string }; Returns: boolean }
       embracon_indices_class: {
         Args: { p_fonte?: string; p_mes: string }
@@ -20099,6 +20100,7 @@ export type Database = {
         Returns: undefined
       }
       nome_usuario: { Args: { p_id: string }; Returns: string }
+      nomes_compativeis: { Args: { a: string; b: string }; Returns: boolean }
       normalize_document: { Args: { doc: string }; Returns: string }
       normalize_owner_phone: { Args: { _raw: string }; Returns: string }
       oi_classify_origem: {
@@ -20178,6 +20180,15 @@ export type Database = {
       }
       painel_incorporador_totais: {
         Args: { p_fim: string; p_ini: string }
+        Returns: Json
+      }
+      parceria_origens_incorporador: { Args: never; Returns: string[] }
+      parceria_resolver_e_mover: {
+        Args: {
+          p_dry_run?: boolean
+          p_fonte?: string
+          p_transaction_id: string
+        }
         Returns: Json
       }
       parse_finalidade_obra: { Args: { _resposta: string }; Returns: string }
