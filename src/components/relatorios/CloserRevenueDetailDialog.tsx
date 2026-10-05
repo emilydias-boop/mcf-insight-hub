@@ -11,7 +11,7 @@ import { subMonths } from 'date-fns';
 import { UnassignedTransactionsDetailPanel } from './UnassignedTransactionsDetailPanel';
 import { useAtribuicaoCloser, type Atribuicao } from '@/hooks/useAtribuicaoCloser';
 import type { CanalEntrada } from '@/hooks/useCanalEntrada';
-import { ALLOWED_INCORPORADOR_CATEGORIES, vendaKey } from './CloserRevenueSummaryTable';
+import { ALLOWED_INCORPORADOR_CATEGORIES, vendaKey, isP2 } from './CloserRevenueSummaryTable';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { calcRecebimento, type PagamentoDaVenda } from '@/hooks/usePagamentosDaVenda';
 
@@ -212,8 +212,10 @@ export function CloserRevenueDetailDialog({
       };
     });
     consolidadas.sort((x, y) => y.lastDate.localeCompare(x.lastDate));
-    const dentro = consolidadas.filter((r) => !r.outside);
-    const fora = consolidadas.filter((r) => r.outside);
+    const dentroTodas = consolidadas.filter((r) => !r.outside);
+    const dentro = dentroTodas.filter((r) => !isP2(r.tx));
+    const p2Vendas = consolidadas.filter((r) => isP2(r.tx));
+    const fora = consolidadas.filter((r) => r.outside && !isP2(r.tx));
     return {
       rows: consolidadas,
       vendasCount: dentro.length,
@@ -225,6 +227,8 @@ export function CloserRevenueDetailDialog({
       outsideCount: fora.length,
       outsideGross: fora.reduce((s, r) => s + r.gross, 0),
       outsideNet: fora.reduce((s, r) => s + r.net, 0),
+      p2Count: p2Vendas.length,
+      p2Net: p2Vendas.reduce((s, r) => s + r.net, 0),
     };
   }, [transactions, atribuicaoMap, pagamentosMap, globalFirstIds, modo, donoMap]);
   const showVendas = !isUnassigned && vendas.rows.length > 0;
@@ -457,6 +461,7 @@ export function CloserRevenueDetailDialog({
               </div>
               <p className="text-lg font-bold font-mono">{formatCurrency(metrics.totalGross)}</p>
               <p className="text-xs text-success font-mono">Líq. {formatCurrency(metrics.totalNet)}</p>
+              <p className="text-[10px] text-muted-foreground font-mono">sem P2: {formatCurrency(metrics.totalNet - metrics.p2.net)} líq.</p>
             </CardContent>
           </Card>
         </div>
@@ -482,7 +487,7 @@ export function CloserRevenueDetailDialog({
                 </TableHeader>
                 <TableBody>
                   {vendas.rows.map(({ key, tx, a, gross, net, aReceber, pagamentos }) => (
-                    <TableRow key={key}>
+                    <TableRow key={key} className={isP2(tx) ? 'text-muted-foreground' : undefined}>
                       <TableCell className="py-1.5 whitespace-nowrap font-mono">
                         {fmtDataHora(tx.sale_date)}
                         {pagamentos.length > 1 && (
@@ -538,13 +543,19 @@ export function CloserRevenueDetailDialog({
             </div>
             <div className="mt-2 space-y-0.5 text-xs">
               <div className="flex justify-end gap-4 font-semibold">
-                <span>Total · {vendas.vendasCount} vendas</span>
+                <span>Total (sem P2) · {vendas.vendasCount} vendas</span>
                 <span className="font-mono">{formatCurrency(vendas.totalGross)}</span>
                 {vendas.totalAReceber > 0 && (
                   <span className="font-mono text-amber-500">A receber {formatCurrency(vendas.totalAReceber)}</span>
                 )}
                 <span className="font-mono text-success">{formatCurrency(vendas.totalNet)}</span>
               </div>
+              {vendas.p2Count > 0 && (
+                <div className="flex justify-end gap-4 text-muted-foreground">
+                  <span>P2 · {vendas.p2Count}</span>
+                  <span className="font-mono">líquido {formatCurrency(vendas.p2Net)}</span>
+                </div>
+              )}
               {vendas.outsideCount > 0 && (
                 <div className="flex justify-end gap-4 text-muted-foreground">
                   <span>Outside (fora do total) · {vendas.outsideCount}</span>
