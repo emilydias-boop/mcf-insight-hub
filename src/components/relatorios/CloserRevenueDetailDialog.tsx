@@ -11,7 +11,8 @@ import { subMonths } from 'date-fns';
 import { UnassignedTransactionsDetailPanel } from './UnassignedTransactionsDetailPanel';
 import { useAtribuicaoCloser, type Atribuicao } from '@/hooks/useAtribuicaoCloser';
 import type { CanalEntrada } from '@/hooks/useCanalEntrada';
-import { ALLOWED_INCORPORADOR_CATEGORIES } from './CloserRevenueSummaryTable';
+import { ALLOWED_INCORPORADOR_CATEGORIES, vendaKey } from './CloserRevenueSummaryTable';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { calcRecebimento, type PagamentoDaVenda } from '@/hooks/usePagamentosDaVenda';
 
 const SP_DATETIME = new Intl.DateTimeFormat('pt-BR', {
@@ -38,6 +39,7 @@ interface Transaction {
   reference_price?: number | null;
   sale_origin?: string | null;
   customer_name?: string | null;
+  source?: string | null;
 }
 
 interface AttendeeMatch {
@@ -184,11 +186,35 @@ export function CloserRevenueDetailDialog({
         outside: modo === 'canal' ? false : !!a?.is_outside,
       };
     });
-    rows.sort((x, y) => (y.tx.sale_date || '').localeCompare(x.tx.sale_date || ''));
-    const dentro = rows.filter((r) => !r.outside);
-    const fora = rows.filter((r) => r.outside);
+    // Consolida pagamentos do mesmo cliente+produto em UMA venda (valores somados)
+    const porVenda = new Map<string, typeof pagamentos>();
+    const pagamentos = rows;
+    for (const r of [...pagamentos].sort((x, y) => (x.tx.sale_date || '').localeCompare(y.tx.sale_date || ''))) {
+      const k = vendaKey(r.tx);
+      const arr = porVenda.get(k) || [];
+      arr.push(r);
+      porVenda.set(k, arr);
+    }
+    const consolidadas = Array.from(porVenda.entries()).map(([key, ps]) => {
+      const first = ps[0];
+      return {
+        key,
+        tx: first.tx,
+        a: first.a,
+        outside: first.outside,
+        gross: ps.reduce((s, p) => s + p.gross, 0),
+        net: ps.reduce((s, p) => s + p.net, 0),
+        aReceber: ps.reduce((s, p) => s + p.aReceber, 0),
+        lastDate: ps[ps.length - 1].tx.sale_date || '',
+        pagamentos: ps.map((p) => p.tx),
+      };
+    });
+    consolidadas.sort((x, y) => y.lastDate.localeCompare(x.lastDate));
+    const dentro = consolidadas.filter((r) => !r.outside);
+    const fora = consolidadas.filter((r) => r.outside);
     return {
-      rows,
+      rows: consolidadas,
+      vendasCount: dentro.length,
       totalGross: dentro.reduce((s, r) => s + r.gross, 0),
       totalNet: dentro.reduce((s, r) => s + r.net, 0),
       totalAReceber: dentro.reduce((s, r) => s + r.aReceber, 0),
@@ -233,7 +259,7 @@ export function CloserRevenueDetailDialog({
 
     const grupoStats = (g: GrupoVenda) => {
       const txs = byGrupo(g);
-      return { count: txs.length, gross: calcGross(txs, g === 'parceria'), net: calcNet(txs) };
+      return { count: new Set(txs.map(vendaKey)).size, gross: calcGross(txs, g === 'parceria'), net: calcNet(txs) };
     };
 
     const contracts = grupoStats('contrato');
@@ -269,17 +295,18 @@ export function CloserRevenueDetailDialog({
       .filter((c) => c.count > 0);
 
     // Parceria breakdown (by product_name)
-    const parceriaMap = new Map<string, { count: number; gross: number; net: number }>();
+    const parceriaMap = new Map<string, { count: number; gross: number; net: number; keys: Set<string> }>();
     for (const tx of byGrupo('parceria')) {
       const name = tx.product_name || 'Parceria';
-      const existing = parceriaMap.get(name) || { count: 0, gross: 0, net: 0 };
-      existing.count++;
+      const existing = parceriaMap.get(name) || { count: 0, gross: 0, net: 0, keys: new Set<string>() };
+      existing.keys.add(vendaKey(tx));
+      existing.count = existing.keys.size;
       existing.gross += getDeduplicatedGross(tx as any, true);
       existing.net += tx.net_value || 0;
       parceriaMap.set(name, existing);
     }
     const parceriaBreakdown = Array.from(parceriaMap.entries())
-      .map(([name, data]) => ({ name, ...data }))
+      .map(([name, { keys: _k, ...data }]) => ({ name, ...data }))
       .sort((a, b) => b.gross - a.gross);
 
     // Previous month
@@ -452,9 +479,27 @@ export function CloserRevenueDetailDialog({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vendas.rows.map(({ tx, a, gross, net, aReceber }) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="py-1.5 whitespace-nowrap font-mono">{fmtDataHora(tx.sale_date)}</TableCell>
+                  {vendas.rows.map(({ key, tx, a, gross, net, aReceber, pagamentos }) => (
+                    <TableRow key={key}>
+                      <TableCell className="py-1.5 whitespace-nowrap font-mono">
+                        {fmtDataHora(tx.sale_date)}
+                        {pagamentos.length > 1 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 cursor-help">{pagamentos.length} pagamentos</Badge>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-mono space-y-0.5">
+                                {pagamentos.map((p) => (
+                                  <div key={p.id}>
+                                    {fmtDataHora(p.sale_date)} · {p.source || '—'} · {formatCurrency(p.product_price || 0)} · líq. {formatCurrency(p.net_value || 0)}
+                                  </div>
+                                ))}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </TableCell>
                       <TableCell className="py-1.5">
                         {a?.deal_id ? (
                           <a href={`/crm/negocios?deal=${a.deal_id}`} className="font-semibold text-primary hover:underline">
@@ -491,7 +536,7 @@ export function CloserRevenueDetailDialog({
             </div>
             <div className="mt-2 space-y-0.5 text-xs">
               <div className="flex justify-end gap-4 font-semibold">
-                <span>Total</span>
+                <span>Total · {vendas.vendasCount} vendas</span>
                 <span className="font-mono">{formatCurrency(vendas.totalGross)}</span>
                 {vendas.totalAReceber > 0 && (
                   <span className="font-mono text-amber-500">A receber {formatCurrency(vendas.totalAReceber)}</span>
@@ -623,7 +668,7 @@ export function CloserRevenueDetailDialog({
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs">Categoria</TableHead>
-                  <TableHead className="text-xs text-right">Transações</TableHead>
+                  <TableHead className="text-xs text-right">Vendas</TableHead>
                   <TableHead className="text-xs text-right">Bruto</TableHead>
                   <TableHead className="text-xs text-right">Líquido</TableHead>
                 </TableRow>
