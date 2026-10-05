@@ -283,6 +283,8 @@ interface CRMContactData {
   extraTags?: string[];           // default ['A010', 'Hubla']
   // Opcional: hubla_id da transação (usado para logIngestFailure)
   hublaId?: string | null;
+  // Opcional: parcela tardia (installment > 1) não é recompra — não reativa deal antigo
+  isLateInstallment?: boolean;
 }
 
 /**
@@ -804,7 +806,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
 
       // Recompra em deal antigo: redistribui dono inválido e reativa etapa parada (regra no banco).
       // Abandono de carrinho ("A010 Em Aberto") não é compra: não reativa.
-      if (!isAbandoned) {
+      if (!isAbandoned && !data.isLateInstallment) {
         try {
           const { data: reativacao, error: reativacaoError } = await supabase.rpc('reativar_recompra_a010', {
             p_deal_id: existingDeal.id,
@@ -3254,6 +3256,7 @@ Deno.serve(async (req) => {
               productName: productName,
               value: netValue,
               hublaId: transactionData.hubla_id ?? invoice?.id ?? null,
+              isLateInstallment: installment > 1,
             });
           }
 
@@ -3468,6 +3471,7 @@ Deno.serve(async (req) => {
               productName: productName,
               value: itemNetValue,
               hublaId,
+              isLateInstallment: installment > 1,
             });
           }
 
