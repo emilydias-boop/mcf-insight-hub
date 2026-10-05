@@ -264,13 +264,15 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         duplicado: true,
+        id: existente.deal_id,
+        cartao_id: existente.deal_id,
         anamnese_atualizada: temAnamnese(anamneseV2),
         encaminhamento_id: existente.id,
         negocio_id: existente.deal_id,
         status: existente.status,
         area: existente.area,
         rota: AREAS[existente.area]?.rota ?? destino.rota,
-      });
+      }, 200);
     }
 
 
@@ -287,15 +289,20 @@ Deno.serve(async (req) => {
     const faixa = body.faixa_classificacao ?? anamnese?.faixa ?? null;
     const gerente = body.gerente ?? {};
     const callbackUrl = String(body.callback_url ?? "").trim() || null;
+    const admissaoExtras = isAdmissao ? extrairAdmissao(body) : null;
 
     // ---------- Etapa de destino ----------
-    const { data: stage, error: stageErr } = await supabase
-      .from("crm_stages")
-      .select("id")
-      .eq("origin_id", destino.origin_id)
-      .eq("stage_name", STAGE_NAME)
-      .maybeSingle();
-    if (stageErr) throw stageErr;
+    let stage: { id: string } | null = stageIdExplicito ? { id: stageIdExplicito } : null;
+    if (!stage) {
+      const { data: st, error: stageErr } = await supabase
+        .from("crm_stages")
+        .select("id")
+        .eq("origin_id", destino.origin_id)
+        .eq("stage_name", STAGE_NAME)
+        .maybeSingle();
+      if (stageErr) throw stageErr;
+      stage = st;
+    }
     if (!stage) return json({ erro: "etapa_destino_ausente", area }, 500);
 
     // ---------- Contato: reaproveita existente por e-mail ou telefone ----------
@@ -392,7 +399,7 @@ Deno.serve(async (req) => {
         origin_id: destino.origin_id,
         stage_id: stage.id,
         data_source: "webhook",
-        product_name: destino.label,
+        product_name: isAdmissao ? (admissaoExtras?.venda?.produto ?? destino.label) : destino.label,
         owner_id: ownerEmail,
         owner_profile_id: ownerProfileId,
         custom_fields: {
@@ -411,7 +418,9 @@ Deno.serve(async (req) => {
           faixa_classificacao: faixa,
           gerente_nome: gerente.nome ?? gerente.name ?? null,
           gerente_email: gerente.email ?? null,
+          gerente_telefone: gerente.telefone ?? null,
           historico_externo: historico,
+          ...(admissaoExtras ? { admissao: admissaoExtras } : {}),
         },
       })
       .select("id")
@@ -452,7 +461,19 @@ Deno.serve(async (req) => {
     if (encErr) throw encErr;
 
     // ---------- Histórico visível no negócio ----------
-    const descricao = [
+    const descricao = isAdmissao
+      ? [
+          `Contato feito na Admissão de clientes.`,
+          admissaoExtras?.nota ? `Nota: ${admissaoExtras.nota}` : "",
+          admissaoExtras?.projeto_status_descricao
+            ? `Projeto: ${admissaoExtras.projeto_status_descricao}`
+            : admissaoExtras?.projeto_status ? `Projeto: ${admissaoExtras.projeto_status}` : "",
+          admissaoExtras?.credito_os?.numero ? `OS de crédito: ${admissaoExtras.credito_os.numero}` : "",
+          admissaoExtras?.venda?.produto ? `Venda: ${admissaoExtras.venda.produto}${admissaoExtras.venda.valor != null ? ` · R$ ${admissaoExtras.venda.valor}` : ""}` : "",
+          admissaoExtras?.registrado_por?.nome ? `Registrado por: ${admissaoExtras.registrado_por.nome}` : "",
+          ownerEmail ? `Distribuído automaticamente para ${ownerNome ?? ownerEmail}.` : "",
+        ].filter(Boolean).join("\n")
+      : [
       `Encaminhado pelo gerente de relacionamento (${destino.label}).`,
       `Motivo: ${motivo}`,
       score !== null && score !== undefined ? `Score: ${score}${faixa ? ` (${faixa})` : ""}` : "",
@@ -471,6 +492,8 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
+      id: deal.id,
+      cartao_id: deal.id,
       encaminhamento_id: enc.id,
       negocio_id: deal.id,
       contato_id: contactId,
@@ -478,7 +501,7 @@ Deno.serve(async (req) => {
       rota: destino.rota,
       status: "recebida",
       responsavel: ownerNome ?? ownerEmail,
-    }, 201);
+    }, isAdmissao ? 200 : 201);
   } catch (e) {
     console.error("[crm-externo-encaminhamento]", (e as Error).message);
     return json({ erro: "falha_ao_processar", detalhe: (e as Error).message }, 500);
