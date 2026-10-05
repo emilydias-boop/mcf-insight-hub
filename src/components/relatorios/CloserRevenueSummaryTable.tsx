@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCanalEntrada, useCanaisEntradaLista } from '@/hooks/useCanalEntrada';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross, normalizeProductKey } from '@/lib/incorporadorPricing';
 import { CloserRevenueDetailDialog } from './CloserRevenueDetailDialog';
 import { useAtribuicaoCloser } from '@/hooks/useAtribuicaoCloser';
 import { usePagamentosDaVenda, calcRecebimento } from '@/hooks/usePagamentosDaVenda';
@@ -78,6 +78,12 @@ const MODO_TITULO: Record<ModoAgrupamento, string> = {
 const CANAL_DIRETO = 'Direto (sem entrada)';
 const MOSTRAR_SEM_VENDA_KEY = 'canal-mostrar-sem-venda';
 
+export const vendaKey = (tx: { customer_email?: string | null; customer_name?: string | null; product_name?: string | null }) => {
+  const email = (tx.customer_email || '').toLowerCase().replace(/\s+/g, '');
+  const quem = email || (tx.customer_name || '').toLowerCase().trim();
+  return `${quem}|${normalizeProductKey(tx.product_name || null)}`;
+};
+
 interface CloserRow {
   id: string;
   name: string;
@@ -88,6 +94,9 @@ interface CloserRow {
   outsideGross: number;
   aReceber?: number;
   outraBu?: boolean;
+  vendas?: number;
+  vendasComBruto?: number;
+  outsideVendas?: number;
 }
 
 export function CloserRevenueSummaryTable({
@@ -162,6 +171,35 @@ export function CloserRevenueSummaryTable({
   });
 
   const { summaryData, closerTransactionsMap } = useMemo(() => {
+    // Venda = cliente + produto normalizado (pagamentos repetidos viram 1 venda). Só contagem.
+    const vendasPorLinha = new Map<string, Map<string, number>>();
+    const outsidePorLinha = new Map<string, Set<string>>();
+    const vendasTotal = new Map<string, number>();
+    const outsideTotal = new Set<string>();
+    const track = (rowId: string, tx: Transaction, gross: number, outside = false) => {
+      const k = vendaKey(tx);
+      if (outside) {
+        const s = outsidePorLinha.get(rowId) || new Set<string>();
+        s.add(k); outsidePorLinha.set(rowId, s); outsideTotal.add(k);
+        return;
+      }
+      const m = vendasPorLinha.get(rowId) || new Map<string, number>();
+      m.set(k, (m.get(k) || 0) + gross); vendasPorLinha.set(rowId, m);
+      vendasTotal.set(k, (vendasTotal.get(k) || 0) + gross);
+    };
+    const finalize = (rows: CloserRow[]) => {
+      for (const row of rows) {
+        const m = vendasPorLinha.get(row.id);
+        row.vendas = m ? m.size : 0;
+        row.vendasComBruto = m ? Array.from(m.values()).filter((g) => g > 0).length : 0;
+        row.outsideVendas = outsidePorLinha.get(row.id)?.size || 0;
+      }
+      return {
+        totalVendas: vendasTotal.size,
+        totalVendasComBruto: Array.from(vendasTotal.values()).filter((g) => g > 0).length,
+        totalOutsideVendas: outsideTotal.size,
+      };
+    };
     const closerTotals = new Map<string, CloserRow>();
     const txMap = new Map<string, Transaction[]>();
     let unassigned: CloserRow = { id: '__unassigned__', name: 'Sem closer', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
@@ -188,6 +226,7 @@ export function CloserRevenueSummaryTable({
         const id = `canal:${canal}`;
         const row = canalTotals.get(id) || { id, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 };
         row.count++;
+        track(id, tx, gross);
         row.gross += gross;
         row.net += net;
         row.aReceber = (row.aReceber || 0) + aRec;
@@ -220,9 +259,11 @@ export function CloserRevenueSummaryTable({
       const diretoRow = rows.find((r) => r.name === CANAL_DIRETO);
       if (diretoRow) rows = [...rows.filter((r) => r !== diretoRow), diretoRow];
       if (!mostrarSemVenda) rows = rows.filter((r) => r.count > 0);
+      const vt = finalize(rows);
       return {
         summaryData: {
           rows,
+          ...vt,
           totalGross: rows.reduce((s, r) => s + r.gross, 0),
           totalNet: rows.reduce((s, r) => s + r.net, 0),
           totalAReceber: rows.reduce((s, r) => s + (r.aReceber || 0), 0),
@@ -248,6 +289,7 @@ export function CloserRevenueSummaryTable({
         if (!hasR1Match) {
           // Pure launch — isolate
           launch.count++;
+        track('__launch__', tx, gross);
           launch.gross += gross;
         launch.aReceber = (launch.aReceber || 0) + aRec;
           launch.net += net;
@@ -260,6 +302,7 @@ export function CloserRevenueSummaryTable({
       // 2. A010 - Funil de entrada automático
       if (tx.product_category === 'a010') {
         a010.count++;
+        track('__a010__', tx, gross);
         a010.gross += gross;
         a010.aReceber = (a010.aReceber || 0) + aRec;
         a010.net += net;
@@ -270,6 +313,7 @@ export function CloserRevenueSummaryTable({
       // 3. Renovação
       if (tx.product_category === 'renovacao') {
         renovacao.count++;
+        track('__renovacao__', tx, gross);
         renovacao.gross += gross;
         renovacao.aReceber = (renovacao.aReceber || 0) + aRec;
         renovacao.net += net;
@@ -280,6 +324,7 @@ export function CloserRevenueSummaryTable({
       // 4. Vitalício (order bump)
       if (tx.product_category === 'ob_vitalicio') {
         vitalicio.count++;
+        track('__vitalicio__', tx, gross);
         vitalicio.gross += gross;
         vitalicio.aReceber = (vitalicio.aReceber || 0) + aRec;
         vitalicio.net += net;
@@ -298,9 +343,11 @@ export function CloserRevenueSummaryTable({
         const existing = closerTotals.get(key) || { id: key, name: nome, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, outraBu: modo === 'sdr' ? false : atr.outra_bu };
         if (atr.is_outside) {
           existing.outsideCount++;
+          track(key, tx, gross, true);
           existing.outsideGross += gross;
         } else {
           existing.count++;
+          track(key, tx, gross);
           existing.gross += gross;
           existing.aReceber = (existing.aReceber || 0) + aRec;
           existing.net += net;
@@ -316,6 +363,7 @@ export function CloserRevenueSummaryTable({
       const pnLower = (tx.product_name || '').toLowerCase();
       if (pnLower.includes('lucrômetro') || pnLower.includes('lucrometro')) {
         lucrometro.count++;
+        track('__lucrometro__', tx, gross);
         lucrometro.gross += gross;
         lucrometro.aReceber = (lucrometro.aReceber || 0) + aRec;
         lucrometro.net += net;
@@ -325,6 +373,7 @@ export function CloserRevenueSummaryTable({
 
       // 7. Sem closer
       unassigned.count++;
+        track('__unassigned__', tx, gross);
       unassigned.gross += gross;
       unassigned.aReceber = (unassigned.aReceber || 0) + aRec;
       unassigned.net += net;
@@ -358,9 +407,10 @@ export function CloserRevenueSummaryTable({
     const totalCount = rows.reduce((s, r) => s + r.count, 0);
     const totalOutsideCount = rows.reduce((s, r) => s + r.outsideCount, 0);
     const totalOutsideGross = rows.reduce((s, r) => s + r.outsideGross, 0);
+    const vt = finalize(rows);
     
     return {
-      summaryData: { rows, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
+      summaryData: { rows, ...vt, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
   }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, canaisLista, mostrarSemVenda]);
@@ -421,7 +471,7 @@ export function CloserRevenueSummaryTable({
                 </span>
                 <span className="flex items-center gap-2">
                   <Badge variant="secondary" className="font-mono text-xs">
-                    {summaryData.totalCount} transações
+                    {summaryData.totalVendas} vendas · {summaryData.totalCount} pagamentos
                   </Badge>
                   <Badge variant="outline" className="font-mono text-xs">
                     {formatCurrency(summaryData.totalGross)}
@@ -440,11 +490,22 @@ export function CloserRevenueSummaryTable({
                 <TableHeader>
                   <TableRow>
                     <TableHead>{modo === 'closer' ? 'Closer' : modo === 'sdr' ? 'SDR' : 'Canal'}</TableHead>
-                    <TableHead className="text-right">Transações</TableHead>
+                    <TableHead className="text-right">Vendas</TableHead>
                     <TableHead className="text-right">Faturamento Bruto</TableHead>
                     <TableHead className="text-right">A receber</TableHead>
                     <TableHead className="text-right">Receita Líquida</TableHead>
-                    <TableHead className="text-right">Ticket Médio</TableHead>
+                    <TableHead className="text-right">
+                      <span className="inline-flex items-center gap-1">
+                        Ticket Médio Bruto
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                            <TooltipContent>Bruto ÷ vendas com bruto (P2 fica fora, bruto 0 por regra)</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-right">Ticket Médio Líquido</TableHead>
                     <TableHead className="text-right">% do Total</TableHead>
                     <TableHead className="text-right">Outside</TableHead>
                     <TableHead className="text-right">Fat. Outside</TableHead>
@@ -480,7 +541,7 @@ export function CloserRevenueSummaryTable({
                             <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">{zerada ? '-' : row.count}</TableCell>
+                        <TableCell className="text-right">{zerada ? '-' : (row.vendas || 0)}</TableCell>
                         <TableCell className="text-right font-mono">
                           {zerada ? '-' : formatCurrency(row.gross)}
                         </TableCell>
@@ -491,7 +552,10 @@ export function CloserRevenueSummaryTable({
                           {zerada ? '-' : formatCurrency(row.net)}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {zerada ? '-' : formatCurrency(row.count > 0 ? row.net / row.count : 0)}
+                          {zerada ? '-' : formatCurrency((row.vendasComBruto || 0) > 0 ? row.gross / (row.vendasComBruto || 1) : 0)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {zerada ? '-' : formatCurrency((row.vendas || 0) > 0 ? row.net / (row.vendas || 1) : 0)}
                         </TableCell>
                         <TableCell className="text-right">
                           {zerada ? '-' : (summaryData.totalGross > 0
@@ -499,7 +563,7 @@ export function CloserRevenueSummaryTable({
                             : '0.0') + '%'}
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
-                          {row.outsideCount > 0 ? row.outsideCount : '-'}
+                          {(row.outsideVendas || 0) > 0 ? row.outsideVendas : '-'}
                         </TableCell>
                         <TableCell className="text-right font-mono text-muted-foreground">
                           {row.outsideGross > 0 ? formatCurrency(row.outsideGross) : '-'}
@@ -511,7 +575,7 @@ export function CloserRevenueSummaryTable({
                 <TableFooter>
                   <TableRow>
                     <TableCell className="font-bold">Total</TableCell>
-                    <TableCell className="text-right font-bold">{summaryData.totalCount}</TableCell>
+                    <TableCell className="text-right font-bold">{summaryData.totalVendas}</TableCell>
                     <TableCell className="text-right font-mono font-bold">
                       {formatCurrency(summaryData.totalGross)}
                     </TableCell>
@@ -522,11 +586,14 @@ export function CloserRevenueSummaryTable({
                       {formatCurrency(summaryData.totalNet)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold">
-                      {formatCurrency(summaryData.totalCount > 0 ? summaryData.totalNet / summaryData.totalCount : 0)}
+                      {formatCurrency(summaryData.totalVendasComBruto > 0 ? summaryData.totalGross / summaryData.totalVendasComBruto : 0)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold">
+                      {formatCurrency(summaryData.totalVendas > 0 ? summaryData.totalNet / summaryData.totalVendas : 0)}
                     </TableCell>
                     <TableCell className="text-right font-bold">100%</TableCell>
                     <TableCell className="text-right font-bold text-muted-foreground">
-                      {summaryData.totalOutsideCount > 0 ? summaryData.totalOutsideCount : '-'}
+                      {summaryData.totalOutsideVendas > 0 ? summaryData.totalOutsideVendas : '-'}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold text-muted-foreground">
                       {summaryData.totalOutsideGross > 0 ? formatCurrency(summaryData.totalOutsideGross) : '-'}
