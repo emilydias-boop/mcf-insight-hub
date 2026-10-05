@@ -15,6 +15,7 @@ import { getDeduplicatedGross, normalizeProductKey } from '@/lib/incorporadorPri
 import { CloserRevenueDetailDialog } from './CloserRevenueDetailDialog';
 import { useAtribuicaoCloser } from '@/hooks/useAtribuicaoCloser';
 import { usePagamentosDaVenda, calcRecebimento } from '@/hooks/usePagamentosDaVenda';
+import { useDonosDasVendas } from '@/hooks/useDonosDasVendas';
 
 interface Closer {
   id: string;
@@ -78,9 +79,13 @@ const MODO_TITULO: Record<ModoAgrupamento, string> = {
 const CANAL_DIRETO = 'Direto (sem entrada)';
 const MOSTRAR_SEM_VENDA_KEY = 'canal-mostrar-sem-venda';
 
-export const vendaKey = (tx: { customer_email?: string | null; customer_name?: string | null; product_name?: string | null }) => {
+export const vendaKey = (
+  tx: { id?: string; customer_email?: string | null; customer_name?: string | null; product_name?: string | null },
+  donoMap?: Map<string, string>,
+) => {
+  const dono = tx.id ? donoMap?.get(tx.id) : undefined;
   const email = (tx.customer_email || '').toLowerCase().replace(/\s+/g, '');
-  const quem = email || (tx.customer_name || '').toLowerCase().trim();
+  const quem = dono || email || (tx.customer_name || '').toLowerCase().trim();
   return `${quem}|${normalizeProductKey(tx.product_name || null)}`;
 };
 
@@ -151,6 +156,7 @@ export function CloserRevenueSummaryTable({
   );
   const { map: pagamentosMap } = usePagamentosDaVenda(pagamentoIds);
   const { map: canalMap, isLoading: loadingCanal } = useCanalEntrada(filteredIds, modo === 'canal');
+  const { map: donoMap, isLoading: loadingDonos } = useDonosDasVendas(filteredIds);
   const { data: canaisLista, isLoading: loadingLista } = useCanaisEntradaLista();
 
   const sdrIds = useMemo(() => {
@@ -177,7 +183,7 @@ export function CloserRevenueSummaryTable({
     const vendasTotal = new Map<string, number>();
     const outsideTotal = new Set<string>();
     const track = (rowId: string, tx: Transaction, gross: number, outside = false) => {
-      const k = vendaKey(tx);
+      const k = vendaKey(tx, donoMap);
       if (outside) {
         const s = outsidePorLinha.get(rowId) || new Set<string>();
         s.add(k); outsidePorLinha.set(rowId, s); outsideTotal.add(k);
@@ -413,11 +419,11 @@ export function CloserRevenueSummaryTable({
       summaryData: { rows, ...vt, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross },
       closerTransactionsMap: txMap,
     };
-  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, canaisLista, mostrarSemVenda]);
+  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, canaisLista, mostrarSemVenda, donoMap]);
 
   if (isLoading || loadingAtribuicao) return null;
   if (modo === 'closer' && summaryData.rows.length === 0) return null;
-  const modoCarregando = loadingCanal || (modo === 'canal' && loadingLista) || (modo === 'sdr' && loadingSdrNames);
+  const modoCarregando = loadingCanal || loadingDonos || (modo === 'canal' && loadingLista) || (modo === 'sdr' && loadingSdrNames);
 
   const selectedTxs = selectedCloser ? (closerTransactionsMap.get(selectedCloser.id) || []) : [];
 
@@ -624,6 +630,7 @@ export function CloserRevenueSummaryTable({
           bu={bu}
           modo={modo}
           canalMap={canalMap}
+          donoMap={donoMap}
         />
       )}
     </>
