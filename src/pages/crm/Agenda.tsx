@@ -64,7 +64,9 @@ export default function Agenda() {
 
   // Configuração de agenda: liderança sempre; demais só com a capacidade individual.
   // "Métricas" segue restrito a não-closer (não é liberado por can_manage_agenda).
-  const { canManageAgenda } = useMyAgendaCapabilities();
+  const { canManageAgenda, agendaVisaoCompletaBUs } = useMyAgendaCapabilities();
+  // Closer com visão completa (somente leitura) da agenda da BU ativa
+  const visaoCompleta = isCloser && !!activeBU && agendaVisaoCompletaBUs.includes(activeBU);
   const isLideranca = ['admin', 'manager', 'coordenador'].some(r => (allRoles as string[]).includes(r));
   const podeConfigurarAgenda = isLideranca || !isCloser || canManageAgenda;
 
@@ -160,7 +162,7 @@ export default function Agenda() {
   );
 
   // Fail-closed: se é closer mas não tem vínculo, não mostra nada
-  const closerHasNoLink = isCloser && !myCloser?.id;
+  const closerHasNoLink = isCloser && !myCloser?.id && !visaoCompleta;
 
   // Filtrar closers: closer só vê sua própria coluna
   const filteredClosers = useMemo(() => {
@@ -170,6 +172,10 @@ export default function Agenda() {
     }
     return closers;
   }, [closers, isCloser, myCloser?.id]);
+
+  // Grade: visão completa mostra todos os closers da BU; demais casos = filteredClosers
+  const gridClosers = visaoCompleta ? closers : filteredClosers;
+  const isMyColumn = (closerId?: string | null) => !visaoCompleta || (!!myCloser?.id && closerId === myCloser.id);
 
   // Closer puro = papel closer sem sdr e sem liderança. Só ele fica restrito ao próprio cadastro.
   const isCloserPuro = isCloserOnly && !isLideranca;
@@ -194,7 +200,7 @@ export default function Agenda() {
 
   const filteredMeetings = useMemo(() => {
     // Fail-closed: closer sem vínculo não vê nenhuma reunião
-    if (isCloser && !myCloser?.id) {
+    if (isCloser && !myCloser?.id && !visaoCompleta) {
       return [];
     }
     
@@ -204,7 +210,7 @@ export default function Agenda() {
     result = result.filter(m => !(m.status === 'canceled' && (!m.attendees || m.attendees.length === 0)));
     
     // Closer só vê suas próprias reuniões
-    if (isCloser && myCloser?.id) {
+    if (isCloser && myCloser?.id && !visaoCompleta) {
       result = result.filter(m => m.closer_id === myCloser.id);
     }
     
@@ -273,7 +279,7 @@ export default function Agenda() {
       );
     }
     return result;
-  }, [meetings, closerFilter, statusFilter, searchTerm, channelFilter, isCloser, myCloser?.id, isCredito]);
+  }, [meetings, closerFilter, statusFilter, searchTerm, channelFilter, isCloser, myCloser?.id, isCredito, visaoCompleta]);
 
   const handlePrev = () => {
     if (viewMode === 'day') {
@@ -346,6 +352,7 @@ export default function Agenda() {
   };
 
   const handleSelectSlot = (closerId: string, date: Date) => {
+    if (!isMyColumn(closerId)) return;
     setPreselectedCloserId(closerId);
     setPreselectedDate(date);
     setQuickScheduleOpen(true);
@@ -442,10 +449,10 @@ export default function Agenda() {
           <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           <div>
             <h1 className="text-lg sm:text-2xl font-bold">
-              {isCloser ? 'Minha Agenda' : 'Agenda dos Closers'}
+              {isCloser && !visaoCompleta ? 'Minha Agenda' : 'Agenda dos Closers'}
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
-              {isCloser ? 'Suas reuniões agendadas' : 'Gerencie reuniões e disponibilidade'}
+              {visaoCompleta ? 'Visualização — você só pode alterar as suas reuniões' : isCloser ? 'Suas reuniões agendadas' : 'Gerencie reuniões e disponibilidade'}
             </p>
           </div>
         </div>
@@ -462,18 +469,20 @@ export default function Agenda() {
               <span className="hidden md:inline">Métricas</span>
             </Button>
           )}
-          {podeConfigurarAgenda && (
+          {podeConfigurarAgenda && !visaoCompleta && (
             <Button variant="outline" onClick={abrirConfigAgenda} size="sm" className="hidden sm:flex">
               <Settings className="h-4 w-4 sm:mr-2" />
               <span className="hidden md:inline">Configurar</span>
             </Button>
           )}
 
+          {(!visaoCompleta || !!myCloser?.id) && (
           <Button onClick={() => setQuickScheduleOpen(true)} size="sm" className="flex-1 sm:flex-none">
             <Plus className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Agendar</span>
             <span className="sm:hidden">Novo</span>
           </Button>
+          )}
         </div>
       </div>
 
@@ -638,7 +647,7 @@ export default function Agenda() {
               className="pl-8 w-[180px] sm:w-[200px] h-9 text-xs sm:text-sm"
             />
           </div>
-          {!isCloser && (
+          {(!isCloser || visaoCompleta) && (
             <Select value={closerFilter || 'all'} onValueChange={(v) => setCloserFilter(v === 'all' ? null : v)}>
               <SelectTrigger className="w-[140px] sm:w-[180px] text-xs sm:text-sm">
                 <Users className="h-4 w-4 mr-1 sm:mr-2 flex-shrink-0" />
@@ -754,10 +763,11 @@ export default function Agenda() {
               selectedDate={selectedDate}
               onSelectMeeting={setSelectedMeeting}
               closerFilter={closerFilter}
-              closers={filteredClosers}
+              closers={gridClosers}
               viewMode={viewMode}
               onEditHours={() => setConfigOpen(true)}
               onSelectSlot={(day, hour, minute, closerId) => {
+                if (!isMyColumn(closerId)) return;
                 const selectedDateTime = new Date(day);
                 selectedDateTime.setHours(hour, minute, 0, 0);
                 setPreselectedDate(selectedDateTime);
@@ -767,6 +777,7 @@ export default function Agenda() {
                 setQuickScheduleOpen(true);
               }}
               onAddToMeeting={(day, hour, minute, closerId) => {
+                if (!isMyColumn(closerId)) return;
                 const selectedDateTime = new Date(day);
                 selectedDateTime.setHours(hour, minute, 0, 0);
                 setPreselectedDate(selectedDateTime);
@@ -785,7 +796,7 @@ export default function Agenda() {
           ) : (
             <CloserColumnCalendar
               meetings={filteredMeetings}
-              closers={filteredClosers}
+              closers={gridClosers}
               blockedDates={blockedDates}
               selectedDate={selectedDate}
               onSelectMeeting={setSelectedMeeting}
@@ -827,6 +838,7 @@ export default function Agenda() {
         open={!!selectedMeeting}
         onOpenChange={(open) => !open && setSelectedMeeting(null)}
         onReschedule={handleReschedule}
+        somenteLeitura={visaoCompleta && selectedMeeting?.closer_id !== myCloser?.id}
       />
 
       {/* Quick Schedule Modal */}

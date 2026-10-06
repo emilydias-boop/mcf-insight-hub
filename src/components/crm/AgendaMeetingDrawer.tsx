@@ -102,6 +102,8 @@ interface AgendaMeetingDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReschedule: (meeting: MeetingSlot) => void;
+  /** Visão completa de outro closer: só exibe, nenhuma ação que grava */
+  somenteLeitura?: boolean;
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -146,7 +148,7 @@ const parseRescheduleHistory = (notes: string | null | undefined) => {
 // Roles that can delete meetings (sdr só se tiver can_cancel_meeting=true)
 const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador'];
 
-export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
+export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule, somenteLeitura = false }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role, user } = useAuth();
@@ -603,6 +605,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             <SheetTitle className="text-lg">
               Reunião às {format(parseISO(meeting.scheduled_at), 'HH:mm')}
             </SheetTitle>
+            {somenteLeitura && (
+              <Badge variant="outline" className="text-xs">Somente leitura</Badge>
+            )}
           </div>
         </SheetHeader>
 
@@ -771,7 +776,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           )}
                         </div>
                         <div className="flex items-center gap-1">
-                          {editingPhoneId === p.id ? (
+                          {somenteLeitura ? (
+                            <span className="text-xs text-muted-foreground">{p.phone || 'Sem telefone'}</span>
+                          ) : editingPhoneId === p.id ? (
                             <>
                               <Input
                                 value={editedPhone}
@@ -828,7 +835,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                     <div className="flex items-center gap-1">
                       {/* Botão Transferir - apenas para admins/managers/coordenadores */}
-                      {canTransfer && p.id && (
+                      {!somenteLeitura && canTransfer && p.id && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -857,7 +864,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           <MessageCircle className="h-4 w-4 text-green-600" />
                         </Button>
                       )}
-                      {participants.length > 1 && p.id && (
+                      {!somenteLeitura && participants.length > 1 && p.id && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -876,7 +883,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </div>
               
               {/* Add Partner Button - Only show if participant is selected and is NOT already a partner */}
-              {isPending && selectedParticipant && !selectedParticipant.isPartner && participants.length < 6 && (
+              {!somenteLeitura && isPending && selectedParticipant && !selectedParticipant.isPartner && participants.length < 6 && (
                 <>
                   {!showAddPartner ? (
                     <Button 
@@ -948,11 +955,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   </div>
                   <div className="flex items-start gap-2 text-sm">
                     <User className="h-4 w-4 text-muted-foreground mt-1" />
+                    {somenteLeitura ? (
+                      <span>{selectedParticipant.bookedByProfile?.full_name || '—'}</span>
+                    ) : (
                     <AgendadorEditor
                       attendeeId={selectedParticipant.id}
                       nomeAtual={selectedParticipant.bookedByProfile?.full_name || null}
                       bookedById={selectedParticipant.bookedBy || null}
                     />
+                    )}
                   </div>
                   {selectedParticipant.bookedByProfile?.email && (
                     <div className="flex items-center gap-2 text-sm">
@@ -970,7 +981,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       attendeeId={selectedParticipant.id}
                       dealId={selectedParticipant.dealId}
                       participantName={selectedParticipant.name}
-                      canAddNotes={true}
+                      canAddNotes={!somenteLeitura}
                     />
                   </div>
 
@@ -1017,7 +1028,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 <span>
                   {format(parseISO(activeMeeting.scheduled_at), 'HH:mm')} - {activeMeeting.duration_minutes}min
                 </span>
-                {isPending && (
+                {isPending && !somenteLeitura && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1044,7 +1055,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             </div>
 
             {/* Quick Actions - Per Participant - ALWAYS VISIBLE */}
-            {!selectedParticipant && participants.length > 1 && (
+            {!somenteLeitura && !selectedParticipant && participants.length > 1 && (
               <>
                 <Separator />
                 <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-300 flex items-start gap-2">
@@ -1059,6 +1070,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             {selectedParticipant && (
               <>
                 <Separator />
+                {!somenteLeitura && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium text-sm text-muted-foreground">
@@ -1234,9 +1246,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
                   </div>
                 </div>
+                )}
 
                 {/* Esteira pós-R1 da BU Crédito */}
-                {isCredito && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
+                {!somenteLeitura && isCredito && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
                   <CreditoEsteiraActions dealId={(selectedParticipant as any).dealId} />
                 )}
 
@@ -1249,7 +1262,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                     <LinkedContractCard
                       attendeeId={selectedParticipant.id}
-                      canUnlink={canLinkContract || !isSdr}
+                      canUnlink={!somenteLeitura && (canLinkContract || !isSdr)}
                     />
                   </div>
                 )}
@@ -1258,7 +1271,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 {activeBU !== 'consorcio' && (
                   <VendaDiretaVinculadaBlock
                     attendeeId={selectedParticipant.id}
-                    canUnlink={canLinkContract || !isSdr}
+                    canUnlink={!somenteLeitura && (canLinkContract || !isSdr)}
                   />
                 )}
 
@@ -1294,6 +1307,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   <h4 className="font-medium text-sm text-muted-foreground">
                     Notas da Closer para: {selectedParticipant.name.split(' ')[0]}
                   </h4>
+                  {somenteLeitura ? (
+                    <p className="text-sm whitespace-pre-wrap rounded-md bg-muted/50 p-3">
+                      {selectedParticipant.closerNotes || 'Sem notas.'}
+                    </p>
+                  ) : (<>
                   <Textarea
                     value={closerNotes}
                     onChange={(e) => setCloserNotes(e.target.value)}
@@ -1312,6 +1330,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <Save className="h-4 w-4 mr-2" />
                     Salvar Notas
                   </Button>
+                  </>)}
                 </div>
               </>
             )}
@@ -1385,7 +1404,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
 
             {/* Delete button - Only visible for coordenador and above */}
-            {canDeleteMeeting && (
+            {!somenteLeitura && canDeleteMeeting && (
               <>
                 <Separator />
                 <AlertDialog>
@@ -1429,6 +1448,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
 
             {/* Reschedule Entire Meeting Button */}
+            {!somenteLeitura && (
             <Button 
               variant="outline" 
               size="sm" 
@@ -1438,9 +1458,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               <Calendar className="h-4 w-4 mr-2" />
               Reagendar Reunião Inteira
             </Button>
+            )}
 
             {/* Move Entire Meeting (Coordenador+) */}
-            {canTransfer && (
+            {!somenteLeitura && canTransfer && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1463,6 +1484,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         </ScrollArea>
 
         {/* Move Attendee Modal */}
+        {!somenteLeitura && (<>
         <MoveAttendeeModal
           attendee={selectedParticipant ? {
             id: selectedParticipant.id,
@@ -1483,10 +1505,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           open={showMoveEntireModal}
           onOpenChange={setShowMoveEntireModal}
         />
+        </>)}
       </SheetContent>
 
       {/* R2 Scheduling Prompt Dialog */}
-      <Dialog open={showR2PromptDialog} onOpenChange={setShowR2PromptDialog}>
+      <Dialog open={showR2PromptDialog && !somenteLeitura} onOpenChange={setShowR2PromptDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
@@ -1521,7 +1544,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         </DialogContent>
       </Dialog>
 
-      {selectedParticipant && (
+      {selectedParticipant && !somenteLeitura && (
         <VincularVendaDiretaDialog
           open={showVendaDiretaDialog}
           onOpenChange={setShowVendaDiretaDialog}
@@ -1531,7 +1554,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       )}
 
       {/* Link Contract Dialog */}
-      {selectedParticipant && (
+      {selectedParticipant && !somenteLeitura && (
         <LinkContractDialog
           open={showLinkContractDialog}
           onOpenChange={setShowLinkContractDialog}
@@ -1541,7 +1564,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         />
       )}
 
-      {outcomeModalDeal && (
+      {outcomeModalDeal && !somenteLeitura && (
         <OutcomeRequiredModal
           open={!!outcomeModalDeal}
           onOpenChange={(v) => !v && setOutcomeModalDeal(null)}
