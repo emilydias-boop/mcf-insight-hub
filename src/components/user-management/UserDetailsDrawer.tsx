@@ -1,3 +1,4 @@
+import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -88,6 +89,8 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     can_cancel_meeting: false,
   });
   const [savingCapKey, setSavingCapKey] = useState<string | null>(null);
+  const [visaoCompletaBUs, setVisaoCompletaBUs] = useState<string[]>([]);
+  const [savingVisaoBU, setSavingVisaoBU] = useState<string | null>(null);
   // Capabilities CRM
   const [canTransferLeads, setCanTransferLeads] = useState(false);
   const [savingCanTransferLeads, setSavingCanTransferLeads] = useState(false);
@@ -149,6 +152,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         can_cancel_meeting: !!(userDetails as any).can_cancel_meeting,
       });
       setCanTransferLeads(!!(userDetails as any).can_transfer_leads);
+      setVisaoCompletaBUs(((userDetails as any).agenda_visao_completa_bus ?? []) as string[]);
     }
   }, [userDetails]);
 
@@ -244,6 +248,29 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
       toast.error('Erro ao atualizar permissão');
     } finally {
       setSavingCapKey(null);
+    }
+  };
+
+  const handleToggleVisaoCompletaBU = async (bu: string, checked: boolean) => {
+    if (!userId) return;
+    const next = checked
+      ? Array.from(new Set([...visaoCompletaBUs, bu]))
+      : visaoCompletaBUs.filter((b) => b !== bu);
+    setSavingVisaoBU(bu);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ agenda_visao_completa_bus: next } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      setVisaoCompletaBUs(next);
+      queryClient.invalidateQueries({ queryKey: ['user-details', userId] });
+      queryClient.invalidateQueries({ queryKey: ['my-agenda-capabilities'] });
+      toast.success('Permissão atualizada');
+    } catch {
+      toast.error('Erro ao atualizar permissão');
+    } finally {
+      setSavingVisaoBU(null);
     }
   };
 
@@ -661,6 +688,29 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                       />
                     </div>
                   ))}
+                  <div className="space-y-2">
+                    <div className="space-y-0.5">
+                      <Label>Ver agenda de todos os closers (somente leitura)</Label>
+                      <p className="text-xs text-muted-foreground">Na Agenda R1 da BU marcada, vê todos os closers; só altera as próprias reuniões</p>
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      {[
+                        { bu: 'incorporador', label: 'Incorporador' },
+                        { bu: 'consorcio', label: 'Consórcio' },
+                        { bu: 'solar', label: 'Solar' },
+                        { bu: 'credito', label: 'Crédito' },
+                      ].map(({ bu, label }) => (
+                        <label key={bu} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={visaoCompletaBUs.includes(bu)}
+                            onCheckedChange={(v) => handleToggleVisaoCompletaBU(bu, v === true)}
+                            disabled={savingVisaoBU !== null}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
