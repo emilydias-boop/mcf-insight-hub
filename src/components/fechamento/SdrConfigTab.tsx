@@ -186,7 +186,6 @@ const SdrFormDialog = ({ onSuccess, defaultSquad = 'incorporador', lockSquad = f
     setEmail('');
     setUserId('');
     setNivel('1');
-    setMetaDiaria('5');
     setActive(true);
     setSquad(defaultSquad);
     setOpen(false);
