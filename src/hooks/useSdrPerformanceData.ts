@@ -411,7 +411,9 @@ export function useSdrPerformanceData({
       : null;
 
     const propLabel = isProporcional ? ` (meta proporcional — ${businessDaysTotal} dias úteis)` : '';
-    let text = `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos${propLabel}, atingindo ${att}% da meta.`;
+    let text = meta != null
+      ? `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos${propLabel}, atingindo ${att}% da meta.`
+      : `Neste período, ${name} realizou ${agend} agendamentos. Sem meta configurada para o período.`;
 
     if (compVar !== null) {
       const prefix = Number(compVar) >= 0 ? "+" : "";
@@ -420,9 +422,9 @@ export function useSdrPerformanceData({
 
     text += ` Mantendo o ritmo atual, deve fechar o período com ${proj} agendamentos.`;
 
-    if (projection.gap > 0 && businessDaysRemaining > 0) {
+    if (projection.gap != null && projection.gap > 0 && businessDaysRemaining > 0 && req != null) {
       text += ` Para bater a meta, precisa fazer ${req.toFixed(1)} por dia útil restante.`;
-    } else if (projection.gap <= 0) {
+    } else if (projection.gap != null && projection.gap <= 0) {
       text += ` Já atingiu a meta do período.`;
     }
 
