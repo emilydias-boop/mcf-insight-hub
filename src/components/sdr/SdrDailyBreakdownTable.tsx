@@ -108,13 +108,15 @@ export const SdrDailyBreakdownTable = ({
                     <TableCell
                       className={cn(
                         "text-center text-xs font-medium",
-                        row.percentDay >= 100
-                          ? "text-green-500"
-                          : row.percentDay >= 70
-                            ? "text-yellow-500"
-                            : row.isBusinessDay
-                              ? "text-destructive"
-                              : "text-muted-foreground"
+                        row.metaDiaria == null
+                          ? "text-muted-foreground"
+                          : row.percentDay >= 100
+                            ? "text-green-500"
+                            : row.percentDay >= 70
+                              ? "text-yellow-500"
+                              : row.isBusinessDay
+                                ? "text-destructive"
+                                : "text-muted-foreground"
                       )}
                     >
                       {row.isBusinessDay && row.metaDiaria != null ? `${row.percentDay.toFixed(0)}%` : "—"}
