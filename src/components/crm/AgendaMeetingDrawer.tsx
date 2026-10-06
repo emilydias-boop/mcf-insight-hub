@@ -1544,7 +1544,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         </DialogContent>
       </Dialog>
 
-      {selectedParticipant && (
+      {selectedParticipant && !somenteLeitura && (
         <VincularVendaDiretaDialog
           open={showVendaDiretaDialog}
           onOpenChange={setShowVendaDiretaDialog}
