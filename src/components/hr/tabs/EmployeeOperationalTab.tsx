@@ -182,10 +182,7 @@ export default function EmployeeOperationalTab({ employeeId }: Props) {
             <Label>Squad</Label>
             <Input value={sdrForm.squad || ''} onChange={(e) => setSdrForm({ ...sdrForm, squad: e.target.value })} />
           </div>
-          <div className="space-y-2">
-            <Label>Meta diária</Label>
-            <Input type="number" value={sdrForm.meta_diaria ?? ''} onChange={(e) => setSdrForm({ ...sdrForm, meta_diaria: e.target.value === '' ? null : Number(e.target.value) })} />
-          </div>
+          <MetaAgendamentoSdrBlock sdrId={sdrForm.id} />
           <div className="space-y-2">
             <Label>Nível</Label>
             <Input type="number" value={sdrForm.nivel ?? ''} onChange={(e) => setSdrForm({ ...sdrForm, nivel: e.target.value === '' ? null : Number(e.target.value) })} />
@@ -197,7 +194,10 @@ export default function EmployeeOperationalTab({ employeeId }: Props) {
           <div className="md:col-span-2 flex justify-end pt-2">
             <Button
               disabled={updateSdr.isPending}
-              onClick={() => updateSdr.mutate({ id: sdrForm.id, data: sdrForm })}
+              onClick={() => {
+                const { meta_diaria: _ignorada, ...semMeta } = sdrForm;
+                updateSdr.mutate({ id: sdrForm.id, data: semMeta });
+              }}
             >
               {updateSdr.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Salvar
