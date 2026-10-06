@@ -94,6 +94,7 @@ export const SdrDailyBreakdownTable = ({
                       className={cn(
                         "text-center font-bold",
                         row.realized > 0 &&
+                        row.metaDiaria != null &&
                           (row.realized >= row.metaDiaria
                             ? "text-green-500"
                             : "text-destructive")
@@ -102,7 +103,7 @@ export const SdrDailyBreakdownTable = ({
                       {row.realized}
                     </TableCell>
                     <TableCell className="text-center text-muted-foreground text-xs">
-                      {row.metaDiaria}
+                      {row.metaDiaria ?? "—"}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -116,22 +117,21 @@ export const SdrDailyBreakdownTable = ({
                               : "text-muted-foreground"
                       )}
                     >
-                      {row.isBusinessDay ? `${row.percentDay.toFixed(0)}%` : "—"}
+                      {row.isBusinessDay && row.metaDiaria != null ? `${row.percentDay.toFixed(0)}%` : "—"}
                     </TableCell>
                     <TableCell className="text-center font-medium text-xs">
                       {row.accumulated}
                     </TableCell>
                     <TableCell className="text-center text-muted-foreground text-xs">
-                      {row.metaAccumulated}
+                      {row.metaDiaria != null ? row.metaAccumulated : "—"}
                     </TableCell>
                     <TableCell
                       className={cn(
                         "text-center font-medium text-xs",
-                        row.gapAccumulated >= 0 ? "text-green-500" : "text-destructive"
+                        row.metaDiaria != null && (row.gapAccumulated >= 0 ? "text-green-500" : "text-destructive")
                       )}
                     >
-                      {row.gapAccumulated > 0 ? "+" : ""}
-                      {row.gapAccumulated}
+                      {row.metaDiaria != null ? `${row.gapAccumulated > 0 ? "+" : ""}${row.gapAccumulated}` : "—"}
                     </TableCell>
                     <TableCell className="text-center">
                       <StatusIcon className={cn("h-4 w-4 mx-auto", statusColor)} />
