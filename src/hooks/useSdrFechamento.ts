@@ -847,6 +847,27 @@ async function createFallbackCompPlan(
 ): Promise<SdrCompPlan | null> {
   const [year, month] = anoMes.split('-').map(Number);
   const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+  const monthEnd = new Date(year, month, 0);
+  const monthEndStr = `${year}-${String(month).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`;
+
+  // Meta diária e dias úteis vêm do RH (metas_agendamento_por_sdr); fallback 15/12 e 22 dias
+  let metaDiariaRh: number | null = null;
+  let diasUteisRh: number | null = null;
+  try {
+    const { data: metasRh } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+      p_sdr_ids: [sdrId],
+      p_ano_mes: anoMes,
+    });
+    const row = Array.isArray(metasRh) ? metasRh[0] : metasRh;
+    if (row?.meta_diaria != null) metaDiariaRh = Number(row.meta_diaria);
+    if (row?.dias_uteis != null) diasUteisRh = Number(row.dias_uteis);
+  } catch (e) {
+    console.error('Erro ao buscar meta de agendamento do RH para o plano fallback:', e);
+  }
+  const diasUteisPlano = diasUteisRh ?? 22;
+  const metaAgendadasPlano = metaDiariaRh != null ? Math.round(metaDiariaRh * diasUteisPlano) : 15;
+  const metaRealizadasPlano = metaDiariaRh != null ? Math.round(0.8 * metaAgendadasPlano) : 12;
+  
   
   // Try to get OTE from cargo_catalogo first
   let oteValues = DEFAULT_OTE_BY_LEVEL[nivel] || DEFAULT_OTE_BY_LEVEL[1];
