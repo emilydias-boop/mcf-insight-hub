@@ -12,6 +12,7 @@ interface SdrCumulativeChartProps {
 }
 
 export function SdrCumulativeChart({ dailyRows, isLoading }: SdrCumulativeChartProps) {
+  const hasMeta = dailyRows.some((row) => row.metaDiaria != null);
   const chartData = useMemo(() => {
     return dailyRows.map((row) => ({
       date: format(row.date, "dd/MM", { locale: ptBR }),
@@ -68,15 +69,17 @@ export function SdrCumulativeChart({ dailyRows, isLoading }: SdrCumulativeChartP
               strokeWidth={2}
               dot={false}
             />
-            <Line
-              type="monotone"
-              dataKey="metaAcumulada"
-              name="Meta Acumulada"
-              stroke="hsl(var(--destructive))"
-              strokeWidth={2}
-              strokeDasharray="6 3"
-              dot={false}
-            />
+            {hasMeta && (
+              <Line
+                type="monotone"
+                dataKey="metaAcumulada"
+                name="Meta Acumulada"
+                stroke="hsl(var(--destructive))"
+                strokeWidth={2}
+                strokeDasharray="6 3"
+                dot={false}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </CardContent>

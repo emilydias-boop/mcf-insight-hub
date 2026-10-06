@@ -15,7 +15,7 @@ export interface MetricWithMeta {
   label: string;
   key: string;
   realized: number;
-  meta: number;
+  meta: number | null;
   attainment: number; // percentage
   gap: number;
   compValue: number | null;
@@ -26,22 +26,22 @@ export interface MetricWithMeta {
 }
 
 export interface ProjectionData {
-  metaFinal: number;
+  metaFinal: number | null;
   realized: number;
   projection: number;
-  gap: number;
-  requiredPerDay: number;
+  gap: number | null;
+  requiredPerDay: number | null;
   businessDaysTotal: number;
   businessDaysPassed: number;
   businessDaysRemaining: number;
-  attainment: number;
+  attainment: number | null;
 }
 
 export interface DailyRow {
   date: Date;
   dateStr: string;
   realized: number;
-  metaDiaria: number;
+  metaDiaria: number | null;
   percentDay: number;
   accumulated: number;
   metaAccumulated: number;
@@ -83,7 +83,7 @@ export interface SdrPerformanceData {
   sdrInfo: { email: string; name: string; cargo: string; squad: string; status: string } | null;
   meetings: MeetingV2[];
   callMetrics: SdrCallMetrics;
-  metaDiaria: number;
+  metaDiaria: number | null;
   ranking: SdrRanking;
   teamAverages: TeamAverages;
   allSdrs: SdrSummaryRow[];
@@ -188,9 +188,10 @@ export function useSdrPerformanceData({
   const isProporcional = effectiveStartDate > startDate;
 
   // Compute meta for the period
-  const metaPeriodo = useMemo(() => {
+  const metaPeriodo = useMemo((): number | null => {
     const md = detail.metaDiaria;
     if (metaMode === "custom" && customMeta !== undefined) return customMeta;
+    if (md == null) return null;
     if (metaMode === "per_business_day") return md;
     const businessDays = contarDiasUteis(effectiveStartDate, endDate);
     if (metaMode === "weekly") return md * 5;
@@ -250,12 +251,12 @@ export function useSdrPerformanceData({
       label: string,
       key: string,
       realized: number,
-      meta: number,
+      meta: number | null,
       compKey?: keyof SdrSummaryRow,
       fmt?: "number" | "percent" | "duration"
     ): MetricWithMeta => {
-      const attainment = meta > 0 ? (realized / meta) * 100 : 0;
-      const gap = realized - meta;
+      const attainment = meta != null && meta > 0 ? (realized / meta) * 100 : 0;
+      const gap = meta != null ? realized - meta : 0;
       let compValue: number | null = null;
       let compVariation: number | null = null;
       if (compSdrMetrics && compKey) {
@@ -306,9 +307,9 @@ export function useSdrPerformanceData({
     const metaFinal = metas.agendMeta;
     const avgPerDay = businessDaysPassed > 0 ? realized / businessDaysPassed : 0;
     const proj = Math.round(avgPerDay * businessDaysTotal);
-    const gap = metaFinal - realized;
-    const requiredPerDay = businessDaysRemaining > 0 ? gap / businessDaysRemaining : 0;
-    const attainment = metaFinal > 0 ? (realized / metaFinal) * 100 : 0;
+    const gap = metaFinal != null ? metaFinal - realized : null;
+    const requiredPerDay = gap != null && businessDaysRemaining > 0 ? gap / businessDaysRemaining : null;
+    const attainment = metaFinal != null && metaFinal > 0 ? (realized / metaFinal) * 100 : null;
     return {
       metaFinal,
       realized,
@@ -337,9 +338,9 @@ export function useSdrPerformanceData({
         (m) => (m.booked_at || m.scheduled_at || m.data_agendamento)?.substring(0, 10) === dateStr
       ).length;
       accumulated += realized;
-      if (isBusinessDay) metaAcc += md;
+      if (isBusinessDay && md != null) metaAcc += md;
       const gapAcc = accumulated - metaAcc;
-      const percentDay = isBusinessDay && md > 0 ? (realized / md) * 100 : 0;
+      const percentDay = isBusinessDay && md != null && md > 0 ? (realized / md) * 100 : 0;
       const ratio = metaAcc > 0 ? accumulated / metaAcc : 1;
       const status: DailyRow["status"] =
         ratio >= 1 ? "above" : ratio >= 0.9 ? "on_track" : "below";
@@ -348,7 +349,7 @@ export function useSdrPerformanceData({
         date,
         dateStr,
         realized,
-        metaDiaria: isBusinessDay ? md : 0,
+        metaDiaria: isBusinessDay ? md : null,
         percentDay,
         accumulated,
         metaAccumulated: metaAcc,
@@ -400,7 +401,7 @@ export function useSdrPerformanceData({
     const name = detail.sdrInfo?.name || sdrEmail.split("@")[0];
     const agend = sm.agendamentos;
     const meta = metas.agendMeta;
-    const att = meta > 0 ? ((agend / meta) * 100).toFixed(0) : "0";
+    const att = meta != null && meta > 0 ? ((agend / meta) * 100).toFixed(0) : null;
     const proj = projection.projection;
     const req = projection.requiredPerDay;
     const compVar = compSdrMetrics
@@ -410,7 +411,9 @@ export function useSdrPerformanceData({
       : null;
 
     const propLabel = isProporcional ? ` (meta proporcional — ${businessDaysTotal} dias úteis)` : '';
-    let text = `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos${propLabel}, atingindo ${att}% da meta.`;
+    let text = meta != null
+      ? `Neste período, ${name} realizou ${agend} agendamentos de ${meta} previstos${propLabel}, atingindo ${att}% da meta.`
+      : `Neste período, ${name} realizou ${agend} agendamentos. Sem meta configurada para o período.`;
 
     if (compVar !== null) {
       const prefix = Number(compVar) >= 0 ? "+" : "";
@@ -419,9 +422,9 @@ export function useSdrPerformanceData({
 
     text += ` Mantendo o ritmo atual, deve fechar o período com ${proj} agendamentos.`;
 
-    if (projection.gap > 0 && businessDaysRemaining > 0) {
+    if (projection.gap != null && projection.gap > 0 && businessDaysRemaining > 0 && req != null) {
       text += ` Para bater a meta, precisa fazer ${req.toFixed(1)} por dia útil restante.`;
-    } else if (projection.gap <= 0) {
+    } else if (projection.gap != null && projection.gap <= 0) {
       text += ` Já atingiu a meta do período.`;
     }
 

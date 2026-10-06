@@ -75,7 +75,7 @@ export function SdrGamificationDialog({ open, onOpenChange, impersonateEmail, im
               </DialogDescription>
               {data && (
                 <div className="mt-2 text-sm text-muted-foreground/80 uppercase tracking-wide">
-                  Meta diária: {data.metaDiaria} agendamentos · BU {data.squad}
+                  {hasMeta ? `Meta diária: ${data.metaDiaria} agendamentos · BU ${data.squad}` : `Sem meta · BU ${data.squad}`}
                 </div>
               )}
             </div>

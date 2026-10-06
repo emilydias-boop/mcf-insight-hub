@@ -372,8 +372,9 @@ export default function SdrDetalheConsorcio() {
     if (dtAdm > endDate) return 0;
     return contarDiasUteis(dtAdm, endDate);
   }, [admissao, startDate, endDate, diasUteisNoPeriodo]);
-  const metaDiaria = Number((cadastro as any)?.meta_diaria) || 10;
-  const metaPeriodo = metaDiaria * diasEfetivos;
+  const metaDiariaRaw = (cadastro as any)?.meta_diaria;
+  const metaDiaria = metaDiariaRaw != null ? Number(metaDiariaRaw) : null;
+  const metaPeriodo = metaDiaria != null ? metaDiaria * diasEfetivos : null;
 
   const cotas = cotasContratadas?.bySdr.get(sdrEmail) || 0;
   const clientes = cotasContratadas?.clientesBySdr.get(sdrEmail) || 0;
@@ -466,11 +467,13 @@ export default function SdrDetalheConsorcio() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard
           titulo="Meta"
-          valor={String(metaPeriodo)}
+          valor={metaPeriodo != null ? String(metaPeriodo) : "—"}
           detalhe={
-            diasEfetivos !== diasUteisNoPeriodo
-              ? `${diasEfetivos}/${diasUteisNoPeriodo} dias úteis`
-              : `${diasUteisNoPeriodo} dias úteis × ${metaDiaria}`
+            metaPeriodo == null
+              ? "Sem meta cadastrada no RH"
+              : diasEfetivos !== diasUteisNoPeriodo
+                ? `${diasEfetivos}/${diasUteisNoPeriodo} dias úteis`
+                : `${diasUteisNoPeriodo} dias úteis × ${metaDiaria}`
           }
         />
         <KpiCard

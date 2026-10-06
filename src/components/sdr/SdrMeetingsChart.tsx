@@ -11,7 +11,7 @@ interface SdrMeetingsChartProps {
   startDate: Date;
   endDate: Date;
   isLoading?: boolean;
-  metaDiaria?: number;
+  metaDiaria?: number | null;
 }
 
 export function SdrMeetingsChart({ meetings, startDate, endDate, isLoading, metaDiaria }: SdrMeetingsChartProps) {

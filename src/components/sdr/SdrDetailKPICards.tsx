@@ -40,7 +40,7 @@ const tooltipDescriptions: Record<string, string> = {
 };
 
 function KPICard({ metric, onClick }: { metric: MetricWithMeta; onClick?: () => void }) {
-  const hasMeta = metric.meta > 0;
+  const hasMeta = metric.meta != null && metric.meta > 0;
   const progressPct = hasMeta ? Math.min(metric.attainment, 100) : 0;
 
   const formattedValue =
@@ -51,9 +51,11 @@ function KPICard({ metric, onClick }: { metric: MetricWithMeta; onClick?: () => 
         : metric.realized.toFixed(0);
 
   const formattedMeta =
-    metric.format === "percent"
-      ? `${metric.meta.toFixed(0)}%`
-      : metric.meta.toFixed(0);
+    metric.meta == null
+      ? "—"
+      : metric.format === "percent"
+        ? `${metric.meta.toFixed(0)}%`
+        : metric.meta.toFixed(0);
 
   const absGap = Math.abs(metric.gap);
   const isInverted = metric.invertGap === true;
