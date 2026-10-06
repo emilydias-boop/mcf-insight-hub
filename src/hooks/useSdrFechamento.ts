@@ -892,7 +892,7 @@ async function createFallbackCompPlan(
   const newPlan = {
     sdr_id: sdrId,
     vigencia_inicio: monthStart,
-    vigencia_fim: null,
+    vigencia_fim: monthEndStr,
     ote_total: oteValues.ote_total,
     fixo_valor: oteValues.fixo_valor,
     variavel_total: oteValues.variavel_total,
@@ -903,11 +903,11 @@ async function createFallbackCompPlan(
     valor_organizacao: Math.round(oteValues.variavel_total * 0.15),
     ifood_mensal: 150,
     ifood_ultrameta: 50,
-    meta_reunioes_agendadas: 15,
-    meta_reunioes_realizadas: 12,
+    meta_reunioes_agendadas: metaAgendadasPlano,
+    meta_reunioes_realizadas: metaRealizadasPlano,
     meta_tentativas: 400,
     meta_organizacao: 100,
-    dias_uteis: 22,
+    dias_uteis: diasUteisPlano,
     meta_no_show_pct: 30,
     status: 'APPROVED' as const,
   };
