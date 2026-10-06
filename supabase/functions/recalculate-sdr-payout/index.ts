@@ -124,7 +124,8 @@ const calculatePayoutValues = (
   diasUteisMes?: number, 
   isCloser: boolean = false,
   metricasAtivas?: MetricaAtiva[],
-  configOverrides?: Record<string, number> | null
+  configOverrides?: Record<string, number> | null,
+  metaRhDiaria?: number | null
 ) => {
   // Dias úteis do mês (do calendário ou padrão)
   const diasUteisReal = configOverrides?.dias_uteis_mes ?? diasUteisMes ?? compPlan.dias_uteis ?? 19;
@@ -146,7 +147,10 @@ const calculatePayoutValues = (
   // Meta de agendadas = meta_diaria do MÊS (derivada do compPlan) × dias úteis do mês
   // Fallback para sdr.meta_diaria global apenas se o compPlan não tiver a meta congelada.
   const planDiasUteis = compPlan.dias_uteis && compPlan.dias_uteis > 0 ? compPlan.dias_uteis : 19;
-  const metaDiariaDoMes = compPlan.meta_reunioes_agendadas && compPlan.meta_reunioes_agendadas > 0
+  // Prioridade: meta do RH (metas_agendamento_por_sdr, fonte 'rh'/'rh_herdada'); senão lógica anterior.
+  const metaDiariaDoMes = metaRhDiaria != null
+    ? metaRhDiaria
+    : compPlan.meta_reunioes_agendadas && compPlan.meta_reunioes_agendadas > 0
     ? compPlan.meta_reunioes_agendadas / planDiasUteis
     : (sdrMetaDiaria || 0);
   const hasMetaAgendadasOverride = configOverrides?.meta_agendadas_ajustada != null;
@@ -948,6 +952,22 @@ serve(async (req) => {
           }
         }
 
+        // Meta diária do RH para o mês (uma vez por SDR)
+        let metaRhDiaria: number | null = null;
+        let metaRhDiariaQualquer: number | null = null;
+        {
+          const { data: metaRows, error: metaErr } = await supabase.rpc('metas_agendamento_por_sdr', {
+            p_sdr_ids: [sdr.id],
+            p_ano_mes: anoMes,
+          });
+          if (metaErr) console.warn(`   ⚠️ metas_agendamento_por_sdr falhou para ${sdr.name}: ${metaErr.message}`);
+          const metaRow = ((metaRows || []) as any[])[0];
+          if (metaRow?.meta_diaria != null) {
+            metaRhDiariaQualquer = Number(metaRow.meta_diaria);
+            if (metaRow.fonte === 'rh' || metaRow.fonte === 'rh_herdada') metaRhDiaria = Number(metaRow.meta_diaria);
+          }
+        }
+
         // Get comp plan
         const { data: compPlanResult, error: compError } = await supabase
           .from('sdr_comp_plan')
@@ -1038,8 +1058,8 @@ serve(async (req) => {
             // iFood por nível: SDR 2 = R$ 570, outros = R$ 600
             ifood_mensal: nivel === 2 ? 570 : 600,
             ifood_ultrameta: 50,
-            meta_reunioes_agendadas: 15,
-            meta_reunioes_realizadas: 12,
+            meta_reunioes_agendadas: metaRhDiariaQualquer != null ? Math.round(metaRhDiariaQualquer * diasUteis) : 15,
+            meta_reunioes_realizadas: metaRhDiariaQualquer != null ? Math.round(0.8 * Math.round(metaRhDiariaQualquer * diasUteis)) : 12,
             meta_tentativas: 400,
             meta_organizacao: 100,
             dias_uteis: diasUteis,
@@ -1549,7 +1569,8 @@ serve(async (req) => {
             diasUteisMes, 
             isCloser,
             metricasAtivas.length > 0 ? metricasAtivas : undefined,
-            configOverrides
+            configOverrides,
+            metaRhDiaria
           );
           
           // AJUSTE: Verificar se a BU do SDR bateu ultrameta do time
