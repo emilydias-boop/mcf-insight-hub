@@ -958,7 +958,7 @@ serve(async (req) => {
         {
           const { data: metaRows, error: metaErr } = await supabase.rpc('metas_agendamento_por_sdr', {
             p_sdr_ids: [sdr.id],
-            p_ano_mes: anoMes,
+            p_ano_mes: ano_mes,
           });
           if (metaErr) console.warn(`   ⚠️ metas_agendamento_por_sdr falhou para ${sdr.name}: ${metaErr.message}`);
           const metaRow = ((metaRows || []) as any[])[0];
