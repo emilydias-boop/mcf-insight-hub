@@ -13808,6 +13808,7 @@ export type Database = {
       profiles: {
         Row: {
           access_status: string | null
+          agenda_visao_completa_bus: string[]
           avatar_url: string | null
           blocked_until: string | null
           can_book_r2: boolean | null
@@ -13830,6 +13831,7 @@ export type Database = {
         }
         Insert: {
           access_status?: string | null
+          agenda_visao_completa_bus?: string[]
           avatar_url?: string | null
           blocked_until?: string | null
           can_book_r2?: boolean | null
@@ -13852,6 +13854,7 @@ export type Database = {
         }
         Update: {
           access_status?: string | null
+          agenda_visao_completa_bus?: string[]
           avatar_url?: string | null
           blocked_until?: string | null
           can_book_r2?: boolean | null
