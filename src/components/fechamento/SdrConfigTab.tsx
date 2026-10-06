@@ -43,6 +43,9 @@ import { Sdr, SdrStatus } from '@/types/sdr-fechamento';
 import { Plus, Check, X, Users, RefreshCw, Pencil, ToggleLeft, ToggleRight, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatters';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 // Squad options mapping
 const SQUAD_OPTIONS = [
@@ -67,12 +70,11 @@ const StatusBadge = ({ status }: { status: SdrStatus }) => {
 };
 
 // Edit SDR Dialog - supports both SDR and Closer modes
-const EditSdrDialog = ({ sdr, isCloserMode, onSuccess }: { sdr: Sdr; isCloserMode?: boolean; onSuccess: () => void }) => {
+const EditSdrDialog = ({ sdr, isCloserMode, onSuccess, metaRh }: { sdr: Sdr; isCloserMode?: boolean; onSuccess: () => void; metaRh?: number | null }) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(sdr.name);
   const [email, setEmail] = useState(sdr.email || '');
   const [nivel, setNivel] = useState(String(sdr.nivel || 1));
-  const [metaDiaria, setMetaDiaria] = useState(String(sdr.meta_diaria || 5));
   
   const updateSdr = useUpdateSdr();
 
@@ -82,7 +84,6 @@ const EditSdrDialog = ({ sdr, isCloserMode, onSuccess }: { sdr: Sdr; isCloserMod
       name: name.trim(),
       email: email.trim() || null,
       nivel: Number(nivel),
-      meta_diaria: Number(metaDiaria),
     });
     setOpen(false);
     onSuccess();
@@ -126,7 +127,10 @@ const EditSdrDialog = ({ sdr, isCloserMode, onSuccess }: { sdr: Sdr; isCloserMod
             {!isCloserMode && (
               <div className="space-y-2">
                 <Label>Meta Diária</Label>
-                <Input type="number" value={metaDiaria} onChange={(e) => setMetaDiaria(e.target.value)} />
+                <div className="flex items-center gap-3 h-10">
+                  <span className="text-sm">{metaRh != null ? metaRh : 'sem meta'}</span>
+                  <Link to="/rh/configuracoes" className="text-xs text-primary hover:underline">Editar no RH</Link>
+                </div>
               </div>
             )}
           </div>
@@ -157,7 +161,6 @@ const SdrFormDialog = ({ onSuccess, defaultSquad = 'incorporador', lockSquad = f
   const [email, setEmail] = useState('');
   const [userId, setUserId] = useState('');
   const [nivel, setNivel] = useState('1');
-  const [metaDiaria, setMetaDiaria] = useState('5');
   const [active, setActive] = useState(true);
   const [squad, setSquad] = useState(defaultSquad);
   
@@ -175,7 +178,6 @@ const SdrFormDialog = ({ onSuccess, defaultSquad = 'incorporador', lockSquad = f
       email: email.trim() || null,
       user_id: userId || null,
       nivel: Number(nivel),
-      meta_diaria: Number(metaDiaria),
       active,
       squad: lockSquad ? defaultSquad : squad,
     });
@@ -280,7 +282,9 @@ const SdrFormDialog = ({ onSuccess, defaultSquad = 'incorporador', lockSquad = f
             </div>
             <div className="space-y-2">
               <Label>Meta Diária</Label>
-              <Input type="number" value={metaDiaria} onChange={(e) => setMetaDiaria(e.target.value)} />
+              <div className="flex items-center h-10">
+                <Link to="/rh/configuracoes" className="text-xs text-primary hover:underline">Definida no RH</Link>
+              </div>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -359,6 +363,27 @@ export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false 
     if (!isConsorcio) return filteredSdrs;
     return filteredSdrs.filter(s => s.role_type === 'sdr' || !s.role_type);
   }, [filteredSdrs, isConsorcio]);
+
+  // Meta diária do mês atual — fonte única: RH (metas_agendamento_por_sdr)
+  const anoMesAtual = format(new Date(), 'yyyy-MM');
+  const sdrListIds = useMemo(() => sdrList.map(s => s.id).sort(), [sdrList]);
+  const { data: metasRh } = useQuery({
+    queryKey: ['metas-agendamento-por-sdr', anoMesAtual, sdrListIds],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: sdrListIds,
+        p_ano_mes: anoMesAtual,
+      });
+      if (error) throw error;
+      const map = new Map<string, number | null>();
+      for (const row of (data || []) as any[]) {
+        map.set(row.sdr_id, row.meta_diaria != null ? Number(row.meta_diaria) : null);
+      }
+      return map;
+    },
+    enabled: sdrListIds.length > 0,
+    staleTime: 1000 * 60,
+  });
 
   const closerList = useMemo(() => {
     if (!isConsorcio) return [];
@@ -439,7 +464,10 @@ export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false 
                     <TableCell className="text-center">
                       <Badge variant="outline" className="font-mono">N{sdr.nivel || 1}</Badge>
                     </TableCell>
-                    <TableCell className="text-center">{sdr.meta_diaria || 5}</TableCell>
+                    <TableCell className="text-center">
+                      <span>{metasRh?.get(sdr.id) ?? '—'}</span>
+                      <Link to="/rh/configuracoes" className="ml-2 text-xs text-primary hover:underline">Editar no RH</Link>
+                    </TableCell>
                     <TableCell className="text-center"><StatusBadge status={sdr.status} /></TableCell>
                     <TableCell className="text-center">
                       <Button
@@ -454,7 +482,7 @@ export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false 
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <EditSdrDialog sdr={sdr} onSuccess={() => refetchSdrs()} />
+                        <EditSdrDialog sdr={sdr} metaRh={metasRh?.get(sdr.id) ?? null} onSuccess={() => refetchSdrs()} />
                         {isAdmin && sdr.status === 'PENDING' && (
                           <>
                             <Button size="sm" variant="ghost" className="text-green-500 hover:text-green-400" onClick={() => handleApproveSdr(sdr.id, true)}>
