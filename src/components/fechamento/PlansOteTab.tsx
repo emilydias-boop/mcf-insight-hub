@@ -87,7 +87,7 @@ interface EmployeeWithPlan {
     meta_comissao_consorcio?: number | null;
     meta_comissao_holding?: number | null;
   } | null;
-  sdr_meta_diaria?: number;
+  sdr_meta_diaria?: number | null;
 }
 
 interface PlansOteTabProps {
@@ -167,6 +167,29 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
     },
   });
 
+  // Meta diária do mês por SDR — fonte única: RH (metas_agendamento_por_sdr)
+  const metaSdrIds = useMemo(
+    () => Array.from(new Set((employees || []).map((e: any) => e.sdr_id).filter(Boolean))).sort() as string[],
+    [employees]
+  );
+  const { data: metasRh } = useQuery({
+    queryKey: ['metas-agendamento-por-sdr', anoMes, metaSdrIds],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: metaSdrIds,
+        p_ano_mes: anoMes,
+      });
+      if (error) throw error;
+      const map = new Map<string, number | null>();
+      for (const row of (data || []) as any[]) {
+        map.set(row.sdr_id, row.meta_diaria != null ? Number(row.meta_diaria) : null);
+      }
+      return map;
+    },
+    enabled: metaSdrIds.length > 0,
+    staleTime: 1000 * 60,
+  });
+
   // Query para métricas ativas do mês/cargo selecionado
   const { data: metricasAtivas, isLoading: metricasLoading } = useFechamentoMetricas(
     anoMes,
@@ -193,6 +216,17 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
       // Find the employee to get cargo_catalogo_id
       const emp = employeesWithPlans.find(e => e.sdr_id === sdrId);
       
+      // Meta diária e dias úteis do mês vêm do RH (metas_agendamento_por_sdr)
+      const { data: metaRows, error: metaError } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: [sdrId],
+        p_ano_mes: anoMes,
+      });
+      if (metaError) throw metaError;
+      const metaRow = ((metaRows || []) as any[])[0];
+      const metaDiariaRh: number | null = metaRow?.meta_diaria != null ? Number(metaRow.meta_diaria) : null;
+      const diasUteisMes: number = Number(metaRow?.dias_uteis ?? 0);
+      const metaAgendadasMes = metaDiariaRh != null ? Math.round(metaDiariaRh * diasUteisMes) : 0;
+
       const planData: Record<string, any> = {
         sdr_id: sdrId,
         vigencia_inicio: monthStart,
@@ -204,11 +238,11 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
         valor_docs_reuniao: values.valor_docs_reuniao,
         valor_tentativas: values.valor_tentativas,
         valor_organizacao: values.valor_organizacao,
-        meta_reunioes_agendadas: values.meta_diaria * 19,
-        meta_reunioes_realizadas: Math.round((values.meta_reunioes_realizadas_pct ?? 70) / 100 * (values.meta_diaria * 19)),
-        meta_tentativas: 84 * 19,
+        meta_reunioes_agendadas: metaAgendadasMes,
+        meta_reunioes_realizadas: Math.round((values.meta_reunioes_realizadas_pct ?? 70) / 100 * metaAgendadasMes),
+        meta_tentativas: 84 * diasUteisMes,
         meta_organizacao: 100,
-        dias_uteis: 19,
+        dias_uteis: diasUteisMes,
         meta_no_show_pct: values.meta_no_show_pct ?? 30,
         ifood_mensal: 0,
         ifood_ultrameta: 0,
@@ -255,20 +289,6 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
         if (error) throw error;
       }
       
-      // Atualizar meta_diaria GLOBAL no sdr apenas se o mês selecionado for o corrente ou futuro.
-      // Caso contrário, editar plano de mês passado sobrescreveria a meta global e contaminaria
-      // o cálculo de outros meses (a meta por mês fica congelada em sdr_comp_plan.meta_reunioes_agendadas).
-      const [yearSel, monthSel] = anoMes.split('-').map(Number);
-      const today = new Date();
-      const isCurrentOrFuture =
-        yearSel > today.getFullYear() ||
-        (yearSel === today.getFullYear() && monthSel >= today.getMonth() + 1);
-      if (isCurrentOrFuture) {
-        await supabase
-          .from('sdr')
-          .update({ meta_diaria: values.meta_diaria })
-          .eq('id', sdrId);
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sdr-comp-plans'] });
@@ -342,10 +362,10 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
             meta_comissao_consorcio: (plan as any).meta_comissao_consorcio || null,
             meta_comissao_holding: (plan as any).meta_comissao_holding || null,
           } : null,
-          sdr_meta_diaria: sdrRecord?.meta_diaria || 10,
+          sdr_meta_diaria: sdrId ? (metasRh?.get(sdrId) ?? null) : null,
         };
       });
-  }, [employees, compPlans, sdrs, selectedCargoId, selectedBU]);
+  }, [employees, compPlans, sdrs, metasRh, selectedCargoId, selectedBU]);
 
   // Calcular divergências entre planos e catálogo
   const divergencias = useMemo(() => {
@@ -473,9 +493,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
       ote: hasPlan ? emp.comp_plan!.ote_total : (cargo?.ote_total || 0),
       fixo: hasPlan ? emp.comp_plan!.fixo_valor : (cargo?.fixo_valor || 0),
       variavel: hasPlan ? emp.comp_plan!.variavel_total : (cargo?.variavel_valor || 0),
-      metaDiaria: hasPlan && emp.comp_plan!.meta_reunioes_agendadas && emp.comp_plan!.dias_uteis
-        ? Math.round(emp.comp_plan!.meta_reunioes_agendadas / emp.comp_plan!.dias_uteis)
-        : emp.sdr_meta_diaria || 10,
+      metaDiaria: emp.sdr_meta_diaria ?? null,
       isPersonalized: hasPlan,
     };
   };
@@ -691,7 +709,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
                               : <span className="text-muted-foreground">—</span>}
                           </span>
                         ) : (
-                          <Badge variant="outline">{values.metaDiaria}</Badge>
+                          <Badge variant="outline">{values.metaDiaria ?? '—'}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -760,7 +778,7 @@ export const PlansOteTab = ({ defaultBU, lockBU = false, onNavigateToMetricas }:
             ote_total: editDialog.employee.cargo_catalogo.ote_total,
             fixo_valor: editDialog.employee.cargo_catalogo.fixo_valor,
             variavel_total: editDialog.employee.cargo_catalogo.variavel_valor,
-            meta_diaria: 10,
+            meta_diaria: null,
             valor_meta_rpg: 0,
             valor_docs_reuniao: 0,
             valor_tentativas: 0,

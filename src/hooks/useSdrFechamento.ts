@@ -730,6 +730,14 @@ export const useRecalculatePayout = () => {
         .eq('id', sdrId)
         .single();
 
+      // Meta diária do mês do fechamento — fonte única: RH (metas_agendamento_por_sdr)
+      const { data: metaRows } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: [sdrId],
+        p_ano_mes: anoMes,
+      });
+      const metaRowRh = ((metaRows || []) as any[])[0];
+      const metaDiariaRh: number | null = metaRowRh?.meta_diaria != null ? Number(metaRowRh.meta_diaria) : null;
+
       // Get or create KPI
       let { data: kpi, error: kpiError } = await supabase
         .from('sdr_month_kpi')
@@ -789,7 +797,7 @@ export const useRecalculatePayout = () => {
         compPlan as SdrCompPlan, 
         kpi as SdrMonthKpi,
         activeMetrics,
-        sdrRecord?.meta_diaria
+        metaDiariaRh ?? undefined
       );
 
       // Upsert payout with departamento_vigente

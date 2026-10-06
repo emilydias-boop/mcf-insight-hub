@@ -14,12 +14,15 @@ import { Badge } from '@/components/ui/badge';
 import { Save, RefreshCw, AlertCircle, Info, ExternalLink, Percent } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { useActiveMetricsForCargo, getMetricValueLabel } from '@/hooks/useActiveMetricsForSdr';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PlanValues {
   ote_total: number;
   fixo_valor: number;
   variavel_total: number;
-  meta_diaria: number;
+  meta_diaria: number | null;
   valor_meta_rpg: number;
   valor_docs_reuniao: number;
   valor_tentativas: number;
@@ -72,6 +75,22 @@ export const EditIndividualPlanDialog = ({
 
   // Fetch active metrics for this cargo
   const { data: activeMetrics, isLoading: loadingMetrics } = useActiveMetricsForCargo(cargoId, anoMes, squad);
+
+  // Meta diária do mês: fonte única = RH (metas_agendamento_por_sdr). Somente leitura aqui.
+  const { data: metaRh, isLoading: loadingMetaRh } = useQuery({
+    queryKey: ['metas-agendamento-por-sdr', anoMes, sdrId],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: [sdrId],
+        p_ano_mes: anoMes,
+      });
+      if (error) throw error;
+      const row = (data || [])[0];
+      return row?.meta_diaria != null ? Number(row.meta_diaria) : null;
+    },
+    enabled: open && !!sdrId,
+    staleTime: 1000 * 60,
+  });
 
   useEffect(() => {
     setFormData(currentValues);
@@ -201,15 +220,14 @@ export const EditIndividualPlanDialog = ({
           {!(squad === 'consorcio' && roleType === 'closer') && (
             <div className="space-y-1.5">
               <Label htmlFor="meta_diaria" className="text-xs">Meta Diária (reuniões)</Label>
-              <Input
-                id="meta_diaria"
-                type="number"
-                min="1"
-                max="50"
-                value={formData.meta_diaria}
-                onChange={(e) => handleChange('meta_diaria', e.target.value)}
-                className="h-9 w-32"
-              />
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" id="meta_diaria" className="h-9 px-3 text-sm">
+                  {loadingMetaRh ? '...' : metaRh != null ? metaRh : 'sem meta'}
+                </Badge>
+                <Link to="/rh/configuracoes" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                  Editar no RH <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
               <span className="text-[10px] text-muted-foreground">
                 Quantidade de reuniões/dia esperadas
               </span>

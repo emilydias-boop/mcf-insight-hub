@@ -248,15 +248,35 @@ export default function ConsorcioPainelEquipe() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [activeSdrsList, fatos.bookerNames]);
 
+  // Meta diária — fonte única: RH (metas_agendamento_por_sdr), mês do início do período.
+  const metaSdrIds = useMemo(
+    () => (allSdrsData || []).filter(s => s.email).map(s => s.id).sort(),
+    [allSdrsData]
+  );
+  const anoMesMeta = useMemo(() => format(start, 'yyyy-MM'), [start]);
+  const { data: metasRh } = useQuery({
+    queryKey: ['metas-agendamento-por-sdr', anoMesMeta, metaSdrIds],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: metaSdrIds,
+        p_ano_mes: anoMesMeta,
+      });
+      if (error) throw error;
+      return (data || []) as Array<{ sdr_id: string; meta_diaria: number | null; fonte: string; dias_uteis: number }>;
+    },
+    enabled: metaSdrIds.length > 0,
+    staleTime: 60000,
+  });
   const sdrMetaMap = useMemo(() => {
     const map = new Map<string, number>();
-    if (allSdrsData) {
-      allSdrsData.forEach(sdr => {
-        if (sdr.email) map.set(sdr.email.toLowerCase(), sdr.meta_diaria || 10);
-      });
-    }
+    const idToEmail = new Map<string, string>();
+    (allSdrsData || []).forEach(s => { if (s.email) idToEmail.set(s.id, s.email.toLowerCase()); });
+    (metasRh || []).forEach(r => {
+      const email = idToEmail.get(r.sdr_id);
+      if (email && r.meta_diaria != null) map.set(email, Number(r.meta_diaria));
+    });
     return map;
-  }, [allSdrsData]);
+  }, [allSdrsData, metasRh]);
 
   const diasUteisNoPeriodo = useMemo(() => contarDiasUteis(start, end), [start, end]);
 
