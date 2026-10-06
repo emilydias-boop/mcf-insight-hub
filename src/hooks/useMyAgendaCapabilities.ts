@@ -19,7 +19,7 @@ export function useMyAgendaCapabilities() {
       if (!user?.id) return null;
       const { data, error } = await supabase
         .from('profiles')
-        .select('can_manage_agenda, can_handle_no_show, can_link_contract, can_cancel_meeting')
+        .select('can_manage_agenda, can_handle_no_show, can_link_contract, can_cancel_meeting, agenda_visao_completa_bus')
         .eq('id', user.id)
         .maybeSingle();
       if (error) throw error;
@@ -28,6 +28,7 @@ export function useMyAgendaCapabilities() {
         can_handle_no_show: boolean;
         can_link_contract: boolean;
         can_cancel_meeting: boolean;
+        agenda_visao_completa_bus: string[] | null;
       } | null;
     },
   });
@@ -38,6 +39,7 @@ export function useMyAgendaCapabilities() {
       canHandleNoShow: true,
       canLinkContract: true,
       canCancelMeeting: true,
+      agendaVisaoCompletaBUs: [] as string[],
       isPrivilegedRole: true,
       isLoading: false,
     };
@@ -48,6 +50,7 @@ export function useMyAgendaCapabilities() {
     canHandleNoShow: profile?.can_handle_no_show ?? true,
     canLinkContract: !!profile?.can_link_contract,
     canCancelMeeting: !!profile?.can_cancel_meeting,
+    agendaVisaoCompletaBUs: (profile?.agenda_visao_completa_bus ?? []) as string[],
     isPrivilegedRole: false,
     isLoading,
   };
