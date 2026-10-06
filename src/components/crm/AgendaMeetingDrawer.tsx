@@ -1067,9 +1067,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 </div>
               </>
             )}
-            {selectedParticipant && !somenteLeitura && (
+            {selectedParticipant && (
               <>
                 <Separator />
+                {!somenteLeitura && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium text-sm text-muted-foreground">
@@ -1245,9 +1246,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
                   </div>
                 </div>
+                )}
 
                 {/* Esteira pós-R1 da BU Crédito */}
-                {isCredito && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
+                {!somenteLeitura && isCredito && selectedParticipant.status === 'completed' && (selectedParticipant as any).dealId && (
                   <CreditoEsteiraActions dealId={(selectedParticipant as any).dealId} />
                 )}
 
@@ -1260,7 +1262,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                     <LinkedContractCard
                       attendeeId={selectedParticipant.id}
-                      canUnlink={canLinkContract || !isSdr}
+                      canUnlink={!somenteLeitura && (canLinkContract || !isSdr)}
                     />
                   </div>
                 )}
@@ -1269,7 +1271,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 {activeBU !== 'consorcio' && (
                   <VendaDiretaVinculadaBlock
                     attendeeId={selectedParticipant.id}
-                    canUnlink={canLinkContract || !isSdr}
+                    canUnlink={!somenteLeitura && (canLinkContract || !isSdr)}
                   />
                 )}
 
@@ -1503,10 +1505,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           open={showMoveEntireModal}
           onOpenChange={setShowMoveEntireModal}
         />
+        </>)}
       </SheetContent>
 
       {/* R2 Scheduling Prompt Dialog */}
-      <Dialog open={showR2PromptDialog} onOpenChange={setShowR2PromptDialog}>
+      <Dialog open={showR2PromptDialog && !somenteLeitura} onOpenChange={setShowR2PromptDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
@@ -1551,7 +1554,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       )}
 
       {/* Link Contract Dialog */}
-      {selectedParticipant && (
+      {selectedParticipant && !somenteLeitura && (
         <LinkContractDialog
           open={showLinkContractDialog}
           onOpenChange={setShowLinkContractDialog}
@@ -1561,7 +1564,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         />
       )}
 
-      {outcomeModalDeal && (
+      {outcomeModalDeal && !somenteLeitura && (
         <OutcomeRequiredModal
           open={!!outcomeModalDeal}
           onOpenChange={(v) => !v && setOutcomeModalDeal(null)}
