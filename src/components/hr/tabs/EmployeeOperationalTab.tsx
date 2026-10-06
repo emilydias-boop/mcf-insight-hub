@@ -7,6 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Briefcase } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { FonteBadge, anoMesAtual, type FonteMeta, type MetaAgendamentoRow } from '@/components/hr/config/MetasAgendamentoTab';
 import { useEmployeeOperational, useUpdateOperationalCloser, useUpdateOperationalSdr } from '@/hooks/useEmployeeOperational';
 
 interface Props {
@@ -209,4 +214,79 @@ export default function EmployeeOperationalTab({ employeeId }: Props) {
   }
 
   return null;
+}
+function MetaAgendamentoSdrBlock({ sdrId }: { sdrId: string }) {
+  const qc = useQueryClient();
+  const anoMes = anoMesAtual();
+  const [valor, setValor] = useState<string>('');
+  const [salvando, setSalvando] = useState(false);
+
+  const { data: efetiva, isLoading } = useQuery({
+    queryKey: ['meta-agendamento-efetiva', sdrId, anoMes],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('meta_agendamento_efetiva', { p_sdr_id: sdrId, p_ano_mes: anoMes });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return (row ?? { meta_diaria: null, fonte: 'sem_meta' }) as { meta_diaria: number | null; fonte: FonteMeta };
+    },
+  });
+
+  const { data: podeEditar = false } = useQuery({
+    queryKey: ['metas-agendamento', anoMes, null],
+    queryFn: async (): Promise<MetaAgendamentoRow[]> => {
+      const { data, error } = await (supabase.rpc as any)('metas_agendamento_mes', { p_ano_mes: anoMes, p_squad: null });
+      if (error) throw error;
+      return (data ?? []) as MetaAgendamentoRow[];
+    },
+    select: (rows: MetaAgendamentoRow[]) => !!rows.find((r) => r.sdr_id === sdrId)?.pode_editar,
+    retry: false,
+  });
+
+  useEffect(() => {
+    setValor(efetiva?.meta_diaria != null ? String(efetiva.meta_diaria) : '');
+  }, [efetiva?.meta_diaria]);
+
+  const salvar = async () => {
+    setSalvando(true);
+    try {
+      const n = valor.trim() === '' ? null : Math.min(100, Math.max(0, Math.round(Number(valor))));
+      const { error } = await (supabase.rpc as any)('salvar_metas_agendamento', {
+        p_ano_mes: anoMes,
+        p_itens: [{ sdr_id: sdrId, meta_diaria: n }],
+      });
+      if (error) throw error;
+      toast.success('Meta salva');
+      qc.invalidateQueries({ queryKey: ['meta-agendamento-efetiva', sdrId] });
+      qc.invalidateQueries({ queryKey: ['metas-agendamento'] });
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Erro ao salvar meta');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>Meta de agendamento (mês atual)</Label>
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {podeEditar ? (
+            <>
+              <Input type="number" min={0} max={100} step={1} className="w-24" value={valor} onChange={(e) => setValor(e.target.value)} />
+              <Button size="sm" variant="outline" disabled={salvando} onClick={salvar}>
+                {salvando && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Salvar meta
+              </Button>
+            </>
+          ) : (
+            <span className="font-medium">{efetiva?.meta_diaria ?? '—'}</span>
+          )}
+          <FonteBadge fonte={efetiva?.fonte} />
+        </div>
+      )}
+      <Link to="/rh/configuracoes" className="text-xs text-primary underline">Ver todas as metas</Link>
+    </div>
+  );
 }
