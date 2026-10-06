@@ -82,11 +82,12 @@ export function SdrProjectionCard({ data, isLoading }: SdrProjectionCardProps) {
                     : "text-destructive"
               )}
             >
-              {data.attainment.toFixed(0)}%
+              {(data.attainment ?? 0).toFixed(0)}%
             </span>
           </div>
           <Progress value={progressPct} className="h-2" />
         </div>
+        )}
       </CardContent>
     </Card>
   );
