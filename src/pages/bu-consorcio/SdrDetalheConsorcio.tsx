@@ -372,7 +372,26 @@ export default function SdrDetalheConsorcio() {
     if (dtAdm > endDate) return 0;
     return contarDiasUteis(dtAdm, endDate);
   }, [admissao, startDate, endDate, diasUteisNoPeriodo]);
-  const metaDiariaRaw = (cadastro as any)?.meta_diaria;
+  // Meta diária — fonte única: RH (metas_agendamento_por_sdr), mês do início do período.
+  const anoMesMeta = startDate
+    ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`
+    : null;
+  const sdrIdParaMeta = (cadastro as any)?.id ?? null;
+  const { data: metaRh } = useQuery({
+    queryKey: ["metas-agendamento-por-sdr", anoMesMeta, [sdrIdParaMeta]],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)("metas_agendamento_por_sdr", {
+        p_sdr_ids: [sdrIdParaMeta],
+        p_ano_mes: anoMesMeta,
+      });
+      if (error) throw error;
+      const row = ((data || []) as any[])[0];
+      return row?.meta_diaria != null ? Number(row.meta_diaria) : null;
+    },
+    enabled: !!sdrIdParaMeta && !!anoMesMeta,
+    staleTime: 1000 * 60 * 5,
+  });
+  const metaDiariaRaw = metaRh;
   const metaDiaria = metaDiariaRaw != null ? Number(metaDiariaRaw) : null;
   const metaPeriodo = metaDiaria != null ? metaDiaria * diasEfetivos : null;
 
