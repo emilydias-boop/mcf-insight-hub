@@ -35,7 +35,7 @@ export interface SdrDetailData {
   ranking: SdrRanking;
   meetings: MeetingV2[];
   allSdrs: SdrSummaryRow[];
-  metaDiaria: number;
+  metaDiaria: number | null;
   dataAdmissao: string | null;
   isLoading: boolean;
   error: Error | null;
@@ -52,27 +52,50 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
   const teamData = useTeamMeetingsData({ startDate, endDate });
   const sdrsQuery = useSdrsFromSquad("inside_sales");
 
-  // Fetch meta_diaria from sdr table
-  const metaDiariaQuery = useQuery({
-    queryKey: ['sdr-meta-diaria-detail', sdrEmail],
+  // sdr_id do SDR
+  const sdrIdQuery = useQuery({
+    queryKey: ['sdr-id-detail', sdrEmail],
     queryFn: async () => {
       const { data } = await supabase
         .from('sdr')
-        .select('id, meta_diaria')
+        .select('id')
         .eq('email', sdrEmail.toLowerCase())
         .eq('active', true)
         .maybeSingle();
-      return { metaDiaria: data?.meta_diaria ?? 10, sdrId: data?.id ?? null };
+      return data?.id ?? null;
     },
     enabled: !!sdrEmail,
     staleTime: 1000 * 60 * 5,
   });
 
+  // Meta diária — fonte única: RH (metas_agendamento_por_sdr), mês do início do período
+  const anoMesMeta = startDate
+    ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`
+    : null;
+  const metaDiariaQuery = useQuery({
+    queryKey: ['metas-agendamento-por-sdr', anoMesMeta, [sdrIdQuery.data]],
+    queryFn: async () => {
+      const sdrId = sdrIdQuery.data;
+      const { data, error } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: [sdrId],
+        p_ano_mes: anoMesMeta,
+      });
+      if (error) throw error;
+      const row = ((data || []) as any[])[0];
+      return {
+        metaDiaria: row?.meta_diaria != null ? Number(row.meta_diaria) : null,
+        sdrId,
+      };
+    },
+    enabled: !!sdrIdQuery.data && !!anoMesMeta,
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Fetch data_admissao from employees table using sdr_id
   const dataAdmissaoQuery = useQuery({
-    queryKey: ['sdr-data-admissao-detail', metaDiariaQuery.data?.sdrId],
+    queryKey: ['sdr-data-admissao-detail', sdrIdQuery.data],
     queryFn: async () => {
-      const sdrId = metaDiariaQuery.data?.sdrId;
+      const sdrId = sdrIdQuery.data;
       if (!sdrId) return null;
       const { data } = await supabase
         .from('employees')
@@ -81,7 +104,7 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
         .maybeSingle();
       return data?.data_admissao ?? null;
     },
-    enabled: !!metaDiariaQuery.data?.sdrId,
+    enabled: !!sdrIdQuery.data,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -195,7 +218,7 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     ranking,
     meetings,
     allSdrs: teamData.bySDR,
-    metaDiaria: metaDiariaQuery.data?.metaDiaria ?? 10,
+    metaDiaria: metaDiariaQuery.data?.metaDiaria ?? null,
     dataAdmissao: dataAdmissaoQuery.data ?? null,
     isLoading: teamData.isLoading || sdrsQuery.isLoading,
     error: teamData.error || sdrsQuery.error || null,
