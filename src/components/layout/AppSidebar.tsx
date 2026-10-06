@@ -285,6 +285,15 @@ const menuItems: MenuItem[] = [
       { title: "Configurações", url: "/rh/configuracoes" },
     ],
   },
+  // Metas de agendamento (manager/coordenador não veem o grupo RH; admin/rh acessam por RH > Configurações)
+  {
+    title: "Metas de agendamento",
+    icon: Users,
+    requiredRoles: ["manager", "coordenador"],
+    items: [
+      { title: "Metas de agendamento", url: "/rh/configuracoes" },
+    ],
+  },
 
 
   // PATRIMÔNIO

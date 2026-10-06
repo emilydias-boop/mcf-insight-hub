@@ -363,7 +363,7 @@ const App = () => (
               <Route path="rh/colaboradores/:id" element={<ResourceGuard resource={"rh" as any}><ColaboradorProfile /></ResourceGuard>} />
               <Route path="rh/prova-equipe" element={<RoleGuard allowedRoles={['admin', 'rh']}><ProvaEquipe /></RoleGuard>} />
               <Route path="rh/prova-equipe/:id" element={<RoleGuard allowedRoles={['admin', 'rh']}><ExamDetail /></RoleGuard>} />
-              <Route path="rh/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracoesRH /></RoleGuard>} />
+              <Route path="rh/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'rh', 'coordenador']}><ConfiguracoesRH /></RoleGuard>} />
               {/* [REMOVIDO 2026-06-24] Rotas /financeiro e /cobrancas desativadas — preservado para rollback.
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="cobrancas" element={<RoleGuard allowedRoles={['admin', 'financeiro']}><Cobrancas /></RoleGuard>} />

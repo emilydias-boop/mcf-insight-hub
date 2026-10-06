@@ -15417,6 +15417,83 @@ export type Database = {
         }
         Relationships: []
       }
+      sdr_metas_mes: {
+        Row: {
+          ano_mes: string
+          created_at: string
+          created_by: string | null
+          id: string
+          meta_diaria: number
+          observacao: string | null
+          sdr_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meta_diaria: number
+          observacao?: string | null
+          sdr_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          meta_diaria?: number
+          observacao?: string | null
+          sdr_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_metas_mes_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_metas_mes_historico: {
+        Row: {
+          acao: string
+          alterado_em: string
+          alterado_por: string | null
+          ano_mes: string
+          id: string
+          meta_anterior: number | null
+          meta_nova: number | null
+          sdr_id: string
+        }
+        Insert: {
+          acao: string
+          alterado_em?: string
+          alterado_por?: string | null
+          ano_mes: string
+          id?: string
+          meta_anterior?: number | null
+          meta_nova?: number | null
+          sdr_id: string
+        }
+        Update: {
+          acao?: string
+          alterado_em?: string
+          alterado_por?: string | null
+          ano_mes?: string
+          id?: string
+          meta_anterior?: number | null
+          meta_nova?: number | null
+          sdr_id?: string
+        }
+        Relationships: []
+      }
       sdr_metrics_exceptions: {
         Row: {
           created_at: string
@@ -20186,6 +20263,40 @@ export type Database = {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
       }
+      meta_agendamento_efetiva: {
+        Args: { p_ano_mes: string; p_sdr_id: string }
+        Returns: {
+          fonte: string
+          meta_diaria: number
+        }[]
+      }
+      metas_agendamento_mes: {
+        Args: { p_ano_mes: string; p_squad?: string }
+        Returns: {
+          atualizado_em: string
+          cargo: string
+          definida_no_mes: boolean
+          dias_uteis: number
+          email: string
+          employee_id: string
+          fonte: string
+          meta_diaria: number
+          meta_mes: number
+          nome: string
+          pode_editar: boolean
+          sdr_id: string
+          squad: string
+        }[]
+      }
+      metas_agendamento_por_sdr: {
+        Args: { p_ano_mes: string; p_sdr_ids: string[] }
+        Returns: {
+          dias_uteis: number
+          fonte: string
+          meta_diaria: number
+          sdr_id: string
+        }[]
+      }
       nome_usuario: { Args: { p_id: string }; Returns: string }
       nomes_compativeis: { Args: { a: string; b: string }; Returns: boolean }
       normalize_document: { Args: { doc: string }; Returns: string }
@@ -20281,6 +20392,7 @@ export type Database = {
       parse_finalidade_obra: { Args: { _resposta: string }; Returns: string }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
       phone_key_br: { Args: { _raw: string }; Returns: string }
+      pode_editar_meta_sdr: { Args: { p_sdr_id: string }; Returns: boolean }
       propagar_qualificacao: {
         Args: {
           _deal_id: string
@@ -20448,6 +20560,10 @@ export type Database = {
       }
       resolve_owner_label: { Args: { _owner: string }; Returns: string }
       resolve_stage_name: { Args: { _stage_id: string }; Returns: string }
+      salvar_metas_agendamento: {
+        Args: { p_ano_mes: string; p_itens: Json }
+        Returns: number
+      }
       script_publicar_versao: {
         Args: { _etapas: Json; _icp_segment?: string; _meeting_type: string }
         Returns: Json
