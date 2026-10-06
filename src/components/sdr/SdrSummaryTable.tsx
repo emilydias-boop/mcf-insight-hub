@@ -176,14 +176,14 @@ export function SdrSummaryTable({
           </TableHeader>
           <TableBody>
             {data.map((row) => {
-              const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
+              const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase());
               const diasEfetivos = sdrDiasUteisMap?.get(row.sdrEmail.toLowerCase()) || diasUteisNoPeriodo || 1;
-              const metaPeriodo = Math.round(metaDiaria * diasEfetivos);
+              const metaPeriodo = metaDiaria != null ? Math.round(metaDiaria * diasEfetivos) : null;
               // Regra: só Lead A conta para meta. Com segmentos ativos, comparar apenas o valor A.
               const agendamentosParaMeta = showSegments
                 ? getSeg(segmentAMap, row.sdrEmail).agendamentos
                 : row.agendamentos;
-              const bateuMeta = agendamentosParaMeta >= metaPeriodo;
+              const bateuMeta = metaPeriodo != null && agendamentosParaMeta >= metaPeriodo;
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
               const contratosLiquidos = row.contratos - (row.reembolsos || 0);
@@ -229,8 +229,8 @@ export function SdrSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex flex-col items-center">
-                      <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-red-400'}`}>
-                        {metaPeriodo}
+                      <span className={`font-medium ${metaPeriodo == null ? 'text-muted-foreground' : bateuMeta ? 'text-green-400' : 'text-red-400'}`}>
+                        {metaPeriodo ?? '—'}
                       </span>
                       {isProporcional && (
                         <span className="text-[10px] text-muted-foreground">

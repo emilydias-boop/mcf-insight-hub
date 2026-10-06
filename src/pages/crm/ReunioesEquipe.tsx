@@ -244,65 +244,35 @@ export default function ReunioesEquipe() {
   // IDs dos SDRs ativos no período (precisa estar declarado antes dos hooks que dependem)
   const sdrIds = useMemo(() => (activeSdrsList || []).map(s => s.id), [activeSdrsList]);
 
-  // Buscar planos de comp vigentes no mês do filtro para usar a meta configurada
-  // no fechamento (meta_reunioes_agendadas) em vez da meta_diaria do cadastro do SDR.
-  const monthStartIso = useMemo(() => format(startOfMonth(start), 'yyyy-MM-dd'), [start]);
-  const { data: compPlansForPeriod } = useQuery({
-    queryKey: ['sdr-comp-plans-for-period', monthStartIso, sdrIds],
+  // Meta diária de agendamento — fonte única: RH (metas_agendamento_por_sdr), mês do início do período.
+  // Sem meta → SDR fica fora do mapa (tela mostra "—").
+  const anoMesMeta = useMemo(() => format(start, 'yyyy-MM'), [start]);
+  const { data: metasRh } = useQuery({
+    queryKey: ['metas-agendamento-por-sdr', anoMesMeta, sdrIds],
     queryFn: async () => {
-      if (!sdrIds || sdrIds.length === 0) return [] as any[];
-      const { data, error } = await supabase
-        .from('sdr_comp_plan')
-        .select('sdr_id, meta_reunioes_agendadas, dias_uteis, vigencia_inicio, vigencia_fim')
-        .in('sdr_id', sdrIds)
-        .lte('vigencia_inicio', monthStartIso)
-        .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStartIso}`)
-        .order('vigencia_inicio', { ascending: false });
+      const { data, error } = await (supabase.rpc as any)('metas_agendamento_por_sdr', {
+        p_sdr_ids: sdrIds,
+        p_ano_mes: anoMesMeta,
+      });
       if (error) throw error;
-      return data || [];
+      return (data || []) as Array<{ sdr_id: string; meta_diaria: number | null; fonte: string; dias_uteis: number }>;
     },
-    enabled: (sdrIds || []).length > 0 && !!monthStartIso,
+    enabled: sdrIds.length > 0,
     staleTime: 60000,
   });
 
-  // Create sdrMetaMap: email -> meta diária EFETIVA (= meta_reunioes_agendadas / dias_uteis do plano).
-  // Mantém pro-rata por admissão funcionando ao multiplicar por sdrDiasUteisMap na tabela.
-  // Fallback: meta_diaria do cadastro do SDR (ou 10).
   const sdrMetaMap = useMemo(() => {
     const map = new Map<string, number>();
     const sdrIdToEmail = new Map<string, string>();
     (activeSdrsList || []).forEach(s => {
       if (s.email && s.id) sdrIdToEmail.set(s.id, s.email.toLowerCase());
     });
-
-    // Pega o plano mais recente por sdr_id (ordenado desc por vigencia_inicio)
-    const planBySdr = new Map<string, { meta: number | null; dias: number | null }>();
-    (compPlansForPeriod || []).forEach((p: any) => {
-      if (!p.sdr_id || planBySdr.has(p.sdr_id)) return;
-      planBySdr.set(p.sdr_id, {
-        meta: p.meta_reunioes_agendadas,
-        dias: p.dias_uteis,
-      });
+    (metasRh || []).forEach(r => {
+      const email = sdrIdToEmail.get(r.sdr_id);
+      if (email && r.meta_diaria != null) map.set(email, Number(r.meta_diaria));
     });
-
-    planBySdr.forEach((plan, sdrId) => {
-      const email = sdrIdToEmail.get(sdrId);
-      if (!email) return;
-      if (plan.meta && plan.dias && plan.dias > 0) {
-        map.set(email, plan.meta / plan.dias);
-      }
-    });
-
-    // Fallback para SDRs sem plano vigente: usa meta_diaria do cadastro.
-    if (allSdrsData) {
-      allSdrsData.forEach(sdr => {
-        if (sdr.email && !map.has(sdr.email.toLowerCase())) {
-          map.set(sdr.email.toLowerCase(), sdr.meta_diaria || 10);
-        }
-      });
-    }
     return map;
-  }, [compPlansForPeriod, allSdrsData, activeSdrsList]);
+  }, [metasRh, activeSdrsList]);
 
   // Calculate business days in the selected period
   const diasUteisNoPeriodo = useMemo(() => {
