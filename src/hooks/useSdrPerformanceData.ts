@@ -15,7 +15,7 @@ export interface MetricWithMeta {
   label: string;
   key: string;
   realized: number;
-  meta: number;
+  meta: number | null;
   attainment: number; // percentage
   gap: number;
   compValue: number | null;
@@ -41,7 +41,7 @@ export interface DailyRow {
   date: Date;
   dateStr: string;
   realized: number;
-  metaDiaria: number;
+  metaDiaria: number | null;
   percentDay: number;
   accumulated: number;
   metaAccumulated: number;
@@ -83,7 +83,7 @@ export interface SdrPerformanceData {
   sdrInfo: { email: string; name: string; cargo: string; squad: string; status: string } | null;
   meetings: MeetingV2[];
   callMetrics: SdrCallMetrics;
-  metaDiaria: number;
+  metaDiaria: number | null;
   ranking: SdrRanking;
   teamAverages: TeamAverages;
   allSdrs: SdrSummaryRow[];
@@ -188,9 +188,10 @@ export function useSdrPerformanceData({
   const isProporcional = effectiveStartDate > startDate;
 
   // Compute meta for the period
-  const metaPeriodo = useMemo(() => {
+  const metaPeriodo = useMemo((): number | null => {
     const md = detail.metaDiaria;
     if (metaMode === "custom" && customMeta !== undefined) return customMeta;
+    if (md == null) return null;
     if (metaMode === "per_business_day") return md;
     const businessDays = contarDiasUteis(effectiveStartDate, endDate);
     if (metaMode === "weekly") return md * 5;
