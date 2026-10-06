@@ -401,7 +401,7 @@ export function useSdrPerformanceData({
     const name = detail.sdrInfo?.name || sdrEmail.split("@")[0];
     const agend = sm.agendamentos;
     const meta = metas.agendMeta;
-    const att = meta > 0 ? ((agend / meta) * 100).toFixed(0) : "0";
+    const att = meta != null && meta > 0 ? ((agend / meta) * 100).toFixed(0) : null;
     const proj = projection.projection;
     const req = projection.requiredPerDay;
     const compVar = compSdrMetrics
