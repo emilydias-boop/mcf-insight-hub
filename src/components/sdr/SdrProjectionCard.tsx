@@ -18,26 +18,27 @@ export function SdrProjectionCard({ data, isLoading }: SdrProjectionCardProps) {
     );
   }
 
-  const willHitMeta = data.projection >= data.metaFinal;
-  const progressPct = Math.min(data.attainment, 100);
+  const hasMeta = data.metaFinal != null;
+  const willHitMeta = hasMeta && data.projection >= (data.metaFinal as number);
+  const progressPct = data.attainment != null ? Math.min(data.attainment, 100) : 0;
 
   const rows = [
-    { label: "Meta Final", value: String(data.metaFinal), color: "text-foreground" },
+    { label: "Meta Final", value: hasMeta ? String(data.metaFinal) : "Sem meta", color: "text-foreground" },
     { label: "Realizado", value: String(data.realized), color: "text-foreground" },
     {
       label: "Projeção",
       value: String(data.projection),
-      color: willHitMeta ? "text-green-500" : "text-destructive",
+      color: hasMeta ? (willHitMeta ? "text-green-500" : "text-destructive") : "text-foreground",
     },
     {
       label: "Faltam",
-      value: data.gap <= 0 ? "✓" : String(data.gap),
-      color: data.gap <= 0 ? "text-green-500" : "text-destructive",
+      value: !hasMeta ? "—" : (data.gap as number) <= 0 ? "✓" : String(data.gap),
+      color: hasMeta && (data.gap as number) <= 0 ? "text-green-500" : hasMeta ? "text-destructive" : "text-muted-foreground",
     },
     {
       label: "Necessário/dia",
-      value: data.gap <= 0 ? "—" : data.requiredPerDay.toFixed(1),
-      color: data.gap <= 0 ? "text-green-500" : "text-foreground",
+      value: !hasMeta || (data.gap as number) <= 0 ? "—" : (data.requiredPerDay as number).toFixed(1),
+      color: hasMeta && (data.gap as number) <= 0 ? "text-green-500" : "text-foreground",
       sub: `${data.businessDaysRemaining} dias úteis restantes`,
     },
   ];
@@ -67,6 +68,7 @@ export function SdrProjectionCard({ data, isLoading }: SdrProjectionCardProps) {
         </div>
 
         {/* Progress bar */}
+        {hasMeta && (
         <div className="mt-4 space-y-1.5">
           <div className="flex items-center justify-between text-[11px]">
             <span className="text-muted-foreground">Atingimento</span>
