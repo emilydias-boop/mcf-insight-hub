@@ -13,7 +13,7 @@ export interface Atribuicao {
   deal_tags: string[];
   r1_at: string | null;
   is_outside: boolean;
-  regra: 'vinculo' | 'r1_contrato_pago' | 'r1_anterior' | 'r1_posterior';
+  regra: 'vinculo' | 'r1_contrato_pago' | 'r1_anterior' | 'r1_posterior' | 'manual';
   sdr_profile_id: string | null;
 }
 

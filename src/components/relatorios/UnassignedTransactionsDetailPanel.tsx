@@ -9,6 +9,7 @@ import { AlertTriangle, Search, Mail, Phone, HelpCircle, Link2, XCircle, UserChe
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { useUnassignedTransactionsDiagnosis, type DiagnosisReason, type TransactionDiagnosis } from '@/hooks/useUnassignedTransactionsDiagnosis';
+import { useAtribuicaoCloser, type Atribuicao } from '@/hooks/useAtribuicaoCloser';
 import { useLinkTransactionToAttendee } from '@/hooks/useLinkTransactionToAttendee';
 
 interface Transaction {
@@ -48,6 +49,14 @@ const REASON_LABELS: Record<DiagnosisReason, { label: string; color: string; ico
   no_match: { label: 'Sem match', color: 'bg-blue-500/15 text-blue-600 border-blue-500/30', icon: <HelpCircle className="h-3 w-3" /> },
 };
 
+const REGRA_LABELS: Record<Atribuicao['regra'], string> = {
+  vinculo: 'Vínculo',
+  r1_contrato_pago: 'R1 com contrato pago',
+  r1_anterior: 'R1 anterior',
+  r1_posterior: 'R1 posterior (outside)',
+  manual: 'Manual (gestão)',
+};
+
 export function UnassignedTransactionsDetailPanel({
   transactions,
   globalFirstIds,
@@ -60,6 +69,13 @@ export function UnassignedTransactionsDetailPanel({
 
   const { diagnosed, summary } = useUnassignedTransactionsDiagnosis(transactions, attendees, closers);
   const linkMutation = useLinkTransactionToAttendee();
+
+  const selectedBu = selectedTx?.transaction.product_category === 'incorporador' ? 'incorporador' : undefined;
+  const { map: atribuicaoMap } = useAtribuicaoCloser(
+    selectedTx ? [selectedTx.transaction.id] : [],
+    selectedBu
+  );
+  const atribuicao = selectedTx ? atribuicaoMap.get(selectedTx.transaction.id) : undefined;
 
   const totalGross = useMemo(
     () => transactions.reduce((s, t) => s + getDeduplicatedGross(t as any, globalFirstIds.has(t.id)), 0),
@@ -305,11 +321,25 @@ export function UnassignedTransactionsDetailPanel({
                     <AlertTriangle className="h-4 w-4 text-warning" />
                     <p className="text-sm font-medium">Diagnóstico</p>
                   </div>
+                  {atribuicao && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs gap-1 bg-success/15 text-success border-success/30">
+                        <UserCheck className="h-3 w-3" />
+                        Atribuída: {atribuicao.closer_nome}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {REGRA_LABELS[atribuicao.regra]}
+                        {atribuicao.r1_at ? ` · R1 ${formatDate(atribuicao.r1_at)}` : ''}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={`text-xs gap-1 ${REASON_LABELS[selectedTx.reason].color}`}>
-                      {REASON_LABELS[selectedTx.reason].icon}
-                      {REASON_LABELS[selectedTx.reason].label}
-                    </Badge>
+                    {!(atribuicao && selectedTx.reason === 'no_match') && (
+                      <Badge variant="outline" className={`text-xs gap-1 ${REASON_LABELS[selectedTx.reason].color}`}>
+                        {REASON_LABELS[selectedTx.reason].icon}
+                        {REASON_LABELS[selectedTx.reason].label}
+                      </Badge>
+                    )}
                     {selectedTx.contactExistsInCRM && (
                       <Badge variant="outline" className="text-xs gap-1 bg-success/15 text-success border-success/30">
                         <UserCheck className="h-3 w-3" />
