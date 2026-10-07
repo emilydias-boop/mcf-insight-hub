@@ -245,6 +245,7 @@ export function CloserRevenueDetailDialog({
     }
     let label = '';
     if (a.regra === 'vinculo') label = 'Vínculo manual';
+    else if (a.regra === 'manual') label = 'Manual (gestão)';
     else if (a.regra === 'r1_contrato_pago') label = `R1 c/ contrato · ${fmtDiaMes(a.r1_at)}`;
     else label = `R1 · ${fmtDiaMes(a.r1_at)}`;
     return (
