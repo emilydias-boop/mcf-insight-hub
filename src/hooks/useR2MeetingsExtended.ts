@@ -32,6 +32,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             status,
             deal_id,
             already_builds,
+            refunded_at,
             lead_profile,
             partner_name,
             video_status,

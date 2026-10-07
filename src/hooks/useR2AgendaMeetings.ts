@@ -23,6 +23,7 @@ export interface R2Meeting {
     deal_id: string | null;
     lead_profile: string | null;
     already_builds: boolean | null;
+    refunded_at?: string | null;
     deal?: {
       id: string;
       name: string;
@@ -62,6 +63,7 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
             status,
             deal_id,
             already_builds,
+            refunded_at,
             lead_profile,
             is_reschedule,
             parent_attendee_id,
@@ -128,6 +130,7 @@ export function useR2MeetingsByCloser(closerId: string, startDate: Date, endDate
             status,
             deal_id,
             already_builds,
+            refunded_at,
             lead_profile,
             is_reschedule,
             parent_attendee_id

@@ -27,6 +27,7 @@ export interface R2AttendeeExtended {
   status: string;
   deal_id: string | null;
   already_builds: boolean | null;
+  refunded_at?: string | null;
   // R2-specific fields
   partner_name: string | null;
   lead_profile: string | null;
