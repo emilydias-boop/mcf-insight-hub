@@ -17,6 +17,30 @@ interface Block extends SegBlock {
   a?: SegBlock;
   b?: SegBlock;
 }
+interface ReguaSemana {
+  numero: number;
+  inicio: string; // YYYY-MM-DD
+  fim: string;
+  status: "passada" | "atual" | "futura";
+  dias_uteis: number;
+  meta_base: number;
+  saldo_anterior: number | null;
+  meta: number;
+  realizadas: number | null;
+  saldo: number | null;
+  faltam: number | null;
+}
+interface ReguaR1 {
+  meta_mes: number;
+  realizadas_mes: number;
+  pct_mes: number;
+  dias_uteis_mes: number;
+  dias_uteis_restantes: number;
+  necessario_por_dia_util: number | null;
+  ritmo_mes_anterior: number | null;
+  semana_atual: ReguaSemana | null;
+  semanas: ReguaSemana[];
+}
 interface Payload {
   today: string;
   updated_at: string;
@@ -29,6 +53,7 @@ interface Payload {
   sdr_ranking?: TVSdrRankingRow[];
   closer_ranking?: TVCloserRankingRow[];
   ligacao_ranking?: TVLigacaoRankingRow[];
+  regua_r1?: ReguaR1 | null;
   error?: string;
 }
 
@@ -154,13 +179,14 @@ export default function TVIncorporadorEquipe() {
       accent={ACCENT}
       today={data.today}
       updatedAt={data.updated_at}
-      mainRowsClassName="grid-rows-[auto_1fr]"
+      mainRowsClassName={data.regua_r1 ? "grid-rows-[auto_auto_1fr]" : "grid-rows-[auto_1fr]"}
     >
       <div className="grid grid-cols-3 gap-4 xl:gap-6 min-h-0">
         <DiaMesCard titulo="Leads Novos" dia={data.leads_novos?.dia} mes={data.leads_novos?.mes} accent="#38bdf8" ocultarAvisoMeta />
         <DiaMesCard titulo="Agendamento" dia={data.dia.a?.agendamento} mes={data.mes.a?.agendamento} diaB={data.dia.b?.agendamento} mesB={data.mes.b?.agendamento} accent={ACCENT} />
         <DiaMesCard titulo="Contrato Pago" dia={data.dia.a?.contrato_pago} mes={data.mes.a?.contrato_pago} diaB={data.dia.b?.contrato_pago} mesB={data.mes.b?.contrato_pago} accent="#bfff00" invertGoal />
       </div>
+      {data.regua_r1 ? <ReguaR1Strip r={data.regua_r1} /> : null}
       <div className="grid grid-cols-3 gap-5 xl:gap-8 min-h-0">
         <TVSdrRankingBlock rows={data.sdr_ranking} accent={ACCENT} />
         <TVCloserRankingBlock rows={data.closer_ranking} accent="#bfff00" />
