@@ -26,6 +26,7 @@ import {
   Handshake,
   Zap,
   Sparkles,
+  Undo2,
 } from 'lucide-react';
 
 interface DealHistoryProps {
@@ -53,6 +54,8 @@ const activityIcons: Record<string, any> = {
   partner_detected: Sparkles,
   outside_detected: Sparkles,
   auto_move: Zap,
+  refund_mcf_pay: Undo2,
+  refund_hubla: Undo2,
 };
 
 const activityLabels: Record<string, string> = {
@@ -63,6 +66,8 @@ const activityLabels: Record<string, string> = {
   partner_detected: 'Parceria detectada',
   outside_detected: 'Venda Outside detectada',
   auto_move: 'Movimentação automática',
+  refund_mcf_pay: 'Reembolso de contrato (MCF Pay)',
+  refund_hubla: 'Reembolso de contrato (Hubla)',
 };
 
 export const DealHistory = ({ dealId, dealUuid, contactId, limit }: DealHistoryProps) => {

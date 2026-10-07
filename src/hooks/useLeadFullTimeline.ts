@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useContactDealIds } from './useContactDealIds';
 import type { LeadReportMeeting } from './useLeadReport';
 
-export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry' | 'tag_change' | 'owner_change' | 'automation';
+export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry' | 'tag_change' | 'owner_change' | 'automation' | 'refund';
 
 // Rótulos PT-BR para os tipos que antes caíam no catch-all de "Notas"
 const OWNERSHIP_TYPES: Record<string, string> = {
@@ -316,6 +316,16 @@ export function useLeadFullTimeline({
               description: act.description,
               date: act.created_at,
               author: resolveAuthor(act.user_id, meta.transferred_by, meta.moved_by_name, meta.moved_by_email),
+              metadata: { original_type: actType, ...meta },
+            });
+          } else if (actType === 'refund_mcf_pay' || actType === 'refund_hubla') {
+            events.push({
+              id: act.id,
+              type: 'refund',
+              title: 'Reembolso de contrato',
+              description: act.description,
+              date: act.created_at,
+              author: resolveAuthor(act.user_id, meta.changed_by),
               metadata: { original_type: actType, ...meta },
             });
           } else if (AUTOMATION_TYPES[actType]) {
