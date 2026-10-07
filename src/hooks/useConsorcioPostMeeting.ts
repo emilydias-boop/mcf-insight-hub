@@ -406,6 +406,8 @@ export function useProposals() {
           carta_excluida_por_nome,
           carta_excluida_motivo,
           created_at,
+          origem_attendee_id,
+          deleted_at,
           crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
           // 'recusada' entra na leitura para a etapa 3 do funil não ENCOLHER com o
@@ -718,6 +720,8 @@ export function useEnviarProposta() {
       /** Cartas da proposta (1..N). O total é a soma delas. */
       cartas: PropostaCartaInput[];
       origem_lead?: string;
+      /** Reunião R1 de onde a venda foi lançada (só em propostas novas). */
+      origem_attendee_id?: string | null;
     }) => {
       const cartas = (params.cartas || []).filter(c => Number(c.valor_credito) > 0);
       if (cartas.length === 0) throw new Error('Informe ao menos uma carta com crédito, prazo e produto.');
@@ -741,7 +745,8 @@ export function useEnviarProposta() {
           prazo_meses: principal.prazo_meses,
           tipo_produto: principal.tipo_produto,
           origem_lead: params.origem_lead || null,
-        })
+          ...(params.origem_attendee_id ? { origem_attendee_id: params.origem_attendee_id } : {}),
+        } as any)
         .select('id')
         .single();
       if (propError) throw propError;

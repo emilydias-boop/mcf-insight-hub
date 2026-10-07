@@ -1,0 +1,2 @@
+ALTER TABLE public.consorcio_proposals ADD COLUMN origem_attendee_id uuid NULL REFERENCES public.meeting_slot_attendees(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_consorcio_proposals_origem_attendee_id ON public.consorcio_proposals(origem_attendee_id);

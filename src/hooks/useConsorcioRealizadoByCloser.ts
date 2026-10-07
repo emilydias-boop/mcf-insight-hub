@@ -27,7 +27,7 @@ export function useConsorcioRealizadoByCloser(startDate: Date, endDate: Date) {
 
       const { data: proposals, error: pErr } = await supabase
         .from("consorcio_proposals")
-        .select("deal_id, created_by, valor_credito, proposal_date, created_at")
+        .select("deal_id, created_by, valor_credito, proposal_date, created_at, origem_attendee_id")
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString());
       if (pErr) throw pErr;
@@ -103,13 +103,28 @@ export function useConsorcioRealizadoByCloser(startDate: Date, endDate: Date) {
         }
       }
 
+      // 0) reunião de origem gravada na proposta → closer da reunião
+      const origemToCloser = new Map<string, string>();
+      const origemIds = [...new Set(list.map((p: any) => p.origem_attendee_id).filter(Boolean) as string[])];
+      if (origemIds.length > 0) {
+        const { data: atts } = await supabase
+          .from("meeting_slot_attendees")
+          .select("id, meeting_slots (closer_id)")
+          .in("id", origemIds);
+        (atts || []).forEach((a: any) => {
+          if (a?.meeting_slots?.closer_id) origemToCloser.set(a.id, a.meeting_slots.closer_id);
+        });
+      }
+
       // Aggregate valor_credito per closer
       const result = new Map<string, number>();
       for (const p of list) {
         const v = Number(p.valor_credito || 0);
         if (!v) continue;
         let cid: string | undefined;
-        if (p.created_by) cid = profileToCloserId.get(p.created_by);
+        const origemId = (p as any).origem_attendee_id as string | null | undefined;
+        if (origemId) cid = origemToCloser.get(origemId);
+        if (!cid && p.created_by) cid = profileToCloserId.get(p.created_by);
         if (!cid && p.deal_id) cid = dealCloserMap.get(p.deal_id);
         if (!cid) continue;
         result.set(cid, (result.get(cid) || 0) + v);
