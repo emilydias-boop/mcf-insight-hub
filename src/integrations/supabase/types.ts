@@ -2715,6 +2715,156 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_contrato_pago_wellington_20261007: {
+        Row: {
+          already_builds: boolean | null
+          attendee_name: string | null
+          attendee_phone: string | null
+          backup_at: string | null
+          boas_vindas_r2_whatsapp_enviado_em: string | null
+          booked_at: string | null
+          booked_by: string | null
+          booked_by_ajustado_em: string | null
+          booked_by_ajustado_por: string | null
+          booked_by_anterior: string | null
+          calendly_invitee_uri: string | null
+          carrinho_status: string | null
+          carrinho_updated_at: string | null
+          carrinho_week_start: string | null
+          closer_notes: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          contact_id: string | null
+          contract_paid_at: string | null
+          cpf: string | null
+          created_at: string | null
+          deal_id: string | null
+          decision_maker_type: string | null
+          id: string | null
+          is_decision_maker: boolean | null
+          is_partner: boolean | null
+          is_reschedule: boolean | null
+          lead_profile: string | null
+          meeting_link: string | null
+          meeting_slot_id: string | null
+          notes: string | null
+          notified_at: string | null
+          outcome_reason: string | null
+          outcome_reason_note: string | null
+          outcome_set_at: string | null
+          outcome_set_by: string | null
+          parent_attendee_id: string | null
+          partner_name: string | null
+          r2_confirmation: string | null
+          r2_observations: string | null
+          r2_status_id: string | null
+          refunded_at: string | null
+          status: string | null
+          thermometer_ids: string[] | null
+          updated_at: string | null
+          updated_by: string | null
+          video_status: string | null
+        }
+        Insert: {
+          already_builds?: boolean | null
+          attendee_name?: string | null
+          attendee_phone?: string | null
+          backup_at?: string | null
+          boas_vindas_r2_whatsapp_enviado_em?: string | null
+          booked_at?: string | null
+          booked_by?: string | null
+          booked_by_ajustado_em?: string | null
+          booked_by_ajustado_por?: string | null
+          booked_by_anterior?: string | null
+          calendly_invitee_uri?: string | null
+          carrinho_status?: string | null
+          carrinho_updated_at?: string | null
+          carrinho_week_start?: string | null
+          closer_notes?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          contact_id?: string | null
+          contract_paid_at?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          decision_maker_type?: string | null
+          id?: string | null
+          is_decision_maker?: boolean | null
+          is_partner?: boolean | null
+          is_reschedule?: boolean | null
+          lead_profile?: string | null
+          meeting_link?: string | null
+          meeting_slot_id?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          outcome_reason?: string | null
+          outcome_reason_note?: string | null
+          outcome_set_at?: string | null
+          outcome_set_by?: string | null
+          parent_attendee_id?: string | null
+          partner_name?: string | null
+          r2_confirmation?: string | null
+          r2_observations?: string | null
+          r2_status_id?: string | null
+          refunded_at?: string | null
+          status?: string | null
+          thermometer_ids?: string[] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          video_status?: string | null
+        }
+        Update: {
+          already_builds?: boolean | null
+          attendee_name?: string | null
+          attendee_phone?: string | null
+          backup_at?: string | null
+          boas_vindas_r2_whatsapp_enviado_em?: string | null
+          booked_at?: string | null
+          booked_by?: string | null
+          booked_by_ajustado_em?: string | null
+          booked_by_ajustado_por?: string | null
+          booked_by_anterior?: string | null
+          calendly_invitee_uri?: string | null
+          carrinho_status?: string | null
+          carrinho_updated_at?: string | null
+          carrinho_week_start?: string | null
+          closer_notes?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          contact_id?: string | null
+          contract_paid_at?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          decision_maker_type?: string | null
+          id?: string | null
+          is_decision_maker?: boolean | null
+          is_partner?: boolean | null
+          is_reschedule?: boolean | null
+          lead_profile?: string | null
+          meeting_link?: string | null
+          meeting_slot_id?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          outcome_reason?: string | null
+          outcome_reason_note?: string | null
+          outcome_set_at?: string | null
+          outcome_set_by?: string | null
+          parent_attendee_id?: string | null
+          partner_name?: string | null
+          r2_confirmation?: string | null
+          r2_observations?: string | null
+          r2_status_id?: string | null
+          refunded_at?: string | null
+          status?: string | null
+          thermometer_ids?: string[] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          video_status?: string | null
+        }
+        Relationships: []
+      }
       backup_effective_from_a001_a009: {
         Row: {
           effective_from: string | null
