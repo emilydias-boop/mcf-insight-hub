@@ -1,3 +1,4 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
