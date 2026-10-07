@@ -157,6 +157,115 @@ function DiaMesCard({
   );
 }
 
+const REGUA_ACCENT = "#f59e0b";
+const ddmm = (iso: string) => { const [, m, d] = iso.split("-"); return `${d}/${m}`; };
+const dd = (iso: string) => iso.split("-")[2];
+
+function ReguaR1Strip({ r }: { r: ReguaR1 }) {
+  const fmt = (v: number) => Number(v ?? 0).toLocaleString("pt-BR");
+  const atual = r.semana_atual;
+  const pctSem = atual && atual.meta > 0 ? Math.min(((atual.realizadas ?? 0) / atual.meta) * 100, 100) : 0;
+  const pctMes = Math.min(Number(r.pct_mes ?? 0), 100);
+  const saldoAnt = atual?.saldo_anterior ?? 0;
+  return (
+    <div
+      className="rounded-2xl border p-3 xl:p-4 grid gap-4 xl:gap-6 items-stretch"
+      style={{ gridTemplateColumns: "1.05fr 2.4fr 0.9fr", borderColor: `${REGUA_ACCENT}8c`, backgroundColor: `${REGUA_ACCENT}0f` }}
+    >
+      <div className="flex flex-col justify-center min-w-0">
+        <div className="uppercase tracking-widest text-[10px] xl:text-xs font-black" style={{ color: REGUA_ACCENT }}>
+          R1 Realizada{atual ? ` · Semana ${atual.numero} · ${ddmm(atual.inicio)}–${ddmm(atual.fim)}` : ""}
+        </div>
+        {atual ? (
+          <>
+            <div className="mt-1 flex items-baseline gap-1.5 xl:gap-2">
+              <span className="text-3xl xl:text-5xl font-black leading-none" style={{ color: REGUA_ACCENT }}>{fmt(atual.realizadas ?? 0)}</span>
+              <span className="text-lg xl:text-2xl font-bold text-white/40">/ {fmt(atual.meta)}</span>
+            </div>
+            <div className="mt-2 h-1.5 xl:h-2 w-full rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pctSem}%`, backgroundColor: REGUA_ACCENT }} />
+            </div>
+            <div className="mt-1.5 text-[10px] xl:text-xs font-semibold text-white/55">
+              {saldoAnt < 0 ? (
+                <>{fmt(atual.meta_base)} da semana <b className="text-white">+ {fmt(-saldoAnt)} que faltaram</b></>
+              ) : saldoAnt > 0 ? (
+                <>{fmt(atual.meta_base)} da semana <b className="text-white">− {fmt(saldoAnt)} de sobra</b></>
+              ) : (
+                <>meta da semana</>
+              )}
+            </div>
+            <div className="text-[10px] xl:text-xs font-semibold text-white/55">
+              {(atual.faltam ?? 0) > 0 ? <>Faltam <b className="text-white">{fmt(atual.faltam ?? 0)}</b> até domingo</> : <b style={{ color: "#22c55e" }}>Meta da semana batida</b>}
+            </div>
+          </>
+        ) : (
+          <div className="mt-2 text-white/40 text-sm">sem semana em andamento</div>
+        )}
+      </div>
+
+      <div className="flex flex-col justify-center min-w-0">
+        <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-xs font-bold">Régua do mês · o que falta passa para a semana seguinte</div>
+        <div className="mt-2 grid gap-1.5 xl:gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(r.semanas.length, 1)}, minmax(0, 1fr))` }}>
+          {r.semanas.map((s) => {
+            const isAtual = s.status === "atual";
+            const isFut = s.status === "futura";
+            const bateu = s.status === "passada" && (s.saldo ?? 0) >= 0;
+            const valColor = isAtual ? REGUA_ACCENT : isFut ? "rgba(255,255,255,0.7)" : bateu ? "#22c55e" : "#ef4444";
+            return (
+              <div
+                key={s.numero}
+                className="rounded-xl border p-1.5 xl:p-2"
+                style={{
+                  opacity: isFut ? 0.55 : 1,
+                  borderColor: isAtual ? REGUA_ACCENT : "rgba(255,255,255,0.10)",
+                  backgroundColor: isAtual ? `${REGUA_ACCENT}1f` : "rgba(255,255,255,0.04)",
+                }}
+              >
+                <div className="text-[9px] xl:text-[10px] font-black tracking-widest" style={{ color: isAtual ? REGUA_ACCENT : "rgba(255,255,255,0.5)" }}>
+                  S{s.numero} · {dd(s.inicio)}–{dd(s.fim)}
+                </div>
+                <div className="mt-0.5 flex items-baseline gap-1">
+                  <span className="text-base xl:text-xl font-black" style={{ color: valColor }}>{isFut ? "—" : fmt(s.realizadas ?? 0)}</span>
+                  <span className="text-[10px] xl:text-xs font-bold text-white/40">/ {fmt(s.meta)}</span>
+                </div>
+                <div className="text-[9px] xl:text-[10px] font-extrabold min-h-[1em]">
+                  {s.status === "passada" ? (
+                    <span style={{ color: bateu ? "#22c55e" : "#ef4444" }}>
+                      {(s.saldo ?? 0) >= 0 ? "+" : "−"}{fmt(Math.abs(s.saldo ?? 0))} → S{s.numero + 1}
+                    </span>
+                  ) : isAtual ? (
+                    <span className="text-white/50">em andamento</span>
+                  ) : (
+                    <span className="text-white/45">{s.dias_uteis} dias úteis</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-col justify-center min-w-0">
+        <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-xs font-bold">Mês</div>
+        <div className="mt-1 flex items-baseline gap-1.5">
+          <span className="text-2xl xl:text-4xl font-black leading-none" style={{ color: REGUA_ACCENT }}>{fmt(r.realizadas_mes)}</span>
+          <span className="text-base xl:text-xl font-bold text-white/40">/ {fmt(r.meta_mes)}</span>
+        </div>
+        <div className="mt-2 h-1.5 xl:h-2 w-full rounded-full bg-white/10 overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pctMes}%`, backgroundColor: REGUA_ACCENT }} />
+        </div>
+        <div className="mt-1.5 text-[10px] xl:text-xs font-semibold text-white/55">
+          {Number(r.pct_mes ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+          {r.necessario_por_dia_util != null ? <> · precisa de <b className="text-white">~{fmt(r.necessario_por_dia_util)} por dia útil</b></> : null}
+        </div>
+        {r.ritmo_mes_anterior != null ? (
+          <div className="text-[10px] xl:text-xs font-semibold text-white/40">mês passado fez {fmt(r.ritmo_mes_anterior)} por dia útil</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function TVIncorporadorEquipe() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["tv-incorporador-equipe", TOKEN],
