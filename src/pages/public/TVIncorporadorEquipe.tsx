@@ -174,7 +174,7 @@ function ReguaR1Strip({ r }: { r: ReguaR1 }) {
   const restantes = Number(r.semanas_restantes ?? 0);
   return (
     <div
-      className="rounded-3xl border-2 p-4 xl:p-7 grid gap-5 xl:gap-8 items-stretch"
+      className="h-full min-h-0 overflow-hidden rounded-3xl border-2 p-5 xl:p-8 grid gap-6 xl:gap-10 items-stretch"
       style={{
         gridTemplateColumns: "1.1fr 2.6fr 1fr",
         borderColor: REGUA_ACCENT,
@@ -184,20 +184,20 @@ function ReguaR1Strip({ r }: { r: ReguaR1 }) {
     >
       {/* Semana atual */}
       <div className="flex flex-col justify-center min-w-0">
-        <div className="uppercase tracking-widest text-xs xl:text-lg font-black" style={{ color: REGUA_ACCENT }}>
+        <div className="uppercase tracking-widest text-base xl:text-2xl font-black" style={{ color: REGUA_ACCENT }}>
           R1 Realizada · Semana {atual?.numero ?? "—"}
         </div>
         {atual ? (
           <>
-            <div className="text-[11px] xl:text-base font-bold text-white/50">{ddmm(atual.inicio)} a {ddmm(atual.fim)}</div>
-            <div className="mt-1 xl:mt-2 flex items-baseline gap-2 xl:gap-3">
-              <span className="text-5xl xl:text-8xl font-black leading-none" style={{ color: REGUA_ACCENT }}>{fmt(atual.realizadas ?? 0)}</span>
-              <span className="text-2xl xl:text-5xl font-bold text-white/45">/ {fmt(atual.meta)}</span>
+            <div className="text-sm xl:text-xl font-bold text-white/50">{ddmm(atual.inicio)} a {ddmm(atual.fim)}</div>
+            <div className="mt-2 xl:mt-3 flex items-baseline gap-3 xl:gap-4">
+              <span className="text-7xl xl:text-[10rem] font-black leading-none" style={{ color: REGUA_ACCENT }}>{fmt(atual.realizadas ?? 0)}</span>
+              <span className="text-3xl xl:text-[4.5rem] font-bold leading-none text-white/45">/ {fmt(atual.meta)}</span>
             </div>
-            <div className="mt-3 h-2.5 xl:h-4 w-full rounded-full bg-white/10 overflow-hidden">
+            <div className="mt-4 xl:mt-6 h-3 xl:h-6 w-full rounded-full bg-white/10 overflow-hidden">
               <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pctSem}%`, backgroundColor: REGUA_ACCENT }} />
             </div>
-            <div className="mt-2 text-xs xl:text-lg font-semibold text-white/60">
+            <div className="mt-3 xl:mt-4 text-base xl:text-2xl font-semibold text-white/65">
               {ajusteAtual > 0 ? (
                 <>{fmt(atual.meta_base)} da semana <b className="text-white">+ {fmt(ajusteAtual)} do que faltou</b></>
               ) : ajusteAtual < 0 ? (
@@ -206,7 +206,7 @@ function ReguaR1Strip({ r }: { r: ReguaR1 }) {
                 <>meta da semana</>
               )}
             </div>
-            <div className="text-xs xl:text-lg font-semibold text-white/60">
+            <div className="text-base xl:text-2xl font-semibold text-white/65">
               {(atual.faltam ?? 0) > 0 ? (
                 <>Faltam <b className="text-white">{fmt(atual.faltam ?? 0)}</b> até domingo</>
               ) : (
@@ -215,15 +215,15 @@ function ReguaR1Strip({ r }: { r: ReguaR1 }) {
             </div>
           </>
         ) : (
-          <div className="mt-2 text-white/40 text-base">sem semana em andamento</div>
+          <div className="mt-2 text-white/40 text-xl">sem semana em andamento</div>
         )}
       </div>
 
       {/* Régua das semanas */}
-      <div className="flex flex-col justify-center min-w-0">
+      <div className="flex flex-col min-w-0 min-h-0">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <div className="text-white/70 uppercase tracking-widest text-xs xl:text-lg font-black">Régua do mês</div>
-          <div className="text-[11px] xl:text-base font-bold" style={{ color: saldoAntes > 0 ? "#f87171" : saldoAntes < 0 ? "#4ade80" : "rgba(255,255,255,0.5)" }}>
+          <div className="text-white/75 uppercase tracking-widest text-base xl:text-2xl font-black">Régua do mês</div>
+          <div className="text-sm xl:text-xl font-bold" style={{ color: saldoAntes > 0 ? "#f87171" : saldoAntes < 0 ? "#4ade80" : "rgba(255,255,255,0.5)" }}>
             {saldoAntes > 0
               ? `Faltaram ${fmt(saldoAntes)} · divididos nas ${restantes} semanas restantes`
               : saldoAntes < 0
@@ -231,7 +231,7 @@ function ReguaR1Strip({ r }: { r: ReguaR1 }) {
               : "No ritmo da meta"}
           </div>
         </div>
-        <div className="mt-2 xl:mt-4 grid gap-2 xl:gap-3" style={{ gridTemplateColumns: `repeat(${Math.max(r.semanas.length, 1)}, minmax(0, 1fr))` }}>
+        <div className="flex-1 min-h-0 mt-3 xl:mt-5 grid gap-3 xl:gap-4" style={{ gridTemplateColumns: `repeat(${Math.max(r.semanas.length, 1)}, minmax(0, 1fr))` }}>
           {r.semanas.map((s) => {
             const isAtual = s.status === "atual";
             const isFut = s.status === "futura";
@@ -241,31 +241,31 @@ function ReguaR1Strip({ r }: { r: ReguaR1 }) {
             return (
               <div
                 key={s.numero}
-                className="rounded-2xl border-2 p-2 xl:p-4"
+                className="rounded-2xl border-2 p-3 xl:p-6 flex flex-col justify-center min-h-0"
                 style={{
                   opacity: isFut ? 0.6 : 1,
                   borderColor: isAtual ? REGUA_ACCENT : s.status === "passada" ? (bateu ? "#22c55e80" : "#ef444480") : "rgba(255,255,255,0.12)",
                   backgroundColor: isAtual ? `${REGUA_ACCENT}26` : "rgba(255,255,255,0.04)",
                 }}
               >
-                <div className="text-[10px] xl:text-sm font-black tracking-widest" style={{ color: isAtual ? REGUA_ACCENT : "rgba(255,255,255,0.55)" }}>
+                <div className="text-xs xl:text-xl font-black tracking-widest" style={{ color: isAtual ? REGUA_ACCENT : "rgba(255,255,255,0.55)" }}>
                   S{s.numero} · {dd(s.inicio)}–{dd(s.fim)}
                 </div>
-                <div className="mt-1 flex items-baseline gap-1 xl:gap-1.5 flex-wrap">
-                  <span className="text-2xl xl:text-5xl font-black leading-none" style={{ color: valColor }}>{isFut ? "—" : fmt(s.realizadas ?? 0)}</span>
-                  <span className="text-sm xl:text-2xl font-bold text-white/45">/ {fmt(s.meta)}</span>
+                <div className="mt-2 xl:mt-3 flex items-baseline gap-1.5 xl:gap-2 flex-wrap">
+                  <span className="text-4xl xl:text-[6rem] font-black leading-none" style={{ color: valColor }}>{isFut ? "—" : fmt(s.realizadas ?? 0)}</span>
+                  <span className="text-xl xl:text-[2.75rem] font-bold leading-none text-white/45">/ {fmt(s.meta)}</span>
                 </div>
-                <div className="mt-1 text-[10px] xl:text-sm font-extrabold min-h-[1em]">
+                <div className="mt-2 xl:mt-3 text-xs xl:text-xl font-extrabold min-h-[1em]">
                   {s.status === "passada" ? (
                     <span style={{ color: bateu ? "#22c55e" : "#ef4444" }}>
                       {bateu ? `+${fmt(s.saldo ?? 0)} acima` : `−${fmt(Math.abs(s.saldo ?? 0))} faltaram`}
                     </span>
                   ) : isAtual ? (
-                    <span className="text-white/60">em andamento</span>
+                    <span className="text-white/65">em andamento</span>
                   ) : aj !== 0 ? (
-                    <span className="text-white/55">{fmt(s.meta_base)} {aj > 0 ? `+ ${fmt(aj)}` : `− ${fmt(-aj)}`}</span>
+                    <span className="text-white/60">{fmt(s.meta_base)} {aj > 0 ? `+ ${fmt(aj)}` : `− ${fmt(-aj)}`}</span>
                   ) : (
-                    <span className="text-white/50">{s.dias_uteis} dias úteis</span>
+                    <span className="text-white/55">{s.dias_uteis} dias úteis</span>
                   )}
                 </div>
               </div>
@@ -276,23 +276,23 @@ function ReguaR1Strip({ r }: { r: ReguaR1 }) {
 
       {/* Mês */}
       <div className="flex flex-col justify-center min-w-0">
-        <div className="text-white/70 uppercase tracking-widest text-xs xl:text-lg font-black">Mês</div>
-        <div className="mt-1 xl:mt-2 flex items-baseline gap-2">
-          <span className="text-4xl xl:text-7xl font-black leading-none" style={{ color: REGUA_ACCENT }}>{fmt(r.realizadas_mes)}</span>
-          <span className="text-xl xl:text-4xl font-bold text-white/45">/ {fmt(r.meta_mes)}</span>
+        <div className="text-white/75 uppercase tracking-widest text-base xl:text-2xl font-black">Mês</div>
+        <div className="mt-2 xl:mt-3 flex items-baseline gap-2 xl:gap-3">
+          <span className="text-6xl xl:text-[8rem] font-black leading-none" style={{ color: REGUA_ACCENT }}>{fmt(r.realizadas_mes)}</span>
+          <span className="text-2xl xl:text-[3.75rem] font-bold leading-none text-white/45">/ {fmt(r.meta_mes)}</span>
         </div>
-        <div className="mt-3 h-2.5 xl:h-4 w-full rounded-full bg-white/10 overflow-hidden">
+        <div className="mt-4 xl:mt-6 h-3 xl:h-6 w-full rounded-full bg-white/10 overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pctMes}%`, backgroundColor: REGUA_ACCENT }} />
         </div>
-        <div className="mt-2 text-xs xl:text-lg font-semibold text-white/60">
+        <div className="mt-3 xl:mt-4 text-base xl:text-2xl font-semibold text-white/65">
           {Number(r.pct_mes ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
           {r.faltam_mes != null ? <> · faltam <b className="text-white">{fmt(r.faltam_mes)}</b></> : null}
         </div>
         {r.necessario_por_dia_util != null ? (
-          <div className="text-xs xl:text-lg font-semibold text-white/60">precisa de <b className="text-white">~{fmt(r.necessario_por_dia_util)} por dia útil</b></div>
+          <div className="text-base xl:text-2xl font-semibold text-white/65">precisa de <b className="text-white">~{fmt(r.necessario_por_dia_util)} por dia útil</b></div>
         ) : null}
         {r.ritmo_mes_anterior != null ? (
-          <div className="text-[11px] xl:text-base font-semibold text-white/40">mês passado fez {fmt(r.ritmo_mes_anterior)} por dia útil</div>
+          <div className="text-sm xl:text-xl font-semibold text-white/40">mês passado fez {fmt(r.ritmo_mes_anterior)} por dia útil</div>
         ) : null}
       </div>
     </div>
@@ -321,7 +321,7 @@ export default function TVIncorporadorEquipe() {
       accent={ACCENT}
       today={data.today}
       updatedAt={data.updated_at}
-      mainRowsClassName={data.regua_r1 ? "grid-rows-[auto_1fr_auto]" : "grid-rows-[auto_1fr]"}
+      mainRowsClassName={data.regua_r1 ? "grid-rows-[auto_auto_minmax(0,1fr)]" : "grid-rows-[auto_1fr]"}
     >
       <div className="grid grid-cols-3 gap-4 xl:gap-6 min-h-0">
         <DiaMesCard titulo="Leads Novos" dia={data.leads_novos?.dia} mes={data.leads_novos?.mes} accent="#38bdf8" ocultarAvisoMeta />
