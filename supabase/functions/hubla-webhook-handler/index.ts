@@ -3633,14 +3633,38 @@ Deno.serve(async (req) => {
           // o reembolso vira flag `refunded_at`, já excluída de caucoes_efetivas.
           const { data: linkedTx } = await supabase
             .from('hubla_transactions')
-            .select('linked_attendee_id, linked_deal_id')
+            .select('linked_attendee_id, linked_deal_id, product_name')
             .eq('hubla_id', hublaId)
             .maybeSingle();
 
           const linkedAttendeeId = linkedTx?.linked_attendee_id ?? null;
           const linkedDealId = linkedTx?.linked_deal_id ?? null;
+          const isContratoRefund = /(^|\W)(A000|contrato)(\W|$)/i.test(String((linkedTx as any)?.product_name ?? ''));
 
-          if (linkedAttendeeId) {
+          let contratoDealId: string | null = linkedDealId;
+          if (isContratoRefund && !contratoDealId && linkedAttendeeId) {
+            const { data: att } = await supabase
+              .from('meeting_slot_attendees')
+              .select('deal_id')
+              .eq('id', linkedAttendeeId)
+              .maybeSingle();
+            contratoDealId = (att as any)?.deal_id ?? null;
+          }
+
+          if (isContratoRefund && contratoDealId) {
+            try {
+              const { error: reembErr } = await supabase.rpc('marcar_reembolso_contrato', {
+                p_deal_id: contratoDealId,
+                p_refunded_at: new Date().toISOString(),
+                p_fonte: 'hubla',
+                p_transaction_id: hublaId,
+              });
+              if (reembErr) console.error('[REEMBOLSO HUBLA] marcar_reembolso_contrato erro:', reembErr);
+              else console.log(`🔴 [REEMBOLSO HUBLA] contrato reembolsado marcado no deal ${contratoDealId}`);
+            } catch (err) {
+              console.error('[REEMBOLSO HUBLA] marcar_reembolso_contrato exceção:', err);
+            }
+          } else if (!isContratoRefund && linkedAttendeeId) {
             await supabase
               .from('meeting_slot_attendees')
               .update({ refunded_at: new Date().toISOString() } as never)
