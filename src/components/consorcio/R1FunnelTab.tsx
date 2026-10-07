@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertTriangle, CalendarCheck, CheckCircle, Loader2, Search, Send, X, XCircle } from 'lucide-react';
@@ -162,11 +164,59 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
     [proposals],
   );
 
+  /**
+   * Reunião R1 REALIZADA mais recente de cada deal — histórico todo, sem o
+   * filtro de período da tela. 4ª condição do botão "Lançar recompra": só a
+   * reunião mais recente do deal pode lançar recompra (reuniões antigas de
+   * recompra, ex.: uma R1 de meses atrás seguida de outra mais nova, deixam
+   * de mostrar o botão).
+   */
+  const dealIdsTela = useMemo(
+    () =>
+      Array.from(
+        new Set((data?.participants || []).map((p) => p.deal_id).filter(Boolean)),
+      ) as string[],
+    [data],
+  );
+  const { data: ultimaR1RealizadaPorDeal } = useQuery({
+    queryKey: ['r1-ultima-realizada-por-deal', dealIdsTela.slice().sort().join(',')],
+    enabled: dealIdsTela.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const m = new Map<string, { attendeeId: string; scheduledAt: string }>();
+      for (let i = 0; i < dealIdsTela.length; i += 200) {
+        const chunk = dealIdsTela.slice(i, i + 200);
+        const { data: rows, error } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, deal_id, status, meeting_slots!inner(scheduled_at, meeting_type, status)')
+          .in('deal_id', chunk)
+          .eq('meeting_slots.meeting_type', 'r1')
+          .eq('status', 'completed');
+        if (error) throw error;
+        for (const r of rows || []) {
+          const slot = (r as any).meeting_slots;
+          const slotStatus = String(slot?.status || '').toLowerCase();
+          if (['cancelled', 'canceled', 'cancelada'].includes(slotStatus)) continue;
+          const scheduledAt: string | null = slot?.scheduled_at || null;
+          if (!scheduledAt || !r.deal_id) continue;
+          const atual = m.get(r.deal_id);
+          if (!atual || scheduledAt > atual.scheduledAt) {
+            m.set(r.deal_id, { attendeeId: r.id, scheduledAt });
+          }
+        }
+      }
+      return m;
+    },
+  });
+
   const podeRecompra = (p: R1FunnelParticipant) => {
     if (!p.deal_id || attendeesComVenda.has(p.id)) return false;
     const ultima = ultimaVendaPorDeal.get(p.deal_id);
     const dia = diaSP(p.scheduled_at);
-    return !!ultima && !!dia && dia > ultima.data;
+    if (!ultima || !dia || dia <= ultima.data) return false;
+    // 4ª condição: só a R1 realizada MAIS RECENTE do deal (histórico todo).
+    const ultimaR1 = ultimaR1RealizadaPorDeal?.get(p.deal_id);
+    return !!ultimaR1 && ultimaR1.attendeeId === p.id;
   };
 
   /** Deals que já tiveram uma venda lançada e desistiram da carta — só informativo. */
