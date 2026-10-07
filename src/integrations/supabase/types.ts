@@ -2571,6 +2571,33 @@ export type Database = {
         }
         Relationships: []
       }
+      backfill_reembolso_contrato_fila: {
+        Row: {
+          deal_id: string
+          fonte: string | null
+          processado_em: string | null
+          quando: string | null
+          resultado: Json | null
+          tx: string | null
+        }
+        Insert: {
+          deal_id: string
+          fonte?: string | null
+          processado_em?: string | null
+          quando?: string | null
+          resultado?: Json | null
+          tx?: string | null
+        }
+        Update: {
+          deal_id?: string
+          fonte?: string | null
+          processado_em?: string | null
+          quando?: string | null
+          resultado?: Json | null
+          tx?: string | null
+        }
+        Relationships: []
+      }
       backup_a005_hubla_eco_restaurado: {
         Row: {
           backup_at: string | null
@@ -2958,6 +2985,45 @@ export type Database = {
           stage_id?: string | null
           stage_moved_at?: string | null
           ultima_compra?: string | null
+        }
+        Relationships: []
+      }
+      backup_reembolso_contrato_deals: {
+        Row: {
+          backup_at: string | null
+          custom_fields: Json | null
+          deal_id: string
+        }
+        Insert: {
+          backup_at?: string | null
+          custom_fields?: Json | null
+          deal_id: string
+        }
+        Update: {
+          backup_at?: string | null
+          custom_fields?: Json | null
+          deal_id?: string
+        }
+        Relationships: []
+      }
+      backup_reembolso_contrato_msa: {
+        Row: {
+          attendee_id: string
+          backup_at: string | null
+          deal_id: string | null
+          refunded_at: string | null
+        }
+        Insert: {
+          attendee_id: string
+          backup_at?: string | null
+          deal_id?: string | null
+          refunded_at?: string | null
+        }
+        Update: {
+          attendee_id?: string
+          backup_at?: string | null
+          deal_id?: string | null
+          refunded_at?: string | null
         }
         Relationships: []
       }
