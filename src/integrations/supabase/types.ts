@@ -16765,6 +16765,36 @@ export type Database = {
         }
         Relationships: []
       }
+      tv_regua_metas: {
+        Row: {
+          chave: string
+          created_at: string
+          id: string
+          mes: string | null
+          meta: number
+          observacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          chave: string
+          created_at?: string
+          id?: string
+          mes?: string | null
+          meta: number
+          observacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chave?: string
+          created_at?: string
+          id?: string
+          mes?: string | null
+          meta?: number
+          observacao?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_employment_data: {
         Row: {
           commission_rate: number | null
@@ -20777,6 +20807,7 @@ export type Database = {
       tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_ligacao_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_payload: { Args: never; Returns: Json }
+      tv_incorporador_regua_r1: { Args: { _today?: string }; Returns: Json }
       tv_incorporador_sdr_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_seg_sums: {
         Args: { _end: string; _seg: string; _start: string }
