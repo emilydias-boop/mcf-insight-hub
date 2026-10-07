@@ -5,3 +5,4 @@
 - [x] Criar `src/components/crm/qualification/CreditoQualificationQuestionnaire.tsx` (novo, mesmo visual do QualificationQuestionnaire)
 - [x] Validar: typecheck + build OK; nenhum arquivo existente alterado
 - [ ] (próxima mensagem) Integração da qualificação de Crédito no fluxo
+- [ ] Venda Consórcio: recompra — regra nova simulada (14 casos mudam, não 1); aguardando decisão do dono antes de aplicar
