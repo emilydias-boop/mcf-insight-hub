@@ -1,37 +1,22 @@
-# Diagnóstico — "Lançar Venda" travado para Edson Carmo do Nascimento (somente leitura)
+# Verificação (somente leitura): 2ª proposta no mesmo negócio (Edson, deal 96222fb2)
 
-## Causa provável
-O botão "Lançar Venda" fica **desabilitado** porque o negócio do Edson (`96222fb2-…`) já tem uma proposta viva de 23/07/2026 (carta de R$ 150 mil, 240 meses, cota aberta). A tela trata "1 negócio = 1 venda", então a reunião nova de 07/10 cai em "Tratadas" e o botão não responde. O produto Auto não é o que trava.
+Nenhum arquivo ou dado foi alterado. Este card apenas registra o resultado; não há implementação a aprovar.
 
-## Evidência — código
-- Lista e botão: `src/components/consorcio/R1FunnelTab.tsx`. Título "Tratadas — venda lançada ou sem sucesso" na linha 534. O botão está na linha 366, com `disabled={jaTemCarta}`. O "Sem Sucesso" (linha 372) também fica desabilitado.
-- `jaTemCarta` (linha 272) = `dealsWithProposal.has(p.deal_id)`.
-- `dealsWithProposal` (linhas 115-124) reúne todo `deal_id` com proposta em `useProposals()` que não tem `carta_excluida = true`. A trava olha o **negócio**, não a reunião nem a data.
-- Critério de "Tratadas" (linhas 185-188): no modo "realizadas", a reunião é pendente só se o negócio não tem proposta viva nem "sem sucesso". Esse critério é o mesmo que trava o botão.
-- O botão abre o `ProposalModal` (linha 549). Como o botão está desabilitado, o modal nem abre. Por isso as validações dele (prazo, produto, toast da linha 141) não chegam a rodar.
-- Mensagem de erro (console, rede ou toast): **nenhuma**. O usuário vê só o botão apagado.
+## 1) Regras de unicidade no banco
+- consorcio_proposals, consorcio_proposal_cartas, consorcio_pending_registrations: única regra de unicidade é a chave primária `id`. Não existe UNIQUE, índice único ou exclusion por deal_id, contact_id ou cpf.
+- A única regra "um por" no caminho é `consorcio_venda_webhook_queue ON CONFLICT (venda_id)` — por proposta, não por negócio.
 
-## Evidência — dados (somente SELECT)
-- Contato `35cfddef-…` (+5521986426373).
-- Negócio `96222fb2-23f1-49dd-a715-fbf99637b0b9`: origem Efeito Alavanca + Clube, etapa **R1 Realizada**.
-- Reuniões desse negócio:
-  - 23/07: Cleiton Lima (`1472d772`), concluída
-  - 04/08: Cleiton Lima (`1472d772`), concluída
-  - **07/10 17:00 (São Paulo)**: closer `f8283cdc-…`, concluída, participante `9fbaa13e-…`
-- Proposta `67d2a1ec-…`: status `aceita`, proposta e aceite em 23/07/2026, `carta_excluida = false`, crédito R$ 150.000, prazo 240.
-- Cadastro `c9838af8-…`: status `cota_aberta`, ligado a essa proposta.
-- O contato tem mais 4 negócios (dois em "Novo Lead", "Base 50K" e "Venda realizada" do A010). Nenhum deles tem proposta de consórcio.
-- Atenção: a reunião de 07/10 está com o closer `f8283cdc`, e o Cleiton é `1472d772`. Não determinei se `f8283cdc` também é o Cleiton (não consultei o nome).
+## 2) Checagens no código
+- `useEnviarProposta` (src/hooks/useConsorcioPostMeeting.ts:736-748): sempre `insert` novo em consorcio_proposals; cartas com `insert` (752-770). Não há upsert, nem update por deal_id, nem bloqueio "já existe proposta".
+- `ProposalModal.tsx:76-84`: chama o insert; 86-110 cria cadastro pendente com o `proposal_id` NOVO.
+- `useCreatePendingRegistration` (useConsorcioPendingRegistrations.ts:496-502): a trava de duplicidade filtra por `proposal_id` (o novo), não pelo negócio. Update de status 'aceita' (552-560) é `.eq('id', input.proposal_id)` novo; update da carta (565-567) é `.eq('id', carta_id)` nova.
 
-## Produto Auto
-- Existe produto ativo **TPA — "TABELA ESTENDIDO AUTO APE (Parcelinha)"**, com prazo disponível **100 meses**.
-- Isso não confirma o achado de que só existem prazos 200/220/240: há um Auto com prazo de 100.
-- Pagamento "1x de 60K": não determinei se o formulário aceita, porque o modal não chega a abrir. Esse ponto só vira bloqueio depois que a trava do negócio for resolvida.
+## 3) Efeitos além do INSERT
+- Etapa do negócio: se origem VdA, update `crm_deals.stage_id = Proposta Enviada` (useConsorcioPostMeeting.ts:775-778). Ao criar cadastro, trigger `trg_consorcio_stage_cota` → `consorcio_sincronizar_stage_cota(deal)`: só age na origem Efeito Alavanca+Clube e só move uma vez; se o negócio já tem backup em cota_contratada_stage_anterior, retorna 'ja_movido' (não move).
+- Cadastro pendente: sim, se algum campo do cliente for preenchido — linha nova.
+- Triggers: auditoria (insert em audit_logs), `trg_sync_proposal_cartas_agregado` (update só `WHERE id = proposal_id da carta` — a nova), validação de carta (prazo/crédito/produto > 0, prazo 100 passa), vendedor padrão (só NEW).
+- `enqueue_consorcio_venda_webhook`: ao virar 'aceita', 1 linha nova na fila (venda_id novo) → `consorcio-venda-webhook-dispatcher` só faz SELECT em propostas/cartas/cadastros/deal/attendees e UPDATE apenas na própria fila. Alerta de venda novo será disparado (comportamento normal).
+- `consorcio-carta-cadastrada-webhook`: só SELECT por card_id/proposal_id/id + insert em bu_webhook_logs.
 
-## O que seria preciso para destravar (nada implementado)
-Cabe ao dono escolher uma das opções:
-1. **Regra (código):** permitir uma segunda venda no mesmo negócio. Por exemplo, a trava passaria a considerar só propostas criadas depois da reunião em questão, ou passaria a valer por reunião. Muda a regra "1 negócio = 1 venda" do `R1FunnelTab`.
-2. **Operacional, sem código:** lançar a carta de Auto pelo botão "Adicionar Carta" na etapa 3 (Termos de Adesão Pendentes). Ele cria proposta, cartas e cadastros sem depender dessa trava. Só funciona se o modal aceitar prazo 100 e pagamento em 1x, o que não verifiquei.
-3. **Dados:** criar um negócio separado para essa nova venda. Isso é alteração de dado e precisa de autorização.
-
-Depois de destravar, ainda falta confirmar que o `ProposalModal` aceita produto TPA, prazo 100 e pagamento em 1x de R$ 60 mil.
+## Conclusão
+Nenhum caminho faz UPDATE na proposta antiga 67d2a1ec nem no cadastro antigo c9838af8. A 2ª proposta grava de ponta a ponta. Ressalva: não testado com gravação real (regra zero).
