@@ -321,11 +321,25 @@ export function UnassignedTransactionsDetailPanel({
                     <AlertTriangle className="h-4 w-4 text-warning" />
                     <p className="text-sm font-medium">Diagnóstico</p>
                   </div>
+                  {atribuicao && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs gap-1 bg-success/15 text-success border-success/30">
+                        <UserCheck className="h-3 w-3" />
+                        Atribuída: {atribuicao.closer_nome}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {REGRA_LABELS[atribuicao.regra]}
+                        {atribuicao.r1_at ? ` · R1 ${formatDate(atribuicao.r1_at)}` : ''}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={`text-xs gap-1 ${REASON_LABELS[selectedTx.reason].color}`}>
-                      {REASON_LABELS[selectedTx.reason].icon}
-                      {REASON_LABELS[selectedTx.reason].label}
-                    </Badge>
+                    {!(atribuicao && selectedTx.reason === 'no_match') && (
+                      <Badge variant="outline" className={`text-xs gap-1 ${REASON_LABELS[selectedTx.reason].color}`}>
+                        {REASON_LABELS[selectedTx.reason].icon}
+                        {REASON_LABELS[selectedTx.reason].label}
+                      </Badge>
+                    )}
                     {selectedTx.contactExistsInCRM && (
                       <Badge variant="outline" className="text-xs gap-1 bg-success/15 text-success border-success/30">
                         <UserCheck className="h-3 w-3" />
