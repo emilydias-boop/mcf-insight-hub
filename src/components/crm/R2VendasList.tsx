@@ -1,3 +1,5 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
+import { useAttendeesRefundedAt } from '@/hooks/useAttendeesRefundedAt';
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -82,6 +84,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfi
   const deleteTransaction = useDeleteTransaction();
 
   // Agreements by email
+  const refundedMap = useAttendeesRefundedAt(vendas.map(v => v.linked_attendee_id));
   const vendaEmails = useMemo(() => vendas.map(v => v.customer_email).filter(Boolean) as string[], [vendas]);
   const { data: agreementsMap } = useAgreementsByEmails(vendaEmails);
 
@@ -436,6 +439,7 @@ export function R2VendasList({ weekStart, weekEnd, filteredVendas, carrinhoConfi
                           <span className="font-medium truncate max-w-[150px]" title={venda.customer_name || ''}>
                             {venda.customer_name || '-'}
                           </span>
+                          <RefundedBadge date={venda.linked_attendee_id ? refundedMap.get(venda.linked_attendee_id) : null} />
                           <R2LeadBadges
                             channel={channelMap.get(venda.id)?.channel}
                             scheduledAt={venda.r2_scheduled_at || venda.sale_date}
