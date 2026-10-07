@@ -1,22 +1,20 @@
-# Verificação (somente leitura): 2ª proposta no mesmo negócio (Edson, deal 96222fb2)
+# Verificação (somente leitura): o que iria junto numa publicação agora
 
-Nenhum arquivo ou dado foi alterado. Este card apenas registra o resultado; não há implementação a aprovar.
+Nada foi alterado nem publicado. Este card só registra o resultado; não há nada a implementar.
 
-## 1) Regras de unicidade no banco
-- consorcio_proposals, consorcio_proposal_cartas, consorcio_pending_registrations: única regra de unicidade é a chave primária `id`. Não existe UNIQUE, índice único ou exclusion por deal_id, contact_id ou cpf.
-- A única regra "um por" no caminho é `consorcio_venda_webhook_queue ON CONFLICT (venda_id)` — por proposta, não por negócio.
+## Site publicado (mcfgestao.com)
+Arquivo principal: `assets/index-CZfz7M0v.js`. As telas carregam em partes separadas, então baixei também as 313 partes ligadas a ele e procurei em todas.
 
-## 2) Checagens no código
-- `useEnviarProposta` (src/hooks/useConsorcioPostMeeting.ts:736-748): sempre `insert` novo em consorcio_proposals; cartas com `insert` (752-770). Não há upsert, nem update por deal_id, nem bloqueio "já existe proposta".
-- `ProposalModal.tsx:76-84`: chama o insert; 86-110 cria cadastro pendente com o `proposal_id` NOVO.
-- `useCreatePendingRegistration` (useConsorcioPendingRegistrations.ts:496-502): a trava de duplicidade filtra por `proposal_id` (o novo), não pelo negócio. Update de status 'aceita' (552-560) é `.eq('id', input.proposal_id)` novo; update da carta (565-567) é `.eq('id', carta_id)` nova.
+| Edição | Texto procurado | Resultado |
+|---|---|---|
+| Admissão no CRM | (é só no servidor) | Já está no ar: funções do servidor publicam na hora |
+| Meta SDR/RH | `metas_agendamento_por_sdr` | No ar (6 arquivos) |
+| Reembolso de contrato (selo/Kanban/linha do tempo) | "Contrato reembolsado em", "Reembolso de contrato" | No ar (arquivo principal: 1 e 2) |
+| Régua R1 na TV (versão das 18:04) | `semanas_restantes`, `grid-rows-[auto_auto_minmax(0,1fr)]` | No ar |
+| Agenda completa só leitura / atribuição "Manual (gestão)" | `agenda_visao_completa_bus`, "Manual (gest" | No ar |
+| Recompra manual + 4ª condição (22:38–22:43) | "Lançar recompra", `origem_attendee_id` | NÃO está no ar (0) |
 
-## 3) Efeitos além do INSERT
-- Etapa do negócio: se origem VdA, update `crm_deals.stage_id = Proposta Enviada` (useConsorcioPostMeeting.ts:775-778). Ao criar cadastro, trigger `trg_consorcio_stage_cota` → `consorcio_sincronizar_stage_cota(deal)`: só age na origem Efeito Alavanca+Clube e só move uma vez; se o negócio já tem backup em cota_contratada_stage_anterior, retorna 'ja_movido' (não move).
-- Cadastro pendente: sim, se algum campo do cliente for preenchido — linha nova.
-- Triggers: auditoria (insert em audit_logs), `trg_sync_proposal_cartas_agregado` (update só `WHERE id = proposal_id da carta` — a nova), validação de carta (prazo/crédito/produto > 0, prazo 100 passa), vendedor padrão (só NEW).
-- `enqueue_consorcio_venda_webhook`: ao virar 'aceita', 1 linha nova na fila (venda_id novo) → `consorcio-venda-webhook-dispatcher` só faz SELECT em propostas/cartas/cadastros/deal/attendees e UPDATE apenas na própria fila. Alerta de venda novo será disparado (comportamento normal).
-- `consorcio-carta-cadastrada-webhook`: só SELECT por card_id/proposal_id/id + insert em bu_webhook_logs.
+## O que ainda não está no ar
+- Recompra manual: botão "Lançar recompra" nas Tratadas, a proposta guarda a reunião de origem e a Produção Gerada passa a dar prioridade ao closer dessa reunião. A coluna nova no banco já existe (ela foi criada antes e fica vazia). A publicação não dispara nada fora do sistema; só um lançamento de venda feito depois gera o alerta de venda normal.
 
-## Conclusão
-Nenhum caminho faz UPDATE na proposta antiga 67d2a1ec nem no cadastro antigo c9838af8. A 2ª proposta grava de ponta a ponta. Ressalva: não testado com gravação real (regra zero).
+Commits depois de 18:04 são só desta conversa (recompra/4ª condição e atualizações deste card).
