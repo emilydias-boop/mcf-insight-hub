@@ -1,3 +1,4 @@
+import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

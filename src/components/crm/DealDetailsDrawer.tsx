@@ -1,3 +1,5 @@
+import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
+import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useEffect } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
