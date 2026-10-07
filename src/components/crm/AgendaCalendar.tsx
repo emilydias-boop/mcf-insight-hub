@@ -1,3 +1,4 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -936,6 +937,7 @@ export function AgendaCalendar({
                                           <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
                                             <span className="text-sm">{att.attendee_name || att.contact?.name || att.deal?.name || 'Lead'}</span>
+                                            <RefundedBadge date={(att as any).refunded_at} />
                                             <LeadSegmentBadge
                                               segment={att.deal?.icp_segment ?? meeting.deal?.icp_segment}
                                               size="sm"
@@ -1345,6 +1347,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                   <span className="truncate flex-1">
                                                     {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                   </span>
+                                                  <RefundedBadge date={(att as any).refunded_at} />
                                                   <LeadSegmentBadge
                                                     segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
                                                     size="sm"
@@ -1688,6 +1691,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         <span className="truncate flex-1">
                                                           {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
+                                                        <RefundedBadge date={(att as any).refunded_at} />
                                                         <LeadSegmentBadge
                                                           segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
                                                           size="sm"
@@ -1749,6 +1753,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                     <span className="truncate flex-1">
                                                       {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                     </span>
+                                                    <RefundedBadge date={(att as any).refunded_at} />
                                                     <LeadSegmentBadge
                                                       segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
                                                       size="sm"
@@ -1859,6 +1864,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       <div className="flex items-center gap-1.5">
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
                                                         <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                                        <RefundedBadge date={(att as any).refunded_at} />
                                                         <LeadSegmentBadge segment={att.icpSegment} size="sm" />
                                                         {att.is_partner && <Badge variant="outline" className="text-[8px] px-1 py-0">Sócio</Badge>}
                                                         {att.already_builds === true && (

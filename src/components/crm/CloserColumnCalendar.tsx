@@ -1,3 +1,4 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -474,6 +475,7 @@ export function CloserColumnCalendar({
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1 flex-wrap">
                                       <span>• {att.attendee_name || att.contact?.name || "Lead"}</span>
+                                      <RefundedBadge date={(att as any).refunded_at} />
                                       <LeadSegmentBadge
                                         segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
                                         size="sm"

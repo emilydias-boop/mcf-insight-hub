@@ -1,3 +1,4 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -360,6 +361,7 @@ export function R2CloserColumnCalendar({
                                         <span className="truncate font-medium">
                                           {att.name || att.deal?.contact?.name || "Lead"}
                                         </span>
+                                        <RefundedBadge date={(att as any).refunded_at} />
                                         {markingByAttendee.get(att.id) && (
                                           <span
                                             title={markingByAttendee.get(att.id)!.name}
@@ -432,6 +434,7 @@ export function R2CloserColumnCalendar({
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1">
                                       <span>• {att.name || att.deal?.contact?.name || "Lead"}</span>
+                                      <RefundedBadge date={(att as any).refunded_at} />
                                       {(() => {
                                         const seg = String((att.deal as any)?.icp_segment ?? "").trim().toUpperCase();
                                         if (seg !== "A" && seg !== "B") return null;

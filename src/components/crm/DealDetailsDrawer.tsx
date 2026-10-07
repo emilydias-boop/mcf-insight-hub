@@ -1,3 +1,5 @@
+import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
+import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useEffect } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -131,6 +133,24 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
             {/* ===== CONTEÚDO PRINCIPAL ===== */}
             <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
               
+              {/* ===== CONTRATO REEMBOLSADO (custom_fields.contrato_reembolsado_em) ===== */}
+              {(() => {
+                const info = contratoReembolsoInfo(deal.custom_fields as Record<string, unknown> | null);
+                if (!info) return null;
+                return (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      title={info.tooltip}
+                      className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
+                    >
+                      Reembolso
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{info.tooltip}</span>
+                  </div>
+                );
+              })()}
+
               {/* ===== ALERTA DE REEMBOLSO ===== */}
               {(deal.custom_fields as any)?.reembolso_solicitado && (
                 <Alert className="bg-orange-50 border-orange-300 dark:bg-orange-950 dark:border-orange-800">

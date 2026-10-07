@@ -21,6 +21,7 @@ import {
   Tag,
   UserCog,
   Zap,
+  Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +45,7 @@ const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; color: 
   tag_change: { icon: Tag, color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-100 dark:bg-sky-900/40', label: 'Tag' },
   owner_change: { icon: UserCog, color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-100 dark:bg-rose-900/40', label: 'Responsável' },
   automation: { icon: Zap, color: 'text-violet-600 dark:text-violet-400', bgColor: 'bg-violet-100 dark:bg-violet-900/40', label: 'Automação' },
+  refund: { icon: Undo2, color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-100 dark:bg-orange-900/40', label: 'Reembolso' },
 };
 
 const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
@@ -171,6 +173,19 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
           <a href={meta.google_meet_link} target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary underline">
             🔗 Meet
           </a>
+        )}
+      </div>
+    );
+  }
+
+  if (event.type === 'refund') {
+    const amount = Number(meta.amount);
+    return (
+      <div className="space-y-1">
+        {meta.amount != null && !isNaN(amount) && (
+          <span className="text-sm font-bold text-foreground">
+            {amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
         )}
       </div>
     );

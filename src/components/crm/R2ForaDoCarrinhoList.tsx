@@ -1,3 +1,5 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
+import { useAttendeesRefundedAt } from '@/hooks/useAttendeesRefundedAt';
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -48,6 +50,7 @@ export function R2ForaDoCarrinhoList({ attendees, isLoading, weekStart }: R2Fora
     scheduledAt: a.scheduled_at,
   })), [filteredAttendees]);
   const channelMap = useR2LeadsChannelMap(channelInputs);
+  const refundedMap = useAttendeesRefundedAt(attendees.map(a => a.id));
 
   if (isLoading) {
     return <div className="flex justify-center py-8">Carregando...</div>;
@@ -131,6 +134,7 @@ export function R2ForaDoCarrinhoList({ attendees, isLoading, weekStart }: R2Fora
                     <span className="font-medium">
                       {att.attendee_name || att.deal_name || 'Sem nome'}
                     </span>
+                    <RefundedBadge date={refundedMap.get(att.id)} />
                     {isFromPreviousWeek(att) && (
                       <Badge
                         variant="outline"

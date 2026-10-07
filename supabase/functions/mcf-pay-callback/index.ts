@@ -542,27 +542,28 @@ Deno.serve(async (req) => {
   };
   await supabase.from("crm_deals").update({ custom_fields: newCustom as never }).eq("id", resolvedDealId);
 
-  if (attendee) {
-    if (isPaid) {
-      await supabase
-        .from("meeting_slot_attendees")
-        .update({
-          contract_paid_at: finalContractPaidAt,
-          status: "contract_paid",
-        })
-        .eq("id", attendee.id);
-    } else if (isRefunded) {
-      await supabase
-        .from("meeting_slot_attendees")
-        .update({
-          // NÃO zeramos contract_paid_at: o histórico do pagamento é preservado.
-          // O reembolso passa a ser uma flag própria (refunded_at), consumida por
-          // caucoes_efetivas e pelas métricas de Closer.
-          refunded_at: paidAt ?? new Date().toISOString(),
-          // mantemos status atual para investigação manual em reembolso
-        } as never)
-        .eq("id", attendee.id);
-    }
+  if (attendee && isPaid) {
+    await supabase
+      .from("meeting_slot_attendees")
+      .update({
+        contract_paid_at: finalContractPaidAt,
+        status: "contract_paid",
+      })
+      .eq("id", attendee.id);
+  }
+
+  // Reembolso de contrato: a RPC marca refunded_at na linha do contrato pago + R1/R2
+  // mais recentes e grava custom_fields.contrato_reembolsado_em. Não mexe em status/etapa.
+  let reemb: unknown = null;
+  if (isRefunded) {
+    const { data: reembData, error: reembErr } = await supabase.rpc("marcar_reembolso_contrato", {
+      p_deal_id: resolvedDealId,
+      p_refunded_at: new Date().toISOString(),
+      p_fonte: "mcf_pay",
+      p_transaction_id: transactionId,
+    });
+    if (reembErr) console.error("[mcf-pay-callback] marcar_reembolso_contrato error:", reembErr);
+    reemb = reembData;
   }
 
   // === Registra atividade canônica de reembolso (fonte oficial de contagem) ===
@@ -600,6 +601,7 @@ Deno.serve(async (req) => {
       attendee_id: attendee?.id ?? null,
       applied: isPaid ? "paid" : "refunded",
       contrato: true,
+      reembolso_contrato: reemb ?? null,
       produtos_informados: purchase.known,
       already_paid: alreadyPaid,
       kept_existing_contract_paid_at: keptExisting,
