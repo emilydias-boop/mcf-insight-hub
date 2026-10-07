@@ -1,3 +1,5 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
+import { useAttendeesRefundedAt } from '@/hooks/useAttendeesRefundedAt';
 import { useState, useMemo } from 'react';
 import { AlertTriangle, Phone, User, Calendar, Filter, CalendarPlus, ShoppingCart, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +30,7 @@ const PAGE_SIZE_OPTIONS = ['20', '50', '100'];
 
 export function R2AccumulatedList({ leads, isLoading, onSchedule, anchorWeekStart }: R2AccumulatedListProps) {
   const [typeFilter, setTypeFilter] = useState('all');
+  const refundedMap = useAttendeesRefundedAt((leads || []).map((l: any) => l.id));
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -189,6 +192,7 @@ export function R2AccumulatedList({ leads, isLoading, onSchedule, anchorWeekStar
                     <span className="font-medium">
                       {lead.attendee_name || lead.deal_name || 'Sem nome'}
                     </span>
+                    <RefundedBadge date={refundedMap.get(lead.id)} />
                     <R2LeadBadges
                       channel={channelMap.get(lead.id)?.channel}
                       r1CloserName={(lead as any).r1_closer_name || null}
