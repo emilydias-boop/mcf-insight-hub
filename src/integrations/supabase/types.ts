@@ -6683,6 +6683,7 @@ export type Database = {
           deletion_reason: string | null
           id: string
           motivo_recusa: string | null
+          origem_attendee_id: string | null
           origem_lead: string | null
           prazo_meses: number | null
           proposal_date: string | null
@@ -6716,6 +6717,7 @@ export type Database = {
           deletion_reason?: string | null
           id?: string
           motivo_recusa?: string | null
+          origem_attendee_id?: string | null
           origem_lead?: string | null
           prazo_meses?: number | null
           proposal_date?: string | null
@@ -6749,6 +6751,7 @@ export type Database = {
           deletion_reason?: string | null
           id?: string
           motivo_recusa?: string | null
+          origem_attendee_id?: string | null
           origem_lead?: string | null
           prazo_meses?: number | null
           proposal_date?: string | null
@@ -6788,6 +6791,13 @@ export type Database = {
             columns: ["deal_id"]
             isOneToOne: false
             referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consorcio_proposals_origem_attendee_id_fkey"
+            columns: ["origem_attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
             referencedColumns: ["id"]
           },
         ]
