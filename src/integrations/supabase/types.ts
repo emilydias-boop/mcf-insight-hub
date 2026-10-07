@@ -18345,6 +18345,7 @@ export type Database = {
         Row: {
           ano_mes: string
           created_at: string | null
+          dias_extras_trabalhados: Json
           dias_uteis_base: number
           dias_uteis_closer: number | null
           dias_uteis_final: number
@@ -18359,6 +18360,7 @@ export type Database = {
         Insert: {
           ano_mes: string
           created_at?: string | null
+          dias_extras_trabalhados?: Json
           dias_uteis_base?: number
           dias_uteis_closer?: number | null
           dias_uteis_final?: number
@@ -18373,6 +18375,7 @@ export type Database = {
         Update: {
           ano_mes?: string
           created_at?: string | null
+          dias_extras_trabalhados?: Json
           dias_uteis_base?: number
           dias_uteis_closer?: number | null
           dias_uteis_final?: number
