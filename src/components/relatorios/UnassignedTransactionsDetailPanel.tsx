@@ -9,6 +9,7 @@ import { AlertTriangle, Search, Mail, Phone, HelpCircle, Link2, XCircle, UserChe
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 import { useUnassignedTransactionsDiagnosis, type DiagnosisReason, type TransactionDiagnosis } from '@/hooks/useUnassignedTransactionsDiagnosis';
+import { useAtribuicaoCloser, type Atribuicao } from '@/hooks/useAtribuicaoCloser';
 import { useLinkTransactionToAttendee } from '@/hooks/useLinkTransactionToAttendee';
 
 interface Transaction {
@@ -46,6 +47,14 @@ const REASON_LABELS: Record<DiagnosisReason, { label: string; color: string; ico
   missing_email: { label: 'Sem email', color: 'bg-orange-500/15 text-orange-600 border-orange-500/30', icon: <Mail className="h-3 w-3" /> },
   missing_phone: { label: 'Sem telefone', color: 'bg-orange-500/15 text-orange-600 border-orange-500/30', icon: <Phone className="h-3 w-3" /> },
   no_match: { label: 'Sem match', color: 'bg-blue-500/15 text-blue-600 border-blue-500/30', icon: <HelpCircle className="h-3 w-3" /> },
+};
+
+const REGRA_LABELS: Record<Atribuicao['regra'], string> = {
+  vinculo: 'Vínculo',
+  r1_contrato_pago: 'R1 com contrato pago',
+  r1_anterior: 'R1 anterior',
+  r1_posterior: 'R1 posterior (outside)',
+  manual: 'Manual (gestão)',
 };
 
 export function UnassignedTransactionsDetailPanel({
