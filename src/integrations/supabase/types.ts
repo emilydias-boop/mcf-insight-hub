@@ -17131,6 +17131,73 @@ export type Database = {
         }
         Relationships: []
       }
+      venda_closer_manual: {
+        Row: {
+          closer_id: string
+          created_at: string
+          created_by: string | null
+          motivo: string
+          transaction_id: string
+        }
+        Insert: {
+          closer_id: string
+          created_at?: string
+          created_by?: string | null
+          motivo: string
+          transaction_id: string
+        }
+        Update: {
+          closer_id?: string
+          created_at?: string
+          created_by?: string | null
+          motivo?: string
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venda_closer_manual_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venda_closer_manual_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venda_closer_manual_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "vw_linhas_marcadas_como_eco"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venda_closer_manual_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "vw_venda_dono"
+            referencedColumns: ["venda_id"]
+          },
+          {
+            foreignKeyName: "venda_closer_manual_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "vw_vendas_base"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venda_closer_manual_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "vw_vendas_painel"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wa_broadcast_targets: {
         Row: {
           broadcast_id: string
