@@ -182,7 +182,6 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
     const amount = Number(meta.amount);
     return (
       <div className="space-y-1">
-        {event.description && <p className="text-xs text-muted-foreground">{event.description}</p>}
         {meta.amount != null && !isNaN(amount) && (
           <span className="text-sm font-bold text-foreground">
             {amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
