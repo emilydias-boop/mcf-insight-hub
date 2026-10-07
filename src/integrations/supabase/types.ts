@@ -20298,6 +20298,16 @@ export type Database = {
         Returns: string
       }
       map_area_to_bu: { Args: { p_area: string }; Returns: string }
+      marcar_reembolso_contrato: {
+        Args: {
+          p_deal_id: string
+          p_dry_run?: boolean
+          p_fonte?: string
+          p_refunded_at?: string
+          p_transaction_id?: string
+        }
+        Returns: Json
+      }
       mcf_code_from_closer: { Args: { p_name: string }; Returns: string }
       mcf_code_from_sdr: { Args: { p_name: string }; Returns: string }
       meetgeek_checar_fila: { Args: never; Returns: Json }
