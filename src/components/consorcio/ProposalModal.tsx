@@ -31,6 +31,8 @@ interface ProposalModalProps {
   originId: string;
   /** Nome de quem vendeu — usado quando o bloco cadastral é preenchido aqui. */
   vendedorName?: string;
+  /** Participante da R1 de onde a venda foi lançada — gravado em origem_attendee_id. */
+  origemAttendeeId?: string | null;
 }
 
 /**
@@ -42,7 +44,7 @@ interface ProposalModalProps {
  *    branco aqui aparece lá como pendência de cadastro, com selo de dias parados.
  */
 export function ProposalModal({
-  open, onOpenChange, dealId, dealName, contactName, originId, vendedorName,
+  open, onOpenChange, dealId, dealName, contactName, originId, vendedorName, origemAttendeeId,
 }: ProposalModalProps) {
   const [details, setDetails] = useState('');
   const [origemLead, setOrigemLead] = useState('');
@@ -78,6 +80,7 @@ export function ProposalModal({
         proposal_details: details,
         cartas: draftsParaInput(cartas),
         origem_lead: origemLead || undefined,
+        origem_attendee_id: origemAttendeeId ?? null,
       });
 
       // Bloco 2: só cria cadastro pendente se a pessoa preencheu alguma coisa.
