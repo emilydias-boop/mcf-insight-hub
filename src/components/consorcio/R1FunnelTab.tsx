@@ -13,6 +13,10 @@ import { LeadCallButton } from '@/components/crm/LeadCallButton';
 import { DealDetailsDrawer } from '@/components/crm/DealDetailsDrawer';
 import { NoShowReasonPicker } from '@/components/crm/NoShowReasonPicker';
 import { NoShowEvidenceDialog } from '@/components/crm/NoShowEvidenceDialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ProposalModal } from '@/components/consorcio/ProposalModal';
 import { SemSucessoModal } from '@/components/consorcio/SemSucessoModal';
 import {
@@ -77,6 +81,16 @@ const R1_EXTRATORES: Record<R1SortField, (p: R1FunnelParticipant) => unknown> = 
   closer_notes: (p) => p.closer_notes || p.notes || '',
 };
 
+/** Dia civil em America/Sao_Paulo (YYYY-MM-DD). Data pura (sem hora) fica como está. */
+function diaSP(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+}
+
 export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilter }: R1FunnelTabProps) {
   const { data, isLoading } = useConsorcioR1Funnel(range);
   const { data: proposals = [] } = useProposals();
@@ -98,6 +112,8 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
 
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [proposalTarget, setProposalTarget] = useState<R1FunnelParticipant | null>(null);
+  /** Reunião de origem da venda aberta no ProposalModal (normal ou recompra). */
+  const [recompraConfirm, setRecompraConfirm] = useState<R1FunnelParticipant | null>(null);
   const [semSucessoTarget, setSemSucessoTarget] = useState<R1FunnelParticipant | null>(null);
   const [evidenceTarget, setEvidenceTarget] = useState<
     { p: R1FunnelParticipant; reason: string; note?: string } | null
@@ -122,6 +138,36 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
       ),
     [proposals],
   );
+
+  /**
+   * Recompra (botão manual). Só informa — não muda Pendentes/Tratadas.
+   * Última venda viva por deal: mesma regra de `dealsWithProposal` (useProposals
+   * já traz só pendente/aceita/recusada) + não deletada.
+   */
+  const ultimaVendaPorDeal = useMemo(() => {
+    const m = new Map<string, { data: string; valor: number | null }>();
+    for (const p of (proposals || []) as any[]) {
+      if (!p?.deal_id || p.carta_excluida === true || p.deleted_at) continue;
+      const d = diaSP(p.proposal_date);
+      if (!d) continue;
+      const atual = m.get(p.deal_id);
+      if (!atual || d > atual.data) m.set(p.deal_id, { data: d, valor: p.valor_credito ?? null });
+    }
+    return m;
+  }, [proposals]);
+
+  /** Reuniões que já têm proposta vinculada (origem_attendee_id). */
+  const attendeesComVenda = useMemo(
+    () => new Set(((proposals || []) as any[]).map((p) => p?.origem_attendee_id).filter(Boolean)),
+    [proposals],
+  );
+
+  const podeRecompra = (p: R1FunnelParticipant) => {
+    if (!p.deal_id || attendeesComVenda.has(p.id)) return false;
+    const ultima = ultimaVendaPorDeal.get(p.deal_id);
+    const dia = diaSP(p.scheduled_at);
+    return !!ultima && !!dia && dia > ultima.data;
+  };
 
   /** Deals que já tiveram uma venda lançada e desistiram da carta — só informativo. */
   const dealsComDesistencia = useMemo(
@@ -374,6 +420,11 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
                       >
                         <XCircle className="mr-1 h-3 w-3" /> Sem Sucesso
                       </Button>
+                      {jaTemCarta && podeRecompra(p) && (
+                        <Button size="sm" variant="outline" onClick={() => setRecompraConfirm(p)}>
+                          <Send className="mr-1 h-3 w-3" /> Lançar recompra
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <span className="text-xs text-muted-foreground">sem negócio vinculado</span>
@@ -553,8 +604,42 @@ export function R1FunnelTab({ mode, range, quickFilter = null, onClearQuickFilte
               dealName={proposalTarget.lead_name}
               contactName={proposalTarget.lead_name}
               originId={''}
+              origemAttendeeId={proposalTarget.id}
             />
           )}
+          <AlertDialog open={!!recompraConfirm} onOpenChange={(o) => !o && setRecompraConfirm(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Lançar recompra</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {(() => {
+                    const p = recompraConfirm;
+                    if (!p?.deal_id) return null;
+                    const u = ultimaVendaPorDeal.get(p.deal_id);
+                    const dataVenda = u ? u.data.split('-').reverse().join('/') : '—';
+                    const valor = u?.valor != null
+                      ? Number(u.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      : 'valor não informado';
+                    const reuniao = p.scheduled_at
+                      ? format(new Date(p.scheduled_at), "dd/MM 'às' HH:mm", { locale: ptBR })
+                      : '—';
+                    return `Este negócio já tem venda em ${dataVenda} (${valor}). Lançar uma NOVA venda (recompra) vinculada à reunião de ${reuniao} com ${p.closer_name || 'closer não informado'}?`;
+                  })()}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setProposalTarget(recompraConfirm);
+                    setRecompraConfirm(null);
+                  }}
+                >
+                  Lançar nova venda
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {semSucessoTarget?.deal_id && (
             <SemSucessoModal
               open={!!semSucessoTarget}
