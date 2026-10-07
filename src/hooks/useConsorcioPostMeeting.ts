@@ -407,6 +407,7 @@ export function useProposals() {
           carta_excluida_motivo,
           created_at,
           origem_attendee_id,
+          deleted_at,
           crm_deals (name, origin_id, owner_id, crm_contacts (name, phone, email))
         `)
           // 'recusada' entra na leitura para a etapa 3 do funil não ENCOLHER com o

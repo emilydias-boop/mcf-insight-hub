@@ -289,7 +289,7 @@ export function useConsorcioProducaoGerada(
       // ══ PERNA A — cartas de propostas lançadas (etapa 3 em diante) ════════
       const { data: propsRaw, error: propsError } = await supabase
         .from("consorcio_proposals")
-        .select("id, deal_id, created_by, proposal_date, aceite_date, deleted_at, carta_excluida")
+        .select("id, deal_id, created_by, proposal_date, aceite_date, deleted_at, carta_excluida, origem_attendee_id")
         .eq("status", "aceita");
       if (propsError) throw propsError;
 
@@ -381,11 +381,29 @@ export function useConsorcioProducaoGerada(
         });
       }
 
+      // Prioridade 0: reunião de origem gravada na proposta (origem_attendee_id).
+      const origemParaCloser = new Map<string, string>();
+      const origemIds = [...new Set(propostas.map((p: any) => p.origem_attendee_id).filter(Boolean) as string[])];
+      for (const parte of chunk(origemIds)) {
+        if (parte.length === 0) continue;
+        const { data: atts } = await supabase
+          .from("meeting_slot_attendees")
+          .select("id, meeting_slots (closer_id)")
+          .in("id", parte);
+        (atts || []).forEach((a: any) => {
+          const cid = a?.meeting_slots?.closer_id;
+          const canon = cid ? idCanonico.get(cid) : undefined;
+          if (canon) origemParaCloser.set(a.id, canon);
+        });
+      }
+
       propostas.forEach((p) => {
         const agg = cartasPorProposta.get(p.id);
         if (!agg) return; // proposta sem carta não gera crédito
         let closerId: string | undefined;
-        if (p.created_by) closerId = criadorParaCloser.get(p.created_by);
+        const origemId = (p as any).origem_attendee_id as string | null | undefined;
+        if (origemId) closerId = origemParaCloser.get(origemId);
+        if (!closerId && p.created_by) closerId = criadorParaCloser.get(p.created_by);
         if (!closerId && p.deal_id) closerId = dealParaCloser.get(p.deal_id);
         if (!closerId && p.deal_id) closerId = dealParaCloserReuniao.get(p.deal_id)?.closerId;
         const alvo = closerId || SEM_ATRIBUICAO;
