@@ -372,14 +372,20 @@ export const DealKanbanCard = ({
           )}
           
           {/* Badge de Reembolso (prioridade visual) */}
-          {(deal.custom_fields as Record<string, unknown>)?.reembolso_solicitado && (
-            <Badge 
-              variant="outline" 
-              className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
-            >
-              Reembolso
-            </Badge>
-          )}
+          {(() => {
+            const cf = deal.custom_fields as Record<string, unknown> | null | undefined;
+            const contratoInfo = contratoReembolsoInfo(cf);
+            if (!cf?.reembolso_solicitado && !contratoInfo) return null;
+            return (
+              <Badge 
+                variant="outline" 
+                title={contratoInfo?.tooltip}
+                className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
+              >
+                Reembolso
+              </Badge>
+            );
+          })()}
           {/* Badge do Motivo de "Sem Interesse" (Reembolso já tem badge próprio logo acima) */}
           {(() => {
             const cf = deal.custom_fields as Record<string, unknown> | null | undefined;
