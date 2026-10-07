@@ -70,6 +70,13 @@ export function UnassignedTransactionsDetailPanel({
   const { diagnosed, summary } = useUnassignedTransactionsDiagnosis(transactions, attendees, closers);
   const linkMutation = useLinkTransactionToAttendee();
 
+  const selectedBu = selectedTx?.transaction.product_category === 'incorporador' ? 'incorporador' : undefined;
+  const { map: atribuicaoMap } = useAtribuicaoCloser(
+    selectedTx ? [selectedTx.transaction.id] : [],
+    selectedBu
+  );
+  const atribuicao = selectedTx ? atribuicaoMap.get(selectedTx.transaction.id) : undefined;
+
   const totalGross = useMemo(
     () => transactions.reduce((s, t) => s + getDeduplicatedGross(t as any, globalFirstIds.has(t.id)), 0),
     [transactions, globalFirstIds]
