@@ -1,3 +1,4 @@
+import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -423,6 +424,7 @@ export function R2MeetingDetailDrawer({
                               <span className="font-medium text-sm truncate">
                                 {att.name || att.deal?.contact?.name || 'Lead'}
                               </span>
+                              <RefundedBadge date={(att as any).refunded_at} />
                               {att.is_reschedule && 
                                !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status || '') && (
                                 <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 border-orange-300 gap-1 shrink-0">
