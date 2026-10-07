@@ -601,6 +601,7 @@ Deno.serve(async (req) => {
       attendee_id: attendee?.id ?? null,
       applied: isPaid ? "paid" : "refunded",
       contrato: true,
+      reembolso_contrato: reemb ?? null,
       produtos_informados: purchase.known,
       already_paid: alreadyPaid,
       kept_existing_contract_paid_at: keptExisting,
