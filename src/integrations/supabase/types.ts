@@ -14676,6 +14676,45 @@ export type Database = {
           },
         ]
       }
+      regra_transferencia_r1_parado: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          dias: number
+          dono_destino_email: string
+          etapa_destino_id: string | null
+          etapa_origem_id: string
+          id: number
+          observacao: string | null
+          origem_id: string
+          r1_a_partir_de: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          dias?: number
+          dono_destino_email: string
+          etapa_destino_id?: string | null
+          etapa_origem_id: string
+          id?: number
+          observacao?: string | null
+          origem_id: string
+          r1_a_partir_de: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          dias?: number
+          dono_destino_email?: string
+          etapa_destino_id?: string | null
+          etapa_origem_id?: string
+          id?: number
+          observacao?: string | null
+          origem_id?: string
+          r1_a_partir_de?: string
+        }
+        Relationships: []
+      }
       regua_faixas: {
         Row: {
           created_at: string
@@ -21243,6 +21282,17 @@ export type Database = {
       sync_hubla_buyer_to_crm: {
         Args: { p_attendee_id: string }
         Returns: undefined
+      }
+      transferir_r1_parados: {
+        Args: { p_dry_run?: boolean; p_hoje?: string }
+        Returns: {
+          deal_id: string
+          dono_anterior: string
+          nome: string
+          parado_desde: string
+          r1_em: string
+          resultado: string
+        }[]
       }
       tv_consorcio_agenda: {
         Args: { _ate: string; _de: string }
