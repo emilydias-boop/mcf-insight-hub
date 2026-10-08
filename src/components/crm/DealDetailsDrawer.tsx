@@ -1,4 +1,5 @@
 import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
+import { HarveyOrigemCard } from '@/components/crm/pos-venda/HarveyOrigem';
 import { PosVendaEntregaveisSection } from '@/components/crm/pos-venda/PosVendaEntregaveisSection';
 import { isPosVendaDeal } from '@/lib/posVenda';
 import { Badge } from '@/components/ui/badge';
@@ -134,6 +135,9 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
             
             {/* ===== CONTEÚDO PRINCIPAL ===== */}
             <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+              {/* ===== ORIGEM HARVEY (custom_fields.stage_harvey) ===== */}
+              <HarveyOrigemCard customFields={deal.custom_fields as Record<string, unknown> | null} />
+              
               
               {/* ===== CONTRATO REEMBOLSADO (custom_fields.contrato_reembolsado_em) ===== */}
               {(() => {
