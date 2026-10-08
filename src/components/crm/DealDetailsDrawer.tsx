@@ -1,4 +1,6 @@
 import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
+import { PosVendaEntregaveisSection } from '@/components/crm/pos-venda/PosVendaEntregaveisSection';
+import { isPosVendaDeal } from '@/lib/posVenda';
 import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useEffect } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -273,6 +275,11 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 </Button>
               )}
               
+              {/* ===== 5d. ENTREGÁVEIS — só pipeline Relacionamento - Pós venda ===== */}
+              {isPosVendaDeal(deal) && (
+                <PosVendaEntregaveisSection dealId={deal.id} stageId={(deal as any).stage_id} />
+              )}
+
               {/* ===== 6. ABAS (com scroll) ===== */}
               <Tabs defaultValue="timeline" className="mt-2">
                 <TabsList className="w-full bg-secondary">
