@@ -1,3 +1,4 @@
+import { HarveyStageBadge, harveyTagStyle, isHarveyTag } from '@/components/crm/pos-venda/HarveyOrigem';
 import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -471,6 +472,7 @@ export const DealKanbanCard = ({
               const name = typeof tag === 'string' ? tag : tag.name;
               const primary = (deal.custom_fields as Record<string, unknown>)?.primary_tag as string | undefined;
               if (primary && name?.toLowerCase() === primary.toLowerCase()) return false;
+              if (isHarveyTag(name) && (deal.custom_fields as Record<string, unknown>)?.stage_harvey) return false;
               return name?.toLowerCase() !== 'base clint';
             })
             .slice(0, 2)
@@ -479,11 +481,12 @@ export const DealKanbanCard = ({
                 key={idx}
                 variant="secondary"
                 className="text-[10px] px-1.5 py-0"
-                style={{ backgroundColor: tag.color || undefined }}
+                style={isHarveyTag(typeof tag === 'string' ? tag : tag.name) ? harveyTagStyle : { backgroundColor: tag.color || undefined }}
               >
                 {typeof tag === "string" ? tag : tag.name}
               </Badge>
             ))}
+          <HarveyStageBadge customFields={deal.custom_fields as Record<string, unknown> | null} />
           <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0" />
           <ResgateBadge resgateEm={deal.resgate_em} />
           {/* Quanto esse lead já comprou (líquido, todas as BUs) */}
