@@ -21514,6 +21514,14 @@ export type Database = {
       }
       usuario_bus_permitidas: { Args: never; Returns: string[] }
       usuario_pode_ver_bu: { Args: { p_bu: string }; Returns: boolean }
+      venda_direta_closer_ok: {
+        Args: { p_closer_nome: string; p_offer: string }
+        Returns: boolean
+      }
+      venda_direta_produto_ok: {
+        Args: { p_code: string; p_name: string; p_offer: string }
+        Returns: boolean
+      }
       vendas_diretas_efetivas: {
         Args: { p_bu?: string; p_from: string; p_to: string }
         Returns: {
