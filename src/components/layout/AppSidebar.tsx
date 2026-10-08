@@ -95,7 +95,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType, ROLE_LABELS } from "@/types/user-management";
 import { useWaEnvioStatus } from "@/hooks/wa/useWaEnvioStatus";
 
-type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo" | "marketing" | "cobranca_consorcio";
+type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo" | "marketing" | "cobranca_consorcio" | "gerente_relacionamento";
 
 // Sub-sub-item (3º nível)
 interface SubSubItem {

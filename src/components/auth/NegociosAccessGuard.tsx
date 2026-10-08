@@ -32,6 +32,7 @@ export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
   ],
   marketing: [],
   solar: ['c0a10a52-7f3e-4b21-9a2d-5f1b8e0a1002'],
+  pos_venda: ['b05a0000-0000-4000-8000-000000000002'],
 };
 
 // ============ MAPEAMENTO BU → GRUPOS (para filtrar dropdown de funis) ============
@@ -48,6 +49,7 @@ export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
   leilao: ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'],
   marketing: [],
   solar: ['c0a10a52-7f3e-4b21-9a2d-5f1b8e0a1001'],
+  pos_venda: ['b05a0000-0000-4000-8000-000000000001'],
 };
 
 // Grupo/Origem padrão para cada BU (para selecionar ao abrir)
@@ -59,6 +61,7 @@ export const BU_DEFAULT_ORIGIN_MAP: Record<BusinessUnit, string> = {
   leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
   marketing: '',
   solar: 'c0a10a52-7f3e-4b21-9a2d-5f1b8e0a1002',
+  pos_venda: 'b05a0000-0000-4000-8000-000000000002',
 };
 
 // Grupo padrão para cada BU (para navegação na sidebar)
@@ -70,6 +73,7 @@ export const BU_DEFAULT_GROUP_MAP: Record<BusinessUnit, string> = {
   leilao: 'f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c',
   marketing: '',
   solar: 'c0a10a52-7f3e-4b21-9a2d-5f1b8e0a1001',
+  pos_venda: 'b05a0000-0000-4000-8000-000000000001',
 };
 
 // ============ CONFIGURAÇÃO GLOBAL DE SDRs ============
@@ -88,6 +92,7 @@ export const SDR_ORIGIN_BY_BU: Record<BusinessUnit, string> = {
   leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
   marketing: '',
   solar: 'c0a10a52-7f3e-4b21-9a2d-5f1b8e0a1002',
+  pos_venda: 'b05a0000-0000-4000-8000-000000000002',
 };
 
 interface NegociosAccessGuardProps {

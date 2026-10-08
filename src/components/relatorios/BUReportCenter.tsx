@@ -27,6 +27,7 @@ const BU_NAMES: Record<BusinessUnit, string> = {
   leilao: 'BU - Leilão',
   marketing: 'BU - Marketing',
   solar: 'BU - MCF Solar',
+  pos_venda: 'BU - Pós Venda',
 };
 
 interface BUReportCenterProps {
