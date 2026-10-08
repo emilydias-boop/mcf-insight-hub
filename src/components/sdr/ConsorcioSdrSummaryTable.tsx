@@ -81,8 +81,10 @@ export function ConsorcioSdrSummaryTable({
   cotasSemVinculoItems = [],
   unassignedItems = [],
   vendasBySdr,
-  vendasSemSdr,
+  vendasSemSdr: vendasSemSdrProp,
 }: ConsorcioSdrSummaryTableProps) {
+  // Com SDR filtrado, a linha "sem SDR" não pertence ao recorte.
+  const vendasSemSdr = sdrFilterEmail ? undefined : vendasSemSdrProp;
   const novaBase = !!vendasBySdr;
   const vendasDe = (email: string) => vendasBySdr?.get(email.toLowerCase()) || { vendas: 0, credito: 0 };
   const navigate = useNavigate();
