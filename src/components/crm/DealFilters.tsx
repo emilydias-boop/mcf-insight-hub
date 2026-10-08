@@ -65,6 +65,8 @@ export interface DealFiltersState {
   temperature: TemperatureFilter;
   /** Motivos de "Sem Interesse" selecionados (labels; SEM_MOTIVO_FILTER_VALUE = sem motivo). Opcional para não quebrar quem monta o estado em outros lugares. */
   lossReasons?: string[];
+  /** Selo Resgate (crm_deals.resgate_em), à parte do A/B/C. Opcional para não quebrar quem monta o estado em outros lugares. */
+  resgate?: 'all' | 'only' | 'none';
 }
 
 interface DealFiltersProps {
@@ -182,6 +184,7 @@ export const DealFilters = ({
     filters.outsideFilter !== 'all',
     filters.temperature !== 'all',
     (filters.lossReasons?.length ?? 0) > 0,
+    (filters.resgate ?? 'all') !== 'all',
   ].filter(Boolean).length;
   
   return (
@@ -648,6 +651,24 @@ export const DealFilters = ({
           </div>
         </PopoverContent>
       </Popover>
+
+      {/* Filtro Resgate (selo à parte do A/B/C) */}
+      <Select
+        value={filters.resgate ?? 'all'}
+        onValueChange={(value) => onChange({ ...filters, resgate: value as 'all' | 'only' | 'none' })}
+      >
+        <SelectTrigger className="w-[150px]">
+          <div className="flex items-center gap-2">
+            <LifeBuoy className="h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Resgate" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos (resgate)</SelectItem>
+          <SelectItem value="only">Só Resgate</SelectItem>
+          <SelectItem value="none">Sem Resgate</SelectItem>
+        </SelectContent>
+      </Select>
 
       {activeFiltersCount > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>
