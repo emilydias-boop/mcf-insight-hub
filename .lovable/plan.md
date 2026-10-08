@@ -2,6 +2,15 @@
 
 Nova BU no mesmo molde da BU - Incorporador MCF (mesmo modelo que já foi usado na MCF Solar), começando pelo CRM.
 
+## Regra principal: não mexer no que já funciona
+- Tudo é **novo e separado**: BU, pipeline, perfil, tabelas e funções novas. Nenhuma tela, etapa, métrica ou fluxo atual muda.
+- A construção é feita em fases. Antes de cada fase que encoste em algo que já roda, eu paro e aviso você:
+  - **Fase 1 (segura, faço direto):** BU, menu, pipeline com 3 etapas, perfil Gerente de Relacionamento, entregáveis obrigatórios, tag do HARVEY, discador e gravações na BU nova. A trava de entregáveis vale só para a pipeline nova.
+  - **Fase 2 (paro e peço sua liberação):** entrada automática pelos webhooks de MCF Pay, Hubla e Kiwify. Isso mexe em funções que hoje recebem todas as vendas. Por isso só faço com sua autorização e deixo a parte nova isolada, para que uma falha nela não atrapalhe a venda.
+  - **Fase 3 (paro e peço sua liberação):** envio do card para Crédito ou Consórcio. Isso cria cards dentro dessas BUs e pode entrar nas métricas e na distribuição delas. Antes de ligar, mostro em qual etapa o card chegaria e o que seria contado lá.
+  - **Busca da anamnese no HARVEY:** se a chamada atual do Consórcio precisar ser alterada para ser reaproveitada, eu paro e aviso. Nesse caso, a versão do Pós Venda fica separada.
+- Se, durante qualquer fase, eu encontrar algo que interrompa um fluxo ou cause efeito colateral, paro e aviso você antes de continuar.
+
 ## O que o usuário vai ver
 - Novo item no menu: **BU - Pós Venda**, com Visão Geral, Contatos e Negócios (mesmas telas do Incorporador).
 - Uma única pipeline, **Relacionamento - Pós venda**, com as etapas:
