@@ -394,17 +394,20 @@ export function useConsorcioProducaoGerada(
 
       // Prioridade 0: reunião de origem gravada na proposta (origem_attendee_id).
       const origemParaCloser = new Map<string, string>();
+      /** attendee de origem → perfil de quem AGENDOU (`booked_by`). */
+      const origemBooker = new Map<string, string>();
       const origemIds = [...new Set(propostas.map((p: any) => p.origem_attendee_id).filter(Boolean) as string[])];
       for (const parte of chunk(origemIds)) {
         if (parte.length === 0) continue;
         const { data: atts } = await supabase
           .from("meeting_slot_attendees")
-          .select("id, meeting_slots (closer_id)")
+          .select("id, booked_by, meeting_slots (closer_id)")
           .in("id", parte);
         (atts || []).forEach((a: any) => {
           const cid = a?.meeting_slots?.closer_id;
           const canon = cid ? idCanonico.get(cid) : undefined;
           if (canon) origemParaCloser.set(a.id, canon);
+          if (a.booked_by) origemBooker.set(a.id, a.booked_by);
         });
       }
 
