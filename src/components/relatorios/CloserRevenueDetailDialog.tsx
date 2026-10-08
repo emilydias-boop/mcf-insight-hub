@@ -14,6 +14,7 @@ import type { CanalEntrada } from '@/hooks/useCanalEntrada';
 import { ALLOWED_INCORPORADOR_CATEGORIES, vendaKey, isP2 } from './CloserRevenueSummaryTable';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { calcRecebimento, type PagamentoDaVenda } from '@/hooks/usePagamentosDaVenda';
+import { calcTicketParceria, TICKET_PARCERIA_TOOLTIP } from '@/lib/ticketParceria';
 
 const SP_DATETIME = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
@@ -22,6 +23,11 @@ const SP_DATE = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit',
 });
 const fmtDataHora = (iso: string | null | undefined) => (iso ? SP_DATETIME.format(new Date(iso)).replace(',', '') : '—');
+const SP_DIA_ISO = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+const SP_DIA_BR = new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' });
+/** Dia (yyyy-MM-dd) da venda em America/Sao_Paulo. */
+const diaSP = (iso: string) => SP_DIA_ISO.format(new Date(iso));
+const fmtDiaBR = (dia: string) => SP_DIA_BR.format(new Date(`${dia}T00:00:00Z`));
 const fmtDiaMes = (iso: string | null | undefined) => (iso ? SP_DATE.format(new Date(iso)) : '—');
 
 interface Transaction {
@@ -229,6 +235,12 @@ export function CloserRevenueDetailDialog({
       outsideNet: fora.reduce((s, r) => s + r.net, 0),
       p2Count: p2Vendas.length,
       p2Net: p2Vendas.reduce((s, r) => s + r.net, 0),
+      ticketParceria: calcTicketParceria(dentro.map((r) => ({
+        productName: r.tx.product_name,
+        bruto: r.gross,
+        liquido: r.net,
+        refunded: r.pagamentos.some((p) => p.sale_status === 'refunded'),
+      }))),
     };
   }, [transactions, atribuicaoMap, pagamentosMap, globalFirstIds, modo, donoMap]);
   const showVendas = !isUnassigned && vendas.rows.length > 0;
@@ -284,17 +296,22 @@ export function CloserRevenueDetailDialog({
     const totalGross = calcGross(transactions);
     const totalNet = calcNet(transactions);
 
-    // By day
-    const dayMap = new Map<string, number>();
-    for (const tx of transactions) {
+    // Melhor/Pior dia: só contrato pago (grupo 'contrato'), sem reembolso, dia em America/Sao_Paulo
+    const dayMap = new Map<string, { keys: Set<string>; net: number }>();
+    for (const tx of byGrupo('contrato')) {
       if (!tx.sale_date) continue;
-      const day = tx.sale_date.substring(0, 10);
-      dayMap.set(day, (dayMap.get(day) || 0) + getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id)));
+      if (tx.sale_status === 'refunded' || (tx.net_value !== null && tx.net_value < 0)) continue;
+      const day = diaSP(tx.sale_date);
+      const d = dayMap.get(day) || { keys: new Set<string>(), net: 0 };
+      d.keys.add(vendaKey(tx, donoMap));
+      d.net += tx.net_value || 0;
+      dayMap.set(day, d);
     }
-    const days = Array.from(dayMap.entries()).filter(([, v]) => v > 0);
-    days.sort((a, b) => b[1] - a[1]);
-    const bestDay = days[0] || null;
-    const worstDay = days[days.length - 1] || null;
+    const days = Array.from(dayMap.entries())
+      .map(([dia, d]) => ({ dia, qtd: d.keys.size, net: d.net }))
+      .filter((d) => d.qtd > 0);
+    const bestDay = [...days].sort((a, b) => b.qtd - a.qtd || b.net - a.net)[0] || null;
+    const worstDay = [...days].sort((a, b) => a.qtd - b.qtd || a.net - b.net)[0] || null;
 
     // Breakdown por grupo (classificador único)
     const categories = GRUPO_ORDEM
@@ -426,6 +443,25 @@ export function CloserRevenueDetailDialog({
               </CardContent>
             </Card>
           )}
+
+          <Card className="bg-card border-border">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Trophy className="h-4 w-4 text-primary" />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xs font-medium text-muted-foreground cursor-help">Ticket médio · parceria</span>
+                    </TooltipTrigger>
+                    <TooltipContent>{TICKET_PARCERIA_TOOLTIP}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <p className="text-xs font-mono">Bruto {vendas.ticketParceria.ticketBruto != null ? formatCurrency(vendas.ticketParceria.ticketBruto) : '—'}</p>
+              <p className="text-xs text-success font-mono">Líquido {vendas.ticketParceria.ticketLiquido != null ? formatCurrency(vendas.ticketParceria.ticketLiquido) : '—'}</p>
+              <p className="text-xs text-muted-foreground">{vendas.ticketParceria.vendas} {vendas.ticketParceria.vendas === 1 ? 'venda' : 'vendas'}</p>
+            </CardContent>
+          </Card>
 
           {metrics.refunds.count > 0 && (
             <Card className="bg-card border-border">
@@ -611,31 +647,39 @@ export function CloserRevenueDetailDialog({
           </Card>
         )}
 
-        {/* Best / Worst Day */}
+        {/* Best / Worst Day (contratos) */}
         <div className="grid grid-cols-2 gap-3">
-          {metrics.bestDay && (
-            <Card className="bg-card border-border">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <CalendarCheck className="h-4 w-4 text-success" />
-                  <span className="text-xs font-medium text-muted-foreground">Melhor Dia</span>
-                </div>
-                <p className="text-sm font-bold">{formatDate(metrics.bestDay[0])}</p>
-                <p className="text-xs font-mono text-success">{formatCurrency(metrics.bestDay[1])}</p>
-              </CardContent>
+          {!metrics.bestDay ? (
+            <Card className="bg-card border-border col-span-2">
+              <CardContent className="p-3 text-xs text-muted-foreground">Sem contrato pago no período</CardContent>
             </Card>
-          )}
-          {metrics.worstDay && metrics.bestDay && metrics.worstDay[0] !== metrics.bestDay[0] && (
-            <Card className="bg-card border-border">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <CalendarX className="h-4 w-4 text-destructive" />
-                  <span className="text-xs font-medium text-muted-foreground">Pior Dia</span>
-                </div>
-                <p className="text-sm font-bold">{formatDate(metrics.worstDay[0])}</p>
-                <p className="text-xs font-mono text-destructive">{formatCurrency(metrics.worstDay[1])}</p>
-              </CardContent>
-            </Card>
+          ) : (
+            <>
+              <Card className="bg-card border-border">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CalendarCheck className="h-4 w-4 text-success" />
+                    <span className="text-xs font-medium text-muted-foreground">Melhor dia · contratos</span>
+                  </div>
+                  <p className="text-sm font-bold">{fmtDiaBR(metrics.bestDay.dia)}</p>
+                  <p className="text-sm font-semibold">{metrics.bestDay.qtd} {metrics.bestDay.qtd === 1 ? 'contrato' : 'contratos'}</p>
+                  <p className="text-xs font-mono text-success">{formatCurrency(metrics.bestDay.net)} líquido</p>
+                </CardContent>
+              </Card>
+              {metrics.worstDay && metrics.worstDay.dia !== metrics.bestDay.dia && (
+                <Card className="bg-card border-border">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CalendarX className="h-4 w-4 text-destructive" />
+                      <span className="text-xs font-medium text-muted-foreground">Pior dia · contratos</span>
+                    </div>
+                    <p className="text-sm font-bold">{fmtDiaBR(metrics.worstDay.dia)}</p>
+                    <p className="text-sm font-semibold">{metrics.worstDay.qtd} {metrics.worstDay.qtd === 1 ? 'contrato' : 'contratos'}</p>
+                    <p className="text-xs font-mono text-destructive">{formatCurrency(metrics.worstDay.net)} líquido</p>
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
         </div>
 
