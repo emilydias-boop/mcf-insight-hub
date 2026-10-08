@@ -21311,6 +21311,7 @@ export type Database = {
         | "marketing"
         | "assistente_administrativo"
         | "cobranca_consorcio"
+        | "gerente_relacionamento"
       asset_event_type:
         | "comprado"
         | "liberado"
@@ -21683,6 +21684,7 @@ export const Constants = {
         "marketing",
         "assistente_administrativo",
         "cobranca_consorcio",
+        "gerente_relacionamento",
       ],
       asset_event_type: [
         "comprado",
