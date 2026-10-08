@@ -766,12 +766,77 @@ export function useConsorcioProducaoGerada(
         pernaC.cartas += 1;
       });
 
-      vendasMes.forEach(({ closerId }) => {
-        const l = byCloser.get(closerId) || zero();
+      // ── SDR da venda ──────────────────────────────────────────────────────
+      // "Quem agendou" = meeting_slot_attendees.booked_by (perfil → e-mail).
+      // 1) reunião de origem da proposta; 2) senão, ÚLTIMA reunião elegível do
+      // negócio conduzida por closer desta BU (mesma regra que a aba SDRs já
+      // usava: status ≠ cancelled/invited, ordenada por booked_at/created_at).
+      const dealsVenda = [...new Set([...vendasMes.values()].map((v) => v.dealId).filter(Boolean) as string[])];
+      const dealUltimoBooker = new Map<string, { by: string; at: string }>();
+      for (const parte of chunk(dealsVenda)) {
+        if (parte.length === 0) continue;
+        const { data: atts } = await supabase
+          .from("meeting_slot_attendees")
+          .select("deal_id, booked_by, booked_at, created_at, status, meeting_slots (closer_id)")
+          .in("deal_id", parte);
+        (atts || []).forEach((a: any) => {
+          if (!a.deal_id || !a.booked_by) return;
+          if (a.status === "cancelled" || a.status === "invited") return;
+          const cid = a?.meeting_slots?.closer_id;
+          if (!cid || !idCanonico.has(cid)) return;
+          const at = String(a.booked_at || a.created_at || "");
+          const atual = dealUltimoBooker.get(a.deal_id);
+          if (!atual || at.localeCompare(atual.at) > 0) dealUltimoBooker.set(a.deal_id, { by: a.booked_by, at });
+        });
+      }
+      const bookerIds = [
+        ...new Set([...origemBooker.values(), ...[...dealUltimoBooker.values()].map((b) => b.by)]),
+      ];
+      const bookerEmail = new Map<string, string>();
+      for (const parte of chunk(bookerIds)) {
+        if (parte.length === 0) continue;
+        const { data: profs } = await supabase.from("profiles").select("id, email").in("id", parte);
+        (profs || []).forEach((p) => {
+          const ek = emailKey(p.email);
+          if (ek) bookerEmail.set(p.id, ek);
+        });
+      }
+
+      const vendasBySdr = new Map<string, { vendas: number; credito: number }>();
+      const vendasSemSdr = { vendas: 0, credito: 0 };
+      const vendasItens: VendaRealizadaItem[] = [];
+      const pernaLinha = { A: pernaA, B: pernaB, C: pernaC };
+      vendasMes.forEach((v, chave) => {
+        const l = byCloser.get(v.closerId) || zero();
         l.vendasRealizadas += 1;
-        byCloser.set(closerId, l);
-        pernaA.vendasRealizadas += 1;
+        byCloser.set(v.closerId, l);
+        pernaLinha[v.perna].vendasRealizadas += 1;
+
+        const bookerId =
+          (v.origemId ? origemBooker.get(v.origemId) : undefined) ||
+          (v.dealId ? dealUltimoBooker.get(v.dealId)?.by : undefined);
+        const sdrEmail = bookerId ? bookerEmail.get(bookerId) || null : null;
+        if (sdrEmail) {
+          const s = vendasBySdr.get(sdrEmail) || { vendas: 0, credito: 0 };
+          s.vendas += 1;
+          s.credito += v.credito;
+          vendasBySdr.set(sdrEmail, s);
+        } else {
+          vendasSemSdr.vendas += 1;
+          vendasSemSdr.credito += v.credito;
+        }
+        vendasItens.push({
+          key: chave,
+          perna: v.perna,
+          nome: v.nome,
+          dataAncora: v.ancora,
+          credito: v.credito,
+          dealId: v.dealId,
+          closerId: v.closerId === SEM_ATRIBUICAO ? null : v.closerId,
+          sdrEmail,
+        });
       });
+      vendasItens.sort((a, b) => b.dataAncora.localeCompare(a.dataAncora));
 
       pessoasPorCloserC.forEach((pessoas, closerId) => {
         add(closerId, 0, 0, pessoas.size);
