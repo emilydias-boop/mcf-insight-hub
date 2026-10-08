@@ -27,18 +27,22 @@ export interface TicketParceria {
   ticketLiquido: number | null;
 }
 
+/**
+ * Só entram no ticket as vendas novas válidas com bruto > 0.
+ * Mensalidade de recorrência (ex.: 2/12) e parcela de plano de mês anterior chegam como
+ * "venda" com bruto 0: ficam fora do numerador, do denominador e dos totais.
+ */
 export function calcTicketParceria(vendas: VendaTicket[]): TicketParceria {
   const validas = vendas.filter(
-    (v) => isProdutoTicketParceria(v.productName) && !v.refunded && v.liquido >= 0,
+    (v) => isProdutoTicketParceria(v.productName) && !v.refunded && v.liquido >= 0 && v.bruto > 0,
   );
   const brutoTotal = validas.reduce((s, v) => s + v.bruto, 0);
   const liquidoTotal = validas.reduce((s, v) => s + v.liquido, 0);
-  const comBruto = validas.filter((v) => v.bruto > 0).length;
   return {
     vendas: validas.length,
     brutoTotal,
     liquidoTotal,
-    ticketBruto: comBruto > 0 ? brutoTotal / comBruto : null,
+    ticketBruto: validas.length > 0 ? brutoTotal / validas.length : null,
     ticketLiquido: validas.length > 0 ? liquidoTotal / validas.length : null,
   };
 }
