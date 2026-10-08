@@ -30,7 +30,8 @@ import { useTotaisPorCliente, normalizarEmail } from '@/hooks/useTotaisPorClient
 import { KanbanColunaServidor } from './KanbanColunaServidor';
 import { useKanbanContagem, invalidarKanban } from '@/hooks/useKanbanServidor';
 import { PosVendaDestinoDialog } from './pos-venda/PosVendaDestinoDialog';
-import { isPosVendaDeal, POS_VENDA_CONCLUIDA_STAGE_ID } from '@/lib/posVenda';
+import { NovosLicenciadosSaidaDialog } from './pos-venda/NovosLicenciadosSaidaDialog';
+import { isPosVendaDeal, POS_VENDA_CONCLUIDA_STAGE_ID, POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID } from '@/lib/posVenda';
 
 interface Deal {
   id: string;
@@ -77,6 +78,7 @@ export const DealKanbanBoard = ({
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const [posVendaDestino, setPosVendaDestino] = useState<{ dealId: string; dealName: string } | null>(null);
+  const [saidaNovos, setSaidaNovos] = useState<{ dealId: string; newStageId: string; oldStageId: string; dealName: string } | null>(null);
   const [pendingLossMove, setPendingLossMove] = useState<{
     dealId: string; newStageId: string; oldStageId: string; dealName: string;
   } | null>(null);
@@ -276,6 +278,12 @@ export const DealKanbanBoard = ({
       )
     ) {
       toast.info('Use os botões da esteira no painel do negócio para avançar esta etapa.');
+      return;
+    }
+
+    // Pós Venda: sair de "Novos licenciados" exige nota do contato e destino
+    if (isPosVendaDeal(deal) && oldStageId === POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID) {
+      setSaidaNovos({ dealId, newStageId, oldStageId, dealName: deal?.name || '' });
       return;
     }
 
@@ -538,6 +546,22 @@ export const DealKanbanBoard = ({
         dealId={posVendaDestino?.dealId ?? null}
         dealName={posVendaDestino?.dealName}
         onOpenChange={(o) => { if (!o) setPosVendaDestino(null); }}
+      />
+      <NovosLicenciadosSaidaDialog
+        open={!!saidaNovos}
+        dealId={saidaNovos?.dealId ?? null}
+        dealName={saidaNovos?.dealName}
+        targetStageName={visibleStages.find((s: any) => s.id === saidaNovos?.newStageId)?.stage_name}
+        onOpenChange={(o) => { if (!o) setSaidaNovos(null); }}
+        onNotaRegistrada={() => {
+          if (!saidaNovos) return;
+          const { dealId, newStageId, oldStageId } = saidaNovos;
+          if (newStageId === POS_VENDA_CONCLUIDA_STAGE_ID) {
+            setPosVendaDestino({ dealId, dealName: saidaNovos.dealName });
+          } else {
+            executeMove(dealId, newStageId, oldStageId);
+          }
+        }}
       />
       <LossReasonDialog
         open={!!pendingLossMove}
