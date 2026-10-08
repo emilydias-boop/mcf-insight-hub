@@ -624,9 +624,18 @@ export function useConsorcioProducaoGerada(
         const flag = antedatado(r);
         add(closerId, credito, 1, 0, flag ? 1 : 0, flag ? credito : 0);
         if (!pessoasPorCloserB.has(closerId)) pessoasPorCloserB.set(closerId, new Set());
-        pessoasPorCloserB
-          .get(closerId)!
-          .add(clientePessoaKey({ id: r.id, cpf: r.cpf, cnpj: r.cnpj, nome_completo: r.nome_completo || r.razao_social }));
+        const clienteB = clientePessoaKey({ id: r.id, cpf: r.cpf, cnpj: r.cnpj, nome_completo: r.nome_completo || r.razao_social });
+        pessoasPorCloserB.get(closerId)!.add(clienteB);
+        regVenda({
+          cliente: clienteB,
+          closerId,
+          ancora: r.aceite_date ? String(r.aceite_date).slice(0, 10) : "",
+          perna: "B",
+          nome: r.nome_completo || r.razao_social || null,
+          dealId: r.deal_id || null,
+          origemId: null,
+          credito,
+        });
         addItem(
           closerId,
           {
@@ -750,6 +759,16 @@ export function useConsorcioProducaoGerada(
         add(closerId, credito, 1, 0);
         if (!pessoasPorCloserC.has(closerId)) pessoasPorCloserC.set(closerId, new Set());
         pessoasPorCloserC.get(closerId)!.add(clientePessoaKey(card));
+        regVenda({
+          cliente: clientePessoaKey(card),
+          closerId,
+          ancora: card.data_contratacao ? String(card.data_contratacao).slice(0, 10) : "",
+          perna: "C",
+          nome: card.nome_completo || null,
+          dealId: null,
+          origemId: null,
+          credito,
+        });
         addItem(closerId, {
           key: `C:${card.id}`,
           perna: "C",
