@@ -8826,6 +8826,57 @@ export type Database = {
           },
         ]
       }
+      crm_deal_entregaveis: {
+        Row: {
+          arquivo_path: string | null
+          created_at: string
+          deal_id: string
+          entregavel_id: string
+          enviado_por: string | null
+          id: string
+          link_url: string | null
+          observacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          arquivo_path?: string | null
+          created_at?: string
+          deal_id: string
+          entregavel_id: string
+          enviado_por?: string | null
+          id?: string
+          link_url?: string | null
+          observacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arquivo_path?: string | null
+          created_at?: string
+          deal_id?: string
+          entregavel_id?: string
+          enviado_por?: string | null
+          id?: string
+          link_url?: string | null
+          observacao?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_deal_entregaveis_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_deal_entregaveis_entregavel_id_fkey"
+            columns: ["entregavel_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stage_entregaveis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_deal_icp_historico: {
         Row: {
           alterado_em: string
@@ -9294,6 +9345,50 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_stage_entregaveis: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          obrigatorio: boolean
+          ordem: number
+          stage_id: string
+          tipo: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          obrigatorio?: boolean
+          ordem?: number
+          stage_id: string
+          tipo?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          obrigatorio?: boolean
+          ordem?: number
+          stage_id?: string
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_stage_entregaveis_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
             referencedColumns: ["id"]
           },
         ]
