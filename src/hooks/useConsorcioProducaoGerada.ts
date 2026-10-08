@@ -52,11 +52,12 @@ export interface ProducaoGeradaLinha {
   /** Vendas: propostas (perna A) + clientes distintos nas pernas B e C. */
   vendas: number;
   /**
-   * VENDAS REALIZADAS (Consórcio): clientes distintos com proposta aceita no
-   * período — só perna A, mesma âncora/filtros/atribuição da Produção Gerada.
-   * Unidade = cliente × mês da âncora (recompra em outro mês conta de novo).
-   * Cliente em dois closers no mesmo mês fica com o closer da proposta mais
-   * antiga do mês; no total ele conta uma vez só.
+   * VENDAS REALIZADAS (Consórcio): clientes distintos na MESMA base da Produção
+   * Gerada — pernas A + B + C, mesma âncora/filtros/atribuição de cada perna.
+   * Unidade = cliente × mês da âncora, deduplicada ENTRE as pernas (o mesmo
+   * cliente na A e na B no mesmo mês = 1). Recompra em outro mês conta de novo.
+   * Cliente em dois closers no mesmo mês fica com o closer do registro de
+   * âncora mais antiga do mês; no total ele conta uma vez só.
    */
   vendasRealizadas: number;
   /** Registros com `aceite_date` em mês anterior ao do lançamento (só sinaliza). */
@@ -100,7 +101,27 @@ export interface ProducaoGeradaItem {
   efetivado: boolean;
 }
 
+/** Uma venda (cliente × mês) — explosão exata do número Vendas Realizadas. */
+export interface VendaRealizadaItem {
+  key: string;
+  /** Perna do registro que definiu a venda (âncora mais antiga do mês). */
+  perna: "A" | "B" | "C";
+  nome: string | null;
+  dataAncora: string;
+  /** Produção Gerada somada de todos os registros do cliente no mês. */
+  credito: number;
+  dealId: string | null;
+  /** null = "Produção sem atribuição". */
+  closerId: string | null;
+  /** SDR que agendou (booked_by). null = sem SDR identificado. */
+  sdrEmail: string | null;
+}
+
 export interface ConsorcioProducaoGerada {
+  /** Vendas Realizadas por SDR (e-mail) e a Produção Gerada dessas vendas. */
+  vendasBySdr: Map<string, { vendas: number; credito: number }>;
+  vendasSemSdr: { vendas: number; credito: number };
+  vendasItens: VendaRealizadaItem[];
   byCloser: Map<string, ProducaoGeradaLinha>;
   /** Balde explícito: nunca descartamos nem chutamos atribuição. */
   semAtribuicao: ProducaoGeradaLinha;
@@ -129,6 +150,9 @@ const zero = (): ProducaoGeradaLinha => ({
 });
 
 const EMPTY: ConsorcioProducaoGerada = {
+  vendasBySdr: new Map(),
+  vendasSemSdr: { vendas: 0, credito: 0 },
+  vendasItens: [],
   byCloser: new Map(),
   semAtribuicao: zero(),
   total: zero(),
@@ -918,6 +942,9 @@ export function useConsorcioProducaoGerada(
       );
 
       return {
+        vendasBySdr,
+        vendasSemSdr,
+        vendasItens,
         byCloser,
         semAtribuicao,
         total,
