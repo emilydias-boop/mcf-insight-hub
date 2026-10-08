@@ -179,6 +179,7 @@ export const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   marketing: { label: "Marketing", color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
   gr: { label: "GR", color: "bg-teal-500/20 text-teal-400 border-teal-500/30" },
   assistente_administrativo: { label: "Assistente Administrativo", color: "bg-sky-500/20 text-sky-400 border-sky-500/30" },
+  gerente_relacionamento: { label: "Gerente de Relacionamento", color: "bg-lime-500/20 text-lime-400 border-lime-500/30" },
 };
 
 export const RESOURCE_LABELS: Record<ResourceType, string> = {

@@ -224,6 +224,16 @@ const menuItems: MenuItem[] = [
     ],
   },
 
+  // BU - PÓS VENDA (criada 2026-10-08)
+  {
+    title: "BU - Pós Venda",
+    icon: Building2,
+    requiredRoles: ["admin", "gerente_relacionamento"],
+    items: [
+      { title: "CRM", url: "/pos-venda/crm" },
+    ],
+  },
+
   // ACADEMIA MCF (criada 2026-09-24) — visível para todos; o conteúdo depende do cadastro na Academia
   {
     title: "Academia MCF",
