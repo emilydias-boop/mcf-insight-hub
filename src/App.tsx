@@ -302,6 +302,7 @@ const App = () => (
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />
+                <Route path="agenda" element={<AgendaPosVenda />} />
                 <Route path="discador" element={<Discador />} />
               </Route>
 
