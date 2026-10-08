@@ -99,6 +99,7 @@ const Negocios = () => {
     outsideFilter: 'all',
     temperature: 'all',
     lossReasons: [],
+    resgate: 'all',
   });
   
   // Estado para seleção e transferência em massa

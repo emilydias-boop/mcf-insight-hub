@@ -4,6 +4,7 @@ import { useA010Journey } from '@/hooks/useA010Journey';
 import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
 import { formatCurrency } from '@/lib/formatters';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
+import { ResgateBadge } from '@/components/crm/ResgateBadge';
 
 
 interface SdrCompactHeaderProps {

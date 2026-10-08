@@ -21,7 +21,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle, Ban } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle, Ban, LifeBuoy } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
