@@ -249,7 +249,6 @@ export function ConsorcioCloserSummaryTable({
           <TableBody>
             {closerRows.map((row) => {
               const cotas = cotasByCloser?.get(row.closer_id) || 0;
-              const clientes = clientesByCloser?.get(row.closer_id) || 0;
               const credito = creditoByCloser?.get(row.closer_id) || 0;
               const producao = producaoByCloser?.get(row.closer_id);
 

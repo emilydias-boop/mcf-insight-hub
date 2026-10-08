@@ -49,6 +49,13 @@ interface ConsorcioSdrSummaryTableProps {
   cotasSemVinculoItems?: CotaResiduoItem[];
   /** Detalhe dos fatos de agenda sem agendador (mesma fonte do número). */
   unassignedItems?: AgendaResiduoItem[];
+  /**
+   * Vendas Realizadas (mesma base da Produção Gerada) por SDR que agendou, com a
+   * Produção Gerada dessas vendas. Quando informado, a coluna Vendas, o Ticket
+   * e a Conversão usam esta base — o Total fecha com o da aba Closers.
+   */
+  vendasBySdr?: Map<string, { vendas: number; credito: number }>;
+  vendasSemSdr?: { vendas: number; credito: number };
 }
 
 export function ConsorcioSdrSummaryTable({
@@ -73,7 +80,11 @@ export function ConsorcioSdrSummaryTable({
   unassigned = null,
   cotasSemVinculoItems = [],
   unassignedItems = [],
+  vendasBySdr,
+  vendasSemSdr,
 }: ConsorcioSdrSummaryTableProps) {
+  const novaBase = !!vendasBySdr;
+  const vendasDe = (email: string) => vendasBySdr?.get(email.toLowerCase()) || { vendas: 0, credito: 0 };
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [detalhe, setDetalhe] = useState<null | "semVinculo" | "naoAtribuido">(null);
@@ -81,13 +92,20 @@ export function ConsorcioSdrSummaryTable({
   // SDRs que têm cota contratada no período mas nenhuma atividade de agenda —
   // sem isto a linha some em silêncio e o Total não fecha com o card do topo.
   const emailsNaTabela = new Set(data.map((r) => r.sdrEmail.toLowerCase()));
-  const extraSdrs = Array.from(cotasBySdr?.entries() || [])
-    .filter(([email, qtd]) => qtd > 0 && !emailsNaTabela.has(email.toLowerCase()))
+  const extraEmails = new Set<string>([
+    ...Array.from(cotasBySdr?.entries() || []).filter(([, q]) => q > 0).map(([e]) => e),
+    ...Array.from(vendasBySdr?.entries() || []).filter(([, v]) => v.vendas > 0).map(([e]) => e),
+  ]);
+  const extraSdrs = Array.from(extraEmails)
+    .map((email) => [email, cotasBySdr?.get(email) || 0] as [string, number])
+    .filter(([email]) => !emailsNaTabela.has(email.toLowerCase()))
     .filter(([email]) => !sdrFilterEmail || email.toLowerCase() === sdrFilterEmail.toLowerCase())
     .sort((a, b) => b[1] - a[1]);
   const extraCotas = extraSdrs.reduce((s, [, qtd]) => s + qtd, 0);
   const extraClientes = extraSdrs.reduce((s, [email]) => s + (clientesBySdr?.get(email) || 0), 0);
   const extraCredito = extraSdrs.reduce((s, [email]) => s + (creditoBySdr?.get(email) || 0), 0);
+  const extraVendas = extraSdrs.reduce((s, [email]) => s + vendasDe(email).vendas, 0);
+  const extraVendasCredito = extraSdrs.reduce((s, [email]) => s + vendasDe(email).credito, 0);
 
   const brl = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -105,9 +123,11 @@ export function ConsorcioSdrSummaryTable({
         cotas: acc.cotas + (cotasBySdr?.get(email) || 0),
         clientes: acc.clientes + (clientesBySdr?.get(email) || 0),
         credito: acc.credito + (creditoBySdr?.get(email) || 0),
+        vendas: acc.vendas + vendasDe(email).vendas,
+        vendasCredito: acc.vendasCredito + vendasDe(email).credito,
       };
     },
-    { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, cotas: 0, clientes: 0, credito: 0 }
+    { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, propostas: 0, cotas: 0, clientes: 0, credito: 0, vendas: 0, vendasCredito: 0 }
   );
   // O Total inclui a linha "Não atribuído" para fechar com o card do topo.
   const totals = {
@@ -120,9 +140,14 @@ export function ConsorcioSdrSummaryTable({
     // Contagem de PESSOAS não é somável: o Total usa o distinct global do
     // conjunto filtrado, calculado uma única vez pelo hook. Somar as linhas
     // contaria duas vezes o cliente presente em mais de uma atribuição.
-    clientes: totalClientesDistintos,
+    // Nova base: soma das linhas (cada cliente×mês está em UM SDR ou em
+    // "sem SDR identificado") — igual, por construção, ao Total dos closers.
+    clientes: novaBase
+      ? baseTotals.vendas + extraVendas + (vendasSemSdr?.vendas || 0)
+      : totalClientesDistintos,
     credito: baseTotals.credito + creditoSemVinculo + extraCredito,
   };
+  const vendasCreditoTotal = baseTotals.vendasCredito + extraVendasCredito + (vendasSemSdr?.credito || 0);
   const unassignedTooltip = unassigned
     ? `Linhas devolvidas pelas métricas da agenda cujo agendador não está na lista de SDRs/Closers do Consórcio${unassigned.emails.length ? `: ${unassigned.emails.join(', ')}` : ''}.\nCobre apenas o que é visível nesta camada — reuniões que a consulta de origem nunca devolveu não aparecem aqui.`
     : '';
@@ -130,7 +155,9 @@ export function ConsorcioSdrSummaryTable({
   const totalTaxaVenda = totals.r1Realizada > 0
     ? (totals.clientes / totals.r1Realizada) * 100
     : 0;
-  const totalTicket = totals.clientes > 0 ? totals.credito / totals.clientes : null;
+  const totalTicket = totals.clientes > 0
+    ? (novaBase ? vendasCreditoTotal : totals.credito) / totals.clientes
+    : null;
   const totalTaxaVendaColor = totalTaxaVenda >= 20
     ? 'text-green-400'
     : totalTaxaVenda >= 10
@@ -207,7 +234,7 @@ export function ConsorcioSdrSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Consórcio Efetivado ÷ Vendas Realizadas. Uma venda = um cliente, mesmo que ele contrate várias cotas."
+                title={novaBase ? "Produção Gerada das vendas ÷ Vendas Realizadas (mesma base e mesma data)." : "Consórcio Efetivado ÷ Vendas Realizadas. Uma venda = um cliente, mesmo que ele contrate várias cotas."}
               >
                 Ticket Médio
               </TableHead>
@@ -229,9 +256,10 @@ export function ConsorcioSdrSummaryTable({
               const isProporcional = sdrDiasUteisMap?.has(row.sdrEmail.toLowerCase()) && diasEfetivos < (diasUteisNoPeriodo || 1);
 
               const cotas = cotasBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
-              const clientes = clientesBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
+              const v = vendasDe(row.sdrEmail);
+              const clientes = novaBase ? v.vendas : clientesBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
               const credito = creditoBySdr?.get(row.sdrEmail.toLowerCase()) || 0;
-              const ticket = clientes > 0 ? credito / clientes : null;
+              const ticket = clientes > 0 ? (novaBase ? v.credito : credito) / clientes : null;
 
               // Clientes distintos / R1 Realizada
               const taxaVenda = row.r1Realizada > 0
@@ -345,7 +373,7 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">0</TableCell>
                 <TableCell className="text-center">0</TableCell>
                 <TableCell className="text-center">0</TableCell>
-                <TableCell className="text-center">{clientesBySdr?.get(email.toLowerCase()) || 0}</TableCell>
+                <TableCell className="text-center">{novaBase ? vendasDe(email).vendas : clientesBySdr?.get(email.toLowerCase()) || 0}</TableCell>
                 <TableCell className="text-center">{qtd}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {(creditoBySdr?.get(email.toLowerCase()) || 0) > 0
@@ -353,9 +381,11 @@ export function ConsorcioSdrSummaryTable({
                     : "—"}
                 </TableCell>
                 <TableCell className="text-center whitespace-nowrap">
-                  {(clientesBySdr?.get(email.toLowerCase()) || 0) > 0
-                    ? brl((creditoBySdr?.get(email.toLowerCase()) || 0) / (clientesBySdr!.get(email.toLowerCase())!))
-                    : "—"}
+                  {novaBase
+                    ? vendasDe(email).vendas > 0 ? brl(vendasDe(email).credito / vendasDe(email).vendas) : "—"
+                    : (clientesBySdr?.get(email.toLowerCase()) || 0) > 0
+                      ? brl((creditoBySdr?.get(email.toLowerCase()) || 0) / (clientesBySdr!.get(email.toLowerCase())!))
+                      : "—"}
                 </TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {mostrarColunaChevron && <TableCell />}
@@ -380,14 +410,34 @@ export function ConsorcioSdrSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">{clientesSemVinculo}</TableCell>
+                <TableCell className="text-center">{novaBase ? "—" : clientesSemVinculo}</TableCell>
                 <TableCell className="text-center">{cotasSemVinculo}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {creditoSemVinculo > 0 ? brl(creditoSemVinculo) : "—"}
                 </TableCell>
                 <TableCell className="text-center whitespace-nowrap">
-                  {clientesSemVinculo > 0 ? brl(creditoSemVinculo / clientesSemVinculo) : "—"}
+                  {!novaBase && clientesSemVinculo > 0 ? brl(creditoSemVinculo / clientesSemVinculo) : "—"}
                 </TableCell>
+                <TableCell className="text-center">—</TableCell>
+                {mostrarColunaChevron && <TableCell />}
+              </TableRow>
+            )}
+
+            {novaBase && (vendasSemSdr?.vendas || 0) > 0 && (
+              <TableRow
+                className="italic text-muted-foreground hover:bg-muted/20"
+                title="Vendas (mesma base da Produção Gerada) sem agendador identificado: sem reunião de origem e sem reunião de consórcio com quem agendou no negócio — inclui as cotas históricas sem cadastro."
+              >
+                <TableCell className="font-normal">Vendas sem SDR identificado</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{vendasSemSdr!.vendas}</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center whitespace-nowrap">{brl(vendasSemSdr!.credito / vendasSemSdr!.vendas)}</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 {mostrarColunaChevron && <TableCell />}
               </TableRow>
@@ -470,9 +520,9 @@ export function ConsorcioSdrSummaryTable({
       </div>
 
       <p className="px-4 py-2 text-xs text-muted-foreground">
-        Vendas Realizadas conta pessoas, não cartas: um cliente com 3 cotas soma 1 aqui e 3 em
-        Cotas Contratadas. A atribuição é por cliente (todas as cotas dele vão para o SDR do
-        última reunião de consórcio agendada), então as linhas somam o Total nas três colunas.
+        {novaBase
+          ? "Vendas Realizadas conta clientes distintos na mesma base da Produção Gerada (propostas aceitas e vendas avulsas sem proposta). Cotas Contratadas segue a data de contratação na Embracon. A venda vai para o SDR que agendou a reunião de origem da proposta (sem ela, a última reunião de consórcio do negócio); o Total é o mesmo da aba Closers."
+          : "Vendas Realizadas conta pessoas, não cartas: um cliente com 3 cotas soma 1 aqui e 3 em Cotas Contratadas. A atribuição é por cliente (todas as cotas dele vão para o SDR do última reunião de consórcio agendada), então as linhas somam o Total nas três colunas."}
       </p>
 
       <ResiduoDetalheModal
