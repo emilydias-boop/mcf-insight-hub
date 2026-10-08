@@ -3,6 +3,8 @@ import { getAnamneseV2 } from '@/components/crm/AnamneseExternaButton';
 /** Pipeline única da BU Pós Venda ("Relacionamento - Pós venda"). */
 export const POS_VENDA_ORIGIN_ID = 'b05a0000-0000-4000-8000-000000000002';
 
+export const POS_VENDA_CONCLUIDA_STAGE_ID = 'b05a0001-0000-4000-8000-000000000003';
+
 export const isPosVendaDeal = (deal: unknown): boolean =>
   (deal as { origin_id?: string | null } | null)?.origin_id === POS_VENDA_ORIGIN_ID;
 
