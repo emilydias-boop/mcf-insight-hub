@@ -30,6 +30,7 @@ import { useSonaxClickToCall } from "@/hooks/useSonaxClickToCall";
 import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
 import { LeadSegmentBadge } from "@/components/crm/LeadSegmentBadge";
+import { ResgateBadge } from "@/components/crm/ResgateBadge";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -484,6 +485,7 @@ export const DealKanbanCard = ({
               </Badge>
             ))}
           <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0" />
+          <ResgateBadge resgateEm={deal.resgate_em} />
           {/* Quanto esse lead já comprou (líquido, todas as BUs) */}
           <LeadTotalCompradoBadge totais={totaisCliente} />
           {outsideInfo?.isOutside && (

@@ -8955,6 +8955,7 @@ export type Database = {
           r2_closer_email: string | null
           replicated_at: string | null
           replicated_from_deal_id: string | null
+          resgate_em: string | null
           stage_id: string | null
           stage_moved_at: string | null
           tags: string[] | null
@@ -8997,6 +8998,7 @@ export type Database = {
           r2_closer_email?: string | null
           replicated_at?: string | null
           replicated_from_deal_id?: string | null
+          resgate_em?: string | null
           stage_id?: string | null
           stage_moved_at?: string | null
           tags?: string[] | null
@@ -9039,6 +9041,7 @@ export type Database = {
           r2_closer_email?: string | null
           replicated_at?: string | null
           replicated_from_deal_id?: string | null
+          resgate_em?: string | null
           stage_id?: string | null
           stage_moved_at?: string | null
           tags?: string[] | null

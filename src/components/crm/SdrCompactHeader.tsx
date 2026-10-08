@@ -4,6 +4,7 @@ import { useA010Journey } from '@/hooks/useA010Journey';
 import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
 import { formatCurrency } from '@/lib/formatters';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
+import { ResgateBadge } from '@/components/crm/ResgateBadge';
 
 
 interface SdrCompactHeaderProps {
@@ -67,6 +68,7 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
       {/* Linha 3: Chips de contexto (Canal, Origem, Produto, Compras A010) */}
       <div className="flex flex-wrap gap-2">
         <LeadSegmentBadge segment={deal?.icp_segment} />
+        <ResgateBadge resgateEm={deal?.resgate_em} />
 
         {/* Badge de Canal de Venda (A010 vs LIVE) - baseado em compra real */}
 

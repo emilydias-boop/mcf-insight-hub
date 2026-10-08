@@ -99,6 +99,7 @@ const Negocios = () => {
     outsideFilter: 'all',
     temperature: 'all',
     lossReasons: [],
+    resgate: 'all',
   });
   
   // Estado para seleção e transferência em massa
@@ -836,6 +837,13 @@ const Negocios = () => {
         const ok = motivo ? lossSel.includes(motivo) : lossSel.includes(SEM_MOTIVO_FILTER_VALUE);
         if (!ok) return false;
       }
+      // Filtro Resgate (selo à parte do A/B/C)
+      const resgateSel = filters.resgate ?? 'all';
+      if (resgateSel !== 'all') {
+        const emResgate = !!(deal as any).resgate_em;
+        if (resgateSel === 'only' && !emResgate) return false;
+        if (resgateSel === 'none' && emResgate) return false;
+      }
       // Filtro Outside
       if (filters.outsideFilter !== 'all') {
         if (!outsideMap) return false;
@@ -888,6 +896,7 @@ const Negocios = () => {
       outsideFilter: 'all',
       temperature: 'all',
       lossReasons: [],
+      resgate: 'all',
     });
   };
   
@@ -1070,6 +1079,15 @@ const Negocios = () => {
           .map((v) => (v === SEM_MOTIVO_FILTER_VALUE ? 'Sem motivo' : v))
           .join(', '),
         onRemove: () => setFilters(f => ({ ...f, lossReasons: [] })),
+      });
+    }
+
+    if ((filters.resgate ?? 'all') !== 'all') {
+      chips.push({
+        key: 'resgate',
+        label: 'Resgate',
+        value: filters.resgate === 'only' ? 'Só Resgate' : 'Sem Resgate',
+        onRemove: () => setFilters(f => ({ ...f, resgate: 'all' })),
       });
     }
 
