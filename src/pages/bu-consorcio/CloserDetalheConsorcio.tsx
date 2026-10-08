@@ -40,6 +40,7 @@ import {
 } from "@/hooks/useConsorcioCloserDetalhe";
 import { useConsorcioProducaoGerada, type ProducaoGeradaItem } from "@/hooks/useConsorcioProducaoGerada";
 import { DealDetailsDrawer } from "@/components/crm/DealDetailsDrawer";
+import { VendasRealizadasLista } from "@/components/sdr/VendasRealizadasLista";
 
 const BU = "consorcio";
 
@@ -359,6 +360,9 @@ export default function CloserDetalheConsorcio() {
 
   const linhaProducao = closerId ? producao?.byCloser.get(closerId) : undefined;
   const itensProducao = (closerId ? producao?.itensByCloser.get(closerId) : undefined) || [];
+  // Vendas Realizadas: mesma base da Produção Gerada (cliente × mês, pernas A+B+C).
+  const vendasCloser = (producao?.vendasItens || []).filter((v) => v.closerId === closerId);
+  const qtdVendas = linhaProducao?.vendasRealizadas ?? 0;
 
   const [dealAberto, setDealAberto] = useState<string | null>(null);
 
@@ -428,9 +432,9 @@ export default function CloserDetalheConsorcio() {
         <KpiCard titulo="No-Show" valor={String(reunioes.noShows.length)} isLoading={reunioes.isLoading} />
         <KpiCard
           titulo="Vendas Realizadas"
-          valor={String(cotas?.vendas ?? 0)}
-          detalhe={`${cotas?.cotas ?? 0} cotas`}
-          isLoading={loadingCotas}
+          valor={String(qtdVendas)}
+          detalhe="Clientes distintos · mesma base da Produção Gerada"
+          isLoading={loadingProducao}
         />
         <KpiCard
           titulo="Consórcio Efetivado"
@@ -447,7 +451,7 @@ export default function CloserDetalheConsorcio() {
         <KpiCard
           titulo="Ticket médio da produção"
           valor={moeda(
-            linhaProducao && linhaProducao.vendas > 0 ? linhaProducao.credito / linhaProducao.vendas : 0,
+            linhaProducao && qtdVendas > 0 ? linhaProducao.credito / qtdVendas : 0,
           )}
           isLoading={loadingProducao}
         />
@@ -459,7 +463,7 @@ export default function CloserDetalheConsorcio() {
           <TabsTrigger value="agendadas">Agendadas ({reunioes.agendadas.length})</TabsTrigger>
           <TabsTrigger value="realizadas">Reuniões Realizadas ({reunioes.realizadas.length})</TabsTrigger>
           <TabsTrigger value="noshows">No-Shows ({reunioes.noShows.length})</TabsTrigger>
-          <TabsTrigger value="vendas">Vendas Realizadas ({cotas?.vendas ?? 0})</TabsTrigger>
+          <TabsTrigger value="vendas">Vendas Realizadas ({qtdVendas})</TabsTrigger>
           <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
         </TabsList>
 
@@ -491,11 +495,10 @@ export default function CloserDetalheConsorcio() {
           <Card className="bg-card border-border">
             <CardContent className="p-4 space-y-3">
               <p className="text-xs text-muted-foreground">
-                {cotas?.vendas ?? 0} vendas (clientes distintos) · {cotas?.cotas ?? 0} cotas ·{" "}
-                {moeda(cotas?.credito ?? 0)} de crédito. A venda é contada por pessoa: uma pessoa com
-                várias cotas é uma venda.
+                {qtdVendas} vendas (clientes distintos) na mesma base da Produção Gerada: propostas
+                aceitas e vendas avulsas sem proposta. Uma pessoa com várias cartas no mês é uma venda.
               </p>
-              <CotasTable itens={cotas?.itens || []} isLoading={loadingCotas} />
+              <VendasRealizadasLista itens={vendasCloser} isLoading={loadingProducao} onAbrirLead={abrirLead} />
             </CardContent>
           </Card>
         </TabsContent>
