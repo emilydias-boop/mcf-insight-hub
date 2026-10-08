@@ -13,8 +13,8 @@ interface Linha { profile_id: string; nome: string; email: string; percentual: n
 /** Distribuição de clientes novos (etapa Novos licenciados) entre gerentes de relacionamento. */
 export default function DistribuicaoNovosLicenciados() {
   const qc = useQueryClient();
-  const { role } = useAuth() as any;
-  const isAdmin = role === 'admin';
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
 
   const { data, isLoading } = useQuery({
     queryKey: ['pos-venda-distribuicao'],
