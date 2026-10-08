@@ -8728,6 +8728,54 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_cliente_timeline: {
+        Row: {
+          actor_id: string | null
+          contact_id: string | null
+          created_at: string
+          deal_destino_id: string | null
+          deal_id: string | null
+          evento: string
+          id: string
+          metadata: Json
+          nota: string | null
+          origin_de: string | null
+          origin_para: string | null
+          stage_de: string | null
+          stage_para: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          deal_destino_id?: string | null
+          deal_id?: string | null
+          evento: string
+          id?: string
+          metadata?: Json
+          nota?: string | null
+          origin_de?: string | null
+          origin_para?: string | null
+          stage_de?: string | null
+          stage_para?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          deal_destino_id?: string | null
+          deal_id?: string | null
+          evento?: string
+          id?: string
+          metadata?: Json
+          nota?: string | null
+          origin_de?: string | null
+          origin_para?: string | null
+          stage_de?: string | null
+          stage_para?: string | null
+        }
+        Relationships: []
+      }
       crm_contact_aliases: {
         Row: {
           contact_id: string
@@ -13889,6 +13937,69 @@ export type Database = {
           id?: string
           phone_suffix?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      pos_venda_distribuicao: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          percentual: number
+          profile_id: string
+          recebidos: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          percentual?: number
+          profile_id: string
+          recebidos?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          percentual?: number
+          profile_id?: string
+          recebidos?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_venda_distribuicao_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_venda_distribuicao_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      pos_venda_entrada_falhas: {
+        Row: {
+          created_at: string
+          erro: string | null
+          id: string
+          transacao_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          erro?: string | null
+          id?: string
+          transacao_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          erro?: string | null
+          id?: string
+          transacao_id?: string | null
         }
         Relationships: []
       }
@@ -21005,6 +21116,11 @@ export type Database = {
         Args: { p_deal_id: string; p_destino: string }
         Returns: Json
       }
+      pos_venda_encaminhar_bu: {
+        Args: { p_bu: string; p_deal_id: string; p_nota: string }
+        Returns: string
+      }
+      pos_venda_escolher_gerente: { Args: never; Returns: string }
       pos_venda_gravacoes_da_reuniao: {
         Args: { p_reuniao_id: string }
         Returns: {
@@ -21031,6 +21147,14 @@ export type Database = {
           p_transaction_id: string
         }
         Returns: Json
+      }
+      pos_venda_registrar_nota: {
+        Args: { p_deal_id: string; p_nota: string }
+        Returns: undefined
+      }
+      pos_venda_salvar_distribuicao: {
+        Args: { p_itens: Json }
+        Returns: undefined
       }
       pos_venda_tem_acesso: { Args: never; Returns: boolean }
       propagar_qualificacao: {
