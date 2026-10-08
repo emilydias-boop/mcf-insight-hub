@@ -178,11 +178,11 @@ export function ConsorcioCloserSummaryTable({
 
 
   // Conversão por PESSOA: um cliente que compra várias cotas conta uma vez.
+  // Vendas Realizadas = mesma base da Produção Gerada (pernas A+B+C).
   const totalTaxaVenda = totals.r1_realizada > 0
-
-    ? (totals.clientes / totals.r1_realizada) * 100
+    ? (vendasRealizadasTotal / totals.r1_realizada) * 100
     : 0;
-  const totalTicket = totals.clientes > 0 ? totals.credito / totals.clientes : null;
+  const totalTicket = vendasRealizadasTotal > 0 ? producaoTotal / vendasRealizadasTotal : null;
 
   const brl = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -233,7 +233,7 @@ export function ConsorcioCloserSummaryTable({
               </TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="Consórcio Efetivado ÷ Vendas Realizadas. Uma venda = um cliente, mesmo que ele contrate várias cotas."
+                title="Produção Gerada ÷ Vendas Realizadas (mesma base e mesma data). Uma venda = um cliente no mês."
               >
                 Ticket Médio
               </TableHead>
@@ -249,13 +249,13 @@ export function ConsorcioCloserSummaryTable({
           <TableBody>
             {closerRows.map((row) => {
               const cotas = cotasByCloser?.get(row.closer_id) || 0;
-              const clientes = clientesByCloser?.get(row.closer_id) || 0;
               const credito = creditoByCloser?.get(row.closer_id) || 0;
               const producao = producaoByCloser?.get(row.closer_id);
 
-              const ticket = clientes > 0 ? credito / clientes : null;
+              const vendasR = producao?.vendasRealizadas ?? 0;
+              const ticket = vendasR > 0 ? (producao?.credito ?? 0) / vendasR : null;
               const taxaVenda = row.r1_realizada > 0
-                ? (clientes / row.r1_realizada) * 100
+                ? (vendasR / row.r1_realizada) * 100
                 : 0;
               const noshowPct = row.r1_agendada > 0
                 ? (row.noshow / row.r1_agendada) * 100
@@ -497,8 +497,9 @@ export function ConsorcioCloserSummaryTable({
       </div>
 
       <p className="px-4 py-2 text-xs text-muted-foreground">
-        Vendas Realizadas conta clientes com proposta aceita no período (mesma base da Produção
-        Gerada). Cotas Contratadas segue a data de contratação na Embracon.
+        Vendas Realizadas conta clientes distintos na mesma base da Produção Gerada (propostas
+        aceitas e vendas avulsas sem proposta). Cotas Contratadas segue a data de contratação na
+        Embracon.
       </p>
 
       {pernaCCredito > 0 && (

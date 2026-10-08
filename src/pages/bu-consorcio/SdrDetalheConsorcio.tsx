@@ -47,6 +47,8 @@ import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
 import { useCRMPipelines } from "@/components/crm/PipelineSelector";
 import { formatMeetingStatus } from "@/utils/formatMeetingStatus";
 import { DealDetailsDrawer } from "@/components/crm/DealDetailsDrawer";
+import { VendasRealizadasLista } from "@/components/sdr/VendasRealizadasLista";
+import { useConsorcioProducaoGerada } from "@/hooks/useConsorcioProducaoGerada";
 
 const BU = "consorcio";
 
@@ -400,8 +402,12 @@ export default function SdrDetalheConsorcio() {
   const credito = cotasContratadas?.creditoBySdr.get(sdrEmail) || 0;
   const itensCotas = cotasContratadas?.itensBySdr.get(sdrEmail) || [];
   const itensClientes = cotasContratadas?.clientesItensBySdr.get(sdrEmail) || [];
-  const ticket = clientes > 0 ? credito / clientes : 0;
-  const convVendas = reunioes.realizadas.length > 0 ? (clientes / reunioes.realizadas.length) * 100 : 0;
+  // Vendas Realizadas: mesma base da Produção Gerada, creditada ao SDR que agendou.
+  const { data: producao, isLoading: loadingProducao } = useConsorcioProducaoGerada(startDate, endDate, BU);
+  const vendasSdr = producao?.vendasBySdr.get(sdrEmail) || { vendas: 0, credito: 0 };
+  const itensVendas = (producao?.vendasItens || []).filter((v) => v.sdrEmail === sdrEmail);
+  const ticket = vendasSdr.vendas > 0 ? vendasSdr.credito / vendasSdr.vendas : 0;
+  const convVendas = reunioes.realizadas.length > 0 ? (vendasSdr.vendas / reunioes.realizadas.length) * 100 : 0;
   const noShowPct =
     reunioes.agendadas.length > 0 ? (reunioes.noShows.length / reunioes.agendadas.length) * 100 : 0;
 
@@ -520,9 +526,9 @@ export default function SdrDetalheConsorcio() {
         />
         <KpiCard
           titulo="Vendas Realizadas"
-          valor={String(clientes)}
-          detalhe="Clientes distintos"
-          isLoading={loadingCotas}
+          valor={String(vendasSdr.vendas)}
+          detalhe="Clientes distintos · mesma base da Produção Gerada"
+          isLoading={loadingProducao}
         />
         <KpiCard
           titulo="Cotas Contratadas"
@@ -533,13 +539,13 @@ export default function SdrDetalheConsorcio() {
         <KpiCard titulo="Consórcio Efetivado" valor={moeda(credito)} isLoading={loadingCotas} />
         <KpiCard
           titulo="Ticket Médio"
-          valor={clientes > 0 ? moeda(ticket) : "—"}
-          isLoading={loadingCotas}
+          valor={vendasSdr.vendas > 0 ? moeda(ticket) : "—"}
+          isLoading={loadingProducao}
         />
         <KpiCard
           titulo={CONSORCIO_LABELS.convVendasReuniao}
           valor={`${convVendas.toFixed(1)}%`}
-          isLoading={loadingCotas || reunioes.isLoading}
+          isLoading={loadingProducao || reunioes.isLoading}
         />
       </div>
 
@@ -550,7 +556,7 @@ export default function SdrDetalheConsorcio() {
             {CONSORCIO_LABELS.reunioesRealizadas} ({reunioes.realizadas.length})
           </TabsTrigger>
           <TabsTrigger value="noshows">No-Shows ({reunioes.noShows.length})</TabsTrigger>
-          <TabsTrigger value="vendas">Vendas Realizadas ({clientes})</TabsTrigger>
+          <TabsTrigger value="vendas">Vendas Realizadas ({vendasSdr.vendas})</TabsTrigger>
           <TabsTrigger value="cotas">Cotas Contratadas ({cotas})</TabsTrigger>
         </TabsList>
 
@@ -602,12 +608,12 @@ export default function SdrDetalheConsorcio() {
           <Card className="bg-card border-border">
             <CardContent className="p-4 space-y-3">
               <p className="text-xs text-muted-foreground">
-                Uma linha por pessoa: {clientes} clientes, {cotas} cotas, {moeda(credito)} de
-                crédito. Vendas Realizadas conta pessoas, não cartas — um cliente com 3 cotas soma 1
-                aqui e 3 na aba Cotas Contratadas. Todas as cotas do cliente vão para o SDR da
-                última reunião de consórcio que ele agendou.
+                Uma linha por cliente no mês: {vendasSdr.vendas} vendas na mesma base da Produção
+                Gerada (propostas aceitas e vendas avulsas sem proposta). A venda vai para o SDR que
+                agendou a reunião de origem da proposta; sem ela, a última reunião de consórcio do
+                negócio.
               </p>
-              <ClientesTable itens={itensClientes} isLoading={loadingCotas} />
+              <VendasRealizadasLista itens={itensVendas} isLoading={loadingProducao} onAbrirLead={abrirLead} />
             </CardContent>
           </Card>
         </TabsContent>

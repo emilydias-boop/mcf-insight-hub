@@ -52,11 +52,12 @@ export interface ProducaoGeradaLinha {
   /** Vendas: propostas (perna A) + clientes distintos nas pernas B e C. */
   vendas: number;
   /**
-   * VENDAS REALIZADAS (Consórcio): clientes distintos com proposta aceita no
-   * período — só perna A, mesma âncora/filtros/atribuição da Produção Gerada.
-   * Unidade = cliente × mês da âncora (recompra em outro mês conta de novo).
-   * Cliente em dois closers no mesmo mês fica com o closer da proposta mais
-   * antiga do mês; no total ele conta uma vez só.
+   * VENDAS REALIZADAS (Consórcio): clientes distintos na MESMA base da Produção
+   * Gerada — pernas A + B + C, mesma âncora/filtros/atribuição de cada perna.
+   * Unidade = cliente × mês da âncora, deduplicada ENTRE as pernas (o mesmo
+   * cliente na A e na B no mesmo mês = 1). Recompra em outro mês conta de novo.
+   * Cliente em dois closers no mesmo mês fica com o closer do registro de
+   * âncora mais antiga do mês; no total ele conta uma vez só.
    */
   vendasRealizadas: number;
   /** Registros com `aceite_date` em mês anterior ao do lançamento (só sinaliza). */
@@ -100,7 +101,27 @@ export interface ProducaoGeradaItem {
   efetivado: boolean;
 }
 
+/** Uma venda (cliente × mês) — explosão exata do número Vendas Realizadas. */
+export interface VendaRealizadaItem {
+  key: string;
+  /** Perna do registro que definiu a venda (âncora mais antiga do mês). */
+  perna: "A" | "B" | "C";
+  nome: string | null;
+  dataAncora: string;
+  /** Produção Gerada somada de todos os registros do cliente no mês. */
+  credito: number;
+  dealId: string | null;
+  /** null = "Produção sem atribuição". */
+  closerId: string | null;
+  /** SDR que agendou (booked_by). null = sem SDR identificado. */
+  sdrEmail: string | null;
+}
+
 export interface ConsorcioProducaoGerada {
+  /** Vendas Realizadas por SDR (e-mail) e a Produção Gerada dessas vendas. */
+  vendasBySdr: Map<string, { vendas: number; credito: number }>;
+  vendasSemSdr: { vendas: number; credito: number };
+  vendasItens: VendaRealizadaItem[];
   byCloser: Map<string, ProducaoGeradaLinha>;
   /** Balde explícito: nunca descartamos nem chutamos atribuição. */
   semAtribuicao: ProducaoGeradaLinha;
@@ -129,6 +150,9 @@ const zero = (): ProducaoGeradaLinha => ({
 });
 
 const EMPTY: ConsorcioProducaoGerada = {
+  vendasBySdr: new Map(),
+  vendasSemSdr: { vendas: 0, credito: 0 },
+  vendasItens: [],
   byCloser: new Map(),
   semAtribuicao: zero(),
   total: zero(),
@@ -394,17 +418,20 @@ export function useConsorcioProducaoGerada(
 
       // Prioridade 0: reunião de origem gravada na proposta (origem_attendee_id).
       const origemParaCloser = new Map<string, string>();
+      /** attendee de origem → perfil de quem AGENDOU (`booked_by`). */
+      const origemBooker = new Map<string, string>();
       const origemIds = [...new Set(propostas.map((p: any) => p.origem_attendee_id).filter(Boolean) as string[])];
       for (const parte of chunk(origemIds)) {
         if (parte.length === 0) continue;
         const { data: atts } = await supabase
           .from("meeting_slot_attendees")
-          .select("id, meeting_slots (closer_id)")
+          .select("id, booked_by, meeting_slots (closer_id)")
           .in("id", parte);
         (atts || []).forEach((a: any) => {
           const cid = a?.meeting_slots?.closer_id;
           const canon = cid ? idCanonico.get(cid) : undefined;
           if (canon) origemParaCloser.set(a.id, canon);
+          if (a.booked_by) origemBooker.set(a.id, a.booked_by);
         });
       }
 
@@ -425,7 +452,35 @@ export function useConsorcioProducaoGerada(
           if (!k.startsWith("card:")) clientePorProposta.set(r.proposal_id, k);
         });
       }
-      const vendasMes = new Map<string, { closerId: string; ancora: string }>();
+      // VENDAS REALIZADAS — cliente × mês da âncora, deduplicado ENTRE as três
+      // pernas. O registro de âncora mais antiga do mês define closer e SDR;
+      // o crédito de todos os registros do cliente no mês soma na venda.
+      type VendaAcc = {
+        cliente: string;
+        closerId: string;
+        ancora: string;
+        perna: "A" | "B" | "C";
+        nome: string | null;
+        dealId: string | null;
+        origemId: string | null;
+        credito: number;
+      };
+      const vendasMes = new Map<string, VendaAcc>();
+      const regVenda = (v: VendaAcc) => {
+        if (!v.ancora) return;
+        const chave = `${v.cliente}|${v.ancora.slice(0, 7)}`;
+        const atual = vendasMes.get(chave);
+        if (!atual) {
+          vendasMes.set(chave, { ...v });
+          return;
+        }
+        const credito = atual.credito + v.credito;
+        if (v.ancora < atual.ancora) vendasMes.set(chave, { ...v, credito, nome: v.nome || atual.nome });
+        else {
+          atual.credito = credito;
+          if (!atual.nome) atual.nome = v.nome;
+        }
+      };
 
       propostas.forEach((p) => {
         const agg = cartasPorProposta.get(p.id);
@@ -438,16 +493,19 @@ export function useConsorcioProducaoGerada(
         if (!closerId && p.deal_id) closerId = dealParaCloserReuniao.get(p.deal_id)?.closerId;
         const alvo = closerId || SEM_ATRIBUICAO;
         add(alvo, agg.credito, agg.qtd, 1);
-        {
-          const ancoraVR = String(p.aceite_date || p.proposal_date || "").slice(0, 10);
-          const cliente =
+        regVenda({
+          cliente:
             clientePorProposta.get(p.id) ||
             (p.deal_id && dealContato.get(p.deal_id) ? `contato:${dealContato.get(p.deal_id)}` : null) ||
-            (p.deal_id ? `deal:${p.deal_id}` : `proposta:${p.id}`);
-          const chave = `${cliente}|${ancoraVR.slice(0, 7)}`;
-          const atual = vendasMes.get(chave);
-          if (!atual || ancoraVR < atual.ancora) vendasMes.set(chave, { closerId: alvo, ancora: ancoraVR });
-        }
+            (p.deal_id ? `deal:${p.deal_id}` : `proposta:${p.id}`),
+          closerId: alvo,
+          ancora: String(p.aceite_date || p.proposal_date || "").slice(0, 10),
+          perna: "A",
+          nome: (p.deal_id ? dealNome.get(p.deal_id) : null) || null,
+          dealId: p.deal_id || null,
+          origemId: origemId || null,
+          credito: agg.credito,
+        });
         addItem(
           alvo,
           {
@@ -590,9 +648,18 @@ export function useConsorcioProducaoGerada(
         const flag = antedatado(r);
         add(closerId, credito, 1, 0, flag ? 1 : 0, flag ? credito : 0);
         if (!pessoasPorCloserB.has(closerId)) pessoasPorCloserB.set(closerId, new Set());
-        pessoasPorCloserB
-          .get(closerId)!
-          .add(clientePessoaKey({ id: r.id, cpf: r.cpf, cnpj: r.cnpj, nome_completo: r.nome_completo || r.razao_social }));
+        const clienteB = clientePessoaKey({ id: r.id, cpf: r.cpf, cnpj: r.cnpj, nome_completo: r.nome_completo || r.razao_social });
+        pessoasPorCloserB.get(closerId)!.add(clienteB);
+        regVenda({
+          cliente: clienteB,
+          closerId,
+          ancora: r.aceite_date ? String(r.aceite_date).slice(0, 10) : "",
+          perna: "B",
+          nome: r.nome_completo || r.razao_social || null,
+          dealId: r.deal_id || null,
+          origemId: null,
+          credito,
+        });
         addItem(
           closerId,
           {
@@ -716,6 +783,16 @@ export function useConsorcioProducaoGerada(
         add(closerId, credito, 1, 0);
         if (!pessoasPorCloserC.has(closerId)) pessoasPorCloserC.set(closerId, new Set());
         pessoasPorCloserC.get(closerId)!.add(clientePessoaKey(card));
+        regVenda({
+          cliente: clientePessoaKey(card),
+          closerId,
+          ancora: card.data_contratacao ? String(card.data_contratacao).slice(0, 10) : "",
+          perna: "C",
+          nome: card.nome_completo || null,
+          dealId: null,
+          origemId: null,
+          credito,
+        });
         addItem(closerId, {
           key: `C:${card.id}`,
           perna: "C",
@@ -732,12 +809,77 @@ export function useConsorcioProducaoGerada(
         pernaC.cartas += 1;
       });
 
-      vendasMes.forEach(({ closerId }) => {
-        const l = byCloser.get(closerId) || zero();
+      // ── SDR da venda ──────────────────────────────────────────────────────
+      // "Quem agendou" = meeting_slot_attendees.booked_by (perfil → e-mail).
+      // 1) reunião de origem da proposta; 2) senão, ÚLTIMA reunião elegível do
+      // negócio conduzida por closer desta BU (mesma regra que a aba SDRs já
+      // usava: status ≠ cancelled/invited, ordenada por booked_at/created_at).
+      const dealsVenda = [...new Set([...vendasMes.values()].map((v) => v.dealId).filter(Boolean) as string[])];
+      const dealUltimoBooker = new Map<string, { by: string; at: string }>();
+      for (const parte of chunk(dealsVenda)) {
+        if (parte.length === 0) continue;
+        const { data: atts } = await supabase
+          .from("meeting_slot_attendees")
+          .select("deal_id, booked_by, booked_at, created_at, status, meeting_slots (closer_id)")
+          .in("deal_id", parte);
+        (atts || []).forEach((a: any) => {
+          if (!a.deal_id || !a.booked_by) return;
+          if (a.status === "cancelled" || a.status === "invited") return;
+          const cid = a?.meeting_slots?.closer_id;
+          if (!cid || !idCanonico.has(cid)) return;
+          const at = String(a.booked_at || a.created_at || "");
+          const atual = dealUltimoBooker.get(a.deal_id);
+          if (!atual || at.localeCompare(atual.at) > 0) dealUltimoBooker.set(a.deal_id, { by: a.booked_by, at });
+        });
+      }
+      const bookerIds = [
+        ...new Set([...origemBooker.values(), ...[...dealUltimoBooker.values()].map((b) => b.by)]),
+      ];
+      const bookerEmail = new Map<string, string>();
+      for (const parte of chunk(bookerIds)) {
+        if (parte.length === 0) continue;
+        const { data: profs } = await supabase.from("profiles").select("id, email").in("id", parte);
+        (profs || []).forEach((p) => {
+          const ek = emailKey(p.email);
+          if (ek) bookerEmail.set(p.id, ek);
+        });
+      }
+
+      const vendasBySdr = new Map<string, { vendas: number; credito: number }>();
+      const vendasSemSdr = { vendas: 0, credito: 0 };
+      const vendasItens: VendaRealizadaItem[] = [];
+      const pernaLinha = { A: pernaA, B: pernaB, C: pernaC };
+      vendasMes.forEach((v, chave) => {
+        const l = byCloser.get(v.closerId) || zero();
         l.vendasRealizadas += 1;
-        byCloser.set(closerId, l);
-        pernaA.vendasRealizadas += 1;
+        byCloser.set(v.closerId, l);
+        pernaLinha[v.perna].vendasRealizadas += 1;
+
+        const bookerId =
+          (v.origemId ? origemBooker.get(v.origemId) : undefined) ||
+          (v.dealId ? dealUltimoBooker.get(v.dealId)?.by : undefined);
+        const sdrEmail = bookerId ? bookerEmail.get(bookerId) || null : null;
+        if (sdrEmail) {
+          const s = vendasBySdr.get(sdrEmail) || { vendas: 0, credito: 0 };
+          s.vendas += 1;
+          s.credito += v.credito;
+          vendasBySdr.set(sdrEmail, s);
+        } else {
+          vendasSemSdr.vendas += 1;
+          vendasSemSdr.credito += v.credito;
+        }
+        vendasItens.push({
+          key: chave,
+          perna: v.perna,
+          nome: v.nome,
+          dataAncora: v.ancora,
+          credito: v.credito,
+          dealId: v.dealId,
+          closerId: v.closerId === SEM_ATRIBUICAO ? null : v.closerId,
+          sdrEmail,
+        });
       });
+      vendasItens.sort((a, b) => b.dataAncora.localeCompare(a.dataAncora));
 
       pessoasPorCloserC.forEach((pessoas, closerId) => {
         add(closerId, 0, 0, pessoas.size);
@@ -800,6 +942,9 @@ export function useConsorcioProducaoGerada(
       );
 
       return {
+        vendasBySdr,
+        vendasSemSdr,
+        vendasItens,
         byCloser,
         semAtribuicao,
         total,

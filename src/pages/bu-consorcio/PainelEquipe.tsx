@@ -387,8 +387,8 @@ export default function ConsorcioPainelEquipe() {
     // Venda fechada = Cotas Contratadas (mesma fonte do card e do Total da tabela,
     // idêntica nas duas abas).
     const totalContratos = cotasContratadas?.total || 0;
-    // Conversão por PESSOA: distinct global de clientes ÷ R1 realizadas.
-    const vendasRealizadas = cotasContratadas?.totalClientes || 0;
+    // Conversão: Vendas Realizadas (mesma base da Produção Gerada) ÷ R1 realizadas.
+    const vendasRealizadas = producaoGerada?.total.vendasRealizadas || 0;
     return {
       sdrCount: closerRows.length,
       totalAgendamentos: t.agendamentos,
@@ -400,7 +400,7 @@ export default function ConsorcioPainelEquipe() {
       taxaConversao: t.r1Realizada > 0 ? (vendasRealizadas / t.r1Realizada) * 100 : 0,
       taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
-  }, [fatos, cotasContratadas]);
+  }, [fatos, cotasContratadas, producaoGerada]);
 
   // Consórcio team targets
   const canEditGoals = role && ['admin', 'manager', 'coordenador'].includes(role);
@@ -432,10 +432,10 @@ export default function ConsorcioPainelEquipe() {
       totalContratos: cotasContratadas?.total || 0,
       totalOutside: 0,
       totalR1Agendada: t.r1Agendada,
-      taxaConversao: t.r1Realizada > 0 ? ((cotasContratadas?.totalClientes || 0) / t.r1Realizada) * 100 : 0,
+      taxaConversao: t.r1Realizada > 0 ? ((producaoGerada?.total.vendasRealizadas || 0) / t.r1Realizada) * 100 : 0,
       taxaNoShow: t.r1Agendada > 0 ? (t.noShows / t.r1Agendada) * 100 : 0,
     };
-  }, [fatos, cotasContratadas]);
+  }, [fatos, cotasContratadas, producaoGerada]);
 
   const enrichedKPIs = useMemo(() => ({
     ...pipelineFilteredKPIs,
@@ -672,6 +672,8 @@ export default function ConsorcioPainelEquipe() {
                 propostasEnviadasBySdr={propostasData}
                 cotasBySdr={cotasContratadas?.bySdr}
                 clientesBySdr={cotasContratadas?.clientesBySdr}
+                vendasBySdr={producaoGerada?.vendasBySdr}
+                vendasSemSdr={producaoGerada?.vendasSemSdr}
                 totalClientesDistintos={cotasContratadas?.totalClientes || 0}
                 creditoBySdr={cotasContratadas?.creditoBySdr}
                 cotasSemVinculo={cotasContratadas?.semVinculo || 0}
