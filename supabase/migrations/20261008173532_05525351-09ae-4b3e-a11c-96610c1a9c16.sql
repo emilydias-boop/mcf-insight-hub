@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.consorcio_vendas_realizadas(date, date, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consorcio_vendas_realizadas(date, date, text) TO service_role;
