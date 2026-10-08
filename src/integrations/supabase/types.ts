@@ -19656,6 +19656,10 @@ export type Database = {
         Args: { _deal_id: string }
         Returns: string
       }
+      consorcio_vendas_realizadas: {
+        Args: { p_bu?: string; p_fim: string; p_ini: string }
+        Returns: number
+      }
       corrigir_agendador_reuniao: {
         Args: { p_attendee_id: string; p_booked_by: string }
         Returns: Json
