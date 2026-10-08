@@ -76,8 +76,8 @@ export function VincularVendaDiretaDialog({ open, onOpenChange, attendeeId, atte
             ) : vendas.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground text-sm">
                 {busca
-                  ? 'Nenhuma venda direta (A003) sem vínculo com essa busca.'
-                  : 'Nenhuma venda direta (A003) sem vínculo encontrada. Use a busca para procurar em todo o histórico.'}
+                  ? 'Nenhuma venda direta (A003 / A001) sem vínculo com essa busca.'
+                  : 'Nenhuma venda direta (A003 / A001) sem vínculo encontrada. Use a busca para procurar em todo o histórico.'}
               </div>
             ) : (
               vendas.map((v) => {
