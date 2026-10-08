@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { calcTicketParceria, TICKET_PARCERIA_TOOLTIP, type TicketParceria, type VendaTicket } from '@/lib/ticketParceria';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -67,6 +68,7 @@ export const ALLOWED_INCORPORADOR_CATEGORIES = new Set([
   'ob_vitalicio',
   'contrato-anticrise',
   'p2',
+  'recorrencia',
 ]);
 
 export type ModoAgrupamento = 'closer' | 'sdr' | 'canal';
@@ -107,6 +109,7 @@ interface CloserRow {
   p2Count?: number;
   vendasComBruto?: number;
   outsideVendas?: number;
+  ticketParceria?: TicketParceria;
 }
 
 export function CloserRevenueSummaryTable({
@@ -187,6 +190,15 @@ export function CloserRevenueSummaryTable({
     const outsidePorLinha = new Map<string, Set<string>>();
     const vendasTotal = new Map<string, number>();
     const outsideTotal = new Set<string>();
+    // Vendas consolidadas p/ ticket de parceria (mesmo conjunto da coluna Vendas)
+    const ticketPorLinha = new Map<string, Map<string, VendaTicket>>();
+    const ticketTotal = new Map<string, VendaTicket>();
+    const addTicket = (m: Map<string, VendaTicket>, k: string, tx: Transaction, gross: number) => {
+      const v = m.get(k) || { productName: tx.product_name, bruto: 0, liquido: 0, refunded: false };
+      v.bruto += gross; v.liquido += tx.net_value || 0;
+      if (tx.sale_status === 'refunded') v.refunded = true;
+      m.set(k, v);
+    };
     let p2Pagamentos = 0;
     let p2Liquido = 0;
     const track = (rowId: string, tx: Transaction, gross: number, outside = false) => {
@@ -200,6 +212,9 @@ export function CloserRevenueSummaryTable({
       const m = vendasPorLinha.get(rowId) || new Map<string, number>();
       m.set(k, (m.get(k) || 0) + gross); vendasPorLinha.set(rowId, m);
       vendasTotal.set(k, (vendasTotal.get(k) || 0) + gross);
+      const tm = ticketPorLinha.get(rowId) || new Map<string, VendaTicket>();
+      addTicket(tm, k, tx, gross); ticketPorLinha.set(rowId, tm);
+      addTicket(ticketTotal, `${rowId}::${k}`, tx, gross);
     };
     const finalize = (rows: CloserRow[]) => {
       for (const row of rows) {
@@ -207,11 +222,17 @@ export function CloserRevenueSummaryTable({
         row.vendas = m ? m.size : 0;
         row.vendasComBruto = m ? Array.from(m.values()).filter((g) => g > 0).length : 0;
         row.outsideVendas = outsidePorLinha.get(row.id)?.size || 0;
+        row.ticketParceria = calcTicketParceria(Array.from(ticketPorLinha.get(row.id)?.values() || []));
       }
       return {
         totalVendas: vendasTotal.size,
         totalVendasComBruto: Array.from(vendasTotal.values()).filter((g) => g > 0).length,
         totalOutsideVendas: outsideTotal.size,
+        totalTicketParceria: calcTicketParceria(
+          Array.from(ticketTotal.entries())
+            .filter(([k]) => rows.some((r) => k.startsWith(`${r.id}::`)))
+            .map(([, v]) => v),
+        ),
       };
     };
     const closerTotals = new Map<string, CloserRow>();
@@ -520,12 +541,22 @@ export function CloserRevenueSummaryTable({
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
-                            <TooltipContent>Bruto ÷ vendas com bruto (P2 fica fora, bruto 0 por regra)</TooltipContent>
+                            <TooltipContent>{TICKET_PARCERIA_TOOLTIP}</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </span>
                     </TableHead>
-                    <TableHead className="text-right">Ticket Médio Líquido</TableHead>
+                    <TableHead className="text-right">
+                      <span className="inline-flex items-center gap-1">
+                        Ticket Médio Líquido
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                            <TooltipContent>{TICKET_PARCERIA_TOOLTIP}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </span>
+                    </TableHead>
                     <TableHead className="text-right">% do Total</TableHead>
                     <TableHead className="text-right">Outside</TableHead>
                     <TableHead className="text-right">Fat. Outside</TableHead>
@@ -577,10 +608,10 @@ export function CloserRevenueSummaryTable({
                           {semValor ? '-' : formatCurrency(row.net)}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {semValor ? '-' : formatCurrency((row.vendasComBruto || 0) > 0 ? row.gross / (row.vendasComBruto || 1) : 0)}
+                          {row.ticketParceria?.ticketBruto != null ? formatCurrency(row.ticketParceria.ticketBruto) : '—'}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {semValor ? '-' : formatCurrency((row.vendas || 0) > 0 ? row.net / (row.vendas || 1) : 0)}
+                          {row.ticketParceria?.ticketLiquido != null ? formatCurrency(row.ticketParceria.ticketLiquido) : '—'}
                         </TableCell>
                         <TableCell className="text-right">
                           {semValor ? '-' : (summaryData.totalGross > 0
@@ -611,10 +642,10 @@ export function CloserRevenueSummaryTable({
                       {formatCurrency(summaryData.totalNet)}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold">
-                      {formatCurrency(summaryData.totalVendasComBruto > 0 ? summaryData.totalGross / summaryData.totalVendasComBruto : 0)}
+                      {summaryData.totalTicketParceria.ticketBruto != null ? formatCurrency(summaryData.totalTicketParceria.ticketBruto) : '—'}
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold">
-                      {formatCurrency(summaryData.totalVendas > 0 ? summaryData.totalNet / summaryData.totalVendas : 0)}
+                      {summaryData.totalTicketParceria.ticketLiquido != null ? formatCurrency(summaryData.totalTicketParceria.ticketLiquido) : '—'}
                     </TableCell>
                     <TableCell className="text-right font-bold">100%</TableCell>
                     <TableCell className="text-right font-bold text-muted-foreground">
