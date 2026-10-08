@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.pos_venda_checar_entregaveis() FROM PUBLIC, anon, authenticated;
