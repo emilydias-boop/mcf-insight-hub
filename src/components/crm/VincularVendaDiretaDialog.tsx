@@ -42,12 +42,12 @@ export function VincularVendaDiretaDialog({ open, onOpenChange, attendeeId, atte
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Tag className="h-5 w-5 text-violet-500" />
-            Vincular venda direta (A003)
+            Vincular venda direta (A003 / A001)
           </DialogTitle>
           <DialogDescription>
-            Amarrar uma <strong>venda direta</strong> de A003 - Anticrise Completo a <strong>{attendeeName}</strong>.
+            Amarrar uma <strong>venda direta</strong> (A003 - Anticrise Completo ou A001 - Incorporador Completo em oferta de venda direta) a <strong>{attendeeName}</strong>.
             <span className="block text-xs mt-1 opacity-75">
-              Venda direta NÃO é contrato pago: não move a etapa do Kanban e não entra no total de Contratos. Para o contrato (A000), use "Vincular Contrato".
+              Venda direta NÃO é contrato pago: não entra no total de Contratos. Por ser compra de parceria, o lead vai para Venda realizada no Kanban. A venda fica com o closer desta R1. Para o contrato (A000), use "Vincular Contrato".
             </span>
           </DialogDescription>
         </DialogHeader>

@@ -1234,7 +1234,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </Button>
                     )}
 
-                    {/* Vincular venda direta (A003) — NÃO é contrato pago; qualquer status */}
+                    {/* Vincular venda direta (A003 / A001) — NÃO é contrato pago; qualquer status */}
                     {(canLinkContract || !isSdr) && activeBU !== 'consorcio' && (
                       <Button
                         variant="outline"
@@ -1270,7 +1270,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   </div>
                 )}
 
-                {/* Venda direta vinculada (A003) — separada do contrato */}
+                {/* Venda direta vinculada (A003 / A001) — separada do contrato */}
                 {activeBU !== 'consorcio' && (
                   <VendaDiretaVinculadaBlock
                     attendeeId={selectedParticipant.id}
@@ -1933,7 +1933,7 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
   );
 }
 
-/** Venda direta (A003) vinculada ao participante. NÃO é contrato pago. */
+/** Venda direta (A003 / A001) vinculada ao participante. NÃO é contrato pago. */
 function VendaDiretaVinculadaBlock({ attendeeId, canUnlink }: { attendeeId: string; canUnlink: boolean }) {
   const { data: vendas = [] } = useVendasDiretasDoParticipante(attendeeId);
   const desvincular = useDesvincularVendaDireta();
@@ -1942,7 +1942,7 @@ function VendaDiretaVinculadaBlock({ attendeeId, canUnlink }: { attendeeId: stri
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <Tag className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-        <h4 className="font-medium text-sm">Venda direta vinculada (A003 — não é contrato pago)</h4>
+        <h4 className="font-medium text-sm">Venda direta vinculada (A003 / A001 — não é contrato pago)</h4>
       </div>
       {vendas.map((v) => (
         <div key={v.id} className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 text-sm">

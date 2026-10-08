@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { VendaSemVinculo, VendaVinculada } from '@/hooks/useVincularVendaR2';
 
 /**
- * Venda direta (A003 - Anticrise Completo) vinculada a uma R1.
+ * Venda direta (A003 - Anticrise Completo ou A001 em oferta de venda direta) vinculada a uma R1.
  * Métrica irmã de Contrato Pago: NÃO move etapa do Kanban, NÃO marca contrato pago
  * e não toca em contract_paid_at nem em caucoes_efetivas.
  */
