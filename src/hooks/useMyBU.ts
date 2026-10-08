@@ -2,7 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type BusinessUnit = 'incorporador' | 'consorcio' | 'credito' | 'projetos' | 'leilao' | 'marketing' | 'solar';
+export type BusinessUnit = 'incorporador' | 'consorcio' | 'credito' | 'projetos' | 'leilao' | 'marketing' | 'solar' | 'pos_venda';
 
 export const BU_OPTIONS: { value: BusinessUnit | ""; label: string }[] = [
   { value: "", label: "Nenhuma" },
@@ -13,6 +13,7 @@ export const BU_OPTIONS: { value: BusinessUnit | ""; label: string }[] = [
   { value: "leilao", label: "BU - Leilão" },
   { value: "marketing", label: "BU - Marketing" },
   { value: "solar", label: "BU - MCF Solar" },
+  { value: "pos_venda", label: "BU - Pós Venda" },
 ];
 
 export function useMyBU() {

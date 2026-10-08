@@ -40,6 +40,7 @@ import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
 import { cn } from "@/lib/utils";
 import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelector";
 import { AnamneseExternaButton, getAnamneseV2 } from "./AnamneseExternaButton";
+import { isPosVendaDeal, precisaVerificarHarvey } from "@/lib/posVenda";
 import { LeadTotalCompradoBadge } from "./LeadTotalCompradoBadge";
 import type { TotaisCliente } from "@/hooks/useTotaisPorCliente";
 import { isSemInteresseStageName } from '@/lib/lossReasons';
@@ -404,6 +405,12 @@ export const DealKanbanCard = ({
               </Badge>
             );
           })()}
+          {/* Pós Venda: anamnese não preenchida → verificar no HARVEY */}
+          {isPosVendaDeal(deal) && precisaVerificarHarvey(deal) && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-destructive/40 text-destructive" title="A ficha de anamnese ainda não chegou. Verifique o cadastro do cliente no HARVEY.">
+              Verificar anamnese no HARVEY
+            </Badge>
+          )}
           {/* Anamnese vinda do encaminhamento externo (ENCAMINHADO GR) */}
           {anamneseExterna && (
             <AnamneseExternaButton anamnese={anamneseExterna} clienteNome={deal.name} />

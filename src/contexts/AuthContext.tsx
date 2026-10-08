@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { getRolesFromToken } from '@/utils/jwt';
 import { useInactivityLogout } from '@/hooks/useInactivityLogout';
 
-type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo' | 'cobranca_consorcio';
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh' | 'gr' | 'marketing' | 'assistente_administrativo' | 'cobranca_consorcio' | 'gerente_relacionamento';
 
 const ROLE_PRIORITY: Record<string, number> = {
   admin: 1,
@@ -21,6 +21,7 @@ const ROLE_PRIORITY: Record<string, number> = {
   marketing: 10,
   sdr: 11,
   viewer: 12,
+  gerente_relacionamento: 13,
 };
 
 // Timeout constants

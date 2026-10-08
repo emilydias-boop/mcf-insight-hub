@@ -95,7 +95,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType, ROLE_LABELS } from "@/types/user-management";
 import { useWaEnvioStatus } from "@/hooks/wa/useWaEnvioStatus";
 
-type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo" | "marketing" | "cobranca_consorcio";
+type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro" | "gr" | "assistente_administrativo" | "marketing" | "cobranca_consorcio" | "gerente_relacionamento";
 
 // Sub-sub-item (3º nível)
 interface SubSubItem {
@@ -221,6 +221,16 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Painel Comercial", url: "/credito/painel-comercial" },
       { title: "CRM", url: "/credito/crm" },
+    ],
+  },
+
+  // BU - PÓS VENDA (criada 2026-10-08)
+  {
+    title: "BU - Pós Venda",
+    icon: Building2,
+    requiredRoles: ["admin", "gerente_relacionamento"],
+    items: [
+      { title: "CRM", url: "/pos-venda/crm" },
     ],
   },
 
