@@ -13829,6 +13829,42 @@ export type Database = {
           },
         ]
       }
+      pos_venda_anamnese_pendente: {
+        Row: {
+          anamnese: Json
+          aplicada_em: string | null
+          created_at: string
+          deal_id: string | null
+          email: string | null
+          external_id: string | null
+          id: string
+          phone_suffix: string | null
+          updated_at: string
+        }
+        Insert: {
+          anamnese: Json
+          aplicada_em?: string | null
+          created_at?: string
+          deal_id?: string | null
+          email?: string | null
+          external_id?: string | null
+          id?: string
+          phone_suffix?: string | null
+          updated_at?: string
+        }
+        Update: {
+          anamnese?: Json
+          aplicada_em?: string | null
+          created_at?: string
+          deal_id?: string | null
+          email?: string | null
+          external_id?: string | null
+          id?: string
+          phone_suffix?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       premiacao_ganhadores: {
         Row: {
           created_at: string
@@ -20824,6 +20860,28 @@ export type Database = {
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
       phone_key_br: { Args: { _raw: string }; Returns: string }
       pode_editar_meta_sdr: { Args: { p_sdr_id: string }; Returns: boolean }
+      pos_venda_aplicar_anamnese_pendente: {
+        Args: { p_deal_id: string }
+        Returns: boolean
+      }
+      pos_venda_concluir_viabilidade: {
+        Args: { p_deal_id: string; p_destino: string }
+        Returns: Json
+      }
+      pos_venda_registrar_cliente: {
+        Args: {
+          p_amount: number
+          p_email: string
+          p_fonte: string
+          p_name: string
+          p_paid_at: string
+          p_phone: string
+          p_product_code: string
+          p_product_name: string
+          p_transaction_id: string
+        }
+        Returns: Json
+      }
       propagar_qualificacao: {
         Args: {
           _deal_id: string

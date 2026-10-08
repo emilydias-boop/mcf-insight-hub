@@ -29,6 +29,8 @@ import { CopyLeadsFormatDialog, buildCopyLeadData, CopyLeadData } from './CopyLe
 import { useTotaisPorCliente, normalizarEmail } from '@/hooks/useTotaisPorCliente';
 import { KanbanColunaServidor } from './KanbanColunaServidor';
 import { useKanbanContagem, invalidarKanban } from '@/hooks/useKanbanServidor';
+import { PosVendaDestinoDialog } from './pos-venda/PosVendaDestinoDialog';
+import { isPosVendaDeal, POS_VENDA_CONCLUIDA_STAGE_ID } from '@/lib/posVenda';
 
 interface Deal {
   id: string;
@@ -74,6 +76,7 @@ export const DealKanbanBoard = ({
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
+  const [posVendaDestino, setPosVendaDestino] = useState<{ dealId: string; dealName: string } | null>(null);
   const [pendingLossMove, setPendingLossMove] = useState<{
     dealId: string; newStageId: string; oldStageId: string; dealName: string;
   } | null>(null);
@@ -273,6 +276,12 @@ export const DealKanbanBoard = ({
       )
     ) {
       toast.info('Use os botões da esteira no painel do negócio para avançar esta etapa.');
+      return;
+    }
+
+    // Pós Venda: concluir viabilidade exige escolher o destino (Crédito/Consórcio)
+    if (isPosVendaDeal(deal) && newStageId === POS_VENDA_CONCLUIDA_STAGE_ID) {
+      setPosVendaDestino({ dealId, dealName: deal?.name || '' });
       return;
     }
 
@@ -524,6 +533,12 @@ export const DealKanbanBoard = ({
         newStageName={stageChangeModal.newStageName}
       />
 
+      <PosVendaDestinoDialog
+        open={!!posVendaDestino}
+        dealId={posVendaDestino?.dealId ?? null}
+        dealName={posVendaDestino?.dealName}
+        onOpenChange={(o) => { if (!o) setPosVendaDestino(null); }}
+      />
       <LossReasonDialog
         open={!!pendingLossMove}
         onOpenChange={(open) => { if (!open) setPendingLossMove(null); }}
