@@ -140,6 +140,10 @@ export function ConsorcioCloserSummaryTable({
   // Produção Gerada: total isolado das outras colunas. Soma TODAS as linhas do
   // hook (mesmo de closer que não aparece na tabela) mais o balde sem
   // atribuição, para o Total nunca esconder crédito.
+  // Vendas Realizadas (regra nova): clientes com proposta aceita, mesma base e
+  // atribuição da Produção Gerada. Cada cliente-mês está em uma única linha.
+  let vendasRealizadasTotal = producaoSemAtribuicao?.vendasRealizadas || 0;
+  producaoByCloser?.forEach((l) => { vendasRealizadasTotal += l.vendasRealizadas; });
   let producaoTotal = producaoSemAtribuicao?.credito || 0;
   let producaoAntedatados = producaoSemAtribuicao?.antedatados || 0;
   let producaoAntedatadosCredito = producaoSemAtribuicao?.antedatadosCredito || 0;
@@ -204,7 +208,7 @@ export function ConsorcioCloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead
                 className="text-muted-foreground text-center font-medium whitespace-nowrap"
-                title="CLIENTES distintos que contrataram ao menos uma cota no período (identidade pelo CPF/CNPJ do titular, fallback no nome). Diferente de 'Cotas Contratadas': um cliente com 3 cotas conta 1 aqui e 3 ali. Cada cliente aparece em uma única linha, então as linhas somam o Total."
+                title="CLIENTES distintos com proposta aceita no período (mesma base, data e atribuição da Produção Gerada; identidade pelo CPF/CNPJ do titular, fallback no nome). Um cliente com 3 cartas conta 1. Cada cliente aparece em uma única linha, então as linhas somam o Total."
               >
                 Vendas Realizadas
               </TableHead>
@@ -284,7 +288,7 @@ export function ConsorcioCloserSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
-                      {clientes}
+                      {producao?.vendasRealizadas ?? 0}
                     </Badge>
                   </TableCell>
                   <TableCell
@@ -360,7 +364,7 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">{clientesSemCloser}</TableCell>
+                <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">{cotasSemCloser}</TableCell>
 
@@ -386,7 +390,7 @@ export function ConsorcioCloserSummaryTable({
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
                 <TableCell className="text-center">—</TableCell>
-                <TableCell className="text-center">—</TableCell>
+                <TableCell className="text-center">{producaoSemAtribuicao.vendasRealizadas || "—"}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {brl(producaoSemAtribuicao.credito)}
                 </TableCell>
@@ -438,7 +442,7 @@ export function ConsorcioCloserSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/30">
-                  {totals.clientes}
+                  {vendasRealizadasTotal}
                 </Badge>
               </TableCell>
               <TableCell
@@ -493,8 +497,8 @@ export function ConsorcioCloserSummaryTable({
       </div>
 
       <p className="px-4 py-2 text-xs text-muted-foreground">
-        Vendas Realizadas conta pessoas, não cartas: um cliente com 3 cotas soma 1 aqui e 3 em
-        Cotas Contratadas. O Total é o mesmo nas abas SDRs e Closers.
+        Vendas Realizadas conta clientes com proposta aceita no período (mesma base da Produção
+        Gerada). Cotas Contratadas segue a data de contratação na Embracon.
       </p>
 
       {pernaCCredito > 0 && (
