@@ -82,5 +82,11 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
+  // Senha provisória: obriga a troca antes de usar o sistema
+  if ((user as any).user_metadata?.must_change_password) {
+    return <Navigate to="/reset-password" replace />;
+  }
+
+
   return <>{children}</>;
 };
