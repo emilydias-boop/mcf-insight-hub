@@ -52,7 +52,7 @@ const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
     'visao-geral', 'contatos', 'negocios',
     'agenda', 'discador', 'meu-historico', 'meus-no-shows', 'configuracoes'
   ],
-  pos_venda: ['visao-geral', 'contatos', 'negocios', 'discador'],
+  pos_venda: ['visao-geral', 'contatos', 'negocios', 'agenda-pos-venda', 'discador'],
 };
 
 interface BUCRMLayoutProps {
@@ -102,6 +102,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     { key: 'negocios', to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
     // { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle }, // Oculto até telefones disponíveis
     { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
+    { key: 'agenda-pos-venda', to: `${basePath}/agenda`, label: 'Agenda de Reuniões', icon: CalendarDays },
     { key: 'discador', to: `${basePath}/discador`, label: 'Discador', icon: Phone },
     { key: 'meu-historico', to: `${basePath}/meu-historico`, label: 'Meu Histórico', icon: History },
     { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },

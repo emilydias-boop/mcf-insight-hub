@@ -13865,6 +13865,73 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_venda_reunioes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deal_id: string
+          duracao_min: number
+          gerente_id: string
+          id: string
+          inicio: string
+          link_reuniao: string | null
+          observacao: string | null
+          status: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deal_id: string
+          duracao_min?: number
+          gerente_id: string
+          id?: string
+          inicio: string
+          link_reuniao?: string | null
+          observacao?: string | null
+          status?: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deal_id?: string
+          duracao_min?: number
+          gerente_id?: string
+          id?: string
+          inicio?: string
+          link_reuniao?: string | null
+          observacao?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_venda_reunioes_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_venda_reunioes_gerente_id_fkey"
+            columns: ["gerente_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_venda_reunioes_gerente_id_fkey"
+            columns: ["gerente_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       premiacao_ganhadores: {
         Row: {
           created_at: string
@@ -20868,6 +20935,19 @@ export type Database = {
         Args: { p_deal_id: string; p_destino: string }
         Returns: Json
       }
+      pos_venda_gravacoes_da_reuniao: {
+        Args: { p_reuniao_id: string }
+        Returns: {
+          duration_minutes: number
+          highlights: Json
+          id: string
+          ingest_status: string
+          started_at: string
+          summary: Json
+          title: string
+          transcript: Json
+        }[]
+      }
       pos_venda_registrar_cliente: {
         Args: {
           p_amount: number
@@ -20882,6 +20962,7 @@ export type Database = {
         }
         Returns: Json
       }
+      pos_venda_tem_acesso: { Args: never; Returns: boolean }
       propagar_qualificacao: {
         Args: {
           _deal_id: string

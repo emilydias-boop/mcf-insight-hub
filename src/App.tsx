@@ -66,6 +66,7 @@ const CRM = lazy(() => import("./pages/CRM"));
 const CRMOverview = lazy(() => import("./pages/crm/Overview"));
 const Contatos = lazy(() => import("./pages/crm/Contatos"));
 const Negocios = lazy(() => import("./pages/crm/Negocios"));
+const AgendaPosVenda = lazy(() => import("./pages/pos-venda/AgendaPosVenda"));
 const Discador = lazy(() => import("./pages/crm/Discador"));
 const Origens = lazy(() => import("./pages/crm/Origens"));
 const Grupos = lazy(() => import("./pages/crm/Grupos"));
@@ -302,6 +303,7 @@ const App = () => (
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />
+                <Route path="agenda" element={<AgendaPosVenda />} />
                 <Route path="discador" element={<Discador />} />
               </Route>
 
