@@ -1,5 +1,6 @@
-/** Ticket médio de parceria: só A001, A003, A009, R001, R009 (sem renovação, sem reembolso). */
-export const TICKET_PARCERIA_TOOLTIP = 'Só parceria: A001, A003, A009, R001, R009 (sem renovação, sem reembolso)';
+/** Ticket médio de parceria: só vendas novas A001, A003, A009, R001, R009, com bruto > 0. */
+export const TICKET_PARCERIA_TOOLTIP =
+  'Só vendas novas de parceria: A001, A003, A009, R001, R009 (sem renovação, sem reembolso, sem parcela de plano anterior)';
 
 const PREFIXOS = ['a001', 'a003', 'a009', 'r001', 'r009'];
 
