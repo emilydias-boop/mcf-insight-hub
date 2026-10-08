@@ -3,7 +3,7 @@ import { calcTicketParceria, isProdutoTicketParceria } from './ticketParceria';
 
 // 1) Só os produtos de parceria, sem renovação.
 assert.equal(isProdutoTicketParceria('A001 - Consórcio'), true);
-assert.equal(isProdutoTicketParceria(' a003 ', true), true);
+assert.equal(isProdutoTicketParceria(' a003 '), true);
 assert.equal(isProdutoTicketParceria('R009 - Plano'), true);
 assert.equal(isProdutoTicketParceria('A005/P2'), false);
 assert.equal(isProdutoTicketParceria('A000'), false);
