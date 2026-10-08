@@ -2637,6 +2637,30 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_bruto_recorrencia_2026_10: {
+        Row: {
+          backed_at: string | null
+          gross_override: number | null
+          id: string
+          product_price: number | null
+          total_installments: number | null
+        }
+        Insert: {
+          backed_at?: string | null
+          gross_override?: number | null
+          id: string
+          product_price?: number | null
+          total_installments?: number | null
+        }
+        Update: {
+          backed_at?: string | null
+          gross_override?: number | null
+          id?: string
+          product_price?: number | null
+          total_installments?: number | null
+        }
+        Relationships: []
+      }
       backup_caucao_venda_direta: {
         Row: {
           attendee_id: string
@@ -21066,6 +21090,18 @@ export type Database = {
         Returns: undefined
       }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
+      recorrencia_e_venda_nova: {
+        Args: {
+          p_email: string
+          p_id: string
+          p_inst: number
+          p_offer: string
+          p_product: string
+          p_sale_date: string
+          p_total: number
+        }
+        Returns: boolean
+      }
       redact_audit_snapshot: { Args: { _data: Json }; Returns: Json }
       refresh_contact_aliases_busca: {
         Args: { p_contact_id: string }
