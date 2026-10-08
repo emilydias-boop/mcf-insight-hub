@@ -428,7 +428,35 @@ export function useConsorcioProducaoGerada(
           if (!k.startsWith("card:")) clientePorProposta.set(r.proposal_id, k);
         });
       }
-      const vendasMes = new Map<string, { closerId: string; ancora: string }>();
+      // VENDAS REALIZADAS — cliente × mês da âncora, deduplicado ENTRE as três
+      // pernas. O registro de âncora mais antiga do mês define closer e SDR;
+      // o crédito de todos os registros do cliente no mês soma na venda.
+      type VendaAcc = {
+        cliente: string;
+        closerId: string;
+        ancora: string;
+        perna: "A" | "B" | "C";
+        nome: string | null;
+        dealId: string | null;
+        origemId: string | null;
+        credito: number;
+      };
+      const vendasMes = new Map<string, VendaAcc>();
+      const regVenda = (v: VendaAcc) => {
+        if (!v.ancora) return;
+        const chave = `${v.cliente}|${v.ancora.slice(0, 7)}`;
+        const atual = vendasMes.get(chave);
+        if (!atual) {
+          vendasMes.set(chave, { ...v });
+          return;
+        }
+        const credito = atual.credito + v.credito;
+        if (v.ancora < atual.ancora) vendasMes.set(chave, { ...v, credito, nome: v.nome || atual.nome });
+        else {
+          atual.credito = credito;
+          if (!atual.nome) atual.nome = v.nome;
+        }
+      };
 
       propostas.forEach((p) => {
         const agg = cartasPorProposta.get(p.id);
@@ -441,16 +469,19 @@ export function useConsorcioProducaoGerada(
         if (!closerId && p.deal_id) closerId = dealParaCloserReuniao.get(p.deal_id)?.closerId;
         const alvo = closerId || SEM_ATRIBUICAO;
         add(alvo, agg.credito, agg.qtd, 1);
-        {
-          const ancoraVR = String(p.aceite_date || p.proposal_date || "").slice(0, 10);
-          const cliente =
+        regVenda({
+          cliente:
             clientePorProposta.get(p.id) ||
             (p.deal_id && dealContato.get(p.deal_id) ? `contato:${dealContato.get(p.deal_id)}` : null) ||
-            (p.deal_id ? `deal:${p.deal_id}` : `proposta:${p.id}`);
-          const chave = `${cliente}|${ancoraVR.slice(0, 7)}`;
-          const atual = vendasMes.get(chave);
-          if (!atual || ancoraVR < atual.ancora) vendasMes.set(chave, { closerId: alvo, ancora: ancoraVR });
-        }
+            (p.deal_id ? `deal:${p.deal_id}` : `proposta:${p.id}`),
+          closerId: alvo,
+          ancora: String(p.aceite_date || p.proposal_date || "").slice(0, 10),
+          perna: "A",
+          nome: (p.deal_id ? dealNome.get(p.deal_id) : null) || null,
+          dealId: p.deal_id || null,
+          origemId: origemId || null,
+          credito: agg.credito,
+        });
         addItem(
           alvo,
           {
