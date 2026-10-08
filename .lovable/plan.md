@@ -1,28 +1,28 @@
-# Importação Harvey: por que 549 "casos para conferir"
+# Karen Nazário com perfil de gerente de relacionamento
 
-## O que o banco mostra agora (consulta só de leitura, 08/10 17:13)
-- 1.314 cards do Harvey na pipeline Relacionamento - Pós venda, todos em "Reunião de Viabilidade 1", nenhum arquivado.
-- Por gerente: Kalyanne 314 · Rebeca 360 · William 358 · Vitor 282.
-- Esperados: 1.344 cards (1.356 linhas, 12 repetidas). Faltam 30.
+## Estado atual (verificado no banco)
 
-## O que são os 549 casos
-"Casos para conferir" não quer dizer "cliente não importado". A tela lista três motivos:
-1. **Telefone igual ao de outro cadastro, nome diferente**: o cliente entrou mesmo assim, com cadastro novo. Só fica avisado para você conferir. Provavelmente é a maioria dos 549.
-2. **Gerente sem login**: o cliente não entrou.
-3. **Erro**: o cliente não entrou.
+- Karen Nazario da Conceição (karen.nazario@minhacasafinanciada.com):
+  - `user_roles`: apenas **sdr**
+  - `profiles.squad`: **[credito]**, access_status ativo
+  - Permissões: `can_handle_no_show = true`, demais flags false — **já idênticas às dos gerentes**
+  - `employees`: squad **credito**, cargo vazio, status ativo
+- Gerentes de relacionamento (Kalyanne, Vitor, Rebeca):
+  - `user_roles`: **gerente_relacionamento** (Rebeca também tem viewer)
+  - `profiles.squad`: **[pos_venda]**
 
-Não tenho a lista dos 549, porque ela só aparece na tela. Por isso, a divisão entre os três motivos ainda não está confirmada.
+## Mudanças (uma migration, com aprovação)
 
-## Próximos passos (só leitura, sem gravar nada)
-1. Comparo os 1.344 códigos do Harvey com os 1.314 cards e listo os 30 que faltam, com gerente, e-mail e telefone.
-2. Para cada um dos 30, descubro o motivo provável:
-   - gerente sem login;
-   - e-mail ou telefone que o bloqueio de duplicidade recusou;
-   - dado inválido.
-3. Conto quantos cadastros novos foram criados por causa do telefone com nome diferente. Esses são os casos do tipo 1.
-4. Entrego um relatório em arquivo: os 30 que faltam com o motivo de cada um, e os casos do tipo 1 para conferência manual.
-5. Para completar os 30, você escolhe entre rodar a tela de novo (os 1.314 não duplicam) ou importar só os 30 com um comando. Nada é gravado sem a sua autorização.
+1. **Papel**: inserir `gerente_relacionamento` em `user_roles` para a Karen, **mantendo** o papel `sdr` (decisão do usuário). O sistema usa o papel de maior prioridade no JWT.
+2. **Squad no perfil**: `profiles.squad` de `[credito]` para `[pos_venda]` (decisão do usuário).
+3. **Squad no cadastro de RH**: `employees.squad` de `credito` para `pos_venda`, mantendo a sincronização bidirecional employees ↔ profiles consistente.
+4. Nenhuma flag de permissão precisa mudar — já estão iguais às dos gerentes.
 
-## Detalhes técnicos
-- Lê os arquivos em /mnt/user-uploads e compara pelo `custom_fields.harvey_cliente_id` em crm_deals (origin POS_VENDA_ORIGIN_ID).
-- Os erros vêm das linhas 70, 88 e 149 de ImportarHarvey.tsx. A trava `trg_prevent_duplicate_crm_contact` pode explicar os erros do tipo "duplicate_contact".
+## Verificação depois de aplicar
+
+- Consulta read-only confirmando: Karen com papéis `sdr` + `gerente_relacionamento`, squad `pos_venda` em profiles e employees.
+
+## Fora de escopo
+
+- Nenhum código alterado, nada publicado.
+- Não mexo em cargo, metas ou comissões da Karen.
