@@ -51,6 +51,14 @@ export interface ProducaoGeradaLinha {
   cartas: number;
   /** Vendas: propostas (perna A) + clientes distintos nas pernas B e C. */
   vendas: number;
+  /**
+   * VENDAS REALIZADAS (Consórcio): clientes distintos com proposta aceita no
+   * período — só perna A, mesma âncora/filtros/atribuição da Produção Gerada.
+   * Unidade = cliente × mês da âncora (recompra em outro mês conta de novo).
+   * Cliente em dois closers no mesmo mês fica com o closer da proposta mais
+   * antiga do mês; no total ele conta uma vez só.
+   */
+  vendasRealizadas: number;
   /** Registros com `aceite_date` em mês anterior ao do lançamento (só sinaliza). */
   antedatados: number;
   /** Crédito desses registros — contado normalmente na soma. */
@@ -112,6 +120,7 @@ const zero = (): ProducaoGeradaLinha => ({
   credito: 0,
   cartas: 0,
   vendas: 0,
+  vendasRealizadas: 0,
   antedatados: 0,
   antedatadosCredito: 0,
   lancadosRetroativos: 0,
@@ -337,11 +346,13 @@ export function useConsorcioProducaoGerada(
       const dealIdsA = [...new Set(propostas.map((p) => p.deal_id).filter(Boolean) as string[])];
       const dealParaCloser = new Map<string, string>();
       const dealNome = new Map<string, string>();
+      const dealContato = new Map<string, string>();
       for (const parte of chunk(dealIdsA)) {
         if (parte.length === 0) continue;
-        const { data: deals } = await supabase.from("crm_deals").select("id, owner_id, name").in("id", parte);
-        (deals || []).forEach((d) => {
+        const { data: deals } = await supabase.from("crm_deals").select("id, owner_id, name, contact_id").in("id", parte);
+        (deals || []).forEach((d: any) => {
           if (d.name) dealNome.set(d.id, d.name);
+          if (d.contact_id) dealContato.set(d.id, d.contact_id);
           const cid = emailParaCloser.get(emailKey(d.owner_id) || "");
           if (cid) dealParaCloser.set(d.id, cid);
         });
@@ -397,6 +408,25 @@ export function useConsorcioProducaoGerada(
         });
       }
 
+      // Identidade do cliente da proposta (Vendas Realizadas): mesma regra da
+      // regra antiga — CPF/CNPJ do titular, fallback nome — lida do cadastro
+      // ligado à proposta; sem cadastro, contato do deal; senão o próprio deal.
+      const clientePorProposta = new Map<string, string>();
+      for (const parte of chunk(propostaIds)) {
+        if (parte.length === 0) continue;
+        const { data: regsProp } = await supabase
+          .from("consorcio_pending_registrations")
+          .select("id, proposal_id, cpf, cnpj, nome_completo, created_at")
+          .in("proposal_id", parte)
+          .order("created_at", { ascending: true });
+        (regsProp || []).forEach((r: any) => {
+          if (!r.proposal_id || clientePorProposta.has(r.proposal_id)) return;
+          const k = clientePessoaKey({ id: r.id, cpf: r.cpf, cnpj: r.cnpj, nome_completo: r.nome_completo });
+          if (!k.startsWith("card:")) clientePorProposta.set(r.proposal_id, k);
+        });
+      }
+      const vendasMes = new Map<string, { closerId: string; ancora: string }>();
+
       propostas.forEach((p) => {
         const agg = cartasPorProposta.get(p.id);
         if (!agg) return; // proposta sem carta não gera crédito
@@ -408,6 +438,16 @@ export function useConsorcioProducaoGerada(
         if (!closerId && p.deal_id) closerId = dealParaCloserReuniao.get(p.deal_id)?.closerId;
         const alvo = closerId || SEM_ATRIBUICAO;
         add(alvo, agg.credito, agg.qtd, 1);
+        {
+          const ancoraVR = String(p.aceite_date || p.proposal_date || "").slice(0, 10);
+          const cliente =
+            clientePorProposta.get(p.id) ||
+            (p.deal_id && dealContato.get(p.deal_id) ? `contato:${dealContato.get(p.deal_id)}` : null) ||
+            (p.deal_id ? `deal:${p.deal_id}` : `proposta:${p.id}`);
+          const chave = `${cliente}|${ancoraVR.slice(0, 7)}`;
+          const atual = vendasMes.get(chave);
+          if (!atual || ancoraVR < atual.ancora) vendasMes.set(chave, { closerId: alvo, ancora: ancoraVR });
+        }
         addItem(
           alvo,
           {
@@ -692,6 +732,13 @@ export function useConsorcioProducaoGerada(
         pernaC.cartas += 1;
       });
 
+      vendasMes.forEach(({ closerId }) => {
+        const l = byCloser.get(closerId) || zero();
+        l.vendasRealizadas += 1;
+        byCloser.set(closerId, l);
+        pernaA.vendasRealizadas += 1;
+      });
+
       pessoasPorCloserC.forEach((pessoas, closerId) => {
         add(closerId, 0, 0, pessoas.size);
         pernaC.vendas += pessoas.size;
@@ -705,6 +752,7 @@ export function useConsorcioProducaoGerada(
         total.credito += l.credito;
         total.cartas += l.cartas;
         total.vendas += l.vendas;
+        total.vendasRealizadas += l.vendasRealizadas;
         total.antedatados += l.antedatados;
         total.antedatadosCredito += l.antedatadosCredito;
         total.lancadosRetroativos += l.lancadosRetroativos;
@@ -716,6 +764,7 @@ export function useConsorcioProducaoGerada(
       total.credito += semAtribuicao.credito;
       total.cartas += semAtribuicao.cartas;
       total.vendas += semAtribuicao.vendas;
+      total.vendasRealizadas += semAtribuicao.vendasRealizadas;
       total.antedatados += semAtribuicao.antedatados;
       total.antedatadosCredito += semAtribuicao.antedatadosCredito;
       total.lancadosRetroativos += semAtribuicao.lancadosRetroativos;
