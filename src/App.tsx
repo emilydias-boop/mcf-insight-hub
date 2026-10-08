@@ -67,6 +67,7 @@ const CRMOverview = lazy(() => import("./pages/crm/Overview"));
 const Contatos = lazy(() => import("./pages/crm/Contatos"));
 const Negocios = lazy(() => import("./pages/crm/Negocios"));
 const AgendaPosVenda = lazy(() => import("./pages/pos-venda/AgendaPosVenda"));
+const ProvisionarPosVenda = lazy(() => import("./pages/pos-venda/ProvisionarUsuarios"));
 const Discador = lazy(() => import("./pages/crm/Discador"));
 const Origens = lazy(() => import("./pages/crm/Origens"));
 const Grupos = lazy(() => import("./pages/crm/Grupos"));
@@ -309,6 +310,7 @@ const App = () => (
 
               {/* BU Crédito Imobiliário — criada 2026-09-23. Pipeline resolvida via bu_origin_mapping (bu='credito'). */}
               <Route path="solar/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><BUProvider bu="solar" basePath="/solar/crm"><PainelComercialSolar /></BUProvider></RoleGuard>} />
+              <Route path="pos-venda/provisionar-usuarios" element={<RoleGuard allowedRoles={['admin']}><ProvisionarPosVenda /></RoleGuard>} />
               <Route path="credito/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><BUProvider bu="credito" basePath="/credito/crm"><PainelComercialCredito /></BUProvider></RoleGuard>} />
               <Route path="credito/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="credito" basePath="/credito/crm" /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
