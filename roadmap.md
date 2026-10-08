@@ -7,6 +7,7 @@
 - [ ] (próxima mensagem) Integração da qualificação de Crédito no fluxo
 - [ ] Venda Consórcio: recompra — regra nova simulada (14 casos mudam, não 1); aguardando decisão do dono antes de aplicar
 - [x] BU Pós Venda — Fase 1: BU, menu, pipeline "Relacionamento - Pós venda" (3 etapas), perfil Gerente de Relacionamento, entregáveis obrigatórios, tag HARVEY, discador
-- [ ] BU Pós Venda — Fase 2: entrada automática via webhooks MCF Pay/Hubla/Kiwify (aguarda liberação do dono)
-- [ ] BU Pós Venda — Fase 3: envio para Crédito/Consórcio ao chegar em Viabilidade Concluída (aguarda liberação do dono)
-- [ ] BU Pós Venda — anamnese do HARVEY sem envio do GR (depende de mudança no envio do app externo; aguarda decisão)
+- [x] BU Pós Venda — Fase 2: entrada automática pelas vendas pagas A001/A003/A004/A009
+- [x] BU Pós Venda — Fase 3: janela Crédito/Consórcio em Viabilidade Concluída
+- [x] BU Pós Venda — recebimento próprio da anamnese (pos-venda-anamnese); falta habilitar envio no HARVEY
+- [ ] BU Pós Venda — Agenda de Viabilidade 1/2 + gravações (PARADO: ~20 telas listam responsáveis de todas as BUs; aguarda decisão do dono)
