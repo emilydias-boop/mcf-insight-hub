@@ -971,6 +971,39 @@ export type Database = {
           },
         ]
       }
+      agendamento_excecoes: {
+        Row: {
+          attendee_id: string
+          criado_em: string
+          criado_por: string | null
+          id: string
+          motivo: string
+          revogada_em: string | null
+          revogada_por: string | null
+          solicitado_por: string
+        }
+        Insert: {
+          attendee_id: string
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          motivo: string
+          revogada_em?: string | null
+          revogada_por?: string | null
+          solicitado_por: string
+        }
+        Update: {
+          attendee_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          motivo?: string
+          revogada_em?: string | null
+          revogada_por?: string | null
+          solicitado_por?: string
+        }
+        Relationships: []
+      }
       alert_rules: {
         Row: {
           alert_level: Database["public"]["Enums"]["alert_level"]
