@@ -180,7 +180,7 @@ export function useLinkContractToAttendee() {
     },
     onError: (error) => {
       console.error('Error linking contract:', error);
-      toast.error(error instanceof Error ? error.message : 'Erro ao vincular contrato');
+      toast.error((error as { message?: string })?.message || 'Erro ao vincular contrato');
     },
   });
 }
