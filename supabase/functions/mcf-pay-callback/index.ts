@@ -523,7 +523,7 @@ Deno.serve(async (req) => {
     .eq("deal_id", resolvedDealId)
     .eq("meeting_slot.meeting_type", "r1")
     .not("status", "in", "(cancelled,rescheduled)")
-    .not("meeting_slot.status", "in", "(cancelled,rescheduled)")
+    .not("meeting_slot.status", "in", "(canceled,cancelled,rescheduled)")
     .order("created_at", { ascending: false })
     .limit(1);
   let attendee: { id: string; contract_paid_at: string | null; status: string | null; meeting_slot_id: string | null } | null =
