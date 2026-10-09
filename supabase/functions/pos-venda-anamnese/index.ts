@@ -60,7 +60,10 @@ Deno.serve(async (req) => {
   const tel = digits(texto(cliente.telefone ?? cliente.phone ?? body?.telefone));
   const sufixo = tel.length >= 9 ? tel.slice(-9) : null;
   const externalId = texto(body?.external_id);
-  if (!email && !sufixo) return json({ erro: "cliente_sem_email_ou_telefone" }, 400);
+  const harveyId = texto(body?.harvey_cliente_id ?? cliente.harvey_cliente_id ?? cliente.id);
+  const cpfRaw = digits(texto(cliente.cpf ?? body?.cpf));
+  const cpf = cpfRaw && cpfRaw.length <= 11 ? cpfRaw.padStart(11, "0") : null;
+  if (!email && !sufixo && !harveyId && !cpf) return json({ erro: "cliente_sem_identificacao" }, 400);
   if (email && (email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return json({ erro: "email_invalido" }, 400);
 
   const anamnese = extrairAnamneseV2(body);
@@ -71,21 +74,34 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
 
   try {
-    const { data: deals, error } = await supabase
+    const base = () => supabase
       .from("crm_deals")
       .select("id, custom_fields, crm_contacts!inner(email, phone)")
       .eq("origin_id", POS_VENDA_ORIGIN_ID)
       .eq("is_archived", false)
       .order("created_at", { ascending: true })
-      .limit(2000);
-    if (error) throw error;
-
-    const alvo = (deals ?? []).find((d: any) => {
-      const c = d.crm_contacts;
-      const ce = (c?.email ?? "").toLowerCase().trim();
-      const cs = digits(c?.phone).slice(-9);
-      return (email && ce === email) || (sufixo && cs.length === 9 && cs === sufixo);
-    });
+      .limit(1);
+    let alvo: any = null;
+    if (harveyId) {
+      const { data, error } = await base().eq("custom_fields->>harvey_cliente_id", harveyId);
+      if (error) throw error;
+      alvo = data?.[0] ?? null;
+    }
+    if (!alvo && cpf) {
+      const { data, error } = await base().eq("custom_fields->>cpf", cpf);
+      if (error) throw error;
+      alvo = data?.[0] ?? null;
+    }
+    if (!alvo && email) {
+      const { data, error } = await base().ilike("crm_contacts.email", email);
+      if (error) throw error;
+      alvo = data?.[0] ?? null;
+    }
+    if (!alvo && sufixo) {
+      const { data, error } = await base().ilike("crm_contacts.phone", `%${sufixo}`);
+      if (error) throw error;
+      alvo = data?.[0] ?? null;
+    }
 
     if (alvo) {
       const cf = (alvo.custom_fields as Record<string, unknown>) ?? {};
@@ -97,13 +113,13 @@ Deno.serve(async (req) => {
       await supabase.from("deal_activities").insert({
         deal_id: alvo.id, activity_type: "pos_venda_anamnese",
         description: anamnese.preenchida === false ? "Anamnese recebida do HARVEY (não preenchida)" : "Anamnese recebida do HARVEY",
-        metadata: { external_id: externalId },
+        metadata: { external_id: externalId, harvey_cliente_id: harveyId },
       });
       return json({ ok: true, acao: "aplicada", deal_id: alvo.id });
     }
 
     const { error: insErr } = await supabase.from("pos_venda_anamnese_pendente").insert({
-      email, phone_suffix: sufixo, external_id: externalId, anamnese,
+      email, phone_suffix: sufixo, external_id: externalId, anamnese, harvey_cliente_id: harveyId, cpf,
     });
     if (insErr) throw insErr;
     return json({ ok: true, acao: "guardada_ate_cliente_entrar" }, 202);

@@ -13908,10 +13908,12 @@ export type Database = {
         Row: {
           anamnese: Json
           aplicada_em: string | null
+          cpf: string | null
           created_at: string
           deal_id: string | null
           email: string | null
           external_id: string | null
+          harvey_cliente_id: string | null
           id: string
           phone_suffix: string | null
           updated_at: string
@@ -13919,10 +13921,12 @@ export type Database = {
         Insert: {
           anamnese: Json
           aplicada_em?: string | null
+          cpf?: string | null
           created_at?: string
           deal_id?: string | null
           email?: string | null
           external_id?: string | null
+          harvey_cliente_id?: string | null
           id?: string
           phone_suffix?: string | null
           updated_at?: string
@@ -13930,10 +13934,12 @@ export type Database = {
         Update: {
           anamnese?: Json
           aplicada_em?: string | null
+          cpf?: string | null
           created_at?: string
           deal_id?: string | null
           email?: string | null
           external_id?: string | null
+          harvey_cliente_id?: string | null
           id?: string
           phone_suffix?: string | null
           updated_at?: string
