@@ -522,6 +522,7 @@ Deno.serve(async (req) => {
     .select("id, contract_paid_at, status, meeting_slot_id, meeting_slot:meeting_slots!inner(meeting_type, status)")
     .eq("deal_id", resolvedDealId)
     .eq("meeting_slot.meeting_type", "r1")
+    .not("status", "in", "(cancelled,rescheduled)")
     .not("meeting_slot.status", "in", "(cancelled,rescheduled)")
     .order("created_at", { ascending: false })
     .limit(1);
