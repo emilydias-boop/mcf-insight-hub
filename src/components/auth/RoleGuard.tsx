@@ -7,10 +7,12 @@ interface RoleGuardProps {
   allowedRoles: AppRole[];
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  /** Libera se QUALQUER papel da pessoa estiver na lista (não só o principal). */
+  matchAnyRole?: boolean;
 }
 
-export const RoleGuard = ({ allowedRoles, children, fallback }: RoleGuardProps) => {
-  const { role, loading } = useAuth();
+export const RoleGuard = ({ allowedRoles, children, fallback, matchAnyRole }: RoleGuardProps) => {
+  const { role, allRoles, loading } = useAuth();
 
   // Wait for auth to complete before checking role
   // With JWT-based roles, roles are available instantly with the session
@@ -22,7 +24,8 @@ export const RoleGuard = ({ allowedRoles, children, fallback }: RoleGuardProps) 
     );
   }
 
-  if (!role || !allowedRoles.includes(role)) {
+  const allowed = !!role && (allowedRoles.includes(role) || (!!matchAnyRole && allRoles.some((r) => allowedRoles.includes(r))));
+  if (!allowed) {
     if (fallback) {
       return <>{fallback}</>;
     }

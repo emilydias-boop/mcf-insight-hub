@@ -302,7 +302,7 @@ const App = () => (
               </Route>
 
               {/* BU Pós Venda — criada 2026-10-08. Acesso: admin e gerente_relacionamento. */}
-              <Route path="pos-venda/crm" element={<RoleGuard allowedRoles={['admin', 'gerente_relacionamento']}><BUCRMLayout bu="pos_venda" basePath="/pos-venda/crm" /></RoleGuard>}>
+              <Route path="pos-venda/crm" element={<RoleGuard allowedRoles={['admin', 'gerente_relacionamento']} matchAnyRole><BUCRMLayout bu="pos_venda" basePath="/pos-venda/crm" /></RoleGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />
@@ -314,7 +314,7 @@ const App = () => (
               <Route path="solar/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><BUProvider bu="solar" basePath="/solar/crm"><PainelComercialSolar /></BUProvider></RoleGuard>} />
               <Route path="pos-venda/provisionar-usuarios" element={<RoleGuard allowedRoles={['admin']}><ProvisionarPosVenda /></RoleGuard>} />
               <Route path="pos-venda/importar-harvey" element={<RoleGuard allowedRoles={['admin']}><ImportarHarvey /></RoleGuard>} />
-              <Route path="pos-venda/distribuicao" element={<RoleGuard allowedRoles={['admin', 'gerente_relacionamento']}><DistribuicaoPosVenda /></RoleGuard>} />
+              <Route path="pos-venda/distribuicao" element={<RoleGuard allowedRoles={['admin', 'gerente_relacionamento']} matchAnyRole><DistribuicaoPosVenda /></RoleGuard>} />
               <Route path="credito/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><BUProvider bu="credito" basePath="/credito/crm"><PainelComercialCredito /></BUProvider></RoleGuard>} />
               <Route path="credito/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="credito" basePath="/credito/crm" /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
