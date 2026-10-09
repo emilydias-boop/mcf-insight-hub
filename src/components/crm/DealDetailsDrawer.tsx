@@ -1,7 +1,7 @@
 import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
 import { HarveyOrigemCard } from '@/components/crm/pos-venda/HarveyOrigem';
 import { PosVendaEntregaveisSection } from '@/components/crm/pos-venda/PosVendaEntregaveisSection';
-import { isPosVendaDeal } from '@/lib/posVenda';
+import { isPosVendaDeal, POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID } from '@/lib/posVenda';
 import { Badge } from '@/components/ui/badge';
 import { useState, useMemo, useEffect } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -230,6 +230,8 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 currentDate={deal.next_action_date}
                 currentNote={deal.next_action_note}
                 onSaved={() => refetchDeal()}
+                encaminharArea={isPosVendaDeal(deal) && deal.stage_id === POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID
+                  ? { dealName: deal.name } : undefined}
               />
               
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
