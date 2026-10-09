@@ -513,15 +513,30 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ===== CONTRATO (A000) — comportamento de sempre =====
-  // Localizar attendee mais recente do deal
-  const { data: attendees } = await supabase
+  // ===== CONTRATO (A000) =====
+  // 1º: attendee de R1 mais recente do deal (não cancelado/reagendado).
+  // Só sem nenhuma R1 no deal cai no attendee mais recente (comportamento antigo).
+  let attendeeCriterio: "r1" | "fallback_mais_recente" = "r1";
+  const { data: r1Attendees } = await supabase
     .from("meeting_slot_attendees")
-    .select("id, contract_paid_at, status, meeting_slot_id")
+    .select("id, contract_paid_at, status, meeting_slot_id, meeting_slot:meeting_slots!inner(meeting_type, status)")
     .eq("deal_id", resolvedDealId)
+    .eq("meeting_slot.meeting_type", "r1")
+    .not("meeting_slot.status", "in", "(cancelled,rescheduled)")
     .order("created_at", { ascending: false })
     .limit(1);
-  const attendee = attendees?.[0] ?? null;
+  let attendee: { id: string; contract_paid_at: string | null; status: string | null; meeting_slot_id: string | null } | null =
+    (r1Attendees?.[0] as never) ?? null;
+  if (!attendee) {
+    attendeeCriterio = "fallback_mais_recente";
+    const { data: attendees } = await supabase
+      .from("meeting_slot_attendees")
+      .select("id, contract_paid_at, status, meeting_slot_id")
+      .eq("deal_id", resolvedDealId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    attendee = attendees?.[0] ?? null;
+  }
 
   const alreadyPaid = Boolean(attendee?.contract_paid_at);
   // Preserva contract_paid_at existente (fonte de verdade da venda manual).
@@ -599,6 +614,7 @@ Deno.serve(async (req) => {
     response: {
       ok: true,
       attendee_id: attendee?.id ?? null,
+      attendee_criterio: attendeeCriterio,
       applied: isPaid ? "paid" : "refunded",
       contrato: true,
       reembolso_contrato: reemb ?? null,
