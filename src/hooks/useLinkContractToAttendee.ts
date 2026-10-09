@@ -39,12 +39,13 @@ export function useLinkContractToAttendee() {
         }
       }
 
-      // VERIFICAÇÃO: Evitar duplicatas - se deal_id já tem outro attendee pago, bloquear
+      // VERIFICAÇÃO: Evitar duplicatas - se deal_id já tem outro attendee de R1 pago, bloquear
       if (dealId) {
         const { data: existingPaid } = await supabase
           .from('meeting_slot_attendees')
-          .select('id, attendee_name')
+          .select('id, attendee_name, meeting_slot:meeting_slots!inner(meeting_type)')
           .eq('deal_id', dealId)
+          .eq('meeting_slot.meeting_type', 'r1')
           .not('contract_paid_at', 'is', null)
           .neq('id', attendeeId)
           .limit(1)
@@ -179,7 +180,7 @@ export function useLinkContractToAttendee() {
     },
     onError: (error) => {
       console.error('Error linking contract:', error);
-      toast.error('Erro ao vincular contrato');
+      toast.error(error instanceof Error ? error.message : 'Erro ao vincular contrato');
     },
   });
 }
