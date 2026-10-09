@@ -8,10 +8,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Save, Phone, MessageCircle, Mail, Video, AlertCircle, Loader2, History, ChevronDown } from 'lucide-react';
+import { CalendarIcon, Save, Phone, MessageCircle, Mail, Video, AlertCircle, Loader2, History, ChevronDown, Send } from 'lucide-react';
 import { useSaveNextAction, NextActionType } from '@/hooks/useNextAction';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { EncaminharAreaDialog } from './pos-venda/EncaminharAreaDialog';
 
 interface NextActionBlockCompactProps {
   dealId: string;
@@ -19,6 +20,8 @@ interface NextActionBlockCompactProps {
   currentDate?: string | null;
   currentNote?: string | null;
   onSaved?: () => void;
+  /** Só para cards do Pós Venda em "Novos licenciados". */
+  encaminharArea?: { dealName?: string };
 }
 
 const ACTION_OPTIONS: { value: NextActionType; label: string; icon: React.ReactNode }[] = [
@@ -40,8 +43,10 @@ export const NextActionBlockCompact = ({
   currentType, 
   currentDate, 
   currentNote,
-  onSaved 
+  onSaved,
+  encaminharArea,
 }: NextActionBlockCompactProps) => {
+  const [encOpen, setEncOpen] = useState(false);
   const [actionType, setActionType] = useState<NextActionType | null>(
     (currentType as NextActionType) || null
   );
@@ -246,6 +251,21 @@ export const NextActionBlockCompact = ({
         onChange={(e) => setActionNote(e.target.value)}
         className="h-7 bg-background text-xs"
       />
+
+      {encaminharArea && (
+        <>
+          <Button size="sm" variant="outline" className="w-full h-8 text-xs" onClick={() => setEncOpen(true)}>
+            <Send className="h-3.5 w-3.5 mr-1.5" /> Encaminhar para área
+          </Button>
+          <EncaminharAreaDialog
+            open={encOpen}
+            dealId={dealId}
+            dealName={encaminharArea.dealName}
+            onOpenChange={setEncOpen}
+            onDone={onSaved}
+          />
+        </>
+      )}
     </div>
   );
 };
