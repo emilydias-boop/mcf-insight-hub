@@ -140,13 +140,25 @@ export function useRefundDetailsInPeriod(startDate: Date | null, endDate: Date |
         return { items, orphans };
       }
 
-      // Fetch deals + contacts + contract_paid_at (fallback de âncora)
+      // Fetch deals + contacts
       const { data: deals } = await supabase
         .from('crm_deals')
-        .select('id, owner_id, contract_paid_at, contact:crm_contacts(name, email)')
+        .select('id, owner_id, contact:crm_contacts(name, email)')
         .in('id', dealIdArr);
       const dealMap = new Map<string, any>();
-      (deals as any[] || []).forEach((d) => dealMap.set(d.id, d));
+      (deals as any[] || []).forEach((d) => dealMap.set(d.id, { ...d, contract_paid_at: null }));
+
+      // contract_paid_at (fallback de âncora) vem da R1 paga em meeting_slot_attendees
+      const { data: paidR1 } = await supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id, contract_paid_at, meeting_slot:meeting_slots!inner(meeting_type)')
+        .in('deal_id', dealIdArr)
+        .eq('meeting_slot.meeting_type', 'r1')
+        .not('contract_paid_at', 'is', null);
+      (paidR1 as any[] || []).forEach((a) => {
+        const d = dealMap.get(a.deal_id);
+        if (d && (!d.contract_paid_at || a.contract_paid_at < d.contract_paid_at)) d.contract_paid_at = a.contract_paid_at;
+      });
 
       // Fetch R1 attendees for closer resolution (most recent R1 per deal)
       const { data: attendees } = await supabase

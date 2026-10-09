@@ -105,17 +105,29 @@ export function useSdrRefundsInPeriod(startDate: Date | null, endDate: Date | nu
         });
       }
 
-      // Buscar contract_paid_at e owner (fallback SDR)
+      // Buscar owner (fallback SDR)
       const { data: deals } = await supabase
         .from('crm_deals')
-        .select('id, owner_id, contract_paid_at')
+        .select('id, owner_id')
         .in('id', ids);
       const dealInfo = new Map<string, { ownerEmail: string | null; contractPaidAt: string | null }>();
       (deals as any[] || []).forEach((d) => {
         dealInfo.set(d.id, {
           ownerEmail: d.owner_id ? String(d.owner_id).toLowerCase() : null,
-          contractPaidAt: d.contract_paid_at ?? null,
+          contractPaidAt: null,
         });
+      });
+
+      // contract_paid_at vem da R1 paga em meeting_slot_attendees
+      const { data: paidR1 } = await supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id, contract_paid_at, meeting_slot:meeting_slots!inner(meeting_type)')
+        .in('deal_id', ids)
+        .eq('meeting_slot.meeting_type', 'r1')
+        .not('contract_paid_at', 'is', null);
+      (paidR1 as any[] || []).forEach((a) => {
+        const info = dealInfo.get(a.deal_id);
+        if (info && (!info.contractPaidAt || a.contract_paid_at < info.contractPaidAt)) info.contractPaidAt = a.contract_paid_at;
       });
 
       // Agregar: para cada deal, resolver âncora + SDR; só conta se âncora no período.
