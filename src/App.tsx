@@ -113,6 +113,7 @@ const MeuFechamento = lazy(() => import("./pages/fechamento-sdr/MeuFechamento"))
 const MeuPlaybook = lazy(() => import("./pages/playbook/MeuPlaybook"));
 const TransacoesIncorp = lazy(() => import("./pages/bu-incorporador/TransacoesIncorp"));
 const Clientes = lazy(() => import("./pages/Clientes"));
+const Cliente360 = lazy(() => import("./pages/Cliente360"));
 const IncorporadorRelatorios = lazy(() => import("./pages/bu-incorporador/Relatorios"));
 // [REMOVIDO 2026-09-22] Tela "Funil e Ciclo de Vendas" desativada — preservado para rollback.
 // const IncorporadorFunilCiclo = lazy(() => import("./pages/bu-incorporador/FunilCicloVendas"));
@@ -369,6 +370,8 @@ const App = () => (
               {/* BU Incorporador */}
               <Route path="bu-incorporador/transacoes" element={<ResourceGuard resource="crm"><TransacoesIncorp /></ResourceGuard>} />
               <Route path="clientes" element={<ResourceGuard resource="crm"><Clientes /></ResourceGuard>} />
+              <Route path="clientes/360" element={<ResourceGuard resource="crm"><Cliente360 /></ResourceGuard>} />
+              <Route path="clientes/:contactId/360" element={<ResourceGuard resource="crm"><Cliente360 /></ResourceGuard>} />
               <Route path="bu-incorporador/relatorios" element={<ResourceGuard resource="relatorios"><IncorporadorRelatorios /></ResourceGuard>} />
               {/* [REMOVIDO 2026-09-22] Tela "Funil e Ciclo de Vendas" desativada — preservado para rollback. */}
               {/* <Route path="bu-incorporador/funil-ciclo-vendas" element={<ResourceGuard resource="crm"><IncorporadorFunilCiclo /></ResourceGuard>} /> */}

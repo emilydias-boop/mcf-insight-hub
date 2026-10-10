@@ -19466,6 +19466,15 @@ export type Database = {
     Functions: {
       _actor_name: { Args: { _uid: string }; Returns: string }
       _assert_stage_admin: { Args: never; Returns: undefined }
+      _c360_ident: {
+        Args: { _contact_id: string }
+        Returns: {
+          contact_ids: string[]
+          emails: string[]
+          phones: string[]
+        }[]
+      }
+      _c360_pode_ver: { Args: { _ids: string[] }; Returns: boolean }
       _card_id_for_subscription: { Args: { _sub: string }; Returns: string }
       _percentual_comissao: {
         Args: { numero_parcela: number; tipo_produto: string }
@@ -19762,6 +19771,19 @@ export type Database = {
       }
       classify_credito_icp: { Args: { p_answers: Json }; Returns: string }
       cleanup_stuck_automation_queue: { Args: never; Returns: number }
+      cliente_360: { Args: { _contact_id: string }; Returns: Json }
+      cliente_timeline: {
+        Args: { _contact_id: string }
+        Returns: {
+          ator: string
+          bu: string
+          deal_id: string
+          detalhe: string
+          tipo: string
+          titulo: string
+          ts: string
+        }[]
+      }
       closer_frases_avaliacao: {
         Args: {
           _ate: string

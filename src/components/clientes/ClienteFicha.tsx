@@ -12,6 +12,7 @@ import {
   temLiquidoDuplicado,
 } from '@/lib/clientesFormat';
 import type { ClienteConsolidado, VendaPorProduto } from '@/hooks/useClientes';
+import { Link } from 'react-router-dom';
 
 interface Props {
   cliente: ClienteConsolidado;
@@ -36,6 +37,9 @@ export function ClienteFicha({ cliente, produtos, carregandoProdutos }: Props) {
         <h2 className="font-display text-2xl leading-tight">
           {cliente.cliente_nome || 'Sem nome'}
         </h2>
+        <Link to={`/clientes/360?email=${encodeURIComponent(cliente.cliente_email)}`} className="text-sm text-primary underline-offset-4 hover:underline">
+          Abrir visão 360
+        </Link>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Mail className="h-3.5 w-3.5" /> {cliente.cliente_email}
