@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
 
   const stream = new ReadableStream({
     async start(controller) {
+      try {
       const enc = new TextEncoder();
       const esc = (v: unknown) => {
         if (v === null || v === undefined) return '';
@@ -45,10 +46,21 @@ Deno.serve(async (req) => {
         from += PAGE;
       }
       controller.close();
+      } catch (e) {
+        console.error('export-all-contacts falhou:', e);
+        try { controller.error(e); } catch { /* stream já encerrado */ }
+      }
     },
   });
 
-  return new Response(stream, {
-    headers: { ...corsHeaders, 'Content-Type': 'text/csv; charset=utf-8' },
-  });
+  try {
+    return new Response(stream, {
+      headers: { ...corsHeaders, 'Content-Type': 'text/csv; charset=utf-8' },
+    });
+  } catch (e) {
+    console.error('export-all-contacts falhou:', e);
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : 'Erro inesperado' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 });
