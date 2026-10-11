@@ -10,6 +10,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 Deno.serve(async (req) => {
+  try {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const token = Deno.env.get("MEETGEEK_API_KEY");
   if (!token) return json({ erro: "MEETGEEK_API_KEY nao configurada" }, 500);
@@ -55,4 +56,8 @@ Deno.serve(async (req) => {
   const expira = new Date(Date.now() + (Number(d?.expires_in) || 14400) * 1000).toISOString();
   await admin.from("meeting_recordings").update({ download_link: d.download_link, download_expires_at: expira }).eq("id", rec.id);
   return json({ link: d.download_link, expira_em: expira });
+  } catch (e) {
+    console.error("pos-venda-gravacao erro inesperado:", e);
+    return json({ erro: "erro inesperado", mensagem: e instanceof Error ? e.message : String(e) }, 500);
+  }
 });
