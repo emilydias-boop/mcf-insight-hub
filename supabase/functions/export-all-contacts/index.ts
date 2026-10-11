@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
 
   const stream = new ReadableStream({
     async start(controller) {
+      try {
       const enc = new TextEncoder();
       const esc = (v: unknown) => {
         if (v === null || v === undefined) return '';
