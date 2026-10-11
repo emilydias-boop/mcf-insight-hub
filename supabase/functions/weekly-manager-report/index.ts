@@ -540,13 +540,30 @@ async function buildIncorporadorReport(supabase: any) {
   // Quais desses emails passaram por estágio Anamnese?
   let contratosAnamneseEmails = new Set<string>();
   if (uniqueContratosEmails.length > 0) {
-    const { data: contratosDeals } = await supabase
-      .from('crm_deals')
-      .select('id, crm_contacts!inner(email)')
-      .in('crm_contacts.email', uniqueContratosEmails);
+    // Busca primeiro os contatos pelo e-mail (usa índice) e depois os negócios
+    // desses contatos (usa índice de contact_id). Evita varrer crm_deals inteira.
+    const emailByContact = new Map<string, string>();
+    for (let i = 0; i < uniqueContratosEmails.length; i += 200) {
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('id, email')
+        .in('email', uniqueContratosEmails.slice(i, i + 200));
+      for (const c of contacts || []) {
+        if (c.email) emailByContact.set(c.id, c.email.toLowerCase());
+      }
+    }
+    const contactIds = [...emailByContact.keys()];
+    const contratosDeals: { id: string; contact_id: string }[] = [];
+    for (let i = 0; i < contactIds.length; i += 200) {
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select('id, contact_id')
+        .in('contact_id', contactIds.slice(i, i + 200));
+      contratosDeals.push(...((deals as any[]) || []));
+    }
     const dealIdsByEmail = new Map<string, string[]>();
-    for (const d of contratosDeals || []) {
-      const email = (d as any).crm_contacts?.email?.toLowerCase();
+    for (const d of contratosDeals) {
+      const email = emailByContact.get(d.contact_id);
       if (!email) continue;
       if (!dealIdsByEmail.has(email)) dealIdsByEmail.set(email, []);
       dealIdsByEmail.get(email)!.push(d.id);
