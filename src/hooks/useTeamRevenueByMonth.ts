@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getFirstTransactionIdsCached } from '@/lib/firstTransactionIds';
 import { parse, startOfMonth, endOfMonth } from 'date-fns';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
@@ -27,7 +28,7 @@ export function useTeamRevenueByMonth(anoMes: string, bu: string) {
 
       if (bu === 'incorporador') {
         // 1. Fetch first transaction IDs for deduplication
-        const { data: firstIdsData } = await supabase.rpc('get_first_transaction_ids');
+        const { data: firstIdsData } = await getFirstTransactionIdsCached();
         const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
 
         // 2. Fetch transactions for the selected month
