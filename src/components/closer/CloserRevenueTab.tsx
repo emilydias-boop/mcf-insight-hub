@@ -12,6 +12,7 @@ import { ptBR } from 'date-fns/locale';
 import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getFirstTransactionIdsCached } from '@/lib/firstTransactionIds';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
@@ -41,7 +42,7 @@ export function CloserRevenueTab({ closerId, startDate, endDate }: CloserRevenue
   const { data: globalFirstIds = new Set<string>() } = useQuery({
     queryKey: ['global-first-transaction-ids'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_first_transaction_ids');
+      const { data, error } = await getFirstTransactionIdsCached();
       if (error) throw error;
       return new Set((data || []).map((r: { id: string }) => r.id));
     },

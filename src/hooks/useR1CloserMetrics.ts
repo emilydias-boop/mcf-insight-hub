@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getFirstTransactionIdsCached } from '@/lib/firstTransactionIds';
 import { startOfDay, endOfDay, format, subHours, addHours } from "date-fns";
 
 /**
@@ -552,7 +553,7 @@ export function useR1CloserMetrics(
         // Fetch IDs of FIRST purchase per customer (Novo) — used to exclude
         // recurring transactions from the outside count. Recurring sales
         // (e.g. monthly Hubla recurrence) must NOT count as new contracts.
-        const { data: firstIdsRows } = await supabase.rpc('get_first_transaction_ids' as any);
+        const { data: firstIdsRows } = await getFirstTransactionIdsCached();
         const firstTransactionIds = new Set<string>(
           (firstIdsRows as any[] | null || []).map((r: any) => r.id as string)
         );

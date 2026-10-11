@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getFirstTransactionIdsCached } from '@/lib/firstTransactionIds';
 import { Building2, TrendingUp, CreditCard, LucideIcon } from "lucide-react";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
 import { formatDateForDB } from "@/lib/dateHelpers";
@@ -81,7 +82,7 @@ export function useSetoresDashboard(referenceDate?: Date) {
       };
     }> => {
       // 1. Fetch global first transaction IDs for Incorporador deduplication
-      const { data: firstIdsData, error: firstIdsError } = await supabase.rpc('get_first_transaction_ids');
+      const { data: firstIdsData, error: firstIdsError } = await getFirstTransactionIdsCached();
       if (firstIdsError) throw firstIdsError;
       const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
 

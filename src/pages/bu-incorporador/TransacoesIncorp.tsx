@@ -4,6 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Filter, Users, Rocket } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getFirstTransactionIdsCached } from '@/lib/firstTransactionIds';
 import { useGestorClosers } from '@/hooks/useGestorClosers';
 import { toast } from 'sonner';
 
@@ -83,7 +84,7 @@ export default function TransacoesIncorp() {
   const { data: globalFirstIds = new Set<string>() } = useQuery({
     queryKey: ['global-first-transaction-ids'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_first_transaction_ids');
+      const { data, error } = await getFirstTransactionIdsCached();
       if (error) throw error;
       return new Set((data || []).map((r: { id: string }) => r.id));
     },
