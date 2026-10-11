@@ -18,6 +18,7 @@ import { NegociosAccessGuard } from "./components/auth/NegociosAccessGuard";
 import { MainLayout } from "./components/layout/MainLayout";
 import { UpdateNotifier } from "./components/layout/UpdateNotifier";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { TelemetryTracker } from "./components/TelemetryTracker";
 import { useProductPricesCache } from "./hooks/useProductPricesCache";
 import { Loader2 } from "lucide-react";
 
@@ -208,6 +209,7 @@ const App = () => (
         <UpdateNotifier />
         <PriceCacheInitializer />
         <BrowserRouter>
+          <TelemetryTracker />
           <AuthProvider>
             <TwilioProvider>
             <Suspense fallback={<PageFallback />}>

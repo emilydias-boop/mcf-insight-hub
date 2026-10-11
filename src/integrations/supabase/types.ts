@@ -1112,6 +1112,39 @@ export type Database = {
         }
         Relationships: []
       }
+      app_telemetry: {
+        Row: {
+          created_at: string
+          details: Json | null
+          duration_ms: number | null
+          event_type: string
+          id: string
+          message: string | null
+          route: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          duration_ms?: number | null
+          event_type: string
+          id?: string
+          message?: string | null
+          route?: string | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          duration_ms?: number | null
+          event_type?: string
+          id?: string
+          message?: string | null
+          route?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       ar_gestores: {
         Row: {
           created_at: string
