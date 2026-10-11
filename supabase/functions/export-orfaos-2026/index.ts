@@ -13,23 +13,30 @@ const toCsv = (rows: Record<string, unknown>[]) => {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
-  const [a, o] = await Promise.all([
-    supabase.rpc('orfaos_a010_2026'),
-    supabase.rpc('orfaos_outside_2026'),
-  ])
-  if (a.error || o.error) {
-    return new Response(JSON.stringify({ error: a.error?.message ?? o.error?.message }), {
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+    const [a, o] = await Promise.all([
+      supabase.rpc('orfaos_a010_2026'),
+      supabase.rpc('orfaos_outside_2026'),
+    ])
+    if (a.error || o.error) {
+      return new Response(JSON.stringify({ error: a.error?.message ?? o.error?.message }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    return new Response(JSON.stringify({
+      a010_csv: toCsv(a.data as any[]),
+      outside_csv: toCsv(o.data as any[]),
+      a010_count: ((a.data as any[]) ?? []).length,
+      outside_count: ((o.data as any[]) ?? []).length,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  } catch (e) {
+    console.error('export-orfaos-2026 falhou:', e)
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : 'Erro inesperado' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
-  return new Response(JSON.stringify({
-    a010_csv: toCsv(a.data as any[]),
-    outside_csv: toCsv(o.data as any[]),
-    a010_count: (a.data as any[]).length,
-    outside_count: (o.data as any[]).length,
-  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 })
