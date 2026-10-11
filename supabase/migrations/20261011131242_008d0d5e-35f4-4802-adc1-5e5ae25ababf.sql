@@ -1,0 +1,1 @@
+ALTER VIEW public.vw_closer_reuniao_avaliada SET (security_invoker = true);
