@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { logTelemetry } from '@/lib/telemetry';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -23,6 +24,10 @@ export class ErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('[ErrorBoundary] Erro capturado:', error, errorInfo);
+    logTelemetry('error', {
+      message: error.message,
+      details: { source: 'ErrorBoundary', stack: error.stack?.slice(0, 1500), component: errorInfo.componentStack?.slice(0, 1500) },
+    });
   }
 
   render() {
