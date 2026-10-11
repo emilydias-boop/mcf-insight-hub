@@ -12,6 +12,7 @@ function digits(s: string | null | undefined): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -185,4 +186,11 @@ Deno.serve(async (req) => {
   }, null, 2), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+  } catch (err) {
+    console.error("backfill-a010-em-aberto-from-logs failed:", err);
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 });
