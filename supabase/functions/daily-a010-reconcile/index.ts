@@ -15,6 +15,7 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  try {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -114,4 +115,11 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify(summary, null, 2), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+  } catch (err) {
+    console.error("[reconcile] daily-a010-reconcile failed:", err);
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 });
