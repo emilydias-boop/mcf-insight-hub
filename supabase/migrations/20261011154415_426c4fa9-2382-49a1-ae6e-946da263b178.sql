@@ -1,0 +1,10 @@
+DROP POLICY IF EXISTS "Authenticated users can delete product configurations" ON public.product_configurations;
+DROP POLICY IF EXISTS "Authenticated users can insert product configurations" ON public.product_configurations;
+DROP POLICY IF EXISTS "Authenticated users can update product configurations" ON public.product_configurations;
+CREATE POLICY "Admins insert product configurations" ON public.product_configurations FOR INSERT TO authenticated WITH CHECK ((select public.has_role(auth.uid(),'admin'::app_role)));
+CREATE POLICY "Admins update product configurations" ON public.product_configurations FOR UPDATE TO authenticated USING ((select public.has_role(auth.uid(),'admin'::app_role))) WITH CHECK ((select public.has_role(auth.uid(),'admin'::app_role)));
+CREATE POLICY "Admins delete product configurations" ON public.product_configurations FOR DELETE TO authenticated USING ((select public.has_role(auth.uid(),'admin'::app_role)));
+DROP POLICY IF EXISTS "Authenticated users can insert price history" ON public.product_price_history;
+DROP POLICY IF EXISTS "Authenticated users can update price history" ON public.product_price_history;
+CREATE POLICY "Admins insert price history" ON public.product_price_history FOR INSERT TO authenticated WITH CHECK ((select public.has_role(auth.uid(),'admin'::app_role)));
+CREATE POLICY "Admins update price history" ON public.product_price_history FOR UPDATE TO authenticated USING ((select public.has_role(auth.uid(),'admin'::app_role))) WITH CHECK ((select public.has_role(auth.uid(),'admin'::app_role)));
