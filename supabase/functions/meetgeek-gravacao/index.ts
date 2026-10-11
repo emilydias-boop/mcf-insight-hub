@@ -115,4 +115,4 @@ async function processar(req: Request): Promise<Response> {
   console.log("[meetgeek-gravacao] link gerado", rec.meetgeek_meeting_id);
 
   return jsonResp({ link, expira_em: expiraEm, do_cache: false });
-});
+}
