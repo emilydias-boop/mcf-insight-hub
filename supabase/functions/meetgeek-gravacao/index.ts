@@ -23,6 +23,16 @@ function jsonResp(body: unknown, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  try {
+    return await processar(req);
+  } catch (e) {
+    // Erro inesperado (rede, resposta malformada, etc.): responde em vez de travar.
+    console.error("[meetgeek-gravacao] erro inesperado", e instanceof Error ? e.message : e);
+    return jsonResp({ erro: "erro_interno", mensagem: "Falha inesperada ao gerar o link da gravacao. Tente de novo." }, 500);
+  }
+});
+
+async function processar(req: Request): Promise<Response> {
   const token = Deno.env.get("MEETGEEK_API_KEY");
   if (!token) return jsonResp({ erro: "MEETGEEK_API_KEY nao configurada" }, 500);
 
@@ -105,4 +115,4 @@ Deno.serve(async (req) => {
   console.log("[meetgeek-gravacao] link gerado", rec.meetgeek_meeting_id);
 
   return jsonResp({ link, expira_em: expiraEm, do_cache: false });
-});
+}
