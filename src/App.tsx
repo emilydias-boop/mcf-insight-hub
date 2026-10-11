@@ -154,6 +154,7 @@ const CallThresholdsConfig = lazy(() => import("./pages/admin/CallThresholdsConf
 const QaDocsViewer = lazy(() => import("./pages/admin/QaDocsViewer"));
 const OutsideDetectionDiff = lazy(() => import("./pages/admin/OutsideDetectionDiff"));
 const IntegracaoMcfPay = lazy(() => import("./pages/admin/IntegracaoMcfPay"));
+const AdminTelemetria = lazy(() => import("./pages/admin/Telemetria"));
 const ConsorcioFechamento = lazy(() => import("./pages/bu-consorcio/Fechamento"));
 const ConsorcioFechamentoDetail = lazy(() => import("./pages/bu-consorcio/FechamentoDetail"));
 const ConsorcioFechamentoConfig = lazy(() => import("./pages/bu-consorcio/FechamentoConfig"));
@@ -353,6 +354,7 @@ const App = () => (
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
               <Route path="admin/roles" element={<RoleGuard allowedRoles={['admin']}><AdminRoles /></RoleGuard>} />
               <Route path="admin/produtos" element={<RoleGuard allowedRoles={['admin']}><ConfiguracaoProdutos /></RoleGuard>} />
+              <Route path="admin/telemetria" element={<RoleGuard allowedRoles={['admin']}><AdminTelemetria /></RoleGuard>} />
               <Route path="admin/automacoes" element={<RoleGuard allowedRoles={['admin']}><Automacoes /></RoleGuard>} />
               <Route path="admin/configuracao-bu" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracaoBU /></RoleGuard>} />
               <Route path="admin/travas-fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AdminMonthLocks /></RoleGuard>} />
