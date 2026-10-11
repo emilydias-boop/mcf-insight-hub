@@ -1,0 +1,18 @@
+REVOKE EXECUTE ON FUNCTION public.check_duplicate_contact_by_identity(text, text) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.check_duplicate_deal_by_identity(text, text, uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.get_consorcio_commission_summary(uuid[]) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.get_incorporador_transactions(text, integer) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.get_incorporador_transactions(text, timestamp with time zone, timestamp with time zone, integer) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.get_incorporador_transactions(text, timestamp with time zone, timestamp with time zone, text[], integer) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.get_incorporador_transactions(text, timestamp without time zone, timestamp without time zone, text[], integer) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.get_pendentes_audit_incorporador(timestamp with time zone, timestamp with time zone) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.get_sdr_pendentes_drilldown(text, text, text, text) FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.check_duplicate_contact_by_identity(text, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.check_duplicate_deal_by_identity(text, text, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_consorcio_commission_summary(uuid[]) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_incorporador_transactions(text, integer) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_incorporador_transactions(text, timestamp with time zone, timestamp with time zone, integer) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_incorporador_transactions(text, timestamp with time zone, timestamp with time zone, text[], integer) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_incorporador_transactions(text, timestamp without time zone, timestamp without time zone, text[], integer) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_pendentes_audit_incorporador(timestamp with time zone, timestamp with time zone) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_sdr_pendentes_drilldown(text, text, text, text) TO authenticated, service_role;
