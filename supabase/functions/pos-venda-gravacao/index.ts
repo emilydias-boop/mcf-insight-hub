@@ -10,6 +10,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 Deno.serve(async (req) => {
+  try {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const token = Deno.env.get("MEETGEEK_API_KEY");
   if (!token) return json({ erro: "MEETGEEK_API_KEY nao configurada" }, 500);
