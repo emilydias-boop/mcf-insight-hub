@@ -1,0 +1,15 @@
+REVOKE EXECUTE ON FUNCTION public.admin_delete_crm_stage(uuid) FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.admin_reorder_crm_stages(uuid, uuid[]) FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.admin_deactivate_crm_stage(uuid, uuid, text) FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.admin_reactivate_crm_stage(uuid) FROM anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.wa_register_opt_out(text, text) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION public.admin_delete_crm_stage(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_reorder_crm_stages(uuid, uuid[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_deactivate_crm_stage(uuid, uuid, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_reactivate_crm_stage(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.wa_register_opt_out(text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_delete_crm_stage(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.admin_reorder_crm_stages(uuid, uuid[]) TO service_role;
+GRANT EXECUTE ON FUNCTION public.admin_deactivate_crm_stage(uuid, uuid, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.admin_reactivate_crm_stage(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.wa_register_opt_out(text, text) TO service_role;
