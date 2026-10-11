@@ -4,3 +4,5 @@
 - Pós Venda new-sale ingestion is a hubla_transactions trigger (pos_venda_on_venda → pos_venda_registrar_cliente), so every source (Hubla, Kiwify, MCFPay) is covered without editing webhook handlers; failures are logged to pos_venda_entrada_falhas instead of blocking the sale.
 - Manager distribution for Pós Venda lives only in pos_venda_distribuicao and is applied only inside pos_venda_registrar_cliente, so other BUs' lead distribution is never affected.
 - Leaving the "Novos licenciados" stage requires a recent pos_venda_nota_contato activity, enforced by a crm_deals trigger scoped to the Pós Venda origin; client BU movements are logged to crm_cliente_timeline for the future timeline screen.
+
+- Front-end telemetry (errors, page views, page load time) goes only through src/lib/telemetry.ts into app_telemetry, fire-and-forget, so a logging failure never blocks a screen.
