@@ -29,7 +29,7 @@ const Hint = ({ k }: { k: keyof PosVendaMetrics }) => (
   <Tooltip>
     <TooltipTrigger asChild>
       <button type="button" aria-label="De onde vem o dado" className="inline-flex shrink-0 items-center">
-        <Info className="h-3 w-3 text-muted-foreground" />
+        <Info className="h-[13px] w-[13px] shrink-0 text-muted-foreground" />
       </button>
     </TooltipTrigger>
     <TooltipContent
