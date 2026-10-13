@@ -20,9 +20,9 @@ import {
 import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-type PeriodType = 'today' | 'week' | 'month';
+export type PeriodType = 'today' | 'week' | 'month';
 
-function getPeriodRange(period: PeriodType) {
+export function getPeriodRange(period: PeriodType) {
   const now = new Date();
   switch (period) {
     case 'today':
