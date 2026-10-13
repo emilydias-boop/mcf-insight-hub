@@ -32,7 +32,11 @@ const Hint = ({ k }: { k: keyof PosVendaMetrics }) => (
         <Info className="h-3 w-3 text-muted-foreground" />
       </button>
     </TooltipTrigger>
-    <TooltipContent side="top" sideOffset={6} className="max-w-xs text-xs leading-relaxed whitespace-normal sm:max-w-sm">
+    <TooltipContent
+      side="top"
+      sideOffset={6}
+      className="max-w-[420px] min-w-[260px] whitespace-normal px-3 py-2 text-[13px] leading-[1.5]"
+    >
       {HINTS[k]}
     </TooltipContent>
   </Tooltip>
