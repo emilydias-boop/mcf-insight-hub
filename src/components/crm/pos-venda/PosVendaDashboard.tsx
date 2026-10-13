@@ -27,8 +27,18 @@ const HINTS: Record<keyof PosVendaMetrics, string> = {
 
 const Hint = ({ k }: { k: keyof PosVendaMetrics }) => (
   <Tooltip>
-    <TooltipTrigger asChild><button type="button" aria-label="De onde vem o dado"><Info className="h-3 w-3 text-muted-foreground" /></button></TooltipTrigger>
-    <TooltipContent className="max-w-xs text-xs">{HINTS[k]}</TooltipContent>
+    <TooltipTrigger asChild>
+      <button type="button" aria-label="De onde vem o dado" className="inline-flex shrink-0 items-center">
+        <Info className="h-[13px] w-[13px] shrink-0 text-muted-foreground" />
+      </button>
+    </TooltipTrigger>
+    <TooltipContent
+      side="top"
+      sideOffset={6}
+      className="max-w-[340px] min-w-[220px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]"
+    >
+      {HINTS[k]}
+    </TooltipContent>
   </Tooltip>
 );
 
