@@ -514,20 +514,43 @@ Deno.serve(async (req) => {
   }
 
   // ===== CONTRATO (A000) =====
-  // 1º: attendee de R1 mais recente do deal (não cancelado/reagendado).
-  // Só sem nenhuma R1 no deal cai no attendee mais recente (comportamento antigo).
+  // Regra (Matheus, 14/10/2026): busca TODAS as R1 do deal, sem filtrar meeting_slots.status
+  // (a reunião que recebe lead remanejado fica "rescheduled" e segue ativa).
+  // Do participante, descarta só cancelled/rescheduled. Prioridade:
+  //  a) reunião até 2h após o pagamento antes das futuras;
+  //  b) participante não no_show/desistencia antes dos no_show/desistencia;
+  //  c) scheduled_at mais recente primeiro.
+  // Sem nenhuma R1 no deal cai no attendee mais recente (comportamento antigo).
   let attendeeCriterio: "r1" | "fallback_mais_recente" = "r1";
-  const { data: r1Attendees } = await supabase
+  const { data: r1Rows } = await supabase
     .from("meeting_slot_attendees")
-    .select("id, contract_paid_at, status, meeting_slot_id, meeting_slot:meeting_slots!inner(meeting_type, status)")
+    .select("id, contract_paid_at, status, meeting_slot_id, meeting_slot:meeting_slots!inner(meeting_type, scheduled_at)")
     .eq("deal_id", resolvedDealId)
     .eq("meeting_slot.meeting_type", "r1")
-    .not("status", "in", "(cancelled,rescheduled)")
-    .not("meeting_slot.status", "in", "(canceled,cancelled,rescheduled)")
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .not("status", "in", "(cancelled,rescheduled)");
+  const refMs = (paidAt ? new Date(paidAt).getTime() : NaN) || Date.now();
+  const limiteMs = refMs + 2 * 60 * 60 * 1000;
+  const r1Candidatas = (r1Rows ?? []).map((r: any) => {
+    const slot = Array.isArray(r.meeting_slot) ? r.meeting_slot[0] : r.meeting_slot;
+    const sAt: string | null = slot?.scheduled_at ?? null;
+    const ms = sAt ? new Date(sAt).getTime() : NaN;
+    return {
+      row: { id: r.id, contract_paid_at: r.contract_paid_at, status: r.status, meeting_slot_id: r.meeting_slot_id },
+      scheduled_at: sAt,
+      ms: Number.isFinite(ms) ? ms : -Infinity,
+      futura: Number.isFinite(ms) ? ms > limiteMs : false,
+      ruim: r.status === "no_show" || r.status === "desistencia",
+    };
+  });
+  r1Candidatas.sort((a, b) => {
+    if (a.futura !== b.futura) return a.futura ? 1 : -1;
+    if (a.ruim !== b.ruim) return a.ruim ? 1 : -1;
+    return b.ms - a.ms;
+  });
+  const r1Escolhida = r1Candidatas[0] ?? null;
+  const r1ScheduledAt: string | null = r1Escolhida?.scheduled_at ?? null;
   let attendee: { id: string; contract_paid_at: string | null; status: string | null; meeting_slot_id: string | null } | null =
-    (r1Attendees?.[0] as never) ?? null;
+    r1Escolhida?.row ?? null;
   if (!attendee) {
     attendeeCriterio = "fallback_mais_recente";
     const { data: attendees } = await supabase
@@ -616,6 +639,8 @@ Deno.serve(async (req) => {
       ok: true,
       attendee_id: attendee?.id ?? null,
       attendee_criterio: attendeeCriterio,
+      r1_scheduled_at: r1ScheduledAt,
+      r1_candidatas: r1Candidatas.length,
       applied: isPaid ? "paid" : "refunded",
       contrato: true,
       reembolso_contrato: reemb ?? null,
