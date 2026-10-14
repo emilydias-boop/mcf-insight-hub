@@ -4472,6 +4472,122 @@ export type Database = {
         }
         Relationships: []
       }
+      carrinho_acompanhamento: {
+        Row: {
+          contrato_attendee_id: string
+          deal_id: string | null
+          desistencia: boolean
+          motivo: string | null
+          observacao: string | null
+          proximo_contato: string | null
+          safra_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          contrato_attendee_id: string
+          deal_id?: string | null
+          desistencia?: boolean
+          motivo?: string | null
+          observacao?: string | null
+          proximo_contato?: string | null
+          safra_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          contrato_attendee_id?: string
+          deal_id?: string | null
+          desistencia?: boolean
+          motivo?: string | null
+          observacao?: string | null
+          proximo_contato?: string | null
+          safra_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "carrinho_acompanhamento_safra_id_fkey"
+            columns: ["safra_id"]
+            isOneToOne: false
+            referencedRelation: "carrinho_safras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      carrinho_acompanhamento_log: {
+        Row: {
+          autor: string | null
+          campo: string
+          contrato_attendee_id: string
+          created_at: string
+          id: number
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          autor?: string | null
+          campo: string
+          contrato_attendee_id: string
+          created_at?: string
+          id?: number
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          autor?: string | null
+          campo?: string
+          contrato_attendee_id?: string
+          created_at?: string
+          id?: number
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: []
+      }
+      carrinho_safras: {
+        Row: {
+          bu: string
+          created_at: string
+          created_by: string | null
+          data_final: string
+          data_inicial: string
+          editada_manual: boolean
+          fechamento_carrinho: string
+          id: string
+          observacao: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bu?: string
+          created_at?: string
+          created_by?: string | null
+          data_final: string
+          data_inicial: string
+          editada_manual?: boolean
+          fechamento_carrinho: string
+          id?: string
+          observacao?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bu?: string
+          created_at?: string
+          created_by?: string | null
+          data_final?: string
+          data_inicial?: string
+          editada_manual?: boolean
+          fechamento_carrinho?: string
+          id?: string
+          observacao?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           color: string | null
@@ -19880,6 +19996,124 @@ export type Database = {
       }
       canal_do_produto: { Args: { p_nome: string }; Returns: string }
       canal_entrada_vendas: { Args: { p_ids: string[] }; Returns: Json }
+      carrinho_acompanhamento_salvar: {
+        Args: {
+          p_campos: Json
+          p_contrato_attendee_id: string
+          p_deal_id: string
+        }
+        Returns: {
+          contrato_attendee_id: string
+          deal_id: string | null
+          desistencia: boolean
+          motivo: string | null
+          observacao: string | null
+          proximo_contato: string | null
+          safra_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "carrinho_acompanhamento"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      carrinho_pode_configurar: { Args: never; Returns: boolean }
+      carrinho_pode_editar: { Args: never; Returns: boolean }
+      carrinho_pode_ver: { Args: never; Returns: boolean }
+      carrinho_rotulo_produto: { Args: { p_nome: string }; Returns: string }
+      carrinho_safra_leads: {
+        Args: { p_safra_id: string }
+        Returns: {
+          acompanhamento_atualizado_em: string
+          acompanhamento_atualizado_por: string
+          closer_r1: string
+          closer_r2: string
+          contact_id: string
+          contract_paid_at: string
+          contrato_attendee_id: string
+          data_compra: string
+          deal_id: string
+          desistencia: boolean
+          email: string
+          lead_name: string
+          motivo: string
+          movimento: string
+          observacao: string
+          parceria_data: string
+          parceria_liquido: number
+          parceria_produtos: string
+          parceria_quando: string
+          parceria_rotulo: string
+          proximo_contato: string
+          r2_attendee_id: string
+          r2_data: string
+          r2_meeting_id: string
+          r2_no_shows: number
+          r2_posicao: string
+          r2_status_nome: string
+          r2_tentativas: number
+          reembolsado_em: string
+          safra_vinculo_id: string
+          safra_vinculo_label: string
+          sdr_name: string
+          situacao: string
+          status_reuniao: string
+          telefone: string
+        }[]
+      }
+      carrinho_safra_para_data: {
+        Args: { p_bu?: string; p_data: string }
+        Returns: {
+          bu: string
+          created_at: string
+          created_by: string | null
+          data_final: string
+          data_inicial: string
+          editada_manual: boolean
+          fechamento_carrinho: string
+          id: string
+          observacao: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "carrinho_safras"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      carrinho_safra_salvar: {
+        Args: {
+          p_data_final: string
+          p_data_inicial: string
+          p_fechamento: string
+          p_id: string
+          p_observacao?: string
+        }
+        Returns: {
+          bu: string
+          created_at: string
+          created_by: string | null
+          data_final: string
+          data_inicial: string
+          editada_manual: boolean
+          fechamento_carrinho: string
+          id: string
+          observacao: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "carrinho_safras"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       caucoes_efetivas: {
         Args: { p_bu?: string; p_from: string; p_to: string }
         Returns: {
