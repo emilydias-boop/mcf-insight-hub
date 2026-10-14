@@ -4479,7 +4479,9 @@ export type Database = {
           desistencia: boolean
           motivo: string | null
           observacao: string | null
+          origem: string
           proximo_contato: string | null
+          reembolso_solicitado: boolean
           safra_id: string | null
           updated_at: string
           updated_by: string | null
@@ -4490,7 +4492,9 @@ export type Database = {
           desistencia?: boolean
           motivo?: string | null
           observacao?: string | null
+          origem?: string
           proximo_contato?: string | null
+          reembolso_solicitado?: boolean
           safra_id?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -4501,7 +4505,9 @@ export type Database = {
           desistencia?: boolean
           motivo?: string | null
           observacao?: string | null
+          origem?: string
           proximo_contato?: string | null
+          reembolso_solicitado?: boolean
           safra_id?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -20008,7 +20014,9 @@ export type Database = {
           desistencia: boolean
           motivo: string | null
           observacao: string | null
+          origem: string
           proximo_contato: string | null
+          reembolso_solicitado: boolean
           safra_id: string | null
           updated_at: string
           updated_by: string | null
@@ -20056,6 +20064,48 @@ export type Database = {
           r2_status_nome: string
           r2_tentativas: number
           reembolsado_em: string
+          safra_vinculo_id: string
+          safra_vinculo_label: string
+          sdr_name: string
+          situacao: string
+          status_reuniao: string
+          telefone: string
+        }[]
+      }
+      carrinho_safra_linhas: {
+        Args: { p_safra_id: string }
+        Returns: {
+          acompanhamento_atualizado_em: string
+          acompanhamento_atualizado_por: string
+          closer_r1: string
+          closer_r2: string
+          contact_id: string
+          contract_paid_at: string
+          contrato_attendee_id: string
+          data_compra: string
+          deal_id: string
+          desistencia: boolean
+          email: string
+          lead_name: string
+          motivo: string
+          movimento: string
+          observacao: string
+          origem: string
+          parceria_data: string
+          parceria_liquido: number
+          parceria_produtos: string
+          parceria_quando: string
+          parceria_rotulo: string
+          proximo_contato: string
+          r2_attendee_id: string
+          r2_data: string
+          r2_meeting_id: string
+          r2_no_shows: number
+          r2_posicao: string
+          r2_status_nome: string
+          r2_tentativas: number
+          reembolsado_em: string
+          reembolso_solicitado: boolean
           safra_vinculo_id: string
           safra_vinculo_label: string
           sdr_name: string
