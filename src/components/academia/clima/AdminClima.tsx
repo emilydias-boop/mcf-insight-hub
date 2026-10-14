@@ -93,7 +93,7 @@ function Editor({ pesquisa }: { pesquisa: ClimaPesquisa }) {
     if (error) toast.error(erroAcademia(error)); refresh();
   };
   const add = async () => {
-    const { error } = await adb.from("clima_perguntas").insert({ pesquisa_id: pesquisa.id, ordem: (perguntas.at(-1)?.ordem ?? 0) + 1, enunciado: "Nova pergunta", tipo: "escala_0_10" });
+    const { error } = await adb.from("clima_perguntas").insert({ pesquisa_id: pesquisa.id, ordem: (perguntas[perguntas.length - 1]?.ordem ?? 0) + 1, enunciado: "Nova pergunta", tipo: "escala_0_10" });
     if (error) toast.error(erroAcademia(error)); refresh();
   };
   const mover = async (i: number, d: -1 | 1) => {
