@@ -16,7 +16,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
+import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
+import { useActiveR2Closers } from '@/hooks/useR2AgendaData';
+import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -33,13 +37,14 @@ interface LeadRow {
   contrato_attendee_id: string; deal_id: string | null; contact_id: string | null; lead_name: string | null;
   telefone: string | null; email: string | null; data_compra: string | null; contract_paid_at: string | null;
   closer_r1: string | null; sdr_name: string | null; r2_attendee_id: string | null; r2_meeting_id: string | null;
-  r2_data: string | null; closer_r2: string | null; r2_posicao: number | null; r2_status_nome: string | null;
+  r2_data: string | null; closer_r2: string | null; r2_posicao: string | null; r2_status_nome: string | null;
   r2_tentativas: number | null; r2_no_shows: number | null; status_reuniao: string | null;
   reembolsado_em: string | null; desistencia: boolean | null; motivo: string | null; observacao: string | null;
   proximo_contato: string | null; acompanhamento_atualizado_em: string | null; acompanhamento_atualizado_por: string | null;
   movimento: 'movido_para' | 'veio_de' | null; safra_vinculo_id: string | null; safra_vinculo_label: string | null;
   parceria_rotulo: string | null; parceria_produtos: string | null; parceria_data: string | null;
   parceria_liquido: number | null; parceria_quando: 'carrinho' | 'pos_carrinho' | null; situacao: string | null;
+  origem: 'agenda' | 'transacao' | null; reembolso_solicitado: boolean | null;
 }
 
 // ---------- helpers de data (fuso SP) ----------
@@ -82,7 +87,7 @@ const STATUS_TIP: Record<string, string> = {
   'Aguardando marcação': 'A R2 já passou e o closer não marcou realizada/no-show',
   'Pendente': 'Contrato pago sem R2',
 };
-const SITUACOES = ['comprou', 'reembolsado', 'desistente', 'movido', 'reprovado', 'no_carrinho', 'no_show', 'pendente', 'aguardando_marcacao', 'agendado'];
+const SITUACOES = ['comprou', 'reembolsado', 'reembolso_solicitado', 'desistente', 'movido', 'reprovado', 'no_carrinho', 'no_show', 'pendente', 'aguardando_marcacao', 'agendado'];
 
 type CardKey = 'contratos' | 'realizadas' | 'noshow' | 'pendentes' | 'aguardando' | 'reembolsos' | 'desistencias' | 'nocarrinho' | 'compraram' | 'pos';
 const CARD_FILTER: Record<CardKey, (r: LeadRow) => boolean> = {
@@ -91,7 +96,7 @@ const CARD_FILTER: Record<CardKey, (r: LeadRow) => boolean> = {
   noshow: (r) => r.status_reuniao === 'No Show',
   pendentes: (r) => r.status_reuniao === 'Pendente',
   aguardando: (r) => r.status_reuniao === 'Aguardando marcação',
-  reembolsos: (r) => !!r.reembolsado_em,
+  reembolsos: (r) => !!r.reembolsado_em || !!r.reembolso_solicitado,
   desistencias: (r) => !!r.desistencia,
   nocarrinho: (r) => r.situacao === 'no_carrinho',
   compraram: (r) => r.parceria_quando === 'carrinho',
@@ -133,11 +138,11 @@ export function CarrinhoSafraView() {
     queryKey: leadsKey,
     enabled: !!safra?.id,
     queryFn: async () => {
-      const { data, error } = await rpc('carrinho_safra_leads', { p_safra_id: safra!.id });
+      const { data, error } = await rpc('carrinho_safra_linhas', { p_safra_id: safra!.id });
       if (error) throw error;
       return (data || []) as LeadRow[];
     },
-    staleTime: 60_000, refetchOnWindowFocus: true,
+    staleTime: 60_000, refetchOnWindowFocus: true, refetchInterval: 120_000,
   });
   const rows = leadsQ.data || [];
 
@@ -179,7 +184,8 @@ export function CarrinhoSafraView() {
     const c = (k: CardKey) => contaveis.filter(CARD_FILTER[k]).length;
     return {
       contratos: contaveis.length, realizadas: c('realizadas'), noshow: c('noshow'), pendentes: c('pendentes'),
-      aguardando: c('aguardando'), reembolsos: c('reembolsos'), desistencias: c('desistencias'),
+      aguardando: c('aguardando'), reembolsos: contaveis.filter((r) => !!r.reembolsado_em).length, desistencias: c('desistencias'),
+      solicitados: contaveis.filter((r) => r.reembolso_solicitado && !r.reembolsado_em).length,
       nocarrinho: c('nocarrinho'), compraram: c('compraram'), pos: c('pos'),
     };
   }, [contaveis]);
@@ -218,7 +224,7 @@ export function CarrinhoSafraView() {
     const head = ['Nome', 'Telefone', 'E-mail', 'Data de compra', 'R2', 'Closer R1', 'Closer R2', 'Status', 'Reembolso/Desistência', 'Parceria', 'Observação', 'Próx. contato'];
     const linhas = filtradas.map((r) => [
       r.lead_name, r.telefone, r.email, dDate(r.data_compra, true), ddmmHHmm(r.r2_data), r.closer_r1, r.closer_r2, r.status_reuniao,
-      r.reembolsado_em ? `Reembolso ${dDate(r.reembolsado_em)}` : r.desistencia ? `Desistência${r.motivo ? ` (${r.motivo})` : ''}` : '',
+      r.reembolsado_em ? `Reembolso ${dDate(r.reembolsado_em)}` : r.reembolso_solicitado ? 'Reembolso solicitado' : r.desistencia ? `Desistência${r.motivo ? ` (${r.motivo})` : ''}` : '',
       `${r.parceria_rotulo || ''}${r.parceria_quando === 'pos_carrinho' ? ' (PÓS CARRINHO)' : ''}`, r.observacao, dDate(r.proximo_contato, true),
     ]);
     const csv = '\uFEFF' + [head, ...linhas].map((l) => l.map(csvCell).join(';')).join('\r\n');
@@ -232,6 +238,27 @@ export function CarrinhoSafraView() {
   const [editOpen, setEditOpen] = useState(false);
   const [desistRow, setDesistRow] = useState<LeadRow | null>(null);
   const [moverRow, setMoverRow] = useState<LeadRow | null>(null);
+  const [agendarRow, setAgendarRow] = useState<LeadRow | null>(null);
+  const updateStatus = useUpdateAttendeeAndSlotStatus();
+  const { data: statusOptions = [] } = useR2StatusOptions();
+  const { data: thermometerOptions = [] } = useR2ThermometerOptions();
+  const { data: r2Closers = [] } = useActiveR2Closers();
+
+  const marcarR2 = async (row: LeadRow, status: 'completed' | 'no_show') => {
+    if (!row.r2_attendee_id) return;
+    let syncSlot = false;
+    if (status === 'completed') {
+      const { data } = await supabase.from('meeting_slot_attendees').select('partner_name').eq('id', row.r2_attendee_id).maybeSingle();
+      syncSlot = !data?.partner_name;
+    }
+    updateStatus.mutate(
+      { attendeeId: row.r2_attendee_id, status, meetingId: row.r2_meeting_id || undefined, meetingType: 'r2', syncSlot },
+      {
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ['carrinho-safra-leads'] }); },
+        onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar status'),
+      },
+    );
+  };
 
   const moverProxima = async (row: LeadRow) => {
     if (!safra) return;
@@ -311,6 +338,7 @@ export function CarrinhoSafraView() {
               <CardContent className="p-3">
                 <div className="text-xs text-muted-foreground">{c.label}</div>
                 {leadsQ.isLoading || safraQ.isLoading ? <Skeleton className="h-7 w-10 mt-1" /> : <div className="text-2xl font-bold">{c.valor}</div>}
+                {c.k === 'reembolsos' && totais.solicitados > 0 && <div className="text-[11px] text-amber-400">+{totais.solicitados} solicitados</div>}
               </CardContent>
             </Card>
           ))}
@@ -380,6 +408,7 @@ export function CarrinhoSafraView() {
                           {r.movimento === 'movido_para' && <Badge variant="outline" className="text-[10px]">→ movido p/ {r.safra_vinculo_label}</Badge>}
                           {r.r2_status_nome?.startsWith('Reprovad') && <Badge variant="outline" className="text-[10px] text-red-400 border-red-500/40">Reprovado</Badge>}
                           {(r.r2_tentativas || 0) > 1 && <Badge variant="outline" className="text-[10px]">{r.r2_tentativas} R2</Badge>}
+                          {r.origem === 'transacao' && <Badge variant="outline" className="text-[10px] text-sky-400 border-sky-500/40">Sem R1 (outside)</Badge>}
                         </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
@@ -395,15 +424,41 @@ export function CarrinhoSafraView() {
                       <TableCell>{r.closer_r1 || '—'}</TableCell>
                       <TableCell>{r.closer_r2 || '—'}</TableCell>
                       <TableCell>
-                        {st ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild><Badge variant="outline" className={cn('whitespace-nowrap', STATUS_CLS[st])}>{st}</Badge></TooltipTrigger>
-                            {(STATUS_TIP[st] || r.r2_status_nome) && <TooltipContent>{STATUS_TIP[st] || r.r2_status_nome}</TooltipContent>}
-                          </Tooltip>
-                        ) : '—'}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild disabled={!podeEditar}>
+                            <button type="button" title={STATUS_TIP[st] || r.r2_status_nome || undefined}>
+                              <Badge variant="outline" className={cn('whitespace-nowrap cursor-pointer', STATUS_CLS[st])}>{st || '—'}{podeEditar && <ChevronDown className="h-3 w-3 ml-1" />}</Badge>
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            {r.r2_attendee_id && <>
+                              <DropdownMenuItem onClick={() => marcarR2(r, 'completed')}>Realizado</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => marcarR2(r, 'no_show')}>No Show</DropdownMenuItem>
+                            </>}
+                            {r.r2_meeting_id && ['No Show', 'Aguardando marcação', 'Agendado'].includes(st) && (
+                              <DropdownMenuItem onClick={() => navigate(`/crm/agenda-r2?reschedule=${r.r2_meeting_id}`)}>Reagendar R2</DropdownMenuItem>
+                            )}
+                            {st === 'Pendente' && !r.r2_meeting_id && (
+                              <DropdownMenuItem disabled={!r.deal_id} onClick={() => setAgendarRow(r)}>
+                                {r.deal_id ? 'Agendar R2' : 'Lead sem negócio no CRM'}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            {r.desistencia
+                              ? <DropdownMenuItem onClick={() => salvarAcomp(r, { desistencia: false }, { desistencia: false })}>Desfazer desistência</DropdownMenuItem>
+                              : <DropdownMenuItem onClick={() => setDesistRow(r)}>Desistência</DropdownMenuItem>}
+                            {!r.reembolsado_em && (r.reembolso_solicitado
+                              ? <DropdownMenuItem onClick={() => salvarAcomp(r, { reembolso_solicitado: false }, { reembolso_solicitado: false })}>Desfazer reembolso solicitado</DropdownMenuItem>
+                              : <DropdownMenuItem onClick={() => salvarAcomp(r, { reembolso_solicitado: true }, { reembolso_solicitado: true })}>Reembolso solicitado</DropdownMenuItem>)}
+                            {r.movimento
+                              ? <DropdownMenuItem onClick={() => salvarAcomp(r, { safra_id: null })}>Voltar para a safra original</DropdownMenuItem>
+                              : <DropdownMenuItem onClick={() => setMoverRow(r)}>Mover para próxima safra</DropdownMenuItem>}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {r.reembolsado_em ? <Badge variant="outline" className="text-red-400 border-red-500/40">Reembolso {dDate(r.reembolsado_em)}</Badge>
+                          : r.reembolso_solicitado ? <Badge variant="outline" className="text-amber-400 border-amber-500/40">Reembolso solicitado</Badge>
                           : r.desistencia ? (
                             <Tooltip>
                               <TooltipTrigger asChild><Badge variant="outline" className="text-orange-400 border-orange-500/40">Desistência</Badge></TooltipTrigger>
@@ -437,14 +492,9 @@ export function CarrinhoSafraView() {
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {r.desistencia
-                              ? <DropdownMenuItem onClick={() => salvarAcomp(r, { desistencia: false }, { desistencia: false })}>Desfazer desistência</DropdownMenuItem>
-                              : <DropdownMenuItem onClick={() => setDesistRow(r)}>Marcar desistência</DropdownMenuItem>}
-                            {r.movimento
-                              ? <DropdownMenuItem onClick={() => salvarAcomp(r, { safra_id: null })}>Voltar para a safra original</DropdownMenuItem>
-                              : <DropdownMenuItem onClick={() => setMoverRow(r)}>Mover para próxima safra</DropdownMenuItem>}
                             {r.deal_id && <DropdownMenuItem onClick={() => navigate(`/crm/negocios?deal=${r.deal_id}`)}>Abrir negócio</DropdownMenuItem>}
                             {r.r2_meeting_id && <DropdownMenuItem onClick={() => navigate('/crm/agenda-r2')}>Abrir R2 na agenda</DropdownMenuItem>}
+                            {!r.deal_id && !r.r2_meeting_id && <DropdownMenuItem disabled>Sem ações</DropdownMenuItem>}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -471,6 +521,18 @@ export function CarrinhoSafraView() {
 
         {safra && <EditarSafraDialog open={editOpen} onOpenChange={setEditOpen} safra={safra} onSaved={invalidar} />}
 
+        <R2QuickScheduleModal
+          open={!!agendarRow}
+          onOpenChange={(o) => { if (!o) { setAgendarRow(null); qc.invalidateQueries({ queryKey: ['carrinho-safra-leads'] }); } }}
+          closers={r2Closers}
+          statusOptions={statusOptions}
+          thermometerOptions={thermometerOptions}
+          preselectedDeal={agendarRow?.deal_id ? {
+            id: agendarRow.deal_id,
+            name: agendarRow.lead_name || '',
+            contact: agendarRow.contact_id ? { id: agendarRow.contact_id, name: agendarRow.lead_name || '', phone: agendarRow.telefone, email: agendarRow.email } : null,
+          } : undefined}
+        />
         <DesistenciaDialog row={desistRow} onClose={() => setDesistRow(null)}
           onConfirm={async (motivo) => { if (desistRow && await salvarAcomp(desistRow, { desistencia: true, motivo }, { desistencia: true, motivo })) setDesistRow(null); }} />
 
