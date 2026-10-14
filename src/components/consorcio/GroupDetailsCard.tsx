@@ -6,7 +6,7 @@ import { differenceInMonths, differenceInYears, parseISO } from 'date-fns';
 
 interface GroupDetailsCardProps {
   grupo: string;
-  dataContratacao: string;
+  dataContratacao: string | null | undefined;
 }
 
 function formatCurrency(value: number): string {
@@ -16,8 +16,11 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatTempoPermanencia(dataContratacao: string): string {
+function formatTempoPermanencia(dataContratacao: string | null | undefined): string {
+  // Reserva ainda não contratada: data_contratacao é nula — só exibição, mostra "-".
+  if (!dataContratacao) return '-';
   const dataInicio = parseISO(dataContratacao);
+  if (Number.isNaN(dataInicio.getTime())) return '-';
   const hoje = new Date();
   
   const anos = differenceInYears(hoje, dataInicio);
