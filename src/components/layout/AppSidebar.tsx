@@ -1,5 +1,9 @@
 import mcfLogo from "@/assets/Group_1321316528.png.asset.json";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+const CREDITO_IMOBILIARIO_ORIGIN_ID = 'c4ed1700-0000-4000-8000-000000000002';
 import {
   LayoutDashboard,
   DollarSign,
@@ -453,6 +457,16 @@ export function AppSidebar() {
   const { pausado: waPausado } = useWaEnvioStatus();
   const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
+  // Pipelines com visão completa liberadas individualmente (sdr.full_view_origin_ids)
+  const { data: fullViewOrigins = [] } = useQuery({
+    queryKey: ['sdr-full-view', user?.id],
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<string[]> => {
+      const { data } = await supabase.from('sdr').select('full_view_origin_ids').eq('user_id', user!.id).maybeSingle();
+      return ((data as any)?.full_view_origin_ids as string[] | null) ?? [];
+    },
+  });
 
   
   // Dialer (visível para SDRs e para o time de cobrança do consórcio —
@@ -580,7 +594,10 @@ export function AppSidebar() {
     const isArItem = item.items?.some(s => s.url?.startsWith('/financeiro/a-receber'));
     if (isArItem && canManageAr) return true;
     // Verificação de roles
-    if (item.requiredRoles && role && !item.requiredRoles.some(r => (allRoles as string[]).includes(r))) {
+    // Exceção individual: quem tem visão completa da pipeline Crédito Imobiliário vê o grupo da BU Crédito
+    const isGrupoCredito = item.items?.some(s => s.url === '/credito/crm');
+    const liberadoCredito = isGrupoCredito && fullViewOrigins.includes(CREDITO_IMOBILIARIO_ORIGIN_ID);
+    if (!liberadoCredito && item.requiredRoles && role && !item.requiredRoles.some(r => (allRoles as string[]).includes(r))) {
       return false;
     }
 
