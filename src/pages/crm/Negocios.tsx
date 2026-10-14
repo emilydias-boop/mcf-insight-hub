@@ -844,6 +844,13 @@ const Negocios = () => {
         if (resgateSel === 'only' && !emResgate) return false;
         if (resgateSel === 'none' && emResgate) return false;
       }
+      // Filtro Projeto (Admissão)
+      const projetoSel = filters.projeto ?? 'all';
+      if (projetoSel !== 'all') {
+        const st = (((deal as any).custom_fields as any)?.admissao?.projeto_status ?? null) as string | null;
+        const cat = st === 'quer_pre_analise' ? 'sem_projeto' : st === 'aprovado' ? 'aprovado' : st === 'nenhum' ? 'nenhum' : 'sem_info';
+        if (cat !== projetoSel) return false;
+      }
       // Filtro Outside
       if (filters.outsideFilter !== 'all') {
         if (!outsideMap) return false;
@@ -897,6 +904,7 @@ const Negocios = () => {
       temperature: 'all',
       lossReasons: [],
       resgate: 'all',
+      projeto: 'all',
     });
   };
   

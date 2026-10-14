@@ -67,7 +67,11 @@ export interface DealFiltersState {
   lossReasons?: string[];
   /** Selo Resgate (crm_deals.resgate_em), à parte do A/B/C. Opcional para não quebrar quem monta o estado em outros lugares. */
   resgate?: 'all' | 'only' | 'none';
+  /** Situação do projeto vinda da Admissão (custom_fields.admissao.projeto_status). */
+  projeto?: ProjetoFiltro;
 }
+
+export type ProjetoFiltro = 'all' | 'sem_projeto' | 'aprovado' | 'nenhum' | 'sem_info';
 
 interface DealFiltersProps {
   filters: DealFiltersState;
@@ -185,6 +189,7 @@ export const DealFilters = ({
     filters.temperature !== 'all',
     (filters.lossReasons?.length ?? 0) > 0,
     (filters.resgate ?? 'all') !== 'all',
+    (filters.projeto ?? 'all') !== 'all',
   ].filter(Boolean).length;
   
   return (
@@ -667,6 +672,23 @@ export const DealFilters = ({
           <SelectItem value="all">Todos (resgate)</SelectItem>
           <SelectItem value="only">Só Resgate</SelectItem>
           <SelectItem value="none">Sem Resgate</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* Filtro Projeto (custom_fields.admissao.projeto_status, vindo da Admissão) */}
+      <Select
+        value={filters.projeto ?? 'all'}
+        onValueChange={(value) => onChange({ ...filters, projeto: value as ProjetoFiltro })}
+      >
+        <SelectTrigger className="w-[170px]">
+          <SelectValue placeholder="Projeto" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos (projeto)</SelectItem>
+          <SelectItem value="sem_projeto">Sem projeto</SelectItem>
+          <SelectItem value="aprovado">Projeto aprovado</SelectItem>
+          <SelectItem value="nenhum">Sem interesse</SelectItem>
+          <SelectItem value="sem_info">Sem informação</SelectItem>
         </SelectContent>
       </Select>
 
