@@ -14,6 +14,7 @@ import {
   subMonths,
   isSameDay,
 } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 import { getWeekStartsOn } from "@/lib/businessDays";
 import { ptBR } from "date-fns/locale";
 import {
@@ -435,6 +436,75 @@ export default function AgendaR2() {
     setMeetingDrawerOpen(false);
     setRescheduleModalOpen(true);
   };
+
+  // Deep-link: ?reschedule=<meeting_id> abre o reagendamento; ?meeting=<id> abre o drawer.
+  const rescheduleParam = searchParams.get('reschedule');
+  const meetingParam = searchParams.get('meeting');
+  const deepLinkId = rescheduleParam || meetingParam;
+  const [deepLinkSlotDate, setDeepLinkSlotDate] = useState<Date | null>(null);
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+
+  const limparDeepLinkParams = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('reschedule');
+    next.delete('meeting');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Busca a data da reunião referenciada para posicionar o calendário no dia certo.
+  useEffect(() => {
+    if (!deepLinkId) {
+      setDeepLinkSlotDate(null);
+      setDeepLinkHandled(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('meeting_slots')
+        .select('scheduled_at')
+        .eq('id', deepLinkId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        toast.error('Reunião não encontrada');
+        limparDeepLinkParams();
+        return;
+      }
+      setDeepLinkSlotDate(new Date(data.scheduled_at));
+    })();
+    return () => { cancelled = true; };
+  }, [deepLinkId, limparDeepLinkParams]);
+
+  // Quando as reuniões do dia carregarem, abre o modal/drawer e limpa a URL.
+  useEffect(() => {
+    if (!deepLinkId || !deepLinkSlotDate || deepLinkHandled) return;
+
+    const target =
+      meetings.find((m) => m.id === deepLinkId) ||
+      filteredMeetings.find((m) => m.id === deepLinkId);
+    if (target) {
+      if (rescheduleParam) handleReschedule(target);
+      else handleSelectMeeting(target);
+      setDeepLinkHandled(true);
+      limparDeepLinkParams();
+      return;
+    }
+
+    // A reunião ainda não está no período carregado: posiciona o dia e aguarda o novo fetch.
+    if (!isSameDay(selectedDate, deepLinkSlotDate) || viewMode !== 'day') {
+      setSelectedDate(deepLinkSlotDate);
+      setViewMode('day');
+      return;
+    }
+
+    if (!isLoadingMeetings) {
+      toast.error('Reunião não encontrada');
+      setDeepLinkHandled(true);
+      limparDeepLinkParams();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkId, deepLinkSlotDate, deepLinkHandled, rescheduleParam, meetings, filteredMeetings, isLoadingMeetings, selectedDate, viewMode, limparDeepLinkParams]);
 
   // Export list handler for Bruna (names + phones)
   const handleExportList = () => {
