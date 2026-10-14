@@ -381,7 +381,19 @@ const Negocios = () => {
   // no servidor passa a ser OR: sou dono OU sou closer da R1/R2.
   const { data: myCloser } = useMyCloser(activeBU);
   const isCloserRole = role === 'closer' || (allRoles || []).includes('closer');
-  const meetingCloserEmail = isRestrictedRole && isCloserRole
+  // Visão completa individual (sdr.full_view_origin_ids): nessas pipelines o SDR vê todos os negócios.
+  const { data: fullViewOrigins = [] } = useQuery({
+    queryKey: ['sdr-full-view', user?.id],
+    enabled: !!user?.id && isSdr,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<string[]> => {
+      const { data } = await supabase.from('sdr').select('full_view_origin_ids').eq('user_id', user!.id).maybeSingle();
+      return ((data as any)?.full_view_origin_ids as string[] | null) ?? [];
+    },
+  });
+  const visaoCompleta = isSdr && !!dealsScopeId && fullViewOrigins.includes(dealsScopeId);
+  const restringirDono = isRestrictedRole && !visaoCompleta;
+  const meetingCloserEmail = restringirDono && isCloserRole
     ? (myCloser?.email || userProfile?.email || undefined)
     : undefined;
   
