@@ -416,7 +416,7 @@ const Negocios = () => {
     // legado: kanban e busca rodam no servidor (kanban_*); remover na limpeza
     enabled: false,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
-    ownerProfileId: isRestrictedRole ? user?.id : undefined,
+    ownerProfileId: restringirDono ? user?.id : undefined,
     // Closer (inclui dual role sdr+closer): união com r1/r2_closer_email
     meetingCloserEmail,
   });
