@@ -521,6 +521,18 @@ export function CarrinhoSafraView() {
 
         {safra && <EditarSafraDialog open={editOpen} onOpenChange={setEditOpen} safra={safra} onSaved={invalidar} />}
 
+        <R2QuickScheduleModal
+          open={!!agendarRow}
+          onOpenChange={(o) => { if (!o) { setAgendarRow(null); qc.invalidateQueries({ queryKey: ['carrinho-safra-leads'] }); } }}
+          closers={r2Closers}
+          statusOptions={statusOptions}
+          thermometerOptions={thermometerOptions}
+          preselectedDeal={agendarRow?.deal_id ? {
+            id: agendarRow.deal_id,
+            name: agendarRow.lead_name || '',
+            contact: agendarRow.contact_id ? { id: agendarRow.contact_id, name: agendarRow.lead_name || '', phone: agendarRow.telefone, email: agendarRow.email } : null,
+          } : undefined}
+        />
         <DesistenciaDialog row={desistRow} onClose={() => setDesistRow(null)}
           onConfirm={async (motivo) => { if (desistRow && await salvarAcomp(desistRow, { desistencia: true, motivo }, { desistencia: true, motivo })) setDesistRow(null); }} />
 
