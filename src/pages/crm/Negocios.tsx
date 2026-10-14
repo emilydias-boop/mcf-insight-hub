@@ -425,10 +425,10 @@ const Negocios = () => {
   const { data: kanbanOrigemIds = [] } = useKanbanOrigemIds(dealsScopeId || undefined);
   const restricaoKanban = useMemo(() => {
     const r: Record<string, string> = {};
-    if (isRestrictedRole && user?.id) r.restrictOwnerProfileId = user.id;
+    if (restringirDono && user?.id) r.restrictOwnerProfileId = user.id;
     if (meetingCloserEmail) r.restrictCloserEmail = meetingCloserEmail;
     return r;
-  }, [isRestrictedRole, user?.id, meetingCloserEmail]);
+  }, [restringirDono, user?.id, meetingCloserEmail]);
   const filtrosKanban = useMemo(
     () => montarFiltrosKanban({ ...filters, search: buscaDebounced }, restricaoKanban),
     [filters, buscaDebounced, restricaoKanban],
@@ -1140,7 +1140,7 @@ const Negocios = () => {
           <div className="flex items-center gap-2">
             <div>
               <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
-                {isRestrictedRole ? 'Meus Negócios' : hasSinglePipeline && selectedPipelineName ? selectedPipelineName : 'Pipeline de Vendas'}
+                {restringirDono ? 'Meus Negócios' : hasSinglePipeline && selectedPipelineName ? selectedPipelineName : 'Pipeline de Vendas'}
                 {hasSinglePipeline && (
                   <Button
                     variant="ghost"
