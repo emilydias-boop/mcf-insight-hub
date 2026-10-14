@@ -60,7 +60,7 @@ function Pessoas() {
         <div><Label>Atuação no funil</Label>
           <Select value={atuacao} onValueChange={setAtuacao}><SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="nenhuma">Não se aplica</SelectItem><SelectItem value="r01">R01</SelectItem><SelectItem value="r02">R02</SelectItem></SelectContent></Select></div>
-        <div><Label>Data de início</Label><Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} /></div>
+        <div><Label>Data de Início na Academia</Label><Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} /></div>
         <div><Label>Gestor</Label><UsuarioPicker valor={gestor} onChange={setGestor} /></div>
         <div><Label>Padrinho (Pessoas & Cultura)</Label><UsuarioPicker valor={padrinho} onChange={setPadrinho} /></div>
         <Button className="w-full" onClick={convidar}>Convidar</Button>
@@ -69,7 +69,7 @@ function Pessoas() {
         {perfis.map((p) => (
           <div key={p.id} className="ac-card p-4 flex flex-wrap items-center gap-3 text-sm">
             <div className="flex-1 min-w-48"><div className="font-bold">{p.nome}</div>
-              <div className="text-xs text-muted-foreground">{cat?.frentes.find((f) => f.id === p.frente_id)?.nome} · início {new Date(p.data_inicio + "T00:00").toLocaleDateString("pt-BR")} · gestor {nomes[p.gestor_id ?? ""] ?? "—"} · padrinho {nomes[p.padrinho_id ?? ""] ?? "—"}</div></div>
+              <div className="text-xs text-muted-foreground">{cat?.frentes.find((f) => f.id === p.frente_id)?.nome} · início na Academia {new Date(p.data_inicio + "T00:00").toLocaleDateString("pt-BR")} · gestor {nomes[p.gestor_id ?? ""] ?? "—"} · padrinho {nomes[p.padrinho_id ?? ""] ?? "—"}</div></div>
             <span className="text-xs rounded-full border px-2 py-0.5">{p.status}</span>
             <span className="text-xs">{p.xp_total} XP</span>
             {p.status !== "encerrado" && <Button size="sm" variant="ghost" onClick={() => encerrar(p.id)}>Encerrar</Button>}
