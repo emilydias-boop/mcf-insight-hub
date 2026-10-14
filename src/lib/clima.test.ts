@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
 import { nivelPorMedia } from "./clima";
 
-describe("nivelPorMedia", () => {
-  it("média 7 ou mais é feliz", () => expect(nivelPorMedia(7)).toBe("feliz"));
-  it("média entre 4 e 6,9 é entediado", () => { expect(nivelPorMedia(4)).toBe("entediado"); expect(nivelPorMedia(6.9)).toBe("entediado"); });
-  it("média abaixo de 4 é triste", () => expect(nivelPorMedia(3.9)).toBe("triste"));
-});
+/** Sem dependência de runner: roda com `bun src/lib/clima.test.ts`. */
+const casos: [number, string][] = [[7, "feliz"], [10, "feliz"], [6.9, "entediado"], [4, "entediado"], [3.9, "triste"], [0, "triste"]];
+for (const [m, esperado] of casos) {
+  const r = nivelPorMedia(m);
+  if (r !== esperado) throw new Error(`média ${m}: esperado ${esperado}, veio ${r}`);
+}
+console.log("clima: ok");
