@@ -1,0 +1,1 @@
+ALTER TABLE public.sdr ADD COLUMN IF NOT EXISTS full_view_origin_ids uuid[] NOT NULL DEFAULT '{}';
