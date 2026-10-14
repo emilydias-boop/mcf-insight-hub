@@ -45,7 +45,7 @@ interface LeadRow {
   parceria_rotulo: string | null; parceria_produtos: string | null; parceria_data: string | null;
   parceria_liquido: number | null; parceria_quando: 'carrinho' | 'pos_carrinho' | null; situacao: string | null;
   origem: 'agenda' | 'transacao' | null; reembolso_solicitado: boolean | null;
-  r2_encontrada_por?: 'negocio' | 'contato' | 'telefone' | 'email' | 'nome' | null;
+  r2_encontrada_por?: 'negocio' | 'contato' | 'telefone' | 'email' | 'nome' | 'agenda_r1' | null;
 }
 
 // ---------- helpers de data (fuso SP) ----------
@@ -401,6 +401,8 @@ export function CarrinhoSafraView() {
                   const st = r.status_reuniao || '';
                   const atrasado = r.proximo_contato && r.proximo_contato < hoje;
                   const enc = r.r2_encontrada_por;
+                  const encR1 = enc === 'agenda_r1';
+                  const abrirNegocio = () => r.deal_id && navigate(`/crm/negocios?deal=${r.deal_id}`);
                   const encTip = enc === 'telefone' || enc === 'email'
                     ? `R2 encontrada pelo ${enc === 'telefone' ? 'telefone' : 'e-mail'} do comprador ou sócio`
                     : null;
@@ -452,13 +454,21 @@ export function CarrinhoSafraView() {
                                 <TooltipContent className="max-w-[320px] whitespace-normal text-[11px]">R2 encontrada pelo nome (a reunião foi agendada sem e-mail/telefone). Confira se é a mesma pessoa.</TooltipContent>
                               </Tooltip>
                             )}
+                            {encR1 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="text-[10px] whitespace-nowrap text-blue-400 border-blue-500/50 bg-blue-500/10">agenda R1</Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[320px] whitespace-normal text-[11px]">Reunião pós-contrato feita na agenda R1 (ex.: venda direta). Conta como R2 no carrinho.</TooltipContent>
+                              </Tooltip>
+                            )}
                           </div>
                           <DropdownMenuContent align="start">
                             {r.r2_attendee_id && <>
                               <DropdownMenuItem onClick={() => marcarR2(r, 'completed')}>Realizado</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => marcarR2(r, 'no_show')}>No Show</DropdownMenuItem>
                             </>}
-                            {r.r2_meeting_id && ['No Show', 'Aguardando marcação', 'Agendado'].includes(st) && (
+                            {r.r2_meeting_id && !encR1 && ['No Show', 'Aguardando marcação', 'Agendado'].includes(st) && (
                               <DropdownMenuItem onClick={() => navigate(`/crm/agenda-r2?reschedule=${r.r2_meeting_id}`)}>Reagendar R2</DropdownMenuItem>
                             )}
                             {st === 'Pendente' && !r.r2_meeting_id && (
@@ -515,9 +525,11 @@ export function CarrinhoSafraView() {
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {r.deal_id && <DropdownMenuItem onClick={() => navigate(`/crm/negocios?deal=${r.deal_id}`)}>Abrir negócio</DropdownMenuItem>}
-                            {r.r2_meeting_id && <DropdownMenuItem onClick={() => navigate(`/crm/agenda-r2?meeting=${r.r2_meeting_id}`)}>Abrir R2 na agenda</DropdownMenuItem>}
-                            {!r.deal_id && !r.r2_meeting_id && <DropdownMenuItem disabled>Sem ações</DropdownMenuItem>}
+                            {r.deal_id && <DropdownMenuItem onClick={abrirNegocio}>Abrir negócio</DropdownMenuItem>}
+                            {encR1
+                              ? r.deal_id && <DropdownMenuItem onClick={abrirNegocio}>Abrir reunião na agenda R1</DropdownMenuItem>
+                              : r.r2_meeting_id && <DropdownMenuItem onClick={() => navigate(`/crm/agenda-r2?meeting=${r.r2_meeting_id}`)}>Abrir R2 na agenda</DropdownMenuItem>}
+                            {!r.deal_id && (encR1 || !r.r2_meeting_id) && <DropdownMenuItem disabled>Sem ações</DropdownMenuItem>}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
