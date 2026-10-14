@@ -3907,6 +3907,24 @@ export type Database = {
         }
         Relationships: []
       }
+      bkp_sdr_karen_20261014: {
+        Row: {
+          allowed_origin_ids: string[] | null
+          backup_em: string | null
+          id: string | null
+        }
+        Insert: {
+          allowed_origin_ids?: string[] | null
+          backup_em?: string | null
+          id?: string | null
+        }
+        Update: {
+          allowed_origin_ids?: string[] | null
+          backup_em?: string | null
+          id?: string | null
+        }
+        Relationships: []
+      }
       bkp_vinculo_deal_20260821: {
         Row: {
           consortium_card_id: string | null
