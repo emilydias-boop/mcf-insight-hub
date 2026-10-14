@@ -15743,6 +15743,7 @@ export type Database = {
           created_at: string | null
           criado_por: string | null
           email: string | null
+          full_view_origin_ids: string[]
           id: string
           meta_diaria: number | null
           name: string
@@ -15762,6 +15763,7 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           email?: string | null
+          full_view_origin_ids?: string[]
           id?: string
           meta_diaria?: number | null
           name: string
@@ -15781,6 +15783,7 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           email?: string | null
+          full_view_origin_ids?: string[]
           id?: string
           meta_diaria?: number | null
           name?: string
