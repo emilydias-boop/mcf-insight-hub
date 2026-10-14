@@ -381,7 +381,19 @@ const Negocios = () => {
   // no servidor passa a ser OR: sou dono OU sou closer da R1/R2.
   const { data: myCloser } = useMyCloser(activeBU);
   const isCloserRole = role === 'closer' || (allRoles || []).includes('closer');
-  const meetingCloserEmail = isRestrictedRole && isCloserRole
+  // Visão completa individual (sdr.full_view_origin_ids): nessas pipelines o SDR vê todos os negócios.
+  const { data: fullViewOrigins = [] } = useQuery({
+    queryKey: ['sdr-full-view', user?.id],
+    enabled: !!user?.id && isSdr,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<string[]> => {
+      const { data } = await supabase.from('sdr').select('full_view_origin_ids').eq('user_id', user!.id).maybeSingle();
+      return ((data as any)?.full_view_origin_ids as string[] | null) ?? [];
+    },
+  });
+  const visaoCompleta = isSdr && !!dealsScopeId && fullViewOrigins.includes(dealsScopeId);
+  const restringirDono = isRestrictedRole && !visaoCompleta;
+  const meetingCloserEmail = restringirDono && isCloserRole
     ? (myCloser?.email || userProfile?.email || undefined)
     : undefined;
   
@@ -404,7 +416,7 @@ const Negocios = () => {
     // legado: kanban e busca rodam no servidor (kanban_*); remover na limpeza
     enabled: false,
     // Se for SDR/Closer, filtrar por owner_profile_id no backend
-    ownerProfileId: isRestrictedRole ? user?.id : undefined,
+    ownerProfileId: restringirDono ? user?.id : undefined,
     // Closer (inclui dual role sdr+closer): união com r1/r2_closer_email
     meetingCloserEmail,
   });
@@ -413,10 +425,10 @@ const Negocios = () => {
   const { data: kanbanOrigemIds = [] } = useKanbanOrigemIds(dealsScopeId || undefined);
   const restricaoKanban = useMemo(() => {
     const r: Record<string, string> = {};
-    if (isRestrictedRole && user?.id) r.restrictOwnerProfileId = user.id;
+    if (restringirDono && user?.id) r.restrictOwnerProfileId = user.id;
     if (meetingCloserEmail) r.restrictCloserEmail = meetingCloserEmail;
     return r;
-  }, [isRestrictedRole, user?.id, meetingCloserEmail]);
+  }, [restringirDono, user?.id, meetingCloserEmail]);
   const filtrosKanban = useMemo(
     () => montarFiltrosKanban({ ...filters, search: buscaDebounced }, restricaoKanban),
     [filters, buscaDebounced, restricaoKanban],
@@ -1128,7 +1140,7 @@ const Negocios = () => {
           <div className="flex items-center gap-2">
             <div>
               <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
-                {isRestrictedRole ? 'Meus Negócios' : hasSinglePipeline && selectedPipelineName ? selectedPipelineName : 'Pipeline de Vendas'}
+                {restringirDono ? 'Meus Negócios' : hasSinglePipeline && selectedPipelineName ? selectedPipelineName : 'Pipeline de Vendas'}
                 {hasSinglePipeline && (
                   <Button
                     variant="ghost"
