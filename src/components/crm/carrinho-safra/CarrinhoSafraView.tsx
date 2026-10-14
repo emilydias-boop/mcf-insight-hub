@@ -400,6 +400,17 @@ export function CarrinhoSafraView() {
                 ) : filtradas.map((r) => {
                   const st = r.status_reuniao || '';
                   const atrasado = r.proximo_contato && r.proximo_contato < hoje;
+                  const enc = r.r2_encontrada_por;
+                  const encTip = enc === 'telefone' || enc === 'email'
+                    ? `R2 encontrada pelo ${enc === 'telefone' ? 'telefone' : 'e-mail'} do comprador ou sócio`
+                    : null;
+                  const statusTrigger = (
+                    <DropdownMenuTrigger asChild disabled={!podeEditar}>
+                      <button type="button" title={encTip ? undefined : (STATUS_TIP[st] || r.r2_status_nome || undefined)}>
+                        <Badge variant="outline" className={cn('whitespace-nowrap cursor-pointer', STATUS_CLS[st])}>{st || '—'}{podeEditar && <ChevronDown className="h-3 w-3 ml-1" />}</Badge>
+                      </button>
+                    </DropdownMenuTrigger>
+                  );
                   return (
                     <TableRow key={r.contrato_attendee_id} className={cn(r.movimento === 'movido_para' && 'opacity-50')}>
                       <TableCell className="min-w-[180px]">
@@ -426,11 +437,22 @@ export function CarrinhoSafraView() {
                       <TableCell>{r.closer_r2 || '—'}</TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild disabled={!podeEditar}>
-                            <button type="button" title={STATUS_TIP[st] || r.r2_status_nome || undefined}>
-                              <Badge variant="outline" className={cn('whitespace-nowrap cursor-pointer', STATUS_CLS[st])}>{st || '—'}{podeEditar && <ChevronDown className="h-3 w-3 ml-1" />}</Badge>
-                            </button>
-                          </DropdownMenuTrigger>
+                          <div className="flex items-center gap-1.5">
+                            {encTip ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>{statusTrigger}</TooltipTrigger>
+                                <TooltipContent className="max-w-[300px] whitespace-normal text-[11px]">{[encTip, STATUS_TIP[st]].filter(Boolean).join(' · ')}</TooltipContent>
+                              </Tooltip>
+                            ) : statusTrigger}
+                            {enc === 'nome' && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="text-[10px] whitespace-nowrap text-yellow-400 border-yellow-500/50 bg-yellow-500/10">conferir</Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[320px] whitespace-normal text-[11px]">R2 encontrada pelo nome (a reunião foi agendada sem e-mail/telefone). Confira se é a mesma pessoa.</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
                           <DropdownMenuContent align="start">
                             {r.r2_attendee_id && <>
                               <DropdownMenuItem onClick={() => marcarR2(r, 'completed')}>Realizado</DropdownMenuItem>
