@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { CarrinhoSafraView } from '@/components/crm/carrinho-safra/CarrinhoSafraView';
 import { format, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, RefreshCw, ShoppingCart, Settings } from 'lucide-react';
@@ -29,7 +30,7 @@ import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
 import { useActiveR2Closers } from '@/hooks/useR2AgendaData';
 import { R2AccumulatedLead } from '@/hooks/useR2AccumulatedLeads';
 
-export default function R2Carrinho() {
+function R2CarrinhoAntigo() {
   const [weekDate, setWeekDate] = useState(() => getActiveCartReferenceDate(new Date()));
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -559,6 +560,27 @@ export default function R2Carrinho() {
           } : null,
         } : undefined}
       />
+    </div>
+  );
+}
+
+const VISAO_KEY = 'r2carrinho_visao';
+
+export default function R2Carrinho() {
+  const [visao, setVisao] = useState<'safra' | 'antiga'>(() => {
+    try { return localStorage.getItem(VISAO_KEY) === 'antiga' ? 'antiga' : 'safra'; } catch { return 'safra'; }
+  });
+  const escolher = (v: 'safra' | 'antiga') => {
+    setVisao(v);
+    try { localStorage.setItem(VISAO_KEY, v); } catch { /* ignore */ }
+  };
+  return (
+    <div className="space-y-3">
+      <div className="inline-flex rounded-md border p-0.5 gap-0.5">
+        <Button size="sm" variant={visao === 'safra' ? 'default' : 'ghost'} onClick={() => escolher('safra')}>Safra (nova)</Button>
+        <Button size="sm" variant={visao === 'antiga' ? 'default' : 'ghost'} onClick={() => escolher('antiga')}>Visão antiga</Button>
+      </div>
+      {visao === 'safra' ? <CarrinhoSafraView /> : <R2CarrinhoAntigo />}
     </div>
   );
 }
