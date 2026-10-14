@@ -3715,6 +3715,24 @@ export type Database = {
           },
         ]
       }
+      bkp_academia_data_inicio_20261014: {
+        Row: {
+          created_at: string
+          data_inicio: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          data_inicio?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          data_inicio?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       bkp_cota_contratada_backfill: {
         Row: {
           deal_id: string
