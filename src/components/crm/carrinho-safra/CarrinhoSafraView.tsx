@@ -493,7 +493,7 @@ export function CarrinhoSafraView() {
                           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {r.deal_id && <DropdownMenuItem onClick={() => navigate(`/crm/negocios?deal=${r.deal_id}`)}>Abrir negócio</DropdownMenuItem>}
-                            {r.r2_meeting_id && <DropdownMenuItem onClick={() => navigate('/crm/agenda-r2')}>Abrir R2 na agenda</DropdownMenuItem>}
+                            {r.r2_meeting_id && <DropdownMenuItem onClick={() => navigate(`/crm/agenda-r2?meeting=${r.r2_meeting_id}`)}>Abrir R2 na agenda</DropdownMenuItem>}
                             {!r.deal_id && !r.r2_meeting_id && <DropdownMenuItem disabled>Sem ações</DropdownMenuItem>}
                           </DropdownMenuContent>
                         </DropdownMenu>
