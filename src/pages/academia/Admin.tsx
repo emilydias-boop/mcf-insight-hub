@@ -6,6 +6,7 @@ import { adb, erroAcademia, type APerfil, type AProduto } from "@/lib/academia";
 import { useCatalogo, useNomes } from "@/hooks/useAcademia";
 import { UsuarioPicker, type UsuarioApp } from "@/components/academia/UsuarioPicker";
 import AdminTemplates from "./AdminTemplates";
+import AdminClima from "@/components/academia/clima/AdminClima";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -207,12 +208,13 @@ export default function AcademiaAdmin() {
       <div><div className="ac-eyebrow">Pessoas & Cultura</div><h1 className="text-3xl">Admin RH</h1></div>
       <Tabs defaultValue="pessoas">
         <TabsList><TabsTrigger value="pessoas">Convites e pessoas</TabsTrigger><TabsTrigger value="templates">Templates de trilha</TabsTrigger>
-          <TabsTrigger value="frentes">Produtos</TabsTrigger><TabsTrigger value="quizzes">Quizzes</TabsTrigger><TabsTrigger value="relatorios">Relatórios</TabsTrigger></TabsList>
+          <TabsTrigger value="frentes">Produtos</TabsTrigger><TabsTrigger value="quizzes">Quizzes</TabsTrigger><TabsTrigger value="relatorios">Relatórios</TabsTrigger><TabsTrigger value="clima">Pesquisa de Clima</TabsTrigger></TabsList>
         <TabsContent value="pessoas" className="mt-6"><Pessoas /></TabsContent>
         <TabsContent value="templates" className="mt-6"><AdminTemplates /></TabsContent>
         <TabsContent value="frentes" className="mt-6"><Frentes /></TabsContent>
         <TabsContent value="quizzes" className="mt-6"><Quizzes /></TabsContent>
         <TabsContent value="relatorios" className="mt-6"><Relatorios /></TabsContent>
+        <TabsContent value="clima" className="mt-6"><AdminClima /></TabsContent>
       </Tabs>
     </div>
   );

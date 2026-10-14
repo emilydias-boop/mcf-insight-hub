@@ -4753,6 +4753,115 @@ export type Database = {
           },
         ]
       }
+      clima_perguntas: {
+        Row: {
+          created_at: string
+          enunciado: string
+          id: string
+          obrigatoria: boolean
+          ordem: number
+          permite_comentario: boolean
+          pesquisa_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enunciado: string
+          id?: string
+          obrigatoria?: boolean
+          ordem?: number
+          permite_comentario?: boolean
+          pesquisa_id: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enunciado?: string
+          id?: string
+          obrigatoria?: boolean
+          ordem?: number
+          permite_comentario?: boolean
+          pesquisa_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clima_perguntas_pesquisa_id_fkey"
+            columns: ["pesquisa_id"]
+            isOneToOne: false
+            referencedRelation: "clima_pesquisas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clima_pesquisas: {
+        Row: {
+          ativa: boolean
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          ativa?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          ativa?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      clima_respostas: {
+        Row: {
+          created_at: string
+          id: string
+          pesquisa_id: string
+          respostas: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pesquisa_id: string
+          respostas?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pesquisa_id?: string
+          respostas?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clima_respostas_pesquisa_id_fkey"
+            columns: ["pesquisa_id"]
+            isOneToOne: false
+            referencedRelation: "clima_pesquisas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       closer_availability: {
         Row: {
           closer_id: string

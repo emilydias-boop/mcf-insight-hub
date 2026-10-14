@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { MarcoCard } from "@/components/academia/MarcoCard";
 import { cn } from "@/lib/utils";
+import { ClimaCard } from "@/components/academia/clima/ResponderClima";
 
 export default function MinhaTrilha() {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ export default function MinhaTrilha() {
 
   return (
     <div className="space-y-8 max-w-5xl">
+      <ClimaCard userId={user?.id} />
       <section className="ac-card p-6 md:p-8 grid md:grid-cols-[1fr_auto] gap-6">
         <div>
           <div className="ac-eyebrow">Trilha de Integração PJ · {frente?.nome ?? "—"}</div>
