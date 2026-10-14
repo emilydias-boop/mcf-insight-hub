@@ -45,6 +45,7 @@ interface LeadRow {
   parceria_rotulo: string | null; parceria_produtos: string | null; parceria_data: string | null;
   parceria_liquido: number | null; parceria_quando: 'carrinho' | 'pos_carrinho' | null; situacao: string | null;
   origem: 'agenda' | 'transacao' | null; reembolso_solicitado: boolean | null;
+  r2_encontrada_por?: 'negocio' | 'contato' | 'telefone' | 'email' | 'nome' | null;
 }
 
 // ---------- helpers de data (fuso SP) ----------
@@ -133,12 +134,12 @@ export function CarrinhoSafraView() {
     }
   }, [safra?.data_inicial]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const leadsKey = ['carrinho-safra-leads', safra?.id];
+  const leadsKey = ['carrinho-safra-leads', 'lista', safra?.id];
   const leadsQ = useQuery({
     queryKey: leadsKey,
     enabled: !!safra?.id,
     queryFn: async () => {
-      const { data, error } = await rpc('carrinho_safra_linhas', { p_safra_id: safra!.id });
+      const { data, error } = await rpc('carrinho_safra_lista', { p_safra_id: safra!.id });
       if (error) throw error;
       return (data || []) as LeadRow[];
     },
@@ -221,9 +222,9 @@ export function CarrinhoSafraView() {
   }, [rows, cardFiltro, busca, fCloserR1, fCloserR2, fStatus, fSituacao, soAguardando, sort]);
 
   const exportar = () => {
-    const head = ['Nome', 'Telefone', 'E-mail', 'Data de compra', 'R2', 'Closer R1', 'Closer R2', 'Status', 'Reembolso/Desistência', 'Parceria', 'Observação', 'Próx. contato'];
+    const head = ['Nome', 'Telefone', 'E-mail', 'Data de compra', 'R2', 'Closer R1', 'Closer R2', 'Status', 'R2 encontrada por', 'Reembolso/Desistência', 'Parceria', 'Observação', 'Próx. contato'];
     const linhas = filtradas.map((r) => [
-      r.lead_name, r.telefone, r.email, dDate(r.data_compra, true), ddmmHHmm(r.r2_data), r.closer_r1, r.closer_r2, r.status_reuniao,
+      r.lead_name, r.telefone, r.email, dDate(r.data_compra, true), ddmmHHmm(r.r2_data), r.closer_r1, r.closer_r2, r.status_reuniao, r.r2_encontrada_por || '',
       r.reembolsado_em ? `Reembolso ${dDate(r.reembolsado_em)}` : r.reembolso_solicitado ? 'Reembolso solicitado' : r.desistencia ? `Desistência${r.motivo ? ` (${r.motivo})` : ''}` : '',
       `${r.parceria_rotulo || ''}${r.parceria_quando === 'pos_carrinho' ? ' (PÓS CARRINHO)' : ''}`, r.observacao, dDate(r.proximo_contato, true),
     ]);
@@ -399,6 +400,17 @@ export function CarrinhoSafraView() {
                 ) : filtradas.map((r) => {
                   const st = r.status_reuniao || '';
                   const atrasado = r.proximo_contato && r.proximo_contato < hoje;
+                  const enc = r.r2_encontrada_por;
+                  const encTip = enc === 'telefone' || enc === 'email'
+                    ? `R2 encontrada pelo ${enc === 'telefone' ? 'telefone' : 'e-mail'} do comprador ou sócio`
+                    : null;
+                  const statusTrigger = (
+                    <DropdownMenuTrigger asChild disabled={!podeEditar}>
+                      <button type="button" title={encTip ? undefined : (STATUS_TIP[st] || r.r2_status_nome || undefined)}>
+                        <Badge variant="outline" className={cn('whitespace-nowrap cursor-pointer', STATUS_CLS[st])}>{st || '—'}{podeEditar && <ChevronDown className="h-3 w-3 ml-1" />}</Badge>
+                      </button>
+                    </DropdownMenuTrigger>
+                  );
                   return (
                     <TableRow key={r.contrato_attendee_id} className={cn(r.movimento === 'movido_para' && 'opacity-50')}>
                       <TableCell className="min-w-[180px]">
@@ -425,11 +437,22 @@ export function CarrinhoSafraView() {
                       <TableCell>{r.closer_r2 || '—'}</TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild disabled={!podeEditar}>
-                            <button type="button" title={STATUS_TIP[st] || r.r2_status_nome || undefined}>
-                              <Badge variant="outline" className={cn('whitespace-nowrap cursor-pointer', STATUS_CLS[st])}>{st || '—'}{podeEditar && <ChevronDown className="h-3 w-3 ml-1" />}</Badge>
-                            </button>
-                          </DropdownMenuTrigger>
+                          <div className="flex items-center gap-1.5">
+                            {encTip ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>{statusTrigger}</TooltipTrigger>
+                                <TooltipContent className="max-w-[300px] whitespace-normal text-[11px]">{[encTip, STATUS_TIP[st]].filter(Boolean).join(' · ')}</TooltipContent>
+                              </Tooltip>
+                            ) : statusTrigger}
+                            {enc === 'nome' && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="text-[10px] whitespace-nowrap text-yellow-400 border-yellow-500/50 bg-yellow-500/10">conferir</Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[320px] whitespace-normal text-[11px]">R2 encontrada pelo nome (a reunião foi agendada sem e-mail/telefone). Confira se é a mesma pessoa.</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
                           <DropdownMenuContent align="start">
                             {r.r2_attendee_id && <>
                               <DropdownMenuItem onClick={() => marcarR2(r, 'completed')}>Realizado</DropdownMenuItem>
