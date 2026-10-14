@@ -2766,6 +2766,177 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_contrato_duplicado_sarah_20261014: {
+        Row: {
+          already_builds: boolean | null
+          attendee_name: string | null
+          attendee_phone: string | null
+          backup_em: string | null
+          boas_vindas_r2_whatsapp_enviado_em: string | null
+          booked_at: string | null
+          booked_by: string | null
+          booked_by_ajustado_em: string | null
+          booked_by_ajustado_por: string | null
+          booked_by_anterior: string | null
+          calendly_invitee_uri: string | null
+          carrinho_status: string | null
+          carrinho_updated_at: string | null
+          carrinho_week_start: string | null
+          closer_notes: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          contact_id: string | null
+          contract_paid_at: string | null
+          cpf: string | null
+          created_at: string | null
+          deal_id: string | null
+          decision_maker_type: string | null
+          id: string | null
+          is_decision_maker: boolean | null
+          is_partner: boolean | null
+          is_reschedule: boolean | null
+          lead_profile: string | null
+          meeting_link: string | null
+          meeting_slot_id: string | null
+          notes: string | null
+          notified_at: string | null
+          outcome_reason: string | null
+          outcome_reason_note: string | null
+          outcome_set_at: string | null
+          outcome_set_by: string | null
+          parent_attendee_id: string | null
+          partner_name: string | null
+          r2_confirmation: string | null
+          r2_observations: string | null
+          r2_status_id: string | null
+          refunded_at: string | null
+          status: string | null
+          thermometer_ids: string[] | null
+          updated_at: string | null
+          updated_by: string | null
+          video_status: string | null
+        }
+        Insert: {
+          already_builds?: boolean | null
+          attendee_name?: string | null
+          attendee_phone?: string | null
+          backup_em?: string | null
+          boas_vindas_r2_whatsapp_enviado_em?: string | null
+          booked_at?: string | null
+          booked_by?: string | null
+          booked_by_ajustado_em?: string | null
+          booked_by_ajustado_por?: string | null
+          booked_by_anterior?: string | null
+          calendly_invitee_uri?: string | null
+          carrinho_status?: string | null
+          carrinho_updated_at?: string | null
+          carrinho_week_start?: string | null
+          closer_notes?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          contact_id?: string | null
+          contract_paid_at?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          decision_maker_type?: string | null
+          id?: string | null
+          is_decision_maker?: boolean | null
+          is_partner?: boolean | null
+          is_reschedule?: boolean | null
+          lead_profile?: string | null
+          meeting_link?: string | null
+          meeting_slot_id?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          outcome_reason?: string | null
+          outcome_reason_note?: string | null
+          outcome_set_at?: string | null
+          outcome_set_by?: string | null
+          parent_attendee_id?: string | null
+          partner_name?: string | null
+          r2_confirmation?: string | null
+          r2_observations?: string | null
+          r2_status_id?: string | null
+          refunded_at?: string | null
+          status?: string | null
+          thermometer_ids?: string[] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          video_status?: string | null
+        }
+        Update: {
+          already_builds?: boolean | null
+          attendee_name?: string | null
+          attendee_phone?: string | null
+          backup_em?: string | null
+          boas_vindas_r2_whatsapp_enviado_em?: string | null
+          booked_at?: string | null
+          booked_by?: string | null
+          booked_by_ajustado_em?: string | null
+          booked_by_ajustado_por?: string | null
+          booked_by_anterior?: string | null
+          calendly_invitee_uri?: string | null
+          carrinho_status?: string | null
+          carrinho_updated_at?: string | null
+          carrinho_week_start?: string | null
+          closer_notes?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          contact_id?: string | null
+          contract_paid_at?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          decision_maker_type?: string | null
+          id?: string | null
+          is_decision_maker?: boolean | null
+          is_partner?: boolean | null
+          is_reschedule?: boolean | null
+          lead_profile?: string | null
+          meeting_link?: string | null
+          meeting_slot_id?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          outcome_reason?: string | null
+          outcome_reason_note?: string | null
+          outcome_set_at?: string | null
+          outcome_set_by?: string | null
+          parent_attendee_id?: string | null
+          partner_name?: string | null
+          r2_confirmation?: string | null
+          r2_observations?: string | null
+          r2_status_id?: string | null
+          refunded_at?: string | null
+          status?: string | null
+          thermometer_ids?: string[] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          video_status?: string | null
+        }
+        Relationships: []
+      }
+      backup_contrato_duplicado_sarah_tx_20261014: {
+        Row: {
+          backup_em: string | null
+          id: string | null
+          linked_attendee_id: string | null
+          linked_deal_id: string | null
+        }
+        Insert: {
+          backup_em?: string | null
+          id?: string | null
+          linked_attendee_id?: string | null
+          linked_deal_id?: string | null
+        }
+        Update: {
+          backup_em?: string | null
+          id?: string | null
+          linked_attendee_id?: string | null
+          linked_deal_id?: string | null
+        }
+        Relationships: []
+      }
       backup_contrato_pago_movido: {
         Row: {
           attendee_id: string
@@ -20049,6 +20220,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      carrinho_nome_tokens: { Args: { p: string }; Returns: string[] }
       carrinho_pode_configurar: { Args: never; Returns: boolean }
       carrinho_pode_editar: { Args: never; Returns: boolean }
       carrinho_pode_ver: { Args: never; Returns: boolean }
@@ -20120,6 +20292,49 @@ export type Database = {
           proximo_contato: string
           r2_attendee_id: string
           r2_data: string
+          r2_meeting_id: string
+          r2_no_shows: number
+          r2_posicao: string
+          r2_status_nome: string
+          r2_tentativas: number
+          reembolsado_em: string
+          reembolso_solicitado: boolean
+          safra_vinculo_id: string
+          safra_vinculo_label: string
+          sdr_name: string
+          situacao: string
+          status_reuniao: string
+          telefone: string
+        }[]
+      }
+      carrinho_safra_lista: {
+        Args: { p_safra_id: string }
+        Returns: {
+          acompanhamento_atualizado_em: string
+          acompanhamento_atualizado_por: string
+          closer_r1: string
+          closer_r2: string
+          contact_id: string
+          contract_paid_at: string
+          contrato_attendee_id: string
+          data_compra: string
+          deal_id: string
+          desistencia: boolean
+          email: string
+          lead_name: string
+          motivo: string
+          movimento: string
+          observacao: string
+          origem: string
+          parceria_data: string
+          parceria_liquido: number
+          parceria_produtos: string
+          parceria_quando: string
+          parceria_rotulo: string
+          proximo_contato: string
+          r2_attendee_id: string
+          r2_data: string
+          r2_encontrada_por: string
           r2_meeting_id: string
           r2_no_shows: number
           r2_posicao: string
