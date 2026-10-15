@@ -15503,6 +15503,39 @@ export type Database = {
         }
         Relationships: []
       }
+      resgate_base_incorporador_20261015: {
+        Row: {
+          a010: boolean | null
+          contact_id: string | null
+          deal_id: string | null
+          feito: boolean | null
+          name: string | null
+          rn: number | null
+          sdr: string | null
+          tags: string[] | null
+        }
+        Insert: {
+          a010?: boolean | null
+          contact_id?: string | null
+          deal_id?: string | null
+          feito?: boolean | null
+          name?: string | null
+          rn?: number | null
+          sdr?: string | null
+          tags?: string[] | null
+        }
+        Update: {
+          a010?: boolean | null
+          contact_id?: string | null
+          deal_id?: string | null
+          feito?: boolean | null
+          name?: string | null
+          rn?: number | null
+          sdr?: string | null
+          tags?: string[] | null
+        }
+        Relationships: []
+      }
       rh_announcements: {
         Row: {
           ativo: boolean
