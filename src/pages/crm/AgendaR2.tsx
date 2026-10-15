@@ -28,11 +28,9 @@ import {
   LayoutGrid,
   Clock,
   Sliders,
-  AlertCircle,
   FileText,
   Download,
   Search,
-  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,17 +50,11 @@ import { R2MeetingDetailDrawer } from "@/components/crm/R2MeetingDetailDrawer";
 import { R2QuickScheduleModal } from "@/components/crm/R2QuickScheduleModal";
 import { R2CloserAvailabilityConfig } from "@/components/crm/R2CloserAvailabilityConfig";
 import { R2PendingLeadsPanel } from "@/components/crm/R2PendingLeadsPanel";
-import { R2NoShowsPanel } from "@/components/crm/R2NoShowsPanel";
 import { R2ListViewTable } from "@/components/crm/R2ListViewTable";
 import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
 import { R2ContractLifecyclePanel } from "@/components/crm/R2ContractLifecyclePanel";
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
-import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
 import { LEAD_PROFILE_OPTIONS, ATTENDANCE_STATUS_OPTIONS, VIDEO_STATUS_OPTIONS } from "@/types/r2Agenda";
-import { useR2PreScheduledCount } from "@/hooks/useR2PreScheduledLeads";
-import { useR2SemSucessoCount } from "@/hooks/useR2SemSucesso";
-import { R2SemSucessoPanel } from "@/components/crm/R2SemSucessoPanel";
-import { R2PreScheduledTab } from "@/components/crm/R2PreScheduledTab";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
 import { R2SpecialMarkingsConfigModal } from "@/components/crm/R2SpecialMarkingsConfigModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
@@ -72,7 +64,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useR2DailySlotsForView } from "@/hooks/useR2DailySlotsForView";
 import { useQueryClient } from "@tanstack/react-query";
-import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
 import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActiveBU } from "@/hooks/useActiveBU";
@@ -92,9 +83,7 @@ export default function AgendaR2() {
   const [r1CloserFilter, setR1CloserFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // Determine initial tab from URL
-  const urlTab = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(urlTab === 'noshows' ? 'noshows' : 'calendar');
+  const [activeTab, setActiveTab] = useState('calendar');
 
   // Modal/Drawer states
   const [selectedMeeting, setSelectedMeeting] = useState<R2MeetingRow | null>(null);
@@ -131,12 +120,7 @@ export default function AgendaR2() {
   const podeConfigurarAgenda = isLideranca || !isR2Closer || canManageAgenda;
 
 
-  // Handle URL param changes
-  useEffect(() => {
-    if (urlTab === 'noshows') {
-      setActiveTab('noshows');
-    }
-  }, [urlTab]);
+
 
   // Calculate date range based on view mode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -170,9 +154,6 @@ export default function AgendaR2() {
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const { data: r1Closers = [] } = useGestorClosers('r1');
   const pendingCount = useR2PendingLeadsCount();
-  const { data: noShowCount = 0 } = useR2NoShowsCount(rangeStart, rangeEnd);
-  const preScheduledCount = useR2PreScheduledCount();
-  const semSucessoCount = useR2SemSucessoCount();
 
   // Fetch R2 configured slots for the "Por Closer" view
   const closerIds = useMemo(() => closers.map((c) => c.id), [closers]);
@@ -370,17 +351,6 @@ export default function AgendaR2() {
       availability: [],
     }));
   }, [displayClosers]);
-
-  // Convert closers for R2NoShowsPanel (uses R2CloserWithAvailability type)
-  const closersAsR2CloserWithAvailability: R2CloserWithAvailability[] = useMemo(() => {
-    return closers.map((c) => ({
-      id: c.id,
-      name: c.name,
-      email: c.email,
-      color: c.color || "#8B5CF6",
-      is_active: c.is_active ?? true,
-    }));
-  }, [closers]);
 
   // Navigation handlers
   const handlePrev = () => {
@@ -778,33 +748,6 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="noshows" className="gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  No-Shows
-                  {noShowCount > 0 && (
-                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-destructive/10 text-destructive border-destructive/20">
-                      {noShowCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="prescheduled" className="gap-2">
-                  <Clock className="h-4 w-4" />
-                  Pré-Agendados
-                  {preScheduledCount > 0 && (
-                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-orange-500/10 text-orange-600 border-orange-500/20">
-                      {preScheduledCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="semsucesso" className="gap-2">
-                  <XCircle className="h-4 w-4" />
-                  Sem Sucesso
-                  {semSucessoCount > 0 && (
-                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-destructive/10 text-destructive border-destructive/20">
-                      {semSucessoCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
                 <TabsTrigger value="report" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Relatório
@@ -829,30 +772,9 @@ export default function AgendaR2() {
               <R2PendingLeadsPanel closers={closersWithAvailability} />
             </TabsContent>
 
-            {/* No-Shows Tab */}
-            <TabsContent value="noshows" className="mt-0">
-              <R2NoShowsPanel 
-                closers={closersAsR2CloserWithAvailability} 
-                parentViewMode={viewMode}
-                parentSelectedDate={selectedDate}
-                parentRangeStart={rangeStart}
-                parentRangeEnd={rangeEnd}
-              />
-            </TabsContent>
-
             {/* Report Tab */}
             <TabsContent value="report" className="mt-0">
               <R2ContractLifecyclePanel />
-            </TabsContent>
-
-            {/* Pre-Scheduled Tab */}
-            <TabsContent value="prescheduled" className="mt-0">
-              <R2PreScheduledTab />
-            </TabsContent>
-
-            {/* Sem Sucesso Tab */}
-            <TabsContent value="semsucesso" className="mt-0">
-              <R2SemSucessoPanel closers={closersAsR2CloserWithAvailability} />
             </TabsContent>
             <TabsContent value="calendar" className="mt-0">
               {isLoadingMeetings || isLoadingClosers ? (
