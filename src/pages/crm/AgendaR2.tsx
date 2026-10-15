@@ -26,7 +26,6 @@ import {
   Settings,
   List,
   LayoutGrid,
-  Clock,
   Sliders,
   FileText,
   Download,
@@ -49,11 +48,9 @@ import { MeetingSlot, CloserWithAvailability } from "@/hooks/useAgendaData";
 import { R2MeetingDetailDrawer } from "@/components/crm/R2MeetingDetailDrawer";
 import { R2QuickScheduleModal } from "@/components/crm/R2QuickScheduleModal";
 import { R2CloserAvailabilityConfig } from "@/components/crm/R2CloserAvailabilityConfig";
-import { R2PendingLeadsPanel } from "@/components/crm/R2PendingLeadsPanel";
 import { R2ListViewTable } from "@/components/crm/R2ListViewTable";
 import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
 import { R2ContractLifecyclePanel } from "@/components/crm/R2ContractLifecyclePanel";
-import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
 import { LEAD_PROFILE_OPTIONS, ATTENDANCE_STATUS_OPTIONS, VIDEO_STATUS_OPTIONS } from "@/types/r2Agenda";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
 import { R2SpecialMarkingsConfigModal } from "@/components/crm/R2SpecialMarkingsConfigModal";
@@ -153,7 +150,6 @@ export default function AgendaR2() {
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const { data: r1Closers = [] } = useGestorClosers('r1');
-  const pendingCount = useR2PendingLeadsCount();
 
   // Fetch R2 configured slots for the "Por Closer" view
   const closerIds = useMemo(() => closers.map((c) => c.id), [closers]);
@@ -739,15 +735,6 @@ export default function AgendaR2() {
                   <LayoutGrid className="h-4 w-4" />
                   Por Sócio
                 </TabsTrigger>
-                <TabsTrigger value="pending" className="gap-2">
-                  <Clock className="h-4 w-4" />
-                  Pendentes
-                  {pendingCount > 0 && (
-                    <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-xs">
-                      {pendingCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
                 <TabsTrigger value="report" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Relatório
@@ -767,10 +754,6 @@ export default function AgendaR2() {
               />
             </TabsContent>
 
-            {/* Pending Leads Tab */}
-            <TabsContent value="pending" className="mt-0">
-              <R2PendingLeadsPanel closers={closersWithAvailability} />
-            </TabsContent>
 
             {/* Report Tab */}
             <TabsContent value="report" className="mt-0">
