@@ -31,7 +31,6 @@ import {
   FileText,
   Download,
   Search,
-  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -85,9 +84,7 @@ export default function AgendaR2() {
   const [r1CloserFilter, setR1CloserFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // Determine initial tab from URL
-  const urlTab = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(urlTab === 'noshows' ? 'noshows' : 'calendar');
+  const [activeTab, setActiveTab] = useState('calendar');
 
   // Modal/Drawer states
   const [selectedMeeting, setSelectedMeeting] = useState<R2MeetingRow | null>(null);
