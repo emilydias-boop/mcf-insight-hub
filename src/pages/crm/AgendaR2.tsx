@@ -748,33 +748,6 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="noshows" className="gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  No-Shows
-                  {noShowCount > 0 && (
-                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-destructive/10 text-destructive border-destructive/20">
-                      {noShowCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="prescheduled" className="gap-2">
-                  <Clock className="h-4 w-4" />
-                  Pré-Agendados
-                  {preScheduledCount > 0 && (
-                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-orange-500/10 text-orange-600 border-orange-500/20">
-                      {preScheduledCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="semsucesso" className="gap-2">
-                  <XCircle className="h-4 w-4" />
-                  Sem Sucesso
-                  {semSucessoCount > 0 && (
-                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-destructive/10 text-destructive border-destructive/20">
-                      {semSucessoCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
                 <TabsTrigger value="report" className="gap-2">
                   <FileText className="h-4 w-4" />
                   Relatório
