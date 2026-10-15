@@ -28,7 +28,6 @@ import {
   LayoutGrid,
   Clock,
   Sliders,
-  AlertCircle,
   FileText,
   Download,
   Search,
@@ -52,17 +51,11 @@ import { R2MeetingDetailDrawer } from "@/components/crm/R2MeetingDetailDrawer";
 import { R2QuickScheduleModal } from "@/components/crm/R2QuickScheduleModal";
 import { R2CloserAvailabilityConfig } from "@/components/crm/R2CloserAvailabilityConfig";
 import { R2PendingLeadsPanel } from "@/components/crm/R2PendingLeadsPanel";
-import { R2NoShowsPanel } from "@/components/crm/R2NoShowsPanel";
 import { R2ListViewTable } from "@/components/crm/R2ListViewTable";
 import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
 import { R2ContractLifecyclePanel } from "@/components/crm/R2ContractLifecyclePanel";
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
-import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
 import { LEAD_PROFILE_OPTIONS, ATTENDANCE_STATUS_OPTIONS, VIDEO_STATUS_OPTIONS } from "@/types/r2Agenda";
-import { useR2PreScheduledCount } from "@/hooks/useR2PreScheduledLeads";
-import { useR2SemSucessoCount } from "@/hooks/useR2SemSucesso";
-import { R2SemSucessoPanel } from "@/components/crm/R2SemSucessoPanel";
-import { R2PreScheduledTab } from "@/components/crm/R2PreScheduledTab";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
 import { R2SpecialMarkingsConfigModal } from "@/components/crm/R2SpecialMarkingsConfigModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
