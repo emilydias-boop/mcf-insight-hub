@@ -13,3 +13,4 @@
 - [ ] BU Pós Venda — Agenda de Viabilidade 1/2 + gravações (PARADO: ~20 telas listam responsáveis de todas as BUs; aguarda decisão do dono)
 - [x] Textos venda direta A003 / A001 (VincularVendaDiretaDialog, AgendaMeetingDrawer, useVendaDiretaR1)
 - [x] Relatório de operações 14/10 — retorno jsonb_pretty completo colado (só leitura)
+- [x] Agenda R2 — aba Pendentes via RPC r2_pendentes_agendar(): seções Recentes/Antigos, badge só com recentes (só front, sem publicar)

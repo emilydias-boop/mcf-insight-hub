@@ -3369,6 +3369,21 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_r2_andre_20261015: {
+        Row: {
+          dados: Json | null
+          tipo: string | null
+        }
+        Insert: {
+          dados?: Json | null
+          tipo?: string | null
+        }
+        Update: {
+          dados?: Json | null
+          tipo?: string | null
+        }
+        Relationships: []
+      }
       backup_recompra_a010_reativada: {
         Row: {
           backup_at: string | null
@@ -21936,6 +21951,30 @@ export type Database = {
           r2_observations: string
           tentativas_pos_r2: number
           ultima_tentativa: string
+        }[]
+      }
+      r2_pendentes_agendar: {
+        Args: never
+        Returns: {
+          attendee_name: string
+          attendee_phone: string
+          contact_email: string
+          contact_id: string
+          contact_name: string
+          contact_phone: string
+          contract_paid_at: string
+          deal_id: string
+          deal_name: string
+          dias_desde_contrato: number
+          grupo: string
+          id: string
+          r1_closer_id: string
+          r1_closer_name: string
+          slot_closer_id: string
+          slot_id: string
+          slot_scheduled_at: string
+          slot_status: string
+          status: string
         }[]
       }
       reativar_recompra_a010: {

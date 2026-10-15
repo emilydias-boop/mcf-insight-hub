@@ -14,6 +14,7 @@ import {
   UserCheck,
   Repeat,
   XCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -79,11 +80,45 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const recognizeRecurrence = useRecognizeRecurrence();
   const [semSucessoModalOpen, setSemSucessoModalOpen] = useState(false);
   const [semSucessoLead, setSemSucessoLead] = useState<R2PendingLead | null>(null);
+  const [antigosOpen, setAntigosOpen] = useState(false);
 
   const filteredLeads = useMemo(() => {
     if (r1CloserFilter === 'all') return pendingLeads;
     return pendingLeads.filter(lead => lead.meeting_slot?.closer?.id === r1CloserFilter);
   }, [pendingLeads, r1CloserFilter]);
+
+  const recentes = useMemo(
+    () => filteredLeads.filter((lead) => lead.grupo !== 'antigo'),
+    [filteredLeads]
+  );
+  const antigos = useMemo(
+    () => filteredLeads.filter((lead) => lead.grupo === 'antigo'),
+    [filteredLeads]
+  );
+
+  // Lista plana com o cabeçalho de "Recentes" e o botão de "Antigos" intercalados,
+  // para as duas seções serem renderizadas no mesmo ScrollArea.
+  const sections = useMemo(() => {
+    const items: Array<
+      | { kind: 'header'; key: string; title: string }
+      | { kind: 'toggle'; key: string }
+      | { kind: 'lead'; key: string; lead: R2PendingLead }
+    > = [
+      {
+        kind: 'header',
+        key: 'h-recentes',
+        title: `Recentes (até 30 dias) — ${recentes.length}`,
+      },
+    ];
+    recentes.forEach((lead) => items.push({ kind: 'lead', key: lead.id, lead }));
+    if (antigos.length > 0) {
+      items.push({ kind: 'toggle', key: 't-antigos' });
+      if (antigosOpen) {
+        antigos.forEach((lead) => items.push({ kind: 'lead', key: lead.id, lead }));
+      }
+    }
+    return items;
+  }, [recentes, antigos, antigosOpen]);
 
   // Resolver canal A010/ANAMNESE/Outro em batch
   const channelInputs: R2LeadInput[] = useMemo(() => filteredLeads.map((l) => ({
@@ -107,9 +142,9 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
 
   const handleCopyReport = useCallback(() => {
     const today = format(new Date(), 'dd/MM/yyyy');
-    const lines = [`📋 RELATÓRIO PENDENTES R2 - ${today}`, `Total: ${filteredLeads.length} leads`, ''];
+    const lines = [`📋 RELATÓRIO PENDENTES R2 - ${today}`, `Total: ${recentes.length} leads`, ''];
 
-    filteredLeads.forEach((lead, i) => {
+    recentes.forEach((lead, i) => {
       const name = lead.attendee_name || lead.deal?.contact?.name || lead.deal?.name || 'Lead';
       const phone = lead.attendee_phone || lead.deal?.contact?.phone || 'N/A';
       const r1Date = lead.meeting_slot?.scheduled_at
@@ -130,7 +165,7 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
 
     navigator.clipboard.writeText(lines.join('\n'));
     toast.success('Relatório copiado!');
-  }, [filteredLeads]);
+  }, [recentes]);
 
   if (isLoading) {
     return (
@@ -168,11 +203,16 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
     <>
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Badge variant="destructive" className="text-sm py-1 px-3">
-            {filteredLeads.length} pendente{filteredLeads.length !== 1 ? 's' : ''}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="destructive" className="text-sm py-1 px-3">
+              {recentes.length} pendente{recentes.length !== 1 ? 's' : ''}
+            </Badge>
+            {antigos.length > 0 && (
+              <span className="text-xs text-muted-foreground">+ {antigos.length} antigos</span>
+            )}
+          </div>
           <span className="text-sm text-muted-foreground">
-            Leads com Contrato Pago aguardando agendamento de R2
+            Contrato pago sem R2, sem reembolso e sem compra de parceria
           </span>
           <Select value={r1CloserFilter} onValueChange={setR1CloserFilter}>
             <SelectTrigger className="w-[180px]">
@@ -196,7 +236,37 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
 
       <ScrollArea className="h-[500px] pr-4">
         <div className="space-y-3">
-          {filteredLeads.map((lead) => {
+          {sections.map((item) => {
+            if (item.kind === 'header') {
+              return (
+                <h3 key={item.key} className="pt-1 text-sm font-semibold text-muted-foreground">
+                  {item.title}
+                </h3>
+              );
+            }
+            if (item.kind === 'toggle') {
+              return (
+                <Button
+                  key={item.key}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-between"
+                  onClick={() => setAntigosOpen((open) => !open)}
+                >
+                  <span className="flex items-center gap-2">
+                    <ChevronDown
+                      className={cn('h-4 w-4 transition-transform', antigosOpen ? '' : '-rotate-90')}
+                    />
+                    Antigos (mais de 30 dias) — {antigos.length}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {antigosOpen ? 'Ocultar' : 'Mostrar'}
+                  </span>
+                </Button>
+              );
+            }
+            const lead = item.lead;
             const leadName = lead.attendee_name || lead.deal?.contact?.name || lead.deal?.name || 'Lead';
             const phone = lead.attendee_phone || lead.deal?.contact?.phone;
             const r1Date = lead.meeting_slot?.scheduled_at 

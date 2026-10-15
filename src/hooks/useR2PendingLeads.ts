@@ -1,29 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-const BATCH_SIZE = 200;
-
-/**
- * Splits a large array into chunks of BATCH_SIZE, runs a query for each chunk in parallel,
- * and concatenates the results.
- */
-async function batchedInQuery<T>(
-  ids: string[],
-  queryFn: (batch: string[]) => Promise<{ data: T[] | null; error: any }>
-): Promise<T[]> {
-  if (ids.length === 0) return [];
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-    chunks.push(ids.slice(i, i + BATCH_SIZE));
-  }
-  const results = await Promise.all(chunks.map(async (chunk) => {
-    const { data, error } = await queryFn(chunk);
-    if (error) throw error;
-    return data || [];
-  }));
-  return results.flat();
-}
-
 export interface R2PendingLead {
   id: string;
   attendee_name: string;
@@ -32,6 +9,10 @@ export interface R2PendingLead {
   status: string;
   contract_paid_at: string;
   contact_id: string | null;
+  /** 'recente' = contrato pago nos últimos 30 dias | 'antigo' = antes disso */
+  grupo?: 'recente' | 'antigo';
+  /** Dias desde o pagamento do contrato (fuso America/Sao_Paulo). */
+  dias_desde_contrato?: number;
   meeting_slot: {
     id: string;
     scheduled_at: string;
@@ -55,330 +36,66 @@ export interface R2PendingLead {
 }
 
 /**
- * Hook to fetch leads with "Contrato Pago" status from R1 that don't have R2 scheduled yet.
- * Now deduplicates by contact_id instead of just deal_id to handle cases where
- * the same contact has R2 on a different deal.
+ * Leads com contrato pago na R1 que ainda não têm R2.
+ *
+ * Todo o cálculo (excluir reembolsados, compras de parceria, R2 agendada em
+ * outro cadastro, reunião pós-contrato feita na agenda R1, dedup por contato)
+ * é feito no banco pela RPC `r2_pendentes_agendar()`, que devolve uma linha
+ * por lead já ordenada pelo contrato mais recente.
  */
 export function useR2PendingLeads() {
   return useQuery({
     queryKey: ['r2-pending-leads'],
-    queryFn: async () => {
-      // Step 1: Get all attendees with contract_paid status from R1 meetings
-      const { data: paidAttendees, error: paidError } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          attendee_name,
-          attendee_phone,
-          deal_id,
-          status,
-          created_at,
-          contract_paid_at,
-          meeting_slot:meeting_slots!inner(
-            id,
-            scheduled_at,
-            closer_id,
-            meeting_type,
-            status,
-            closer:closers(id, name)
-          ),
-          deal:crm_deals(
-            id,
-            name,
-            contact_id,
-            contact:crm_contacts(id, name, phone, email)
-          )
-        `)
-        .in('status', ['contract_paid'])
-        .eq('meeting_slot.meeting_type', 'r1')
-        .order('contract_paid_at', { ascending: false, nullsFirst: false });
+    queryFn: async (): Promise<R2PendingLead[]> => {
+      const { data, error } = await supabase.rpc('r2_pendentes_agendar');
+      if (error) throw error;
 
-      if (paidError) throw paidError;
-      if (!paidAttendees || paidAttendees.length === 0) return [];
-
-      // Step 2: Extract contact_ids, names, and phones from the paid attendees
-      const contactIds = new Set<string>();
-      const normalizedNames = new Set<string>();
-      const normalizedPhones = new Set<string>();
-      
-      const attendeesWithContact = (paidAttendees as any[]).map(a => {
-        const deal = Array.isArray(a.deal) ? a.deal[0] : a.deal;
-        const contactId = deal?.contact_id || deal?.contact?.id || null;
-        if (contactId) contactIds.add(contactId);
-        
-        // Collect normalized name
-        const normalizedName = a.attendee_name?.toLowerCase().trim() || null;
-        if (normalizedName) normalizedNames.add(normalizedName);
-        
-        // Collect normalized phone (digits only, min 8 chars)
-        const normalizedPhone = a.attendee_phone?.replace(/\D/g, '') || null;
-        if (normalizedPhone && normalizedPhone.length >= 8) normalizedPhones.add(normalizedPhone);
-        
-        return {
-          ...a,
-          contact_id: contactId,
-          normalized_name: normalizedName,
-          normalized_phone: normalizedPhone,
-          meeting_slot: Array.isArray(a.meeting_slot) ? a.meeting_slot[0] : a.meeting_slot,
-          deal: deal,
-        };
-      });
-
-      if (contactIds.size === 0) {
-        // No contacts found, return all as pending (edge case)
-        return attendeesWithContact.map(a => ({
-          ...a,
-          contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
-        })) as R2PendingLead[];
-      }
-
-      // Step 3: Get ALL deals belonging to these contacts
-      const allDealsForContacts = await batchedInQuery<{ id: string; contact_id: string | null }>(
-        Array.from(contactIds),
-        (batch) => supabase.from('crm_deals').select('id, contact_id').in('contact_id', batch) as any
-      );
-
-      // Create a map: contact_id -> all deal_ids for that contact
-      const contactToDealIds = new Map<string, Set<string>>();
-      (allDealsForContacts || []).forEach(d => {
-        if (d.contact_id) {
-          if (!contactToDealIds.has(d.contact_id)) {
-            contactToDealIds.set(d.contact_id, new Set());
-          }
-          contactToDealIds.get(d.contact_id)!.add(d.id);
-        }
-      });
-
-      // Collect ALL deal_ids that belong to any of these contacts
-      const allDealIds = new Set<string>();
-      contactToDealIds.forEach(dealSet => {
-        dealSet.forEach(dealId => allDealIds.add(dealId));
-      });
-
-      if (allDealIds.size === 0) {
-        return attendeesWithContact.map(a => ({
-          ...a,
-          contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
-        })) as R2PendingLead[];
-      }
-
-      // Step 4: Get R2 attendees for ALL deals of these contacts (batched)
-      const r2Attendees = await batchedInQuery<any>(
-        Array.from(allDealIds),
-        (batch) => supabase
-          .from('meeting_slot_attendees')
-          .select(`deal_id, meeting_slot:meeting_slots!inner(meeting_type)`)
-          .in('deal_id', batch)
-          .eq('meeting_slot.meeting_type', 'r2') as any
-      );
-
-      // Create a set of deal_ids that have R2
-      const dealsWithR2 = new Set(
-        (r2Attendees || []).map(a => a.deal_id)
-      );
-
-      // Step 4b: Get ALL R2 attendees by name/phone (fallback correlation)
-      const { data: r2ByNamePhone } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          attendee_name,
-          attendee_phone,
-          meeting_slot:meeting_slots!inner(meeting_type)
-        `)
-        .eq('meeting_slot.meeting_type', 'r2');
-
-      // Create sets of normalized names/phones with R2
-      const r2Names = new Set<string>();
-      const r2Phones = new Set<string>();
-      ((r2ByNamePhone as any[]) || []).forEach(a => {
-        const name = a.attendee_name?.toLowerCase().trim();
-        if (name) r2Names.add(name);
-        const phone = a.attendee_phone?.replace(/\D/g, '');
-        if (phone && phone.length >= 8) r2Phones.add(phone);
-      });
-
-      // Step 5: Find which contacts already have R2 (via ANY of their deals)
-      const contactsWithR2 = new Set<string>();
-      contactToDealIds.forEach((dealSet, contactId) => {
-        for (const dealId of dealSet) {
-          if (dealsWithR2.has(dealId)) {
-            contactsWithR2.add(contactId);
-            break;
-          }
-        }
-      });
-
-      // Step 6: Filter out leads that already have R2 (by any correlation method)
-      // Also filter out Outside leads whose R1 is not yet completed
-      const pendingLeads = attendeesWithContact
-        .filter(a => {
-          // 0. Fallback: exclude already recognized statuses and sem_sucesso
-          const status = a.status;
-          if (status === 'partner_recognized' || status === 'recurrence_recognized' || status === 'sem_sucesso') {
-            return false;
-          }
-          // 1. Check by contact_id
-          if (a.contact_id && contactsWithR2.has(a.contact_id)) {
-            return false;
-          }
-          // 2. Check by deal_id
-          if (a.deal_id && dealsWithR2.has(a.deal_id)) {
-            return false;
-          }
-          // 3. Check by normalized name (fallback)
-          if (a.normalized_name && r2Names.has(a.normalized_name)) {
-            return false;
-          }
-          // 4. Check by normalized phone (fallback)
-          if (a.normalized_phone && r2Phones.has(a.normalized_phone)) {
-            return false;
-          }
-          
-          // 5. OUTSIDE LEAD CHECK: If contract was paid BEFORE the R1 meeting,
-          // only include if R1 has been marked as completed
-          const contractPaidAt = a.contract_paid_at || a.created_at;
-          const scheduledAt = a.meeting_slot?.scheduled_at;
-          
-          if (contractPaidAt && scheduledAt) {
-            const isOutside = new Date(contractPaidAt) < new Date(scheduledAt);
-            if (isOutside) {
-              // Outside lead: require R1 to be completed
-              const slotStatus = a.meeting_slot?.status;
-              if (slotStatus !== 'completed') {
-                return false; // Exclude: Outside lead without completed R1
-              }
+      return (data || []).map((r) => ({
+        id: r.id,
+        attendee_name: r.attendee_name ?? '',
+        attendee_phone: r.attendee_phone ?? null,
+        deal_id: r.deal_id ?? null,
+        status: r.status ?? '',
+        contract_paid_at: r.contract_paid_at,
+        contact_id: r.contact_id ?? null,
+        grupo: r.grupo === 'antigo' ? 'antigo' : 'recente',
+        dias_desde_contrato: r.dias_desde_contrato ?? undefined,
+        meeting_slot: {
+          id: r.slot_id,
+          scheduled_at: r.slot_scheduled_at,
+          closer_id: r.slot_closer_id ?? null,
+          status: r.slot_status ?? undefined,
+          closer: r.r1_closer_id
+            ? { id: r.r1_closer_id, name: r.r1_closer_name ?? '' }
+            : null,
+        },
+        deal: r.deal_id
+          ? {
+              id: r.deal_id,
+              name: r.deal_name ?? '',
+              contact: r.contact_id
+                ? {
+                    id: r.contact_id,
+                    name: r.contact_name ?? '',
+                    phone: r.contact_phone ?? null,
+                    email: r.contact_email ?? null,
+                  }
+                : null,
             }
-          }
-          
-          return true;
-        })
-        .map(a => ({
-          ...a,
-          contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
-        })) as R2PendingLead[];
-
-      // Step 6.5: Deduplicate by contact_id, keeping the most recent meeting
-      const seenContacts = new Map<string, R2PendingLead>();
-
-      pendingLeads.forEach(lead => {
-        // Use contact_id as primary key, fallback to normalized_name or normalized_phone
-        const dedupeKey = lead.contact_id 
-          || (lead as any).normalized_name 
-          || (lead as any).normalized_phone 
-          || lead.id;
-        
-        const existing = seenContacts.get(dedupeKey);
-        
-        if (!existing) {
-          seenContacts.set(dedupeKey, lead);
-          return;
-        }
-        
-        // Keep the one with the most recent meeting
-        const existingDate = existing.meeting_slot?.scheduled_at 
-          ? new Date(existing.meeting_slot.scheduled_at).getTime() 
-          : 0;
-        const currentDate = lead.meeting_slot?.scheduled_at 
-          ? new Date(lead.meeting_slot.scheduled_at).getTime() 
-          : 0;
-        
-        if (currentDate > existingDate) {
-          seenContacts.set(dedupeKey, lead);
-        }
-      });
-
-      const uniquePendingLeads = Array.from(seenContacts.values());
-
-      // Step 7: For rescheduled leads, find the most recent R1 closer by CONTACT (not deal)
-      // This ensures we find meetings across all deals belonging to the same contact
-      const contactIdsForLatestCloser = new Set<string>();
-      uniquePendingLeads.forEach(lead => {
-        if (lead.contact_id) contactIdsForLatestCloser.add(lead.contact_id);
-      });
-
-      // Get all deal_ids for these contacts (we already have this from Step 3)
-      const allDealIdsForContacts = new Set<string>();
-      contactIdsForLatestCloser.forEach(contactId => {
-        const deals = contactToDealIds.get(contactId);
-        if (deals) deals.forEach(d => allDealIdsForContacts.add(d));
-      });
-
-      if (allDealIdsForContacts.size > 0) {
-        const latestAttendees = await batchedInQuery<any>(
-          Array.from(allDealIdsForContacts),
-          (batch) => supabase
-            .from('meeting_slot_attendees')
-            .select(`
-              deal_id,
-              meeting_slot:meeting_slots!inner(
-                scheduled_at,
-                meeting_type,
-                closer:closers(id, name)
-              )
-            `)
-            .in('deal_id', batch)
-            .eq('meeting_slot.meeting_type', 'r1')
-            .order('meeting_slot(scheduled_at)', { ascending: false }) as any
-        );
-
-        // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
-        const sortedAttendees = (latestAttendees || [])
-          .map(att => {
-            const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
-           const closer = Array.isArray(slot?.closer) ? slot?.closer[0] : slot?.closer;
-            return {
-              deal_id: att.deal_id,
-              scheduled_at: slot?.scheduled_at,
-             closer: closer
-            };
-          })
-          .sort((a, b) => {
-            if (!a.scheduled_at || !b.scheduled_at) return 0;
-            return new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime();
-          });
-
-        // Create map: contact_id -> most recent closer (across all deals)
-        const latestCloserByContact = new Map<string, { id: string; name: string } | null>();
-
-        sortedAttendees.forEach(att => {
-          if (!att.deal_id) return;
-          // Find which contact owns this deal
-          for (const [contactId, dealSet] of contactToDealIds.entries()) {
-            if (dealSet.has(att.deal_id) && !latestCloserByContact.has(contactId)) {
-              latestCloserByContact.set(contactId, att.closer || null);
-              break;
-            }
-          }
-        });
-
-        // Enrich pendingLeads with most recent closer (by contact)
-        return uniquePendingLeads.map(lead => {
-          const latestCloser = lead.contact_id ? latestCloserByContact.get(lead.contact_id) : null;
-          if (latestCloser) {
-            return {
-              ...lead,
-              meeting_slot: {
-                ...lead.meeting_slot,
-                closer: latestCloser
-              }
-            };
-          }
-          return lead;
-        }) as R2PendingLead[];
-      }
-
-      return uniquePendingLeads;
+          : null,
+      })) as R2PendingLead[];
     },
     staleTime: 30000, // 30 seconds
   });
 }
 
 /**
- * Get the count of pending R2 leads
+ * Get the count of pending R2 leads (badge da aba "Pendentes").
+ * Conta apenas os leads do grupo 'recente' (contrato nos últimos 30 dias).
  */
 export function useR2PendingLeadsCount() {
   const { data: pendingLeads } = useR2PendingLeads();
-  return pendingLeads?.length || 0;
+  return (pendingLeads || []).filter((lead) => lead.grupo === 'recente').length;
 }
 
 /**
