@@ -772,30 +772,9 @@ export default function AgendaR2() {
               <R2PendingLeadsPanel closers={closersWithAvailability} />
             </TabsContent>
 
-            {/* No-Shows Tab */}
-            <TabsContent value="noshows" className="mt-0">
-              <R2NoShowsPanel 
-                closers={closersAsR2CloserWithAvailability} 
-                parentViewMode={viewMode}
-                parentSelectedDate={selectedDate}
-                parentRangeStart={rangeStart}
-                parentRangeEnd={rangeEnd}
-              />
-            </TabsContent>
-
             {/* Report Tab */}
             <TabsContent value="report" className="mt-0">
               <R2ContractLifecyclePanel />
-            </TabsContent>
-
-            {/* Pre-Scheduled Tab */}
-            <TabsContent value="prescheduled" className="mt-0">
-              <R2PreScheduledTab />
-            </TabsContent>
-
-            {/* Sem Sucesso Tab */}
-            <TabsContent value="semsucesso" className="mt-0">
-              <R2SemSucessoPanel closers={closersAsR2CloserWithAvailability} />
             </TabsContent>
             <TabsContent value="calendar" className="mt-0">
               {isLoadingMeetings || isLoadingClosers ? (
