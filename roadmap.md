@@ -12,3 +12,4 @@
 - [x] BU Pós Venda — recebimento próprio da anamnese (pos-venda-anamnese); falta habilitar envio no HARVEY
 - [ ] BU Pós Venda — Agenda de Viabilidade 1/2 + gravações (PARADO: ~20 telas listam responsáveis de todas as BUs; aguarda decisão do dono)
 - [x] Textos venda direta A003 / A001 (VincularVendaDiretaDialog, AgendaMeetingDrawer, useVendaDiretaR1)
+- [x] Relatório de operações 14/10 — retorno jsonb_pretty completo colado (só leitura)
