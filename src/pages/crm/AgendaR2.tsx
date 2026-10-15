@@ -353,17 +353,6 @@ export default function AgendaR2() {
     }));
   }, [displayClosers]);
 
-  // Convert closers for R2NoShowsPanel (uses R2CloserWithAvailability type)
-  const closersAsR2CloserWithAvailability: R2CloserWithAvailability[] = useMemo(() => {
-    return closers.map((c) => ({
-      id: c.id,
-      name: c.name,
-      email: c.email,
-      color: c.color || "#8B5CF6",
-      is_active: c.is_active ?? true,
-    }));
-  }, [closers]);
-
   // Navigation handlers
   const handlePrev = () => {
     switch (viewMode) {
