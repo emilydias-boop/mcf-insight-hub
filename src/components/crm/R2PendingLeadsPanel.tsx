@@ -203,11 +203,16 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
     <>
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Badge variant="destructive" className="text-sm py-1 px-3">
-            {filteredLeads.length} pendente{filteredLeads.length !== 1 ? 's' : ''}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="destructive" className="text-sm py-1 px-3">
+              {recentes.length} pendente{recentes.length !== 1 ? 's' : ''}
+            </Badge>
+            {antigos.length > 0 && (
+              <span className="text-xs text-muted-foreground">+ {antigos.length} antigos</span>
+            )}
+          </div>
           <span className="text-sm text-muted-foreground">
-            Leads com Contrato Pago aguardando agendamento de R2
+            Contrato pago sem R2, sem reembolso e sem compra de parceria
           </span>
           <Select value={r1CloserFilter} onValueChange={setR1CloserFilter}>
             <SelectTrigger className="w-[180px]">
@@ -231,7 +236,37 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
 
       <ScrollArea className="h-[500px] pr-4">
         <div className="space-y-3">
-          {filteredLeads.map((lead) => {
+          {sections.map((item) => {
+            if (item.kind === 'header') {
+              return (
+                <h3 key={item.key} className="pt-1 text-sm font-semibold text-muted-foreground">
+                  {item.title}
+                </h3>
+              );
+            }
+            if (item.kind === 'toggle') {
+              return (
+                <Button
+                  key={item.key}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-between"
+                  onClick={() => setAntigosOpen((open) => !open)}
+                >
+                  <span className="flex items-center gap-2">
+                    <ChevronDown
+                      className={cn('h-4 w-4 transition-transform', antigosOpen ? '' : '-rotate-90')}
+                    />
+                    Antigos (mais de 30 dias) — {antigos.length}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {antigosOpen ? 'Ocultar' : 'Mostrar'}
+                  </span>
+                </Button>
+              );
+            }
+            const lead = item.lead;
             const leadName = lead.attendee_name || lead.deal?.contact?.name || lead.deal?.name || 'Lead';
             const phone = lead.attendee_phone || lead.deal?.contact?.phone;
             const r1Date = lead.meeting_slot?.scheduled_at 
