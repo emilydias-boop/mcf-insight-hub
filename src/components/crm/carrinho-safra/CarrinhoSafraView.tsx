@@ -83,10 +83,12 @@ const STATUS_CLS: Record<string, string> = {
   'Pendente': 'bg-muted text-muted-foreground border-border',
   'Prox Semana': 'bg-purple-500/15 text-purple-400 border-purple-500/40',
   'Desistência': 'bg-orange-500/15 text-orange-400 border-orange-500/40',
+  'Sem R2': 'bg-muted text-muted-foreground border-border line-through decoration-muted-foreground/40',
 };
 const STATUS_TIP: Record<string, string> = {
   'Aguardando marcação': 'A R2 já passou e o closer não marcou realizada/no-show',
   'Pendente': 'Contrato pago sem R2',
+  'Sem R2': 'Sem R2, mas já reembolsou ou já comprou parceria — não precisa agendar',
 };
 const SITUACOES = ['comprou', 'reembolsado', 'reembolso_solicitado', 'desistente', 'movido', 'reprovado', 'no_carrinho', 'no_show', 'pendente', 'aguardando_marcacao', 'agendado'];
 
