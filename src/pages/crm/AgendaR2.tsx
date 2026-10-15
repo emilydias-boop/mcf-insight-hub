@@ -121,12 +121,7 @@ export default function AgendaR2() {
   const podeConfigurarAgenda = isLideranca || !isR2Closer || canManageAgenda;
 
 
-  // Handle URL param changes
-  useEffect(() => {
-    if (urlTab === 'noshows') {
-      setActiveTab('noshows');
-    }
-  }, [urlTab]);
+
 
   // Calculate date range based on view mode
   const { rangeStart, rangeEnd } = useMemo(() => {
