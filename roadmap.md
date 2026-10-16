@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Academia MCF — atribuir uma ou mais trilhas por colaborador no Admin RH
+- [x] Academia MCF — aba Atribuir trilhas no Admin RH, trilhas adicionais por nome e todas as fases; 4 testes passaram, compilação OK; atribuição com login real não verificada (Supabase externo sem sessão disponível)
 
 - [x] Inventário do fluxo de qualificação pré-R1 (entregue no plano)
 - [x] Criar `src/components/crm/qualification/CreditoQualificationQuestions.ts` (novo, textos exatos)
