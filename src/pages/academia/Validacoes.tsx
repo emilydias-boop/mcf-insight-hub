@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Paperclip } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adb, USER_TASK_SELECT, TIPO_LABEL, type AUserTask, type AMilestone, type APerfil } from "@/lib/academia";
@@ -54,6 +55,13 @@ export default function Validacoes() {
       return { tarefas: (t.data ?? []) as AUserTask[], marcos: (m.data ?? []) as AMilestone[], todos: (p.data ?? null) as APerfil[] | null };
     },
   });
+  const { data: feitas = [] } = useQuery({
+    queryKey: ["academia", "feitas", user?.id], enabled: !!user?.id,
+    queryFn: async () => {
+      const { data } = await adb.from("academia_user_tasks").select(USER_TASK_SELECT).eq("validada_por", user!.id).order("validada_em", { ascending: false }).limit(30);
+      return (data ?? []) as AUserTask[];
+    },
+  });
   const pessoas: APerfil[] = data?.todos ?? (vinculados as APerfil[]);
   const pp = (id: string) => pessoas.find((p) => p.id === id);
   const meuPapel = (uid: string, tipo?: string): boolean => {
@@ -77,6 +85,20 @@ export default function Validacoes() {
         <h2 className="text-lg">Tarefas aguardando ({fila.length})</h2>
         {fila.length === 0 && <p className="text-muted-foreground text-sm">Nada pendente por aqui.</p>}
         {fila.map((ut) => <ItemValidacao key={ut.id} ut={ut} pessoa={pp(ut.user_id)} />)}
+      </section>
+      <section className="space-y-3">
+        <h2 className="text-lg">Já validadas por mim</h2>
+        {feitas.length === 0 && <p className="text-muted-foreground text-sm">Nenhuma validação feita ainda.</p>}
+        {feitas.map((ut) => (
+          <Link key={ut.id} to={`/academia/equipe/${ut.user_id}`} className="ac-card p-4 flex flex-wrap items-center gap-3 hover:border-primary transition-colors">
+            <div className="flex-1">
+              <div className="font-semibold">{ut.task.titulo}</div>
+              <div className="text-xs text-muted-foreground">{pp(ut.user_id)?.nome ?? "Colaborador"} · {ut.task.module?.phase?.titulo} · {ut.validada_em ? new Date(ut.validada_em).toLocaleString("pt-BR") : "—"}</div>
+            </div>
+            <span className="text-xs">{ut.status === "aprovada" ? "Aprovada" : "Devolvida"}</span>
+            <span className="text-xs underline">Ver ficha</span>
+          </Link>
+        ))}
       </section>
       <section className="space-y-3">
         <h2 className="text-lg">Marcos para assinar</h2>
