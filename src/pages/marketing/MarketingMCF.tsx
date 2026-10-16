@@ -12,8 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const MIN_DATE = "2025-12-01";
-type Preset = "90dias" | "mes" | "mes-passado" | "2026" | "personalizado";
+type Preset = "hoje" | "ontem" | "90dias" | "mes" | "mes-passado" | "2026" | "personalizado";
 const presets: { value: Preset; label: string }[] = [
+  { value: "hoje", label: "Hoje" },
+  { value: "ontem", label: "Ontem" },
   { value: "90dias", label: "Últimos 90 dias" },
   { value: "mes", label: "Este mês" },
   { value: "mes-passado", label: "Mês passado" },
@@ -37,6 +39,8 @@ function calendarDate(year: number, month: number, day: number): string {
 function presetPeriod(preset: Exclude<Preset, "personalizado">) {
   const today = todayBrasilia();
   const [year, month, day] = today.split("-").map(Number);
+  if (preset === "hoje") return { from: today, to: today };
+  if (preset === "ontem") return { from: calendarDate(year, month, day - 1), to: calendarDate(year, month, day - 1) };
   if (preset === "mes") return { from: calendarDate(year, month, 1), to: today };
   if (preset === "mes-passado") return { from: calendarDate(year, month - 1, 1), to: calendarDate(year, month, 0) };
   if (preset === "2026") return { from: "2026-01-01", to: "2026-12-31" };
@@ -111,6 +115,9 @@ export default function MarketingMCF() {
   const [wasClamped, setWasClamped] = useState(false);
   const from = clampDate(period.from), to = clampDate(period.to);
   const validPeriod = !!from && !!to && from <= to;
+  // A one-day period is always grouped by day, so the grouping select stays locked.
+  const singleDay = !!from && from === to;
+  const effectiveGrao: Grao = singleDay ? "day" : grao;
   const choosePreset = (value: Preset) => {
     setPreset(value);
     if (value !== "personalizado") {
@@ -140,8 +147,8 @@ export default function MarketingMCF() {
         </div>
         <div className="flex items-center gap-[8px]">
           <span id="marketing-agrupamento" className="text-[12px] text-muted-foreground">Agrupamento</span>
-          <Select value={grao} onValueChange={value => { if (value === "month" || value === "week" || value === "day") setGrao(value); }} disabled={tab !== "funil"}>
-            <SelectTrigger aria-labelledby="marketing-agrupamento" className="h-[36px] w-[120px] px-[10px] text-[12px]"><SelectValue /></SelectTrigger>
+          <Select value={effectiveGrao} onValueChange={value => { if (value === "month" || value === "week" || value === "day") setGrao(value); }} disabled={tab !== "funil" || singleDay}>
+            <SelectTrigger aria-labelledby="marketing-agrupamento" title={singleDay ? "Período de um dia: agrupado por dia" : undefined} className="h-[36px] w-[120px] px-[10px] text-[12px]"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="month" className="py-[8px] text-[12px]">Mês</SelectItem><SelectItem value="week" className="py-[8px] text-[12px]">Semana</SelectItem><SelectItem value="day" className="py-[8px] text-[12px]">Dia</SelectItem></SelectContent>
           </Select>
         </div>
@@ -155,12 +162,12 @@ export default function MarketingMCF() {
 
     <Tabs value={tab} onValueChange={setTab} className="min-w-0 space-y-[20px]">
       <TabsList aria-label="Visões de marketing" className="h-auto w-fit max-w-full flex-wrap gap-[4px] p-[4px]">
-        <TabsTrigger value="funil" className="h-[36px] px-[12px] text-[12px]">Funil por safra</TabsTrigger>
+        <TabsTrigger value="funil" className="h-[36px] px-[12px] text-[12px]">Funil</TabsTrigger>
         <TabsTrigger value="criativos" className="h-[36px] px-[12px] text-[12px]">Anúncios e criativos</TabsTrigger>
         <TabsTrigger value="canais" className="h-[36px] px-[12px] text-[12px]">Canais</TabsTrigger>
       </TabsList>
       {!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
-        <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={grao} /></TabsContent>
+        <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} /></TabsContent>
         <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} /></TabsContent>
         <TabsContent value="canais" className="m-0"><CanaisPeriodo from={from} to={to} /></TabsContent>
       </>}
