@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { addDays, differenceInCalendarDays, endOfMonth, format, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Info } from "lucide-react";
 import { useFunilSafras, formatBRL, formatInt, type FunilSafraRow, type Grao } from "@/hooks/useMarketingFunil";
@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface FunilSafrasProps {
@@ -54,13 +53,11 @@ function Roas({ investment, liquid }: { investment: number; liquid: number }) {
   return <span className={`font-semibold tabular-nums ${color}`}>{formatRoas(value)}</span>;
 }
 
-function periodInfo(period: string, grain: Grao, today: Date) {
+function periodLabel(period: string, grain: Grao) {
   const start = parseISO(period.slice(0, 10));
-  if (Number.isNaN(start.getTime())) return { label: period, maturing: false };
-  const end = grain === "month" ? endOfMonth(start) : grain === "week" ? addDays(start, 6) : start;
-  const label = grain === "month" ? format(start, "MMM/yy", { locale: ptBR })
+  if (Number.isNaN(start.getTime())) return period;
+  return grain === "month" ? format(start, "MMM/yy", { locale: ptBR })
     : grain === "week" ? `semana de ${format(start, "dd/MM")}` : format(start, "dd/MM");
-  return { label, maturing: differenceInCalendarDays(today, end) < 90 };
 }
 
 const numericCell = "whitespace-nowrap px-[12px] py-[12px] text-right tabular-nums";
@@ -105,17 +102,13 @@ export function FunilSafras({ from, to, grao }: FunilSafrasProps) {
 
   const rows: FunilSafraRow[] = [...data].sort((a, b) => b.periodo.localeCompare(a.periodo));
   const totals = Object.fromEntries(numericFields.map(field => [field, rows.reduce((sum, row) => sum + row[field], 0)])) as Totals;
-  // Use the reporting timezone without converting date-only periods through UTC.
-  const todayParts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-  const part = (type: string) => todayParts.find(item => item.type === type)?.value ?? "";
-  const today = parseISO(`${part("year")}-${part("month")}-${part("day")}`);
   const kpis = [
     { label: "Investimento", value: formatBRL(totals.investimento), detail: <Hint text="Conta Distribuição de Conteúdo. Não gera clique para checkout, por isso não entra no custo por venda."><span>+ {formatBRL(totals.investimento_awareness)} em divulgação</span></Hint> },
     { label: "Entradas A010", value: formatInt(totals.entradas), detail: `custo ${cost(totals.investimento, totals.entradas)}` },
     { label: "R1 realizadas", value: formatInt(totals.r1_realizadas), detail: `custo por R1 ${cost(totals.investimento, totals.r1_realizadas)}` },
     { label: "Contratos", value: formatInt(totals.contratos), detail: `custo por contrato ${cost(totals.investimento, totals.contratos)}` },
     { label: "Parcerias", value: formatInt(totals.parcerias), detail: `custo por parceria ${cost(totals.investimento, totals.parcerias)}` },
-    { label: "ROAS líquido", value: formatRoas(ratio(totals.liq_total, totals.investimento)), detail: `${formatBRL(totals.liq_total)} recebidos`, hint: "Dinheiro líquido já recebido das pessoas dessas safras ÷ investimento. Safras recentes ainda vão crescer." },
+    { label: "ROAS líquido", value: formatRoas(ratio(totals.liq_total, totals.investimento)), detail: `${formatBRL(totals.liq_total)} recebidos`, hint: "Dinheiro líquido que entrou no período (vendas de quem veio de anúncio, já descontados os estornos) ÷ investimento do período." },
   ];
   const stages = [
     { label: "Entradas", count: totals.entradas, rate: null },
@@ -127,7 +120,7 @@ export function FunilSafras({ from, to, grao }: FunilSafrasProps) {
   const headers = [
     { label: "Investimento" }, { label: "LPV", hint: "Dado da Meta (pixel)" },
     { label: "Checkout iniciado", hint: "Dado da Meta (pixel)" },
-    { label: "Entradas", hint: "Compradores de A010 cujo primeiro anúncio foi nesse período" },
+    { label: "Entradas", hint: "Compras de A010 no período de pessoas que vieram de anúncio" },
     { label: "Custo/entrada" }, { label: "R1 realizadas" }, { label: "Contratos" },
     { label: "Custo/contrato" }, { label: "Parcerias" }, { label: "Custo/parceria" },
     { label: "Líquido recebido" }, { label: "ROAS" },
@@ -150,8 +143,8 @@ export function FunilSafras({ from, to, grao }: FunilSafrasProps) {
 
         <Card className="min-w-0">
           <CardHeader className="space-y-[8px] p-[20px]">
-            <CardTitle className="text-[18px] tracking-normal">Funil por safra</CardTitle>
-            <CardDescription className="text-[12px] leading-[1.6]">Safra = pessoas agrupadas pelo período do primeiro anúncio que clicaram. A010, R1, contrato e parceria contam nessa safra, mesmo meses depois.</CardDescription>
+            <CardTitle className="text-[18px] tracking-normal">Funil por período</CardTitle>
+            <CardDescription className="text-[12px] leading-[1.6]">Cada etapa conta no dia em que aconteceu (data da compra ou da reunião) e é creditada ao primeiro anúncio que a pessoa clicou. Só entram pessoas que vieram de anúncio.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-[24px] p-[20px] pt-0">
             <div className="space-y-[16px]">
@@ -176,20 +169,12 @@ export function FunilSafras({ from, to, grao }: FunilSafrasProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(row => {
-                  const period = periodInfo(row.periodo, grao, today);
-                  return (
-                    <TableRow key={row.periodo}>
-                      <TableCell className="whitespace-nowrap px-[12px] py-[12px]">
-                        <span className="inline-flex items-center gap-[8px]">
-                          {period.label}
-                          {period.maturing && <Hint text="Parte das pessoas dessa safra ainda está no meio do funil (R1, contrato, parceria)."><Badge variant="outline" className="px-[6px] py-[2px] text-[10px] font-normal text-muted-foreground">em maturação</Badge></Hint>}
-                        </span>
-                      </TableCell>
-                      <MetricCells row={row} />
-                    </TableRow>
-                  );
-                })}
+                {rows.map(row => (
+                  <TableRow key={row.periodo}>
+                    <TableCell className="whitespace-nowrap px-[12px] py-[12px]">{periodLabel(row.periodo, grao)}</TableCell>
+                    <MetricCells row={row} />
+                  </TableRow>
+                ))}
               </TableBody>
               <TableFooter>
                 <TableRow className="hover:bg-muted/50">

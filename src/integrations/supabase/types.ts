@@ -20014,6 +20014,40 @@ export type Database = {
           canal_conhecimento: string | null
           cliente_antes: boolean | null
           contrato_at: string | null
+          contrato_reembolsado: boolean | null
+          contrato_reembolsado_at: string | null
+          entrada_at: string | null
+          first_channel: string | null
+          first_organic_at: string | null
+          first_paid_at: string | null
+          first_touch_at: string | null
+          liq_contrato: number | null
+          liq_entrada: number | null
+          liq_parceria: number | null
+          origem: string | null
+          parceria_at: string | null
+          person: string | null
+          placement: string | null
+          r1_agendada_at: string | null
+          r1_realizada_at: string | null
+          r2_agendada_at: string | null
+          r2_realizada_at: string | null
+          touches: number | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+        }
+        Relationships: []
+      }
+      mkt_funnel_person_v1_old: {
+        Row: {
+          ad_id: string | null
+          adset_id: string | null
+          campaign_id: string | null
+          canal: string | null
+          canal_conhecimento: string | null
+          cliente_antes: boolean | null
+          contrato_at: string | null
           entrada_at: string | null
           first_channel: string | null
           first_organic_at: string | null
@@ -20076,6 +20110,13 @@ export type Database = {
         }
         Relationships: []
       }
+      mkt_person_canon: {
+        Row: {
+          contact_id: string | null
+          person: string | null
+        }
+        Relationships: []
+      }
       mkt_sale_attribution: {
         Row: {
           attributed_channel: string | null
@@ -20106,6 +20147,17 @@ export type Database = {
           sale_id: string | null
           source: string | null
           touches: number | null
+        }
+        Relationships: []
+      }
+      mkt_sale_person: {
+        Row: {
+          etapa: string | null
+          occurred_at: string | null
+          person: string | null
+          produto: string | null
+          ref_id: string | null
+          valor: number | null
         }
         Relationships: []
       }
