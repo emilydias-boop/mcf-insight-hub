@@ -19939,6 +19939,66 @@ export type Database = {
           },
         ]
       }
+      mkt_person_attribution: {
+        Row: {
+          attributed_channel: string | null
+          email_norm: string | null
+          first_ad_id: string | null
+          first_adset_id: string | null
+          first_campaign_id: string | null
+          first_channel: string | null
+          first_organic_at: string | null
+          first_paid_at: string | null
+          first_paid_product: string | null
+          first_placement: string | null
+          first_touch_at: string | null
+          first_utm_campaign: string | null
+          first_utm_content: string | null
+          first_utm_medium: string | null
+          has_organic_form: boolean | null
+          has_paid: boolean | null
+          last_ad_id: string | null
+          last_campaign_id: string | null
+          last_paid_at: string | null
+          last_touch_at: string | null
+          last_utm_content: string | null
+          organic_canal: string | null
+          organic_origem: string | null
+          phone_norm: string | null
+          touches: number | null
+        }
+        Relationships: []
+      }
+      mkt_sync_status: {
+        Row: {
+          ads_upserted: number | null
+          dias_para_token_expirar: number | null
+          error: string | null
+          finished_at: string | null
+          id: number | null
+          rows_upserted: number | null
+          since_date: string | null
+          started_at: string | null
+          status: string | null
+          token_expires_at: string | null
+          ultimo_dia_com_custo: string | null
+          until_date: string | null
+        }
+        Relationships: []
+      }
+      mkt_tracking_health: {
+        Row: {
+          ad_id_com_custo: number | null
+          com_ad_id: number | null
+          com_utm: number | null
+          compras_entrada: number | null
+          macro_nao_resolvida: number | null
+          mes: string | null
+          pct_com_anuncio: number | null
+          source: string | null
+        }
+        Relationships: []
+      }
       user_performance_summary: {
         Row: {
           commission_rate: number | null
@@ -20302,6 +20362,10 @@ export type Database = {
       academia_assinar_marco: {
         Args: { _milestone_id: string; _observacoes?: string; _papel: string }
         Returns: undefined
+      }
+      academia_atribuir_trilhas: {
+        Args: { _template_ids: string[]; _user_id: string }
+        Returns: Json
       }
       academia_buscar_usuarios: {
         Args: { _busca: string }
