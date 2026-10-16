@@ -71,6 +71,7 @@ const AgendaPosVenda = lazy(() => import("./pages/pos-venda/AgendaPosVenda"));
 const ProvisionarPosVenda = lazy(() => import("./pages/pos-venda/ProvisionarUsuarios"));
 const ImportarHarvey = lazy(() => import("./pages/pos-venda/ImportarHarvey"));
 const DistribuicaoPosVenda = lazy(() => import("./pages/pos-venda/DistribuicaoNovosLicenciados"));
+const FluxoPosVenda = lazy(() => import("./pages/FluxoPosVenda"));
 const Discador = lazy(() => import("./pages/crm/Discador"));
 const Origens = lazy(() => import("./pages/crm/Origens"));
 const Grupos = lazy(() => import("./pages/crm/Grupos"));
