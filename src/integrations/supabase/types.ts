@@ -971,6 +971,189 @@ export type Database = {
           },
         ]
       }
+      ads_entities: {
+        Row: {
+          account_id: string
+          ad_id: string
+          ad_name: string | null
+          adset_id: string | null
+          campaign_id: string | null
+          created_time: string | null
+          creative_id: string | null
+          creative_type: string | null
+          effective_status: string | null
+          image_url: string | null
+          platform: string
+          status: string | null
+          synced_at: string
+          thumbnail_url: string | null
+          video_id: string | null
+        }
+        Insert: {
+          account_id: string
+          ad_id: string
+          ad_name?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          created_time?: string | null
+          creative_id?: string | null
+          creative_type?: string | null
+          effective_status?: string | null
+          image_url?: string | null
+          platform?: string
+          status?: string | null
+          synced_at?: string
+          thumbnail_url?: string | null
+          video_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          ad_id?: string
+          ad_name?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          created_time?: string | null
+          creative_id?: string | null
+          creative_type?: string | null
+          effective_status?: string | null
+          image_url?: string | null
+          platform?: string
+          status?: string | null
+          synced_at?: string
+          thumbnail_url?: string | null
+          video_id?: string | null
+        }
+        Relationships: []
+      }
+      ads_insights_daily: {
+        Row: {
+          account_id: string
+          account_name: string | null
+          ad_id: string
+          ad_name: string | null
+          adset_id: string | null
+          adset_name: string | null
+          campaign_id: string | null
+          campaign_name: string | null
+          clicks: number
+          date: string
+          frequency: number | null
+          impressions: number
+          initiate_checkout: number
+          landing_page_views: number
+          leads_pixel: number
+          link_clicks: number
+          platform: string
+          purchase_value_pixel: number
+          purchases_pixel: number
+          raw_actions: Json | null
+          reach: number
+          spend: number
+          synced_at: string
+          thruplays: number
+          video_3s_views: number
+        }
+        Insert: {
+          account_id: string
+          account_name?: string | null
+          ad_id: string
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          clicks?: number
+          date: string
+          frequency?: number | null
+          impressions?: number
+          initiate_checkout?: number
+          landing_page_views?: number
+          leads_pixel?: number
+          link_clicks?: number
+          platform?: string
+          purchase_value_pixel?: number
+          purchases_pixel?: number
+          raw_actions?: Json | null
+          reach?: number
+          spend?: number
+          synced_at?: string
+          thruplays?: number
+          video_3s_views?: number
+        }
+        Update: {
+          account_id?: string
+          account_name?: string | null
+          ad_id?: string
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          clicks?: number
+          date?: string
+          frequency?: number | null
+          impressions?: number
+          initiate_checkout?: number
+          landing_page_views?: number
+          leads_pixel?: number
+          link_clicks?: number
+          platform?: string
+          purchase_value_pixel?: number
+          purchases_pixel?: number
+          raw_actions?: Json | null
+          reach?: number
+          spend?: number
+          synced_at?: string
+          thruplays?: number
+          video_3s_views?: number
+        }
+        Relationships: []
+      }
+      ads_sync_runs: {
+        Row: {
+          ads_upserted: number | null
+          details: Json | null
+          error: string | null
+          finished_at: string | null
+          id: number
+          platform: string
+          rows_upserted: number | null
+          since_date: string | null
+          started_at: string
+          status: string
+          token_expires_at: string | null
+          until_date: string | null
+        }
+        Insert: {
+          ads_upserted?: number | null
+          details?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          id?: number
+          platform?: string
+          rows_upserted?: number | null
+          since_date?: string | null
+          started_at?: string
+          status?: string
+          token_expires_at?: string | null
+          until_date?: string | null
+        }
+        Update: {
+          ads_upserted?: number | null
+          details?: Json | null
+          error?: string | null
+          finished_at?: string | null
+          id?: number
+          platform?: string
+          rows_upserted?: number | null
+          since_date?: string | null
+          started_at?: string
+          status?: string
+          token_expires_at?: string | null
+          until_date?: string | null
+        }
+        Relationships: []
+      }
       agendamento_excecoes: {
         Row: {
           attendee_id: string
@@ -21767,6 +21950,7 @@ export type Database = {
         Args: { keep_id: string; remove_id: string }
         Returns: undefined
       }
+      meta_ads_backfill_tick: { Args: never; Returns: string }
       meta_agendamento_efetiva: {
         Args: { p_ano_mes: string; p_sdr_id: string }
         Returns: {
