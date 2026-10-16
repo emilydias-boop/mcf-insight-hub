@@ -7,6 +7,7 @@ import { useCatalogo, useNomes } from "@/hooks/useAcademia";
 import { UsuarioPicker, type UsuarioApp } from "@/components/academia/UsuarioPicker";
 import AdminTemplates from "./AdminTemplates";
 import AdminClima from "@/components/academia/clima/AdminClima";
+import AtribuirTrilhas from "@/components/academia/AtribuirTrilhas";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -207,9 +208,10 @@ export default function AcademiaAdmin() {
     <div className="space-y-6">
       <div><div className="ac-eyebrow">Pessoas & Cultura</div><h1 className="text-3xl">Admin RH</h1></div>
       <Tabs defaultValue="pessoas">
-        <TabsList><TabsTrigger value="pessoas">Convites e pessoas</TabsTrigger><TabsTrigger value="templates">Templates de trilha</TabsTrigger>
+        <TabsList className="h-auto flex flex-wrap justify-start gap-1"><TabsTrigger value="pessoas">Convites e pessoas</TabsTrigger><TabsTrigger value="atribuicao">Atribuir trilhas</TabsTrigger><TabsTrigger value="templates">Templates de trilha</TabsTrigger>
           <TabsTrigger value="frentes">Produtos</TabsTrigger><TabsTrigger value="quizzes">Quizzes</TabsTrigger><TabsTrigger value="relatorios">Relatórios</TabsTrigger><TabsTrigger value="clima">Pesquisa de Clima</TabsTrigger></TabsList>
         <TabsContent value="pessoas" className="mt-6"><Pessoas /></TabsContent>
+        <TabsContent value="atribuicao" className="mt-6"><AtribuirTrilhas /></TabsContent>
         <TabsContent value="templates" className="mt-6"><AdminTemplates /></TabsContent>
         <TabsContent value="frentes" className="mt-6"><Frentes /></TabsContent>
         <TabsContent value="quizzes" className="mt-6"><Quizzes /></TabsContent>
