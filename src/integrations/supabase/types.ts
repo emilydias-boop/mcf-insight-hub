@@ -20005,6 +20005,20 @@ export type Database = {
           },
         ]
       }
+      mkt_funnel_events: {
+        Row: {
+          first_ad_id: string | null
+          first_paid_at: string | null
+          id: number | null
+          last_ad_id: string | null
+          occurred_at: string | null
+          person: string | null
+          ref_id: string | null
+          tipo: string | null
+          valor: number | null
+        }
+        Relationships: []
+      }
       mkt_funnel_person: {
         Row: {
           ad_id: string | null
@@ -20077,6 +20091,15 @@ export type Database = {
           key: string | null
           key_type: string | null
           via: string | null
+        }
+        Relationships: []
+      }
+      mkt_paid_touch_person: {
+        Row: {
+          ad_id: string | null
+          occurred_at: string | null
+          person: string | null
+          touchpoint_id: number | null
         }
         Relationships: []
       }
@@ -22394,6 +22417,80 @@ export type Database = {
           thruplays: number
           thumbnail_url: string
           video_3s: number
+        }[]
+      }
+      mkt_funil_criativos: {
+        Args: {
+          p_data?: string
+          p_from: string
+          p_nivel?: string
+          p_to: string
+          p_toque?: string
+        }
+        Returns: {
+          campanha: string
+          checkout_iniciado: number
+          cliques_link: number
+          compras_pixel: number
+          conjunto: string
+          conta: string
+          contratos: number
+          cpc: number
+          cpm: number
+          ctr: number
+          custo_contrato: number
+          custo_entrada: number
+          custo_parceria: number
+          custo_r1_realizada: number
+          entradas: number
+          impressoes: number
+          investimento: number
+          leads: number
+          liq_parceria: number
+          liq_total: number
+          lpv: number
+          nivel_id: string
+          nome: string
+          parcerias: number
+          r1_agendadas: number
+          r1_realizadas: number
+          r2_realizadas: number
+          roas_liquido: number
+          status: string
+          taxa_lpv_checkout: number
+          thruplays: number
+          thumbnail_url: string
+          video_3s: number
+        }[]
+      }
+      mkt_funil_periodo: {
+        Args: {
+          p_data?: string
+          p_from: string
+          p_grao?: string
+          p_to: string
+          p_toque?: string
+        }
+        Returns: {
+          checkout_iniciado: number
+          cliques_link: number
+          compras_pixel: number
+          contratos: number
+          entradas: number
+          impressoes: number
+          investimento: number
+          investimento_awareness: number
+          leads: number
+          liq_contrato: number
+          liq_entrada: number
+          liq_parceria: number
+          liq_total: number
+          lpv: number
+          parcerias: number
+          periodo: string
+          r1_agendadas: number
+          r1_realizadas: number
+          r2_realizadas: number
         }[]
       }
       mkt_funil_safras: {
