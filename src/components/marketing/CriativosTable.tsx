@@ -159,7 +159,7 @@ export function CriativosTable({ from, to }: CriativosTableProps) {
     <Card className="min-w-0 text-foreground">
       <CardHeader className="space-y-[8px] p-[20px]">
         <CardTitle className="text-[18px] tracking-normal">Anúncios e criativos</CardTitle>
-        <CardDescription className="text-[12px] leading-[1.6]">Cada pessoa é creditada ao primeiro anúncio que clicou. Investimento e métricas da Meta são do período; entradas, contratos e parcerias são das pessoas que clicaram pela primeira vez nesse período.</CardDescription>
+        <CardDescription className="text-[12px] leading-[1.6]">Cada venda conta no dia em que aconteceu e é creditada ao primeiro anúncio que a pessoa clicou, mesmo que o clique tenha sido semanas antes. Por isso um criativo pausado ainda pode ter parceria hoje.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-[20px] p-[20px] pt-0">
         <div className="flex flex-wrap items-center gap-[12px]">
