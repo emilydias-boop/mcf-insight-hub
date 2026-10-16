@@ -48,6 +48,7 @@ const McfAtendimentoAccess = lazy(() => import("./pages/settings/McfAtendimentoA
 // Lazy — all other routes (split into per-route chunks)
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const VisaoDiaria = lazy(() => import("./pages/diretoria/VisaoDiaria"));
+const MarketingMCF = lazy(() => import("./pages/marketing/MarketingMCF"));
 const PainelComercialCredito = lazy(() => import("./pages/bu-credito/PainelComercialCredito"));
 const PainelComercialSolar = lazy(() => import("./pages/bu-solar/PainelComercialSolar"));
 const MeuDesempenhoCloser = lazy(() => import("./pages/closer/MeuDesempenhoCloser"));
@@ -246,6 +247,7 @@ const App = () => (
               <Route path="checkin/disparos/:id" element={<McfAtendimentoGuard><DisparoDetalhe /></McfAtendimentoGuard>} />
               <Route path="checkin/acesso" element={<RoleGuard allowedRoles={['admin', 'manager']}><McfAtendimentoAccess /></RoleGuard>} />
               <Route path="diretoria/visao-diaria" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><VisaoDiaria /></RoleGuard>} />
+              <Route path="marketing" element={<RoleGuard allowedRoles={['admin','manager','coordenador','marketing','financeiro']} matchAnyRole><MarketingMCF /></RoleGuard>} />
               {/* Visão Chairman - rota desativada (manter para rollback) */}
               {/* <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} /> */}
               <Route index element={<Navigate to="/home" replace />} />

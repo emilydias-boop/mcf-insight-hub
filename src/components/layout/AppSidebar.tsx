@@ -146,6 +146,12 @@ const menuItems: MenuItem[] = [
     icon: LayoutDashboard,
     requiredRoles: ["admin", "manager", "coordenador"],
   },
+  {
+    title: "Marketing MCF",
+    url: "/marketing",
+    icon: Megaphone,
+    requiredRoles: ["admin", "manager", "coordenador", "marketing", "financeiro"],
+  },
   // Visão Chairman - desativada (manter comentado para rollback)
   // {
   //   title: "Visão Chairman",
