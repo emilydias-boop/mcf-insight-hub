@@ -1,0 +1,1 @@
+ALTER FUNCTION public.academia_atribuir_trilhas(uuid,uuid[]) SECURITY INVOKER;
