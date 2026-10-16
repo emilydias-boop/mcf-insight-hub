@@ -6,3 +6,4 @@
 - Leaving the "Novos licenciados" stage requires a recent pos_venda_nota_contato activity, enforced by a crm_deals trigger scoped to the Pós Venda origin; client BU movements are logged to crm_cliente_timeline for the future timeline screen.
 
 - Front-end telemetry (errors, page views, page load time) goes only through src/lib/telemetry.ts into app_telemetry, fire-and-forget, so a logging failure never blocks a screen.
+- Manual Academy track assignment uses the admin/RH-validated academia_atribuir_trilhas RPC; additional tracks reuse extension records and expose every assigned phase, preserving existing tasks and progress.

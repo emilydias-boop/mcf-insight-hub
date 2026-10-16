@@ -16,6 +16,15 @@ export default function MinhaTrilha() {
   const { data: perfil, isLoading } = useMeuPerfilAcademia();
   const { data: trilha, isLoading: lt, error } = useTrilhaDoUsuario(perfil ? user?.id : undefined, true);
   const { data: cat } = useCatalogo();
+  const { data: templates = [] } = useQuery({
+    queryKey: ["academia", "nomes-templates"],
+    enabled: !!perfil,
+    queryFn: async () => {
+      const { data, error } = await adb.from("academia_track_templates").select("id,nome");
+      if (error) throw error;
+      return (data ?? []) as { id: string; nome: string }[];
+    },
+  });
   const { data: turma } = useQuery({
     queryKey: ["academia", "turma", user?.id], enabled: !!perfil,
     queryFn: async () => (await adb.rpc("academia_media_turma")).data as { pessoas: number; media: number },
@@ -30,18 +39,19 @@ export default function MinhaTrilha() {
       {isAdmin && <Button asChild className="mt-4"><Link to="/academia/admin">Ir para Admin RH</Link></Button>}
     </div>
   );
-  if (error) return <div className="ac-warn">Não foi possível montar a trilha. Fale com o RH.</div>;
+  if (error || !trilha) return <div className="ac-warn">Não foi possível montar a trilha. Fale com o RH.</div>;
 
-  const principal = trilha!.tracks.find((t) => t.tipo === "principal");
-  const tarefas = trilha!.tarefas.filter((t) => t.user_track_id === principal?.id);
+  const principal = trilha.tracks.find((t) => t.tipo === "principal");
+  const tarefas = trilha.tarefas.filter((t) => t.user_track_id === principal?.id);
   const fases = agruparPorFase(tarefas);
-  const fase0ok = fases.find((f) => f.phase.codigo === "fase_0") ? faseConcluida(fases.find((f) => f.phase.codigo === "fase_0")!) : false;
+  const fase0 = fases.find((f) => f.phase.codigo === "fase_0");
+  const fase0ok = fase0 ? faseConcluida(fase0) : false;
   const dia = diasDesde(perfil.data_inicio);
   const atual = fases.find((f) => !faseConcluida(f));
   const pct = progresso(tarefas);
   const frente = cat?.frentes.find((f) => f.id === perfil.frente_id);
   const prox = NIVEIS.find((n) => n.xp > perfil.xp_total);
-  const extensoes = trilha!.tracks.filter((t) => t.tipo === "extensao");
+  const extensoes = trilha.tracks.filter((t) => t.tipo === "extensao");
 
   return (
     <div className="space-y-8 max-w-5xl">
@@ -64,7 +74,7 @@ export default function MinhaTrilha() {
         </div>
       </section>
 
-      {trilha!.marcos.filter((m) => !m.fechado_em).map((m) => <MarcoCard key={m.id} marco={m} papel="colaborador" nome={perfil.nome} />)}
+      {trilha.marcos.filter((m) => !m.fechado_em).map((m) => <MarcoCard key={m.id} marco={m} papel="colaborador" nome={perfil.nome} />)}
 
       <section className="relative pl-8">
         <div className="absolute left-3 top-2 bottom-2 w-px bg-border" />
@@ -90,7 +100,7 @@ export default function MinhaTrilha() {
                   </div>
                   <div className="ml-auto flex items-center gap-3">
                     <span className="text-sm font-bold">{fp}%</span>
-                    {!travada && <Button asChild size="sm" variant={ehAtual ? "default" : "outline"}><Link to={`/academia/fase/${f.phase.id}?trilha=${principal!.id}`}>Abrir <ChevronRight className="h-4 w-4" /></Link></Button>}
+                    {!travada && principal && <Button asChild size="sm" variant={ehAtual ? "default" : "outline"}><Link to={`/academia/fase/${f.phase.id}?trilha=${principal.id}`}>Abrir <ChevronRight className="h-4 w-4" /></Link></Button>}
                   </div>
                 </div>
                 {travada && <div className="mt-4 text-sm rounded-xl border p-3 ac-warn-bg flex gap-2"><Lock className="h-4 w-4 ac-warn shrink-0 mt-0.5" />{MENSAGEM_TRAVA}</div>}
@@ -116,17 +126,18 @@ export default function MinhaTrilha() {
 
       {extensoes.length > 0 && (
         <section>
-          <h2 className="text-xl mb-3 flex items-center gap-2"><Flag className="h-5 w-5 text-primary" />Trilhas de extensão</h2>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <h2 className="text-xl mb-3 flex items-center gap-2"><Flag className="h-5 w-5 text-primary" />Trilhas adicionais</h2>
+          <div className="space-y-6">
             {extensoes.map((e) => {
-              const ts = trilha!.tarefas.filter((t) => t.user_track_id === e.id);
+              const ts = trilha.tarefas.filter((t) => t.user_track_id === e.id);
               const fr = cat?.frentes.find((f) => f.id === e.frente_id);
-              const ph = ts[0]?.task.module?.phase;
+              const fasesAdicionais = agruparPorFase(ts);
               return (
-                <Link key={e.id} to={ph ? `/academia/fase/${ph.id}?trilha=${e.id}` : "#"} className="ac-card p-4 block hover:border-primary">
-                  <div className="font-semibold">{fr?.nome}</div>
+                <section key={e.id} className="border-t pt-4">
+                  <div className="flex justify-between gap-3"><h3 className="font-semibold text-lg">{templates.find((t) => t.id === e.track_template_id)?.nome ?? fr?.nome ?? "Trilha adicional"}</h3><span className="text-sm">{progresso(ts)}%</span></div>
                   <Progress value={progresso(ts)} className="h-1.5 mt-2" />
-                </Link>);
+                  <div className="mt-3 divide-y">{fasesAdicionais.map((f) => <div key={f.phase.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><div className="font-semibold">{f.phase.titulo}</div><div className="text-xs text-muted-foreground">{progresso(f.tarefas)}% · {f.tarefas.length} tarefa(s)</div></div><Button asChild size="sm" variant="outline"><Link to={`/academia/fase/${f.phase.id}?trilha=${e.id}`}>Abrir <ChevronRight className="h-4 w-4" /></Link></Button></div>)}</div>
+                </section>);
             })}
           </div>
         </section>
