@@ -74,6 +74,8 @@ export interface CanalPeriodoRow {
 
 export type Grao = 'day' | 'week' | 'month';
 export type Nivel = 'criativo' | 'ad' | 'adset' | 'campaign';
+export type ModeloData = 'venda' | 'safra';
+export type ModeloToque = 'primeiro' | 'ultimo';
 
 /** Converte numeric/Postgres (que pode chegar como string) para number. */
 const toNum = (v: unknown): number => Number(v ?? 0);
@@ -155,27 +157,32 @@ export const useFunilSafras = ({
   from,
   to,
   grao = 'month',
+  data = 'venda',
+  toque = 'primeiro',
 }: {
   from: string | null;
   to: string | null;
   grao?: Grao;
+  data?: ModeloData;
+  toque?: ModeloToque;
 }) =>
   useQuery<FunilSafraRow[]>({
-    queryKey: ['mkt-funil-safras', from, to, grao],
+    queryKey: ['mkt-funil-safras', from, to, grao, data, toque],
     staleTime: 5 * 60 * 1000,
     enabled: !!from && !!to,
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as any)('mkt_funil_safras', {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_periodo', {
         p_from: from,
         p_to: to,
-        p_bu: 'incorporador',
         p_grao: grao,
+        p_data: data,
+        p_toque: toque,
       });
       if (error) {
         if (error.code === '42501') throw new Error(PERM_ERROR);
         throw error;
       }
-      return (data ?? []).map(mapSafra);
+      return (rows ?? []).map(mapSafra);
     },
   });
 
@@ -183,27 +190,32 @@ export const useFunilAnuncios = ({
   from,
   to,
   nivel = 'criativo',
+  data = 'venda',
+  toque = 'primeiro',
 }: {
   from: string | null;
   to: string | null;
   nivel?: Nivel;
+  data?: ModeloData;
+  toque?: ModeloToque;
 }) =>
   useQuery<FunilAnuncioRow[]>({
-    queryKey: ['mkt-funil-anuncios', from, to, nivel],
+    queryKey: ['mkt-funil-anuncios', from, to, nivel, data, toque],
     staleTime: 5 * 60 * 1000,
     enabled: !!from && !!to,
     queryFn: async () => {
-      const { data, error } = await (supabase.rpc as any)('mkt_funil_anuncios', {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos', {
         p_from: from,
         p_to: to,
         p_nivel: nivel,
-        p_bu: 'incorporador',
+        p_data: data,
+        p_toque: toque,
       });
       if (error) {
         if (error.code === '42501') throw new Error(PERM_ERROR);
         throw error;
       }
-      return (data ?? []).map(mapAnuncio);
+      return (rows ?? []).map(mapAnuncio);
     },
   });
 
