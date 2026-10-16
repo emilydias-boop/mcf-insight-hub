@@ -12774,6 +12774,99 @@ export type Database = {
           },
         ]
       }
+      lead_touchpoints: {
+        Row: {
+          ad_id: string | null
+          adset_id: string | null
+          campaign_id: string | null
+          canal_conhecimento: string | null
+          channel: string
+          created_at: string
+          customer_name: string | null
+          email_norm: string | null
+          event: string
+          fbclid: string | null
+          id: number
+          landing_url: string | null
+          net_value: number | null
+          occurred_at: string
+          origem: string | null
+          phone_norm: string | null
+          product_name: string | null
+          ref_id: string
+          sck: string | null
+          source_system: string
+          src: string | null
+          updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_id: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          canal_conhecimento?: string | null
+          channel: string
+          created_at?: string
+          customer_name?: string | null
+          email_norm?: string | null
+          event: string
+          fbclid?: string | null
+          id?: number
+          landing_url?: string | null
+          net_value?: number | null
+          occurred_at: string
+          origem?: string | null
+          phone_norm?: string | null
+          product_name?: string | null
+          ref_id: string
+          sck?: string | null
+          source_system: string
+          src?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_id?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          canal_conhecimento?: string | null
+          channel?: string
+          created_at?: string
+          customer_name?: string | null
+          email_norm?: string | null
+          event?: string
+          fbclid?: string | null
+          id?: number
+          landing_url?: string | null
+          net_value?: number | null
+          occurred_at?: string
+          origem?: string | null
+          phone_norm?: string | null
+          product_name?: string | null
+          ref_id?: string
+          sck?: string | null
+          source_system?: string
+          src?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_id?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: []
+      }
       lead_tracking: {
         Row: {
           closer: string | null
@@ -21985,6 +22078,21 @@ export type Database = {
           sdr_id: string
         }[]
       }
+      mkt_channel: {
+        Args: { p_ad_id: string; p_origem: string; p_source: string }
+        Returns: string
+      }
+      mkt_meta_id: { Args: { p: string }; Returns: string }
+      mkt_norm_phone: { Args: { p: string }; Returns: string }
+      mkt_touch_from_sale: {
+        Args: { r: Database["public"]["Tables"]["hubla_transactions"]["Row"] }
+        Returns: undefined
+      }
+      mkt_touch_from_webhook: {
+        Args: { p_created: string; p_data: Json; p_id: string; p_type: string }
+        Returns: undefined
+      }
+      mkt_url_param: { Args: { p_key: string; p_url: string }; Returns: string }
       nome_usuario: { Args: { p_id: string }; Returns: string }
       nomes_compativeis: { Args: { a: string; b: string }; Returns: boolean }
       normalize_document: { Args: { doc: string }; Returns: string }
