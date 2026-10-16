@@ -96,6 +96,7 @@ const AcademiaBiblioteca = lazy(() => import("./pages/academia/Biblioteca"));
 const AcademiaCombinadoPJ = lazy(() => import("./pages/academia/CombinadoPJ"));
 const AcademiaValidacoes = lazy(() => import("./pages/academia/Validacoes"));
 const AcademiaPainelGestor = lazy(() => import("./pages/academia/PainelGestor"));
+const AcademiaColaborador = lazy(() => import("./pages/academia/ColaboradorDetalhe"));
 const AcademiaAdmin = lazy(() => import("./pages/academia/Admin"));
 const LeadsLimbo = lazy(() => import("./pages/crm/LeadsLimbo"));
 const RetornosParceiros = lazy(() => import("./pages/crm/RetornosParceiros"));
@@ -342,6 +343,7 @@ const App = () => (
                 <Route path="combinado-pj" element={<AcademiaCombinadoPJ />} />
                 <Route path="validacoes" element={<AcademiaValidacoes />} />
                 <Route path="equipe" element={<AcademiaPainelGestor />} />
+                <Route path="equipe/:userId" element={<AcademiaColaborador />} />
                 <Route path="admin" element={<RoleGuard allowedRoles={['admin', 'rh']}><AcademiaAdmin /></RoleGuard>} />
               </Route>
 

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { useAcademiaIsAdmin, useCatalogo } from "@/hooks/useAcademia";
 import { useMeusVinculados } from "./AcademiaLayout";
@@ -39,7 +40,7 @@ export default function PainelGestor() {
           const dia = diasDesde(p.data_inicio);
           const atrasada = atual && atual.phase.dia_fim != null && dia > atual.phase.dia_fim;
           return (
-            <div key={p.id} className="ac-card p-5 grid md:grid-cols-[1.5fr_1fr_1fr] gap-4 items-center">
+            <Link to={`/academia/equipe/${p.id}`} key={p.id} className="ac-card p-5 hover:border-primary transition-colors grid md:grid-cols-[1.5fr_1fr_1fr] gap-4 items-center">
               <div>
                 <div className="font-bold">{p.nome}</div>
                 <div className="text-xs text-muted-foreground">{cat?.frentes.find((f) => f.id === p.frente_id)?.nome} · {p.funcao ?? "—"} · {p.nivel}</div>
@@ -55,7 +56,7 @@ export default function PainelGestor() {
                 {aguardando > 0 && <div>{aguardando} aguardando validação</div>}
                 {devolvidas > 0 && <div className="ac-warn">{devolvidas} devolvida(s)</div>}
               </div>
-            </div>);
+            </Link>);
         })}
       </div>
     </div>
