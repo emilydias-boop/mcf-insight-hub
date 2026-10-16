@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Academia MCF — atribuir uma ou mais trilhas por colaborador no Admin RH
+
 - [x] Inventário do fluxo de qualificação pré-R1 (entregue no plano)
 - [x] Criar `src/components/crm/qualification/CreditoQualificationQuestions.ts` (novo, textos exatos)
 - [x] Criar `src/components/crm/qualification/CreditoQualificationQuestionnaire.tsx` (novo, mesmo visual do QualificationQuestionnaire)
