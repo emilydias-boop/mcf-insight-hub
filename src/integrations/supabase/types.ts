@@ -971,6 +971,30 @@ export type Database = {
           },
         ]
       }
+      ads_account_bu: {
+        Row: {
+          account_id: string
+          account_name: string
+          bu: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          account_name: string
+          bu: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          account_name?: string
+          bu?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ads_entities: {
         Row: {
           account_id: string
@@ -19981,6 +20005,38 @@ export type Database = {
           },
         ]
       }
+      mkt_funnel_person: {
+        Row: {
+          ad_id: string | null
+          adset_id: string | null
+          campaign_id: string | null
+          canal: string | null
+          canal_conhecimento: string | null
+          cliente_antes: boolean | null
+          contrato_at: string | null
+          entrada_at: string | null
+          first_channel: string | null
+          first_organic_at: string | null
+          first_paid_at: string | null
+          first_touch_at: string | null
+          liq_contrato: number | null
+          liq_entrada: number | null
+          liq_parceria: number | null
+          origem: string | null
+          parceria_at: string | null
+          person: string | null
+          placement: string | null
+          r1_agendada_at: string | null
+          r1_realizada_at: string | null
+          r2_agendada_at: string | null
+          r2_realizada_at: string | null
+          touches: number | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+        }
+        Relationships: []
+      }
       mkt_identity: {
         Row: {
           contact_id: string | null
@@ -22234,9 +22290,83 @@ export type Database = {
           sdr_id: string
         }[]
       }
+      mkt_can_view: { Args: { _uid: string }; Returns: boolean }
+      mkt_canais_periodo: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          canal: string
+          contratos: number
+          entradas: number
+          origem: string
+          parcerias: number
+          r1_realizadas: number
+        }[]
+      }
       mkt_channel: {
         Args: { p_ad_id: string; p_origem: string; p_source: string }
         Returns: string
+      }
+      mkt_funil_anuncios: {
+        Args: { p_bu?: string; p_from: string; p_nivel?: string; p_to: string }
+        Returns: {
+          campanha: string
+          checkout_iniciado: number
+          cliques_link: number
+          compras_pixel: number
+          conjunto: string
+          conta: string
+          contratos: number
+          cpc: number
+          cpm: number
+          ctr: number
+          custo_contrato: number
+          custo_entrada: number
+          custo_parceria: number
+          custo_r1_realizada: number
+          entradas: number
+          impressoes: number
+          investimento: number
+          leads: number
+          liq_parceria: number
+          liq_total: number
+          lpv: number
+          nivel_id: string
+          nome: string
+          parcerias: number
+          r1_agendadas: number
+          r1_realizadas: number
+          r2_realizadas: number
+          roas_liquido: number
+          status: string
+          taxa_lpv_checkout: number
+          thruplays: number
+          thumbnail_url: string
+          video_3s: number
+        }[]
+      }
+      mkt_funil_safras: {
+        Args: { p_bu?: string; p_from: string; p_grao?: string; p_to: string }
+        Returns: {
+          checkout_iniciado: number
+          cliques_link: number
+          compras_pixel: number
+          contratos: number
+          entradas: number
+          impressoes: number
+          investimento: number
+          investimento_awareness: number
+          leads: number
+          liq_contrato: number
+          liq_entrada: number
+          liq_parceria: number
+          liq_total: number
+          lpv: number
+          parcerias: number
+          periodo: string
+          r1_agendadas: number
+          r1_realizadas: number
+          r2_realizadas: number
+        }[]
       }
       mkt_meta_id: { Args: { p: string }; Returns: string }
       mkt_norm_phone: { Args: { p: string }; Returns: string }
