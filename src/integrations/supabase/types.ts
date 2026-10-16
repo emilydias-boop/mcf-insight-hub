@@ -1603,6 +1603,13 @@ export type Database = {
             foreignKeyName: "ar_titulos_hubla_transaction_id_fkey"
             columns: ["hubla_transaction_id"]
             isOneToOne: false
+            referencedRelation: "mkt_sale_attribution"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "ar_titulos_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
@@ -5254,6 +5261,13 @@ export type Database = {
             foreignKeyName: "checkin_rooms_hubla_transaction_id_fkey"
             columns: ["hubla_transaction_id"]
             isOneToOne: false
+            referencedRelation: "mkt_sale_attribution"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "checkin_rooms_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
@@ -8779,6 +8793,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "hubla_transactions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_post_sale_tracking_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "mkt_sale_attribution"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "contract_post_sale_tracking_transaction_id_fkey"
@@ -15589,6 +15610,13 @@ export type Database = {
             foreignKeyName: "r2_vendas_extras_hubla_transaction_id_fkey"
             columns: ["hubla_transaction_id"]
             isOneToOne: false
+            referencedRelation: "mkt_sale_attribution"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "r2_vendas_extras_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
@@ -16754,6 +16782,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "hubla_transactions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_intermediacoes_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "mkt_sale_attribution"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "sdr_intermediacoes_hubla_transaction_id_fkey"
@@ -18640,6 +18675,13 @@ export type Database = {
             foreignKeyName: "venda_closer_manual_transaction_id_fkey"
             columns: ["transaction_id"]
             isOneToOne: true
+            referencedRelation: "mkt_sale_attribution"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "venda_closer_manual_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
             referencedRelation: "vw_linhas_marcadas_como_eco"
             referencedColumns: ["id"]
           },
@@ -19939,6 +19981,15 @@ export type Database = {
           },
         ]
       }
+      mkt_identity: {
+        Row: {
+          contact_id: string | null
+          key: string | null
+          key_type: string | null
+          via: string | null
+        }
+        Relationships: []
+      }
       mkt_person_attribution: {
         Row: {
           attributed_channel: string | null
@@ -19969,6 +20020,39 @@ export type Database = {
         }
         Relationships: []
       }
+      mkt_sale_attribution: {
+        Row: {
+          attributed_channel: string | null
+          email: string | null
+          first_ad_id: string | null
+          first_adset_id: string | null
+          first_campaign_id: string | null
+          first_channel: string | null
+          first_organic_at: string | null
+          first_paid_at: string | null
+          first_paid_touchpoint_id: number | null
+          first_placement: string | null
+          first_touch_at: string | null
+          first_utm_campaign: string | null
+          first_utm_content: string | null
+          first_utm_medium: string | null
+          last_ad_id: string | null
+          last_campaign_id: string | null
+          last_paid_at: string | null
+          last_utm_content: string | null
+          net_value: number | null
+          organic_canal: string | null
+          organic_matched_by: string | null
+          organic_origem: string | null
+          paid_matched_by: string | null
+          product_name: string | null
+          sale_date: string | null
+          sale_id: string | null
+          source: string | null
+          touches: number | null
+        }
+        Relationships: []
+      }
       mkt_sync_status: {
         Row: {
           ads_upserted: number | null
@@ -19983,6 +20067,14 @@ export type Database = {
           token_expires_at: string | null
           ultimo_dia_com_custo: string | null
           until_date: string | null
+        }
+        Relationships: []
+      }
+      mkt_touch_contact: {
+        Row: {
+          contact_id: string | null
+          touchpoint_id: number | null
+          via: string | null
         }
         Relationships: []
       }
@@ -22148,6 +22240,7 @@ export type Database = {
       }
       mkt_meta_id: { Args: { p: string }; Returns: string }
       mkt_norm_phone: { Args: { p: string }; Returns: string }
+      mkt_phone_key: { Args: { p: string }; Returns: string }
       mkt_touch_from_sale: {
         Args: { r: Database["public"]["Tables"]["hubla_transactions"]["Row"] }
         Returns: undefined
