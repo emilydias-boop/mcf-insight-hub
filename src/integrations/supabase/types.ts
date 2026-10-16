@@ -19991,10 +19991,11 @@ export type Database = {
           ad_id_com_custo: number | null
           com_ad_id: number | null
           com_utm: number | null
+          compras_entrada: number | null
           macro_nao_resolvida: number | null
           mes: string | null
+          pct_com_anuncio: number | null
           source: string | null
-          vendas_entrada: number | null
         }
         Relationships: []
       }
@@ -20361,6 +20362,10 @@ export type Database = {
       academia_assinar_marco: {
         Args: { _milestone_id: string; _observacoes?: string; _papel: string }
         Returns: undefined
+      }
+      academia_atribuir_trilhas: {
+        Args: { _template_ids: string[]; _user_id: string }
+        Returns: Json
       }
       academia_buscar_usuarios: {
         Args: { _busca: string }
