@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FunilSafras } from "@/components/marketing/FunilSafras";
 import { CriativosTable } from "@/components/marketing/CriativosTable";
-import { useCanaisPeriodo, CANAL_LABELS, formatInt, type Grao } from "@/hooks/useMarketingFunil";
+import { useCanaisPeriodo, CANAL_LABELS, formatInt, type Grao, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 
 const MIN_DATE = "2025-12-01";
 type Preset = "hoje" | "ontem" | "90dias" | "mes" | "mes-passado" | "2026" | "personalizado";
@@ -111,6 +113,8 @@ export default function MarketingMCF() {
   const [preset, setPreset] = useState<Preset>("90dias");
   const [period, setPeriod] = useState(() => presetPeriod("90dias"));
   const [grao, setGrao] = useState<Grao>("month");
+  const [data, setData] = useState<ModeloData>("venda");
+  const [toque, setToque] = useState<ModeloToque>("primeiro");
   const [tab, setTab] = useState("funil");
   const [wasClamped, setWasClamped] = useState(false);
   const from = clampDate(period.from), to = clampDate(period.to);
@@ -153,6 +157,20 @@ export default function MarketingMCF() {
           </Select>
         </div>
       </div>
+      <TooltipProvider delayDuration={200}>
+        <div className="flex flex-wrap items-center gap-[16px]">
+          <div role="group" aria-label="Contar pela" className="flex flex-wrap items-center gap-[6px]">
+            <span className="text-[12px] text-muted-foreground">Contar pela</span>
+            <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre a data de contagem" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">Data da venda: a parceria de hoje aparece hoje, no criativo que trouxe a pessoa. Data do 1º clique: a venda volta para o período em que a pessoa clicou no anúncio — serve para medir o retorno do dinheiro gasto naquele período.</TooltipContent></Tooltip>
+            {([{ value: "venda", label: "Data da venda" }, { value: "safra", label: "Data do 1º clique" }] as const).map(item => <Button key={item.value} variant={data === item.value ? "secondary" : "ghost"} aria-pressed={data === item.value} disabled={tab === "canais"} onClick={() => setData(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+          </div>
+          <div role="group" aria-label="Crédito para" className="flex flex-wrap items-center gap-[6px]">
+            <span className="text-[12px] text-muted-foreground">Crédito para</span>
+            <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre o crédito do anúncio" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">1º anúncio: quem trouxe a pessoa. Último anúncio: o último anúncio com que ela interagiu antes daquela compra.</TooltipContent></Tooltip>
+            {([{ value: "primeiro", label: "1º anúncio" }, { value: "ultimo", label: "Último anúncio" }] as const).map(item => <Button key={item.value} variant={toque === item.value ? "secondary" : "ghost"} aria-pressed={toque === item.value} disabled={tab === "canais"} onClick={() => setToque(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+          </div>
+        </div>
+      </TooltipProvider>
       {preset === "personalizado" && <div className="flex flex-wrap gap-[12px]">
         <label className="space-y-[6px] text-[12px] text-muted-foreground">De<Input type="date" min={MIN_DATE} value={from} onChange={event => changeDate("from", event.target.value)} className="h-[38px] w-[180px] px-[10px] text-[12px] text-foreground" /></label>
         <label className="space-y-[6px] text-[12px] text-muted-foreground">Até<Input type="date" min={MIN_DATE} value={to} onChange={event => changeDate("to", event.target.value)} className="h-[38px] w-[180px] px-[10px] text-[12px] text-foreground" /></label>
@@ -167,8 +185,8 @@ export default function MarketingMCF() {
         <TabsTrigger value="canais" className="h-[36px] px-[12px] text-[12px]">Canais</TabsTrigger>
       </TabsList>
       {!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
-        <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} /></TabsContent>
-        <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} /></TabsContent>
+        <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} data={data} toque={toque} /></TabsContent>
+        <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} data={data} toque={toque} /></TabsContent>
         <TabsContent value="canais" className="m-0"><CanaisPeriodo from={from} to={to} /></TabsContent>
       </>}
     </Tabs>

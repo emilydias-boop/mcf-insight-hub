@@ -2,17 +2,20 @@ import type { ReactNode } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Info } from "lucide-react";
-import { useFunilSafras, formatBRL, formatInt, type FunilSafraRow, type Grao } from "@/hooks/useMarketingFunil";
+import { useFunilSafras, formatBRL, formatInt, type FunilSafraRow, type Grao, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 interface FunilSafrasProps {
   from: string;
   to: string;
   grao: Grao;
+  data: ModeloData;
+  toque: ModeloToque;
 }
 
 const numericFields = [
@@ -62,6 +65,19 @@ function periodLabel(period: string, grain: Grao) {
 
 const numericCell = "whitespace-nowrap px-[12px] py-[12px] text-right tabular-nums";
 
+function isMaturing(period: string, grain: Grao): boolean {
+  const [year, month, day] = period.slice(0, 10).split("-").map(Number);
+  const start = Date.UTC(year, month - 1, day);
+  const end = grain === "month" ? Date.UTC(year, month, 0)
+    : grain === "week" ? start + 6 * 86_400_000 : start;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find(item => item.type === type)?.value);
+  const today = Date.UTC(part("year"), part("month") - 1, part("day"));
+  return Number.isFinite(end) && today - end < 60 * 86_400_000;
+}
+
 function MetricCells({ row }: { row: Totals }) {
   return (
     <>
@@ -81,8 +97,8 @@ function MetricCells({ row }: { row: Totals }) {
   );
 }
 
-export function FunilSafras({ from, to, grao }: FunilSafrasProps) {
-  const { data, isLoading, error } = useFunilSafras({ from, to, grao });
+export function FunilSafras({ from, to, grao, data: modeloData, toque }: FunilSafrasProps) {
+  const { data, isLoading, error } = useFunilSafras({ from, to, grao, data: modeloData, toque });
 
   if (isLoading) return (
     <div role="status" aria-label="Carregando safras" className="space-y-[20px]">
@@ -143,8 +159,10 @@ export function FunilSafras({ from, to, grao }: FunilSafrasProps) {
 
         <Card className="min-w-0">
           <CardHeader className="space-y-[8px] p-[20px]">
-            <CardTitle className="text-[18px] tracking-normal">Funil por período</CardTitle>
-            <CardDescription className="text-[12px] leading-[1.6]">Cada etapa conta no dia em que aconteceu (data da compra ou da reunião) e é creditada ao primeiro anúncio que a pessoa clicou. Só entram pessoas que vieram de anúncio.</CardDescription>
+            <CardTitle className="text-[18px] tracking-normal">{modeloData === "venda" ? "Funil por data da venda" : "Funil por safra (data do 1º clique)"}</CardTitle>
+            <CardDescription className="text-[12px] leading-[1.6]">{modeloData === "venda"
+              ? `Cada etapa conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes daquela etapa"}. Só entram pessoas que vieram de anúncio.`
+              : "Pessoas agrupadas pelo período do 1º anúncio que clicaram; tudo o que fizeram depois (A010, R1, contrato, parceria) conta nesse período, mesmo meses depois. Safras recentes ainda vão crescer."}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-[24px] p-[20px] pt-0">
             <div className="space-y-[16px]">
@@ -171,7 +189,10 @@ export function FunilSafras({ from, to, grao }: FunilSafrasProps) {
               <TableBody>
                 {rows.map(row => (
                   <TableRow key={row.periodo}>
-                    <TableCell className="whitespace-nowrap px-[12px] py-[12px]">{periodLabel(row.periodo, grao)}</TableCell>
+                    <TableCell className="whitespace-nowrap px-[12px] py-[12px]">
+                      {periodLabel(row.periodo, grao)}
+                      {modeloData === "safra" && isMaturing(row.periodo, grao) && <Hint text="Parte das pessoas dessa safra ainda está no meio do funil"><Badge variant="outline" className="ml-[6px] px-[6px] py-[2px] text-[10px] font-normal">em maturação</Badge></Hint>}
+                    </TableCell>
                     <MetricCells row={row} />
                   </TableRow>
                 ))}

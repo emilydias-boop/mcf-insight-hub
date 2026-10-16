@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, ImageOff } from "lucide-react";
-import { useFunilAnuncios, formatBRL, formatInt, type FunilAnuncioRow, type Nivel } from "@/hooks/useMarketingFunil";
+import { useFunilAnuncios, formatBRL, formatInt, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface CriativosTableProps { from: string; to: string }
+interface CriativosTableProps { from: string; to: string; data: ModeloData; toque: ModeloToque }
 type NumericKey = { [K in keyof FunilAnuncioRow]: FunilAnuncioRow[K] extends number | null ? K : never }[keyof FunilAnuncioRow];
 type SortKey = NumericKey | "nome" | "status";
 type MetricFormat = "money" | "integer" | "percent" | "roas";
@@ -98,7 +98,7 @@ function sumRows(rows: FunilAnuncioRow[]): FunilAnuncioRow {
 
 // Quote every cell and neutralize spreadsheet formulas in text supplied by ad names.
 const csvCell = (value: string) => `"${(/^[\s]*[=+@-]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
-function exportCsv(rows: FunilAnuncioRow[], nivel: Nivel, from: string, to: string) {
+function exportCsv(rows: FunilAnuncioRow[], nivel: Nivel, data: ModeloData, toque: ModeloToque, from: string, to: string) {
   const thumbnails = nivel === "criativo" || nivel === "ad";
   const header = [...(thumbnails ? ["Miniatura"] : []), "Nome", "Campanha", "Conjunto", "Conta", "Status", ...columns.map(c => c.label)];
   const lines = rows.map(row => [
@@ -109,19 +109,19 @@ function exportCsv(rows: FunilAnuncioRow[], nivel: Nivel, from: string, to: stri
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `marketing-${nivel}-${from}_a_${to}.csv`;
+  anchor.download = `marketing-${nivel}-${data}-${toque}-${from}_a_${to}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-export function CriativosTable({ from, to }: CriativosTableProps) {
+export function CriativosTable({ from, to, data: modeloData, toque }: CriativosTableProps) {
   const [nivel, setNivel] = useState<Nivel>("criativo");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; direction: "desc" | "asc" }>({ key: "investimento", direction: "desc" });
   const [limit, setLimit] = useState(30);
-  const { data, isLoading, error } = useFunilAnuncios({ from, to, nivel });
+  const { data, isLoading, error } = useFunilAnuncios({ from, to, nivel, data: modeloData, toque });
   useEffect(() => setLimit(30), [from, to, nivel, search, sort]);
   const filtered = useMemo(() => {
     const needle = normalize(search.trim());
@@ -159,7 +159,9 @@ export function CriativosTable({ from, to }: CriativosTableProps) {
     <Card className="min-w-0 text-foreground">
       <CardHeader className="space-y-[8px] p-[20px]">
         <CardTitle className="text-[18px] tracking-normal">Anúncios e criativos</CardTitle>
-        <CardDescription className="text-[12px] leading-[1.6]">Cada venda conta no dia em que aconteceu e é creditada ao primeiro anúncio que a pessoa clicou, mesmo que o clique tenha sido semanas antes. Por isso um criativo pausado ainda pode ter parceria hoje.</CardDescription>
+        <CardDescription className="text-[12px] leading-[1.6]">{modeloData === "venda"
+          ? `Cada venda conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes da compra"}. Por isso um criativo pausado ainda pode ter parceria hoje.`
+          : `Vendas das pessoas que clicaram pela 1ª vez no período, creditadas ao ${toque === "primeiro" ? "1º" : "último"} anúncio. Bom para medir o retorno do que foi gasto no período.`}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-[20px] p-[20px] pt-0">
         <div className="flex flex-wrap items-center gap-[12px]">
@@ -172,7 +174,7 @@ export function CriativosTable({ from, to }: CriativosTableProps) {
             </TabsList>
           </Tabs>
           <Input aria-label="Buscar por nome" placeholder="Buscar por nome" value={search} onChange={event => setSearch(event.target.value)} className="h-[40px] min-w-[160px] flex-1 text-[12px] md:max-w-[320px]" />
-          <Button variant="outline" onClick={() => exportCsv(filtered, nivel, from, to)} disabled={isLoading || !!error || !filtered.length} className="h-[40px] gap-[8px] px-[12px] text-[12px]">
+          <Button variant="outline" onClick={() => exportCsv(filtered, nivel, modeloData, toque, from, to)} disabled={isLoading || !!error || !filtered.length} className="h-[40px] gap-[8px] px-[12px] text-[12px]">
             <Download className="h-[14px] w-[14px]" />Exportar CSV
           </Button>
         </div>
