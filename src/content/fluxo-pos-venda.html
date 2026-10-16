@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap">
+<title>Fluxo do Pós-venda MCF</title>
+<style>
+/* Layout: à esquerda a espinha do fluxo (botões); à direita o painel com o detalhe da etapa clicada */
+:root{
+  --bg:#F5F6F2; --surface:#FFFFFF; --fg:#16181B; --muted:#5B6068; --line:#D3D7CC; --soft:#ECEEE7;
+  --brand:#B3F302; --brand-ink:#3F5400; --brand-soft:#EEF7CC;
+  --ind:#101010; --ind-fg:#FFFFFF; --ind-line:#101010; --end:#3A3D38;
+  --display:'Nasalization','Poppins',system-ui,sans-serif;
+  --body:'Poppins',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0E0F0D;--surface:#171916;--fg:#ECEEE8;--muted:#A3A89D;--line:#343931;--soft:#20231F;--brand-ink:#C9F54A;--brand-soft:#26300F;--ind:#050505;--ind-fg:#FFFFFF;--ind-line:#4A5240;--end:#4A4E46;color-scheme:dark;}}
+:root[data-theme="dark"]{--bg:#0E0F0D;--surface:#171916;--fg:#ECEEE8;--muted:#A3A89D;--line:#343931;--soft:#20231F;--brand-ink:#C9F54A;--brand-soft:#26300F;--ind:#050505;--ind-fg:#FFFFFF;--ind-line:#4A5240;--end:#4A4E46;color-scheme:dark;}
+*,*::before,*::after{box-sizing:border-box;}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;}
+.wrap{max-width:1180px;margin:0 auto;padding-block:30px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));}
+header{text-align:center;max-width:700px;margin:0 auto 26px;}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--brand-ink);}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);line-height:1.15;margin:8px 0 10px;text-wrap:balance;}
+.intro{color:var(--muted);margin:0;}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 410px;gap:28px;align-items:start;}
+
+/* espinha */
+.flow{display:flex;flex-direction:column;align-items:center;min-width:0;}
+.v{width:2px;height:22px;background:var(--muted);position:relative;flex:none;}
+.v::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top:6px solid var(--muted);border-bottom:0;}
+.step{all:unset;box-sizing:border-box;cursor:pointer;width:min(100%,330px);text-align:center;padding:11px 16px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-family:var(--body);color:var(--fg);transition:transform .12s ease, box-shadow .12s ease;position:relative;}
+.step:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.08);}
+.step:focus-visible{outline:3px solid var(--brand);outline-offset:3px;}
+.step b{display:block;font-weight:600;font-size:15px;line-height:1.3;}
+.step small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px;}
+.step .k{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:1px 7px;border-radius:3px;margin-bottom:5px;background:var(--soft);color:var(--muted);}
+.step.ind{background:var(--ind);color:var(--ind-fg);border-color:var(--ind-line);}
+.step.ind small{color:#C3C7BD;}
+.step.ind .k{background:var(--brand);color:#101010;}
+.step.start{background:var(--ind);color:var(--brand);border:2px solid var(--brand);border-radius:40px;}
+.step.start small{color:#D6E2B4;}
+.step.end{background:var(--end);color:#fff;border-color:var(--end);border-radius:40px;}
+.step.end small{color:#D7DAD2;}
+.step.ent{background:var(--brand-soft);border:1.5px solid var(--brand);}
+.step[aria-pressed="true"]{box-shadow:0 0 0 3px var(--brand);}
+.step .more{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:16px;opacity:.55;}
+
+.r1row{display:grid;grid-template-columns:1fr minmax(0,330px) 1fr;width:100%;align-items:center;}
+.r1row > .c{grid-column:2;display:flex;justify-content:center;}
+.r1row > .s{grid-column:3;display:flex;align-items:center;min-width:0;}
+.r1row .h{flex:0 0 26px;height:2px;background:var(--brand);border-style:dashed;}
+.chip{all:unset;box-sizing:border-box;cursor:pointer;font-family:var(--body);font-size:12.5px;line-height:1.35;padding:8px 11px;border-radius:6px;border:1.5px dashed var(--brand);background:var(--surface);color:var(--fg);max-width:190px;}
+.chip b{display:block;font-weight:600;}
+.chip span{color:var(--muted);}
+.chip:focus-visible{outline:3px solid var(--brand);outline-offset:2px;}
+.chip[aria-pressed="true"]{box-shadow:0 0 0 3px var(--brand);}
+
+.q{font-size:12.5px;font-weight:600;color:var(--muted);text-align:center;margin:8px 0 4px;}
+.fan{width:100%;}
+.fan .bar{height:2px;background:var(--muted);margin:0 12.5%;}
+.trilhas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.tr{display:flex;flex-direction:column;align-items:center;min-width:0;}
+.tcard{all:unset;box-sizing:border-box;cursor:pointer;width:100%;text-align:center;padding:10px 8px;border-radius:6px;background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--line);font-family:var(--body);color:var(--fg);}
+.tcard b{display:block;font-size:13.5px;line-height:1.25;}
+.tcard small{display:block;font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.3;}
+.tcard.sel{border-color:var(--brand);border-top-color:var(--brand);box-shadow:0 0 0 2px var(--brand);}
+.tcard:focus-visible{outline:3px solid var(--brand);outline-offset:2px;}
+.badge{display:inline-block;margin-top:6px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:var(--soft);color:var(--muted);}
+.badge.ok{background:var(--brand);color:#101010;}
+
+.trilha-h{margin:6px 0 2px;text-align:center;}
+.trilha-h .n{font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-ink);}
+.trilha-h b{display:block;font-family:var(--display);font-weight:400;font-size:19px;}
+.todo{width:min(100%,330px);text-align:center;border:1.5px dashed var(--line);border-radius:6px;padding:14px;color:var(--muted);font-size:13.5px;}
+.hint{font-size:12.5px;color:var(--muted);text-align:center;margin-top:14px;}
+
+/* painel */
+.panel{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px 20px;min-width:0;max-height:calc(100vh - 32px);overflow:auto;}
+.panel .pk{font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-ink);}
+.panel h2{font-family:var(--display);font-weight:400;font-size:21px;line-height:1.2;margin:4px 0 8px;text-wrap:balance;}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.meta span{font-size:12px;padding:2px 9px;border-radius:20px;background:var(--soft);border:1px solid var(--line);}
+.meta span.g{background:var(--brand);border-color:var(--brand);color:#101010;font-weight:600;}
+.blk{border-top:1px solid var(--line);padding-top:10px;margin-top:10px;}
+.blk h3{font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 4px;}
+.blk p{margin:0;font-size:14px;}
+.blk ul{margin:2px 0 0;padding-left:18px;font-size:14px;}
+.blk li{margin-bottom:4px;}
+.blk.ent{background:var(--brand-soft);border:1px solid var(--brand);border-radius:6px;padding:10px 12px;}
+.chk{list-style:none;padding:0 !important;}
+.chk li{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;padding:6px 0;border-bottom:1px dashed var(--line);}
+.chk li:last-child{border-bottom:0;}
+.chk .d{width:9px;height:9px;transform:rotate(45deg);border:2px solid var(--fg);margin-top:6px;}
+.chk .no{grid-column:2;font-size:13px;color:var(--muted);}
+.chk .no b{color:var(--fg);font-weight:600;}
+.priv{font-size:12.5px;color:var(--muted);margin-top:12px;}
+.foot{text-align:center;margin-top:30px;font-size:12px;color:var(--muted);}
+
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;}
+  .panel{position:static;max-height:none;}
+}
+@media (max-width:560px){
+  .trilhas{grid-template-columns:1fr 1fr;}
+  .fan .bar{display:none;}
+  .r1row{grid-template-columns:1fr;row-gap:8px;}
+  .r1row > .c,.r1row > .s{grid-column:1;justify-content:center;}
+  .r1row .h{display:none;}
+  .chip{max-width:330px;width:min(100%,330px);text-align:center;}
+}
+@media (prefers-reduced-motion:reduce){.step{transition:none;}}
+</style>
+</head><body>
+
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Pós-venda · Gerentes de Relacionamento</div>
+  <h1>Para onde vai o cliente em cada passo</h1>
+  <p class="intro">Clique em qualquer etapa para ver o que acontece nela: aula, checagens, entrega, tarefa e quem mais participa. Clique numa trilha para ver as reuniões dela.</p>
+</header>
+
+<div class="layout">
+  <div class="flow" id="flow"></div>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</div>
+<p class="foot">MCF Capital · rascunho para validação · outubro de 2026</p>
+</div>
+
+<script>
+(function(){
+const D = {
+  compra:{k:'Início',t:'Compra na R2',meta:['Closer de R2'],
+    blocks:[['O que acontece','O parceiro compra o produto: R$ 5 mil no Pix ou no cartão à vista, ou R$ 6 mil em 12x no cartão.'],
+            ['Depois','A venda cai para o gerente de relacionamento, que faz o primeiro contato no mesmo dia. A trilha não é escolhida aqui.']]},
+  contato:{k:'GR · no mesmo dia',t:'Contato de boas-vindas',meta:['WhatsApp','Ligação'],
+    blocks:[['O que acontece','O GR se apresenta, envia a Aula 0 (como funciona a jornada) e marca a Reunião 1 em até 48h.']],
+    checks:[['Respondeu e marcou a Reunião 1?','Novas tentativas por WhatsApp e ligação. Status Pendente até marcar.']]},
+  r1:{k:'Reunião 1 · até 48h',t:'Reunião de confirmação',meta:['Individual','Vídeo','20 a 40 min'],
+    blocks:[['Aula antes','Aula 0 · Como funciona a jornada.'],
+            ['O que acontece','O GR confirma três coisas: o cadastro no Harvey, a anamnese e o interesse real do parceiro. O interesse define a trilha.']],
+    checks:[['Compareceu?','Remarcar. Status Pendente.'],
+            ['Cadastro no Harvey completo?','O GR completa com o parceiro na própria reunião.'],
+            ['Anamnese preenchida?','Preenchem juntos na reunião.'],
+            ['Qual é o interesse real?','Define uma das 4 trilhas: incorporar para vender, incorporar para alugar, levantamento de recursos ou construir para cliente.']],
+    also:'Ainda nesta reunião, o GR marca a Aula de Alavancagem Patrimonial.',
+    ent:['Mapa do Parceiro','Objetivo confirmado, trilha, quanto pode investir, prazo e documentos pendentes. Depois da reunião, o kit físico da trilha é enviado.']},
+  alav:{k:'Marcada na Reunião 1',t:'Aula de Alavancagem Patrimonial',meta:['Agenda do Consórcio','Em paralelo à trilha'],
+    blocks:[['Para o parceiro','Uma aula sobre como multiplicar o patrimônio.'],
+            ['Na prática','É a reunião de venda de consórcio. Acontece junto com a trilha, sem esperar as outras etapas.']],
+    priv:'Uso interno: o parceiro não precisa saber que é uma reunião de venda.'},
+  final:{k:'Fim da trilha',t:'Check-in mensal',meta:['GR'],
+    blocks:[['O que acontece','Depois da última entrega, o parceiro passa para um check-in mensal com o GR até o início da obra ou da operação.'],
+            ['Entrega física','Dossiê do Projeto: todas as entregas da trilha impressas e encadernadas.']]}
+};
+const T = [
+  {id:'vender',t:'Incorporar para vender',p:'Construção Financiada · Home Equity',badge:'Maior demanda',ok:true,
+   steps:[
+    {k:'Etapa 1 · até o 7º dia',t:'Maturidade e mercado',meta:['Grupo, ao vivo (proposta)'],
+     aula:'Maturidade e as 10 casas.',
+     o:'Define o condomínio-alvo (antes era na Reunião 1). Calcula a maturidade: casas construídas ÷ total de lotes × 100. Entre 30% e 70% é bom. Revisa a ficha das 10 casas de referência.',
+     checks:[['Foi ao vivo?','Assiste à gravação e faz um plantão de 15 min com o GR.']],
+     ent:['Diagnóstico de Maturidade','% de ocupação, leitura (bom ou atenção), nível de concorrência e ficha das 10 casas.'],
+     tarefa:'Completar as 10 casas, se faltar alguma, e levantar 2 ou 3 lotes disponíveis, com preço.',
+     outros:'Crédito (Fábio): pré-análise com os documentos do cadastro. IA de condomínios, se ele tiver dúvida.'},
+    {k:'Etapa 2 · 2ª semana',t:'Apresentação do produto imobiliário',meta:['Individual','Vídeo, tela compartilhada'],
+     aula:'Como nasce um produto imobiliário.',
+     o:'O GR apresenta a maturidade, os dados das 10 casas e a casa sugerida: m² construídos, terreno, quartos, banheiros, vagas, piscina e faixa de VGV. Usa o script de apresentação.',
+     checks:[['O terreno vem de leilão?','Encaminha para a reunião de Leilão.']],
+     ent:['Proposta de Produto','A casa sugerida, a comparação com a média do condomínio e a faixa de VGV.'],
+     tarefa:'Escolher o lote entre os candidatos e confirmar o preço com o vendedor.',
+     outros:'Leilão, quando for o caso.'},
+    {k:'Etapa 3 · 3ª semana',t:'Viabilidade e orçamento',meta:['Grupo, ao vivo (proposta)'],
+     aula:'Viabilidade sem achismo.',
+     o:'Monta a planilha com o lote escolhido e a casa proposta: lote, obra (m² × custo da região), projeto, aprovação, cartório, impostos e valor de venda. Calcula margem e prazo.',
+     checks:[['O negócio fecha?','Ajustar: volta para a Etapa 2 com outra casa ou outro lote. Parar: o GR registra o motivo no Harvey. Seguir: vai para a Etapa 4.']],
+     ent:['Planilha de Viabilidade','Custo total, valor de venda, margem, prazo e a decisão registrada.'],
+     tarefa:'Completar a documentação que faltar para o crédito.',
+     outros:'MCF Projetos: custo de obra por m² da região.'},
+    {k:'Etapa 4 · 4ª–5ª semana',t:'Funding e execução',meta:['Individual'],
+     aula:'De onde vem o dinheiro.',
+     o:'Divide o custo total em fontes: capital próprio, Construção Financiada ou Home Equity (Crédito) e consórcio. Encaminha o projeto e a aprovação. Monta os marcos dos próximos 90 dias.',
+     checks:[['O crédito foi aprovado?','Volta para a Etapa 3 para ajustar o produto ou a fonte do dinheiro.']],
+     ent:['Plano de Funding + cronograma de 90 dias','Quanto vem de cada fonte, o que já está aprovado e as datas até o início da obra.'],
+     tarefa:'Executar os marcos dos 90 dias.',
+     outros:'Crédito (Fábio), Consórcio e MCF Projetos (projeto e aprovação).'}
+   ]},
+  {id:'alugar',t:'Incorporar para alugar',p:'Galpão ou kitnet · Home Equity ou Consórcio',badge:'A definir',
+   desc:'Construir para viver da renda do aluguel, em vez de vender.'},
+  {id:'recursos',t:'Levantamento de recursos',p:'Capital de giro · Home Equity',badge:'A definir',
+   desc:'Usar o imóvel como garantia para levantar dinheiro para o negócio.'},
+  {id:'cliente',t:'Construir para cliente',p:'Construção Financiada · Home Equity',badge:'A definir',
+   desc:'Construir sob encomenda para um terceiro.'}
+];
+const CICLO='Em toda etapa: aula antes, reunião, entrega no mesmo dia (PDF com a marca MCF, anexado no Harvey com a nota e o status) e tarefa. A próxima reunião só é marcada com a tarefa feita; sem ela, lembrete do GR e status Pendente.';
+
+let trilha='vender', sel='r1';
+const flow=document.getElementById('flow'), panel=document.getElementById('panel');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function btn(id,cls,k,t,sm){
+  return `<button class="step ${cls}" data-id="${id}" aria-pressed="${sel===id}">${k?`<span class="k">${esc(k)}</span>`:''}<b>${esc(t)}</b>${sm?`<small>${esc(sm)}</small>`:''}<span class="more" aria-hidden="true">›</span></button>`;
+}
+function renderFlow(){
+  const tr=T.find(x=>x.id===trilha);
+  let h='';
+  h+=btn('compra','start','', 'Compra na R2','R$ 5 mil, ou R$ 6 mil em 12x');
+  h+='<div class="v"></div>'+btn('contato','','GR · mesmo dia','Contato de boas-vindas','Aula 0 e marca a Reunião 1');
+  h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Reunião 1 · até 48h','Reunião de confirmação','Cadastro, anamnese e interesse real')+
+     `</div><div class="s"><div class="h"></div><button class="chip" data-id="alav" aria-pressed="${sel==='alav'}"><b>Aula de Alavancagem</b><span>marcada na Reunião 1 · em paralelo</span></button></div></div>`;
+  h+='<div class="v"></div><div class="q">Qual é o interesse real?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
+  T.forEach(x=>{h+=`<div class="tr"><div class="v"></div><button class="tcard ${x.id===trilha?'sel':''}" data-tr="${x.id}" aria-pressed="${x.id===trilha}"><b>${esc(x.t)}</b><small>${esc(x.p)}</small><span class="badge ${x.ok?'ok':''}">${esc(x.badge)}</span></button></div>`;});
+  h+='</div></div><div class="v" style="margin-top:12px"></div>';
+  h+=`<div class="trilha-h"><span class="n">Trilha selecionada</span><b>${esc(tr.t)}</b></div><div class="v"></div>`;
+  if(tr.steps){
+    tr.steps.forEach((s,i)=>{ const id=tr.id+'-'+i; const grp=s.meta[0].startsWith('Grupo');
+      h+=(i?'<div class="v"></div>':'')+btn(id, grp?'ent':'ind', s.k, s.t, s.ent[0]); });
+  } else {
+    h+=`<div class="todo"><b style="color:var(--fg)">Reuniões a definir</b><br>${esc(tr.desc)} A sequência de reuniões desta trilha ainda vai ser destrinchada.</div>`;
+  }
+  h+='<div class="v"></div>'+btn('final','end','','Check-in mensal','Dossiê do Projeto impresso');
+  h+='<p class="hint">Preto: reunião individual · Verde-claro: encontro em grupo · Tracejado: em paralelo</p>';
+  flow.innerHTML=h;
+}
+function chkList(c){ return '<ul class="chk">'+c.map(([q,n])=>`<li><span class="d"></span><span>${esc(q)}</span><span class="no"><b>Se não:</b> ${esc(n)}</span></li>`).join('')+'</ul>'; }
+function chkList2(c){ return '<ul class="chk">'+c.map(([q,n])=>`<li><span class="d"></span><span>${esc(q)}</span><span class="no">${esc(n)}</span></li>`).join('')+'</ul>'; }
+function renderPanel(){
+  let h='';
+  const m=sel.match(/^(\w+)-(\d+)$/);
+  if(m){
+    const tr=T.find(x=>x.id===m[1]), s=tr.steps[+m[2]];
+    h+=`<div class="pk">${esc(tr.t)} · ${esc(s.k)}</div><h2>${esc(s.t)}</h2><div class="meta">${s.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
+    h+=`<div class="blk"><h3>Aula antes</h3><p>${esc(s.aula)}</p></div>`;
+    h+=`<div class="blk"><h3>O que acontece</h3><p>${esc(s.o)}</p></div>`;
+    h+=`<div class="blk"><h3>Checagem</h3>${chkList2(s.checks)}</div>`;
+    h+=`<div class="blk ent"><h3>Entrega · mesmo dia</h3><p><b>${esc(s.ent[0])}.</b> ${esc(s.ent[1])}</p></div>`;
+    h+=`<div class="blk"><h3>Tarefa do parceiro</h3><p>${esc(s.tarefa)}</p></div>`;
+    h+=`<div class="blk"><h3>Quem mais entra</h3><p>${esc(s.outros)}</p></div>`;
+    h+=`<p class="priv">${esc(CICLO)}</p>`;
+  } else if(sel.startsWith('tr:')){
+    const tr=T.find(x=>x.id===sel.slice(3));
+    h+=`<div class="pk">Trilha</div><h2>${esc(tr.t)}</h2><div class="meta">${tr.p.split(' · ').map(x=>`<span>${esc(x)}</span>`).join('')}</div>`;
+    if(tr.steps){ h+=`<div class="blk"><h3>Etapas depois da Reunião 1</h3><ul>${tr.steps.map(s=>`<li><b>${esc(s.t)}</b> · ${esc(s.k.split(' · ')[1])}</li>`).join('')}</ul></div><p class="priv">Clique numa etapa no fluxo para ver o detalhe.</p>`; }
+    else { h+=`<div class="blk"><h3>Objetivo</h3><p>${esc(tr.desc)}</p></div><div class="blk"><h3>Reuniões</h3><p>A definir. Cada trilha terá a sua própria sequência, porque cada uma tem um objetivo específico.</p></div>`; }
+  } else {
+    const d=D[sel];
+    h+=`<div class="pk">${esc(d.k)}</div><h2>${esc(d.t)}</h2><div class="meta">${d.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
+    d.blocks.forEach(([a,b])=>{h+=`<div class="blk"><h3>${esc(a)}</h3><p>${esc(b)}</p></div>`;});
+    if(d.checks) h+=`<div class="blk"><h3>Checagens</h3>${chkList(sel==='r1'?d.checks.slice(0,3):d.checks)}${sel==='r1'?chkList2([d.checks[3]]):''}</div>`;
+    if(d.also) h+=`<div class="blk"><h3>Também nesta reunião</h3><p>${esc(d.also)}</p></div>`;
+    if(d.ent) h+=`<div class="blk ent"><h3>Entrega · mesmo dia</h3><p><b>${esc(d.ent[0])}.</b> ${esc(d.ent[1])}</p></div>`;
+    if(d.priv) h+=`<p class="priv">${esc(d.priv)}</p>`;
+  }
+  panel.innerHTML=h;
+}
+function render(){renderFlow();renderPanel();}
+flow.addEventListener('click',e=>{
+  const b=e.target.closest('[data-id],[data-tr]'); if(!b) return;
+  if(b.dataset.tr){ trilha=b.dataset.tr; sel='tr:'+trilha; } else { sel=b.dataset.id; }
+  render();
+  if(window.matchMedia('(max-width:900px)').matches) panel.scrollIntoView({behavior:'smooth',block:'start'});
+});
+render();
+})();
+</script>
+
+</body></html>
