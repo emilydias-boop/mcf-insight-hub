@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, ImageOff } from "lucide-react";
-import { useFunilAnuncios, formatBRL, formatInt, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, ImageOff, Play } from "lucide-react";
+import { useFunilAnuncios, useAdPreview, formatBRL, formatInt, type AdPreviewFormato, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -57,6 +59,35 @@ function Hint({ text, children }: { text: string; children: ReactNode }) {
   </Tooltip>;
 }
 
+const FORMATOS_PREVIEW: { value: AdPreviewFormato; label: string }[] = [
+  { value: "INSTAGRAM_STANDARD", label: "Feed Instagram" },
+  { value: "INSTAGRAM_REELS", label: "Reels" },
+  { value: "INSTAGRAM_STORY", label: "Stories" },
+  { value: "MOBILE_FEED_STANDARD", label: "Feed Facebook" },
+];
+
+function AdPreviewDialog({ row, onClose }: { row: FunilAnuncioRow | null; onClose: () => void }) {
+  const padrao: AdPreviewFormato = row?.tipo_criativo === "VIDEO" ? "INSTAGRAM_REELS" : "INSTAGRAM_STANDARD";
+  const [formato, setFormato] = useState<AdPreviewFormato>(padrao);
+  useEffect(() => setFormato(padrao), [row?.ad_preview, padrao]);
+  const { data, isLoading, error } = useAdPreview(row?.ad_preview ?? null, formato);
+  return <Dialog open={!!row} onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-[420px]">
+      <DialogHeader><DialogTitle className="line-clamp-2 break-words pr-[24px] text-[14px] leading-[1.4]">{row?.nome}</DialogTitle></DialogHeader>
+      <ToggleGroup type="single" value={formato} onValueChange={v => { if (v) setFormato(v as AdPreviewFormato); }} className="flex-wrap justify-start">
+        {FORMATOS_PREVIEW.map(f => <ToggleGroupItem key={f.value} value={f.value} className="h-[32px] px-[10px] text-[12px]">{f.label}</ToggleGroupItem>)}
+      </ToggleGroup>
+      <div className="mx-auto w-full max-w-[360px]">
+        {isLoading ? <Skeleton className="h-[640px] w-full" />
+          : error ? <Alert variant="destructive"><AlertDescription className="text-[12px]">{(error as Error).message}. Tente outro formato.</AlertDescription></Alert>
+          : data?.src ? <iframe key={data.src} src={data.src} title={`Prévia do anúncio ${row?.nome ?? ""}`} allow="autoplay; encrypted-media" className="h-[640px] w-full border-0" />
+          : null}
+      </div>
+      {row && <p className="text-[11px] text-muted-foreground">Investimento {formatBRL(row.investimento)} · Contratos {formatInt(row.contratos)} · Parcerias {formatInt(row.parcerias)}</p>}
+    </DialogContent>
+  </Dialog>;
+}
+
 function Thumbnail({ src }: { src: string | null }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
@@ -85,7 +116,7 @@ function sumRows(rows: FunilAnuncioRow[]): FunilAnuncioRow {
   const r1 = sum("r1_realizadas"), contracts = sum("contratos"), partners = sum("parcerias"), liquid = sum("liq_total");
   const ctr = divide(clicks * 100, impressions), cpm = divide(investment * 1000, impressions);
   return {
-    nivel_id: "total", nome: "TOTAL", campanha: null, conjunto: null, conta: "", status: null, thumbnail_url: null,
+    nivel_id: "total", nome: "TOTAL", campanha: null, conjunto: null, conta: "", status: null, thumbnail_url: null, ad_preview: null, tipo_criativo: null,
     investimento: investment, impressoes: impressions, cliques_link: clicks, lpv, checkout_iniciado: checkout,
     compras_pixel: sum("compras_pixel"), video_3s: sum("video_3s"), thruplays: sum("thruplays"), leads: sum("leads"),
     entradas, r1_agendadas: sum("r1_agendadas"), r1_realizadas: r1, contratos: contracts,
@@ -122,6 +153,7 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
   const [sort, setSort] = useState<{ key: SortKey; direction: "desc" | "asc" }>({ key: "investimento", direction: "desc" });
   const [limit, setLimit] = useState(30);
   const { data, isLoading, error } = useFunilAnuncios({ from, to, nivel, data: modeloData, toque });
+  const [previewRow, setPreviewRow] = useState<FunilAnuncioRow | null>(null);
   useEffect(() => setLimit(30), [from, to, nivel, search, sort]);
   const filtered = useMemo(() => {
     const needle = normalize(search.trim());
@@ -205,7 +237,17 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
                 <TableBody>
                   {!filtered.length && <TableRow><TableCell colSpan={columns.length + 2 + (hasThumbnails ? 1 : 0)} className="py-[32px] text-center text-muted-foreground">Nenhum anúncio com gasto ou conversão no período</TableCell></TableRow>}
                   {filtered.slice(0, limit).map((row, index) => <TableRow key={`${row.nivel_id}-${index}`}>
-                    {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-card px-[12px] py-[12px]"><Thumbnail src={row.thumbnail_url} /></TableCell>}
+                    {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-card px-[12px] py-[12px]">
+                      {row.ad_preview
+                        ? <button type="button" onClick={() => setPreviewRow(row)} aria-label={`Ver anúncio ${row.nome}`}
+                            className="relative block cursor-pointer rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                            <Thumbnail src={row.thumbnail_url} />
+                            {row.tipo_criativo === "VIDEO" && <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+                              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-background/80"><Play className="h-[12px] w-[12px] fill-foreground text-foreground" /></span>
+                            </span>}
+                          </button>
+                        : <Thumbnail src={row.thumbnail_url} />}
+                    </TableCell>}
                     <TableCell className="min-w-[240px] max-w-[320px] px-[12px] py-[12px]">
                       <p title={row.nome} className="line-clamp-2 break-words font-medium leading-[1.5]">{row.nome}</p>
                       {(row.campanha || row.conjunto) && <p className="mt-[4px] line-clamp-2 break-words text-[11px] text-muted-foreground">{[row.campanha, row.conjunto].filter(Boolean).join(" · ")}</p>}
@@ -232,5 +274,6 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
           </>}
       </CardContent>
     </Card>
+    <AdPreviewDialog row={previewRow} onClose={() => setPreviewRow(null)} />
   </TooltipProvider>;
 }
