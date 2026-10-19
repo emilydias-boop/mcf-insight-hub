@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Faturamento Closer/SDR/Canal — separar carteira, agrupar ex-SDRs e conciliar P2/Outside; somente front-end, sem publicação.
+- [x] Faturamento Closer/SDR/Canal — carteira separada, ex-SDRs agrupados e P2/Outside conciliados; testes dos três modos e compilação automática OK; navegador com dados simulados confirmou carteira e detalhe. Verificação autenticada indisponível (Supabase externo); sem banco/publicação.
 
 - [x] Abrir documentos da biblioteca em popup no fluxo Pós-venda; 21 testes e compilação automática OK; navegador com dados simulados confirmou popup, recarga e Ir para a tela em computador/celular, sem banco/publicação.
 
