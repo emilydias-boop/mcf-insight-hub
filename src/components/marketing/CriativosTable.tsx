@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, ImageOff, Play } from "lucide-react";
-import { useFunilAnuncios, useAdPreview, formatBRL, formatInt, type AdPreviewFormato, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
+import { useFunilAnuncios, useAdPreview, useAdVideo, formatBRL, formatInt, type AdPreviewFormato, type AdVideoInfo, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,23 +66,48 @@ const FORMATOS_PREVIEW: { value: AdPreviewFormato; label: string }[] = [
   { value: "MOBILE_FEED_STANDARD", label: "Feed Facebook" },
 ];
 
+type ModoDialog = AdPreviewFormato | "VIDEO";
+
 function AdPreviewDialog({ row, onClose }: { row: FunilAnuncioRow | null; onClose: () => void }) {
-  const padrao: AdPreviewFormato = row?.tipo_criativo === "VIDEO" ? "INSTAGRAM_REELS" : "INSTAGRAM_STANDARD";
-  const [formato, setFormato] = useState<AdPreviewFormato>(padrao);
+  const isVideo = row?.tipo_criativo === "VIDEO";
+  const padrao: ModoDialog = isVideo ? "VIDEO" : "INSTAGRAM_STANDARD";
+  const [formato, setFormato] = useState<ModoDialog>(padrao);
   useEffect(() => setFormato(padrao), [row?.ad_preview, padrao]);
-  const { data, isLoading, error } = useAdPreview(row?.ad_preview ?? null, formato);
+  const emVideo = formato === "VIDEO";
+  const { data, isLoading, error } = useAdPreview(!emVideo ? row?.ad_preview ?? null : null, emVideo ? "INSTAGRAM_REELS" : formato);
+  const video = useAdVideo(row?.ad_preview ?? null);
+  const opcoes: { value: ModoDialog; label: string }[] = [...(isVideo ? [{ value: "VIDEO" as const, label: "Vídeo com som" }] : []), ...FORMATOS_PREVIEW];
+  const linkCls = "inline-flex items-center gap-[4px] text-[11px] text-primary underline-offset-2 hover:underline";
+  const links = (v: AdVideoInfo | undefined, botoes = false) => <>
+    {v?.ig_url && (botoes ? <Button asChild variant="outline" className="h-[32px] px-[10px] text-[12px]"><a href={v.ig_url} target="_blank" rel="noopener noreferrer">Abrir no Instagram</a></Button>
+      : <a href={v.ig_url} target="_blank" rel="noopener noreferrer" className={linkCls}>Abrir no Instagram</a>)}
+    {v?.fb_url && (botoes ? <Button asChild variant="outline" className="h-[32px] px-[10px] text-[12px]"><a href={v.fb_url} target="_blank" rel="noopener noreferrer">Abrir no Facebook</a></Button>
+      : <a href={v.fb_url} target="_blank" rel="noopener noreferrer" className={linkCls}>Abrir no Facebook</a>)}
+  </>;
   return <Dialog open={!!row} onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent className="max-w-[420px]">
       <DialogHeader><DialogTitle className="line-clamp-2 break-words pr-[24px] text-[14px] leading-[1.4]">{row?.nome}</DialogTitle></DialogHeader>
-      <ToggleGroup type="single" value={formato} onValueChange={v => { if (v) setFormato(v as AdPreviewFormato); }} className="flex-wrap justify-start">
-        {FORMATOS_PREVIEW.map(f => <ToggleGroupItem key={f.value} value={f.value} className="h-[32px] px-[10px] text-[12px]">{f.label}</ToggleGroupItem>)}
+      <ToggleGroup type="single" value={formato} onValueChange={v => { if (v) setFormato(v as ModoDialog); }} className="flex-wrap justify-start">
+        {opcoes.map(f => <ToggleGroupItem key={f.value} value={f.value} className="h-[32px] px-[10px] text-[12px]">{f.label}</ToggleGroupItem>)}
       </ToggleGroup>
       <div className="mx-auto w-full max-w-[360px]">
-        {isLoading ? <Skeleton className="h-[640px] w-full" />
-          : error ? <Alert variant="destructive"><AlertDescription className="text-[12px]">{(error as Error).message}. Tente outro formato.</AlertDescription></Alert>
-          : data?.src ? <iframe key={data.src} src={data.src} title={`Prévia do anúncio ${row?.nome ?? ""}`} allow="autoplay; encrypted-media" className="h-[640px] w-full border-0" />
-          : null}
+        {emVideo
+          ? (video.isLoading ? <Skeleton className="h-[640px] w-full" />
+            : video.data?.video_src ? <video src={video.data.video_src} controls playsInline preload="metadata" poster={video.data.poster ?? undefined}
+                aria-label={`Vídeo do anúncio ${row?.nome ?? ""}`} className="max-h-[640px] w-full bg-black object-contain" />
+            : <div className="space-y-[10px]">
+                <Alert><AlertDescription className="text-[12px]">{video.error ? `${(video.error as Error).message}. ` : ""}A Meta não liberou o arquivo do vídeo para este anúncio. Abra no Instagram ou no Facebook para ouvir.</AlertDescription></Alert>
+                <div className="flex flex-wrap gap-[8px]">{links(video.data, true)}</div>
+              </div>)
+          : <>
+            {isLoading ? <Skeleton className="h-[640px] w-full" />
+              : error ? <Alert variant="destructive"><AlertDescription className="text-[12px]">{(error as Error).message}. Tente outro formato.</AlertDescription></Alert>
+              : data?.src ? <iframe key={data.src} src={data.src} title={`Prévia do anúncio ${row?.nome ?? ""}`} allow="autoplay; encrypted-media" className="h-[640px] w-full border-0" />
+              : null}
+            {isVideo && <p className="mt-[6px] text-[11px] text-muted-foreground">Prévia da Meta — sem áudio. Use “Vídeo com som” para ouvir.</p>}
+          </>}
       </div>
+      {(video.data?.ig_url || video.data?.fb_url) && <div className="flex flex-wrap gap-[12px]">{links(video.data)}</div>}
       {row && <p className="text-[11px] text-muted-foreground">Investimento {formatBRL(row.investimento)} · Contratos {formatInt(row.contratos)} · Parcerias {formatInt(row.parcerias)}</p>}
     </DialogContent>
   </Dialog>;

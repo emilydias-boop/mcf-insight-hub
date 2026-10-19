@@ -369,3 +369,34 @@ export const useAdPreview = (adId: string | null, formato: AdPreviewFormato) =>
       return data;
     },
   });
+
+export interface AdVideoInfo {
+  video_src: string | null;
+  poster: string | null;
+  fb_url: string | null;
+  ig_url: string | null;
+  aviso: string | null;
+}
+
+export const useAdVideo = (adId: string | null) =>
+  useQuery<AdVideoInfo>({
+    queryKey: ['mkt-ad-video', adId],
+    enabled: !!adId,
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('meta-ad-preview', { body: { ad_id: adId, modo: 'video' } });
+      if (error) {
+        let msg = error.message;
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const b = await ctx.json();
+            if (b?.erro) msg = b.erro;
+          }
+        } catch { /* mantém mensagem original */ }
+        throw new Error(msg);
+      }
+      return data as AdVideoInfo;
+    },
+  });
