@@ -182,7 +182,8 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
     { label: "Checkout iniciado", hint: "Dado da Meta (pixel)" },
     { label: "Entradas", hint: "Pessoas que entraram no período: compra de A010, formulário de anamnese (sem A010) ou outro produto de entrada (Guia, Planilha, A011, Lucrômetro…). Cada pessoa conta 1 vez por período." },
     { label: "A010" }, { label: "Anamnese", hint: "Negócio com tag ANAMNESE criado no período, sem A010 (mesma régua da Visão Diária)" }, { label: "Outras" },
-    { label: "Custo/entrada" }, { label: "R1 agendadas", hint: "Pessoas que tiveram uma R1 marcada no período (pela data em que foi marcada)" }, { label: "R1 realizadas", hint: "Pessoas com R1 feita no período (completed, contrato pago ou reembolsado)" }, { label: "Contratos" },
+    { label: "Custo/entrada" }, { label: "R1 agendadas", hint: "Pessoas que tiveram uma R1 marcada no período (pela data em que foi marcada)" }, { label: "R1 realizadas", hint: "Pessoas com R1 feita no período (completed, contrato pago ou reembolsado)" }, { label: "Contratos", hint: "Contratos líquidos (brutos − reembolsados)" },
+    { label: "Contratos brutos" }, { label: "Reembolsados" },
     { label: "Custo/contrato" }, { label: "Parcerias" }, { label: "Custo/parceria" },
     { label: "Líquido recebido" }, { label: "ROAS" },
   ].filter(header => origem === "anuncio" || !["Custo/entrada", "Custo/contrato", "Custo/parceria", "ROAS"].includes(header.label));
