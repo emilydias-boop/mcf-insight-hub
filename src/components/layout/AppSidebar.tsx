@@ -241,6 +241,7 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "gerente_relacionamento"],
     items: [
       { title: "CRM", url: "/pos-venda/crm" },
+      { title: "Materiais do processo", url: "/pos-venda/materiais" },
       { title: "Distribuição de novos licenciados", url: "/pos-venda/distribuicao" },
     ],
   },
