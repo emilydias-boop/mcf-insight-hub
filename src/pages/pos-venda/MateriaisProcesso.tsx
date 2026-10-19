@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { MATERIAL_STATUS, MATERIAL_TIPOS, PROCESSO_POS_VENDA, statusInfo } from "@/lib/processoMateriais";
 
+const MSG_PRONTO = "Para ficar Pronto, anexe o arquivo ou escreva o conteúdo aqui. Link para outro lugar não conta (só telas do Gestão, no tipo Sistema).";
+
 const db = supabase as any;
 const BUCKET = "processo-materiais";
 
@@ -243,9 +245,13 @@ function Editor({ material, processoId, etapas, pessoas, podeEditar, nomePessoa,
     arquivo_path: f.arquivo_path || null, arquivo_nome: f.arquivo_nome || null,
   });
 
+  const prontoOk = f.status !== "pronto" || !!f.arquivo_path || f.conteudo.trim().length > 0
+    || (f.tipo === "sistema" && f.link_url.startsWith("https://mcfgestao.com/"));
+
   const salvar = useMutation({
     mutationFn: async () => {
       if (!f.titulo.trim()) throw new Error("Informe o título");
+      if (!prontoOk) throw new Error(MSG_PRONTO);
       if (material) {
         const { error } = await db.from("processo_materiais").update(payload()).eq("id", material.id);
         if (error) throw error;
@@ -255,7 +261,7 @@ function Editor({ material, processoId, etapas, pessoas, podeEditar, nomePessoa,
       }
     },
     onSuccess: () => { toast.success("Material salvo"); onSalvo(); },
-    onError: (e: any) => toast.error(e.message ?? "Erro ao salvar"),
+    onError: (e: any) => toast.error(String(e?.message ?? "").includes("processo_materiais_pronto_registrado") ? MSG_PRONTO : (e.message ?? "Erro ao salvar")),
   });
 
   const arquivar = useMutation({
@@ -323,6 +329,7 @@ function Editor({ material, processoId, etapas, pessoas, podeEditar, nomePessoa,
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{MATERIAL_STATUS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
           </Select>
+          {!prontoOk && <p className="text-xs text-destructive">{MSG_PRONTO}</p>}
         </div>
         <div className="space-y-1 col-span-2"><Label>Responsável</Label>
           <Select disabled={ro} value={f.responsavel_id || "_none"} onValueChange={(v) => set("responsavel_id", v === "_none" ? "" : v)}>
