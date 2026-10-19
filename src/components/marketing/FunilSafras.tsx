@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Info } from "lucide-react";
-import { useFunilSafras, formatBRL, formatInt, type FunilSafraRow, type Grao, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
+import { useFunilSafras, useFunilContratos, produtoContratoLabel, formatBRL, formatInt, type FunilSafraRow, type FunilContratoRow, type Grao, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -79,7 +79,7 @@ function isMaturing(period: string, grain: Grao): boolean {
   return Number.isFinite(end) && today - end < 60 * 86_400_000;
 }
 
-function MetricCells({ row, origem }: { row: Totals; origem: ModeloOrigem }) {
+function MetricCells({ row, origem, brutos, reembolsados }: { row: Totals; origem: ModeloOrigem; brutos: number; reembolsados: number }) {
   return (
     <>
       <TableCell className={numericCell}>{formatBRL(row.investimento)}</TableCell>
@@ -93,6 +93,8 @@ function MetricCells({ row, origem }: { row: Totals; origem: ModeloOrigem }) {
       <TableCell className={numericCell}>{formatInt(row.r1_agendadas)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.r1_realizadas)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.contratos)}</TableCell>
+      <TableCell className={numericCell}>{formatInt(brutos)}</TableCell>
+      <TableCell className={numericCell}>{formatInt(reembolsados)}</TableCell>
       {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.contratos)}</TableCell>}
       <TableCell className={numericCell}>{formatInt(row.parcerias)}</TableCell>
       {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.parcerias)}</TableCell>}
@@ -105,8 +107,9 @@ function MetricCells({ row, origem }: { row: Totals; origem: ModeloOrigem }) {
 export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }: FunilSafrasProps) {
   const { data, isLoading, error } = useFunilSafras({ from, to, grao, data: modeloData, toque, origem });
   const anuncios = useFunilSafras({ from: origem === "todas" ? from : null, to: origem === "todas" ? to : null, grao, data: modeloData, toque, origem: "anuncio" });
+  const contratos = useFunilContratos({ from, to, grao, data: modeloData, origem });
 
-  if (isLoading || (origem === "todas" && anuncios.isLoading)) return (
+  if (isLoading || contratos.isLoading || (origem === "todas" && anuncios.isLoading)) return (
     <div role="status" aria-label="Carregando safras" className="space-y-[20px]">
       <div className="grid grid-cols-2 gap-[12px] md:grid-cols-4 xl:grid-cols-7">
         {Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-[112px] w-full" />)}
@@ -116,7 +119,7 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
     </div>
   );
 
-  const queryError = error ?? (origem === "todas" ? anuncios.error : null);
+  const queryError = error ?? contratos.error ?? (origem === "todas" ? anuncios.error : null);
   if (queryError) {
     const message = typeof queryError === "object" && "message" in queryError ? String(queryError.message) : String(queryError);
     return <Alert variant="destructive" className="p-[16px]"><AlertDescription className="text-[13px]">{message}</AlertDescription></Alert>;
@@ -125,6 +128,21 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
 
   const rows: FunilSafraRow[] = [...data].sort((a, b) => b.periodo.localeCompare(a.periodo));
   const totals = Object.fromEntries(numericFields.map(field => [field, rows.reduce((sum, row) => sum + row[field], 0)])) as Totals;
+  const contratosRows: FunilContratoRow[] = contratos.data ?? [];
+  const contratosTotais = {
+    brutos: contratosRows.reduce((sum, r) => sum + r.brutos, 0),
+    reembolsados: contratosRows.reduce((sum, r) => sum + r.reembolsados, 0),
+    liquidos: contratosRows.reduce((sum, r) => sum + r.liquidos, 0),
+  };
+  const contratosPorProduto = Array.from(
+    contratosRows.reduce((map, r) => {
+      const item = map.get(r.produto) ?? { brutos: 0, reembolsados: 0, liquidos: 0 };
+      item.brutos += r.brutos; item.reembolsados += r.reembolsados; item.liquidos += r.liquidos;
+      map.set(r.produto, item);
+      return map;
+    }, new Map<string, { brutos: number; reembolsados: number; liquidos: number }>()),
+  ).map(([produto, v]) => ({ produto, ...v })).sort((a, b) => b.brutos - a.brutos);
+  const contratosPorPeriodo = new Map(contratosRows.map(r => [r.periodo, r]));
   const stageDetail = (field: "entradas" | "r1_agendadas" | "r1_realizadas" | "contratos" | "parcerias", label: string) => {
     if (origem === "anuncio") return `${label} ${cost(totals.investimento, totals[field])}`;
     const adCount = (anuncios.data ?? []).reduce((sum, row) => sum + row[field], 0);
@@ -136,7 +154,18 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
     { label: "Entradas", value: formatInt(totals.entradas), detail: <><div>A010 {formatInt(totals.entradas_a010)} · Anamnese {formatInt(totals.entradas_anamnese)} · Outras {formatInt(totals.entradas_outras)}</div><div>{stageDetail("entradas", "custo")}</div></> },
     { label: "R1 agendadas", value: formatInt(totals.r1_agendadas), detail: stageDetail("r1_agendadas", "custo por R1 agendada") },
     { label: "R1 realizadas", value: formatInt(totals.r1_realizadas), detail: stageDetail("r1_realizadas", "custo por R1") },
-    { label: "Contratos", value: formatInt(totals.contratos), detail: stageDetail("contratos", "custo por contrato") },
+    { label: "Contratos", value: formatInt(totals.contratos), detail: (
+      <>
+        <div>Bruto {formatInt(contratosTotais.brutos)} · Reembolsados {formatInt(contratosTotais.reembolsados)}</div>
+        {contratosPorProduto.map(p => (
+          <div key={p.produto}>
+            {produtoContratoLabel(p.produto)}: {formatInt(p.liquidos)}
+            {p.reembolsados > 0 ? ` (${formatInt(p.brutos)} − ${formatInt(p.reembolsados)} reemb.)` : ""}
+          </div>
+        ))}
+        <div>{stageDetail("contratos", "custo por contrato")}</div>
+      </>
+    ), hint: "Contrato novo = 1º contrato da pessoa (parcelas mensais do A000 e recompras não contam de novo, só entram no líquido em R$). Bruto = todos os contratos novos do período; Reembolsados = estornados (MCF Pay/Hubla); o número grande é o líquido. O Painel Comercial mostra o bruto." },
     { label: "Parcerias", value: formatInt(totals.parcerias), detail: stageDetail("parcerias", "custo por parceria") },
     { label: "ROAS líquido", value: origem === "todas" ? "—" : formatRoas(ratio(totals.liq_total, totals.investimento)), detail: origem === "todas" ? "ROAS só em Só anúncio" : `${formatBRL(totals.liq_total)} recebidos`, hint: "Dinheiro líquido que entrou no período (vendas de quem veio de anúncio, já descontados os estornos) ÷ investimento do período." },
   ];
@@ -209,14 +238,14 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
                       {periodLabel(row.periodo, grao)}
                       {modeloData === "safra" && isMaturing(row.periodo, grao) && <Hint text="Parte das pessoas dessa safra ainda está no meio do funil"><Badge variant="outline" className="ml-[6px] px-[6px] py-[2px] text-[10px] font-normal">em maturação</Badge></Hint>}
                     </TableCell>
-                    <MetricCells row={row} origem={origem} />
+                    <MetricCells row={row} origem={origem} brutos={contratosPorPeriodo.get(row.periodo)?.brutos ?? 0} reembolsados={contratosPorPeriodo.get(row.periodo)?.reembolsados ?? 0} />
                   </TableRow>
                 ))}
               </TableBody>
               <TableFooter>
                 <TableRow className="hover:bg-muted/50">
                   <TableCell className="whitespace-nowrap px-[12px] py-[12px] font-semibold">TOTAL</TableCell>
-                  <MetricCells row={totals} origem={origem} />
+                  <MetricCells row={totals} origem={origem} brutos={contratosTotais.brutos} reembolsados={contratosTotais.reembolsados} />
                 </TableRow>
               </TableFooter>
             </Table>
