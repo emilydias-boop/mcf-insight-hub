@@ -1,16 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { addDays, endOfMonth, format, startOfMonth } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, CalendarCheck, CalendarPlus, CheckCircle, ChevronLeft, ChevronRight, RefreshCw, Users, XCircle } from 'lucide-react';
+import { addDays, format } from 'date-fns';
+import { AlertTriangle, CalendarCheck, CalendarPlus, CheckCircle, Users, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { POS_VENDA_ORIGIN_ID } from '@/lib/posVenda';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { TeamKPICards, type TeamKpiCardDefinition } from '@/components/sdr/TeamKPICards';
 import type { TeamKPIs } from '@/hooks/useTeamMeetingsData';
 
@@ -43,7 +40,6 @@ const fonteDoLead = (cf: Record<string, unknown> | null | undefined): string | n
   return 'Outro';
 };
 
-const ymdHoje = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const ymd = (d: Date) => format(d, 'yyyy-MM-dd');
 const ymdLocal = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 /** Início do dia em Brasília (UTC-3, sem horário de verão). */
@@ -62,29 +58,12 @@ async function buscarTudo<T>(build: (from: number, to: number) => any): Promise<
   }
 }
 
-type Preset = 'month' | 'custom';
-
-export default function PainelComercialPosVenda() {
-  const hoje = ymdHoje();
-  const [preset, setPreset] = useState<Preset>('month');
-  const [mes, setMes] = useState(() => startOfMonth(ymdLocal(hoje)));
-  const [ini, setIni] = useState<Date | null>(null);
-  const [fim, setFim] = useState<Date | null>(null);
+/** Painel comercial do Pós Venda (cards + tabela por gerente). O período vem de quem usa (from/to 'yyyy-MM-dd', data civil de Brasília). */
+export function PainelComercialPosVendaSection({ from, to }: { from: string; to: string }) {
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
-
-  const { from, to } = useMemo(() => {
-    if (preset === 'custom') {
-      const a = ini ? ymd(ini) : ymd(startOfMonth(ymdLocal(hoje)));
-      const b = fim ? ymd(fim) : ini ? ymd(ini) : hoje;
-      return a <= b ? { from: a, to: b } : { from: b, to: a };
-    }
-    const f = ymd(startOfMonth(mes));
-    const e = ymd(endOfMonth(mes));
-    return { from: f, to: e > hoje && f <= hoje ? hoje : e };
-  }, [preset, mes, ini, fim, hoje]);
   const ate = ymd(addDays(ymdLocal(to), 1)); // exclusivo
 
-  const { data, isLoading, isError, isFetching, refetch, dataUpdatedAt } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['painel-comercial-pos-venda', from, to],
     staleTime: 60_000,
     queryFn: async () => {
@@ -183,45 +162,9 @@ export default function PainelComercialPosVenda() {
     <button type="button" onClick={onClick} disabled={n === 0} className="tabular-nums hover:underline disabled:no-underline disabled:cursor-default">{fmtInt(n)}</button>
   );
 
-  const mudarMes = (inc: number) => { const n = new Date(mes); n.setMonth(n.getMonth() + inc); setMes(n); };
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
-      <h1 className="text-lg font-semibold text-foreground sm:text-xl">Painel Comercial — Pós Venda</h1>
-
-      <Card className="bg-card border-border">
-        <CardContent className="p-3 sm:p-4">
-          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-full sm:w-auto">
-              {([['month', 'Mês'], ['custom', 'Custom']] as const).map(([v, l]) => (
-                <Button key={v} variant={preset === v ? 'secondary' : 'ghost'} size="sm" onClick={() => setPreset(v)} className="flex-1 sm:flex-initial text-xs sm:text-sm">{l}</Button>
-              ))}
-            </div>
-            {preset === 'month' && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => mudarMes(-1)} aria-label="Mês anterior"><ChevronLeft className="h-4 w-4" /></Button>
-                <span className="text-sm font-medium min-w-[120px] text-center capitalize">{format(mes, 'MMMM yyyy', { locale: ptBR })}</span>
-                <Button variant="outline" size="icon" onClick={() => mudarMes(1)} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></Button>
-              </div>
-            )}
-            {preset === 'custom' && (
-              <div className="flex items-center gap-2">
-                <DatePickerCustom selected={ini ?? undefined} onSelect={(d) => setIni((d as Date) ?? null)} placeholder="Data início" />
-                <span className="text-muted-foreground">até</span>
-                <DatePickerCustom selected={fim ?? undefined} onSelect={(d) => setFim((d as Date) ?? null)} placeholder="Data fim" />
-              </div>
-            )}
-            <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
-              <RefreshCw className={`h-4 w-4 mr-1 ${isFetching ? 'animate-spin' : ''}`} />Atualizar
-            </Button>
-          </div>
-          <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Período: {format(ymdLocal(from), 'dd/MM/yyyy')} - {format(ymdLocal(to), 'dd/MM/yyyy')} (horário de Brasília)</span>
-            {dataUpdatedAt > 0 && <span>Atualizado às {format(new Date(dataUpdatedAt), 'HH:mm')}</span>}
-          </div>
-        </CardContent>
-      </Card>
-
+    <div className="space-y-4">
       {isLoading && <div className="grid grid-cols-2 gap-3 md:grid-cols-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>}
       {isError && !isLoading && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">Não foi possível carregar os dados do painel.</div>
