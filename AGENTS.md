@@ -8,3 +8,4 @@
 - Front-end telemetry (errors, page views, page load time) goes only through src/lib/telemetry.ts into app_telemetry, fire-and-forget, so a logging failure never blocks a screen.
 - Manual Academy track assignment uses the admin/RH-validated academia_atribuir_trilhas RPC; additional tracks reuse extension records and expose every assigned phase, preserving existing tasks and progress.
 - Process materials library (processos/processo_etapas/processo_materiais) is display/edit-only: it never feeds automation_templates or any sending path; /pos-venda/fluxo injects it as window.__MATERIAIS__ and falls back to the HTML's embedded data.
+- Flow document dialogs live outside the sandboxed iframe; accept material messages only from its contentWindow and queried material IDs, and keep dialog state independent of flow refetches.
