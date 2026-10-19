@@ -47,6 +47,7 @@ export function useLinkContractToAttendee() {
           .eq('deal_id', dealId)
           .eq('meeting_slot.meeting_type', 'r1')
           .not('contract_paid_at', 'is', null)
+          .is('refunded_at', null)
           .neq('id', attendeeId)
           .limit(1)
           .maybeSingle();

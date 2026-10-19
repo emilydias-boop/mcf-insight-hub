@@ -3688,6 +3688,27 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_reembolso_novo_ciclo_20261019: {
+        Row: {
+          criado_em: string
+          dados: Json
+          id: string
+          tipo: string
+        }
+        Insert: {
+          criado_em?: string
+          dados: Json
+          id: string
+          tipo: string
+        }
+        Update: {
+          criado_em?: string
+          dados?: Json
+          id?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
       backup_venda_direta_backfill_set2026: {
         Row: {
           backup_at: string | null
@@ -21326,7 +21347,42 @@ export type Database = {
           valor: number
         }[]
       }
+      caucoes_efetivas_v2_teste: {
+        Args: { p_bu?: string; p_from: string; p_to: string }
+        Returns: {
+          attendee_id: string
+          closer_bu: string
+          closer_id: string
+          closer_name: string
+          contract_paid_at: string
+          deal_id: string
+          eff_date: string
+          fonte: string
+          lead_name: string
+          origin_id: string
+          refunded_at: string
+          sdr_email: string
+          sdr_id: string
+          sdr_name: string
+          segment: string
+          valor: number
+        }[]
+      }
       caucoes_orfas: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          customer_email: string
+          customer_name: string
+          linked_deal_id: string
+          net_value: number
+          product_name: string
+          sale_date: string
+          source: string
+          transaction_id: string
+          tx_date: string
+        }[]
+      }
+      caucoes_orfas_v2_teste: {
         Args: { p_from: string; p_to: string }
         Returns: {
           customer_email: string
@@ -21460,6 +21516,7 @@ export type Database = {
         Returns: Json
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      deal_situacao_contrato: { Args: { p_deal_id: string }; Returns: Json }
       decisao_recompra_a010: {
         Args: { p_compra_em?: string; p_deal_id: string }
         Returns: {
