@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getPeriodRange, PeriodType } from '@/components/crm/FunilDashboard';
 import { usePosVendaOverview, PosVendaMetrics } from '@/hooks/usePosVendaOverview';
+import { format } from 'date-fns';
+import { PainelComercialPosVendaSection } from './PainelComercialPosVendaSection';
 
 const HINTS: Record<keyof PosVendaMetrics, string> = {
   entraram: 'Clientes que entraram na etapa "Novos licenciados" no período (card criado nessa etapa ou movido para ela).',
@@ -90,6 +92,8 @@ export function PosVendaDashboard() {
             </div>
           </div>
         </div>
+
+        <PainelComercialPosVendaSection from={format(start, 'yyyy-MM-dd')} to={format(end, 'yyyy-MM-dd')} />
 
         {isLoading || !t ? <Skeleton className="h-64 w-full rounded-lg" /> : porGerente ? (
           <Card>

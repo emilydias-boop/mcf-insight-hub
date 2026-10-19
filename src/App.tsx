@@ -72,7 +72,6 @@ const AgendaPosVenda = lazy(() => import("./pages/pos-venda/AgendaPosVenda"));
 const ProvisionarPosVenda = lazy(() => import("./pages/pos-venda/ProvisionarUsuarios"));
 const ImportarHarvey = lazy(() => import("./pages/pos-venda/ImportarHarvey"));
 const DistribuicaoPosVenda = lazy(() => import("./pages/pos-venda/DistribuicaoNovosLicenciados"));
-const PainelComercialPosVenda = lazy(() => import("./pages/pos-venda/PainelComercialPosVenda"));
 const FluxoPosVenda = lazy(() => import("./pages/FluxoPosVenda"));
 const Discador = lazy(() => import("./pages/crm/Discador"));
 const Origens = lazy(() => import("./pages/crm/Origens"));
@@ -324,7 +323,7 @@ const App = () => (
               <Route path="pos-venda/provisionar-usuarios" element={<RoleGuard allowedRoles={['admin']}><ProvisionarPosVenda /></RoleGuard>} />
               <Route path="pos-venda/importar-harvey" element={<RoleGuard allowedRoles={['admin']}><ImportarHarvey /></RoleGuard>} />
               <Route path="pos-venda/distribuicao" element={<RoleGuard allowedRoles={['admin', 'gerente_relacionamento']} matchAnyRole><DistribuicaoPosVenda /></RoleGuard>} />
-              <Route path="pos-venda/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'gerente_relacionamento']} matchAnyRole><PainelComercialPosVenda /></RoleGuard>} />
+              <Route path="pos-venda/painel-comercial" element={<Navigate to="/pos-venda/crm" replace />} />
               {/* Fluxo do Pós-venda — tela só de exibição; qualquer usuário logado pode abrir (sem item no menu). */}
               <Route path="pos-venda/fluxo" element={<FluxoPosVenda />} />
               <Route path="credito/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><BUProvider bu="credito" basePath="/credito/crm"><PainelComercialCredito /></BUProvider></RoleGuard>} />
