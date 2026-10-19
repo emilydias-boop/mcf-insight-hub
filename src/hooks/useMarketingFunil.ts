@@ -38,6 +38,8 @@ export interface FunilAnuncioRow {
   conta: string;
   status: string | null;
   thumbnail_url: string | null;
+  ad_preview: string | null;
+  tipo_criativo: string | null;
   investimento: number;
   impressoes: number;
   cliques_link: number;
@@ -131,6 +133,8 @@ const mapAnuncio = (r: any): FunilAnuncioRow => ({
   conta: r.conta,
   status: r.status ?? null,
   thumbnail_url: r.thumbnail_url ?? null,
+  ad_preview: r.ad_preview ?? null,
+  tipo_criativo: r.tipo_criativo ?? null,
   investimento: toNum(r.investimento),
   impressoes: toNum(r.impressoes),
   cliques_link: toNum(r.cliques_link),
@@ -230,7 +234,7 @@ export const useFunilAnuncios = ({
     staleTime: 5 * 60 * 1000,
     enabled: !!from && !!to,
     queryFn: async () => {
-      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos', {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos_v2', {
         p_from: from,
         p_to: to,
         p_nivel: nivel,
