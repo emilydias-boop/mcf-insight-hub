@@ -14064,6 +14064,27 @@ export type Database = {
           },
         ]
       }
+      mkt_parametros: {
+        Row: {
+          atualizado_em: string
+          chave: string
+          descricao: string | null
+          valor: number
+        }
+        Insert: {
+          atualizado_em?: string
+          chave: string
+          descricao?: string | null
+          valor: number
+        }
+        Update: {
+          atualizado_em?: string
+          chave?: string
+          descricao?: string | null
+          valor?: number
+        }
+        Relationships: []
+      }
       no_show_ai_settings: {
         Row: {
           applies_to_roles: string[]
@@ -22655,6 +22676,7 @@ export type Database = {
         Args: { p_ad_id: string; p_origem: string; p_source: string }
         Returns: string
       }
+      mkt_fator_investimento: { Args: never; Returns: number }
       mkt_funil_anuncios: {
         Args: { p_bu?: string; p_from: string; p_nivel?: string; p_to: string }
         Returns: {
