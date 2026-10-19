@@ -38,6 +38,8 @@ export interface FunilAnuncioRow {
   conta: string;
   status: string | null;
   thumbnail_url: string | null;
+  ad_preview: string | null;
+  tipo_criativo: string | null;
   investimento: number;
   impressoes: number;
   cliques_link: number;
@@ -131,6 +133,8 @@ const mapAnuncio = (r: any): FunilAnuncioRow => ({
   conta: r.conta,
   status: r.status ?? null,
   thumbnail_url: r.thumbnail_url ?? null,
+  ad_preview: r.ad_preview ?? null,
+  tipo_criativo: r.tipo_criativo ?? null,
   investimento: toNum(r.investimento),
   impressoes: toNum(r.impressoes),
   cliques_link: toNum(r.cliques_link),
@@ -230,7 +234,7 @@ export const useFunilAnuncios = ({
     staleTime: 5 * 60 * 1000,
     enabled: !!from && !!to,
     queryFn: async () => {
-      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos', {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos_v2', {
         p_from: from,
         p_to: to,
         p_nivel: nivel,
@@ -334,3 +338,34 @@ export const formatBRL = (n: number): string =>
 
 export const formatInt = (n: number): string =>
   new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(n);
+
+export type AdPreviewFormato =
+  | 'MOBILE_FEED_STANDARD'
+  | 'INSTAGRAM_STANDARD'
+  | 'INSTAGRAM_REELS'
+  | 'INSTAGRAM_STORY'
+  | 'FACEBOOK_REELS_MOBILE';
+
+export const useAdPreview = (adId: string | null, formato: AdPreviewFormato) =>
+  useQuery<{ src: string; formato: string }>({
+    queryKey: ['mkt-ad-preview', adId, formato],
+    enabled: !!adId,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('meta-ad-preview', { body: { ad_id: adId, formato } });
+      if (error) {
+        let msg = error.message;
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const b = await ctx.json();
+            if (b?.erro) msg = b.erro;
+          }
+        } catch { /* mantém mensagem original */ }
+        throw new Error(msg);
+      }
+      if (!data?.src) throw new Error(data?.erro ?? 'Prévia indisponível');
+      return data;
+    },
+  });
