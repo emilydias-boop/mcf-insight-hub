@@ -20,8 +20,8 @@ const levels: { value: Nivel; label: string }[] = [
   { value: "criativo", label: "Criativo" }, { value: "ad", label: "Anúncio" },
   { value: "adset", label: "Conjunto" }, { value: "campaign", label: "Campanha" },
 ];
-const columns: { key: NumericKey; label: string; format: MetricFormat; cost?: boolean }[] = [
-  { key: "investimento", label: "Investimento", format: "money" },
+const columns: { key: NumericKey; label: string; format: MetricFormat; cost?: boolean; hint?: string }[] = [
+  { key: "investimento", label: "Investimento", format: "money", hint: "Gasto da Meta × 1,125 (impostos)" },
   { key: "ctr", label: "CTR", format: "percent" },
   { key: "cpm", label: "CPM", format: "money", cost: true },
   { key: "taxa_lpv_checkout", label: "LPV→Checkout", format: "percent" },
@@ -147,13 +147,16 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
     { label: "Maior ROAS", row: bestRoas, value: metricText(bestRoas?.roas_liquido ?? null, "roas"), criterion: "Investimento ≥ R$ 20.000", empty: "—" },
     { label: "Maior gasto com ROAS < 1", row: worstSpend, value: worstSpend ? `${formatBRL(worstSpend.investimento)} · ${metricText(worstSpend.roas_liquido, "roas")}` : "", criterion: "Investimento ≥ R$ 20.000", empty: "Nenhum", warning: true },
   ];
-  const sortHeader = (key: SortKey, label: string, numeric = false) => <TableHead key={key} scope="col"
-    aria-sort={sort.key === key ? sort.direction === "asc" ? "ascending" : "descending" : "none"}
-    className={`sticky top-0 z-20 bg-card px-[12px] py-[10px] ${numeric ? "text-right" : "text-left"}`}>
-    <Button variant="ghost" className="h-[32px] gap-[6px] whitespace-nowrap px-[4px] text-[12px]" onClick={() => setSort(current => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }))}>
+  const sortHeader = (key: SortKey, label: string, numeric = false, hint?: string) => {
+    const button = <Button variant="ghost" className="h-[32px] gap-[6px] whitespace-nowrap px-[4px] text-[12px]" onClick={() => setSort(current => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }))}>
       {label}{sort.key === key ? sort.direction === "desc" ? <ArrowDown className="h-[12px] w-[12px]" /> : <ArrowUp className="h-[12px] w-[12px]" /> : <ArrowUpDown className="h-[12px] w-[12px]" />}
-    </Button>
-  </TableHead>;
+    </Button>;
+    return <TableHead key={key} scope="col"
+      aria-sort={sort.key === key ? sort.direction === "asc" ? "ascending" : "descending" : "none"}
+      className={`sticky top-0 z-20 bg-card px-[12px] py-[10px] ${numeric ? "text-right" : "text-left"}`}>
+      {hint ? <Tooltip><TooltipTrigger asChild>{button}</TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">{hint}</TooltipContent></Tooltip> : button}
+    </TableHead>;
+  };
 
   return <TooltipProvider delayDuration={200}>
     <Card className="min-w-0 text-foreground">
@@ -197,7 +200,7 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
                 <TableHeader><TableRow>
                   {hasThumbnails && <TableHead scope="col" className="sticky left-0 top-0 z-30 w-[68px] min-w-[68px] bg-card px-[12px] text-[11px]">Miniatura</TableHead>}
                   {sortHeader("nome", "Nome")}{sortHeader("status", "Status")}
-                  {columns.map(column => sortHeader(column.key, column.label, true))}
+                  {columns.map(column => sortHeader(column.key, column.label, true, column.hint))}
                 </TableRow></TableHeader>
                 <TableBody>
                   {!filtered.length && <TableRow><TableCell colSpan={columns.length + 2 + (hasThumbnails ? 1 : 0)} className="py-[32px] text-center text-muted-foreground">Nenhum anúncio com gasto ou conversão no período</TableCell></TableRow>}
