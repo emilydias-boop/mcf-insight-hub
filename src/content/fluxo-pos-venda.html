@@ -130,21 +130,27 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 const D = {
   compra:{k:'Início',t:'Compra na R2',meta:['Closer de R2'],
     blocks:[['O que acontece','O parceiro compra o produto: R$ 5 mil no Pix ou no cartão à vista, ou R$ 6 mil em 12x no cartão.'],
-            ['Depois','A venda cai para o gerente de relacionamento, que faz o primeiro contato no mesmo dia. A trilha não é escolhida aqui.']]},
-  contato:{k:'GR · no mesmo dia',t:'Contato de boas-vindas',meta:['WhatsApp','Ligação'],
-    blocks:[['O que acontece','O GR se apresenta, envia a Aula 0 (como funciona a jornada) e marca a Reunião 1 em até 48h.']],
-    checks:[['Respondeu e marcou a Reunião 1?','Novas tentativas por WhatsApp e ligação. Status Pendente até marcar.']]},
-  r1:{k:'Reunião 1 · até 48h',t:'Reunião de confirmação',meta:['Individual','Vídeo','20 a 40 min'],
-    blocks:[['Aula antes','Aula 0 · Como funciona a jornada.'],
-            ['O que acontece','O GR confirma três coisas: o cadastro no Harvey, a anamnese e o interesse real do parceiro. O interesse define a trilha.']],
+            ['Depois','Ele recebe na hora o e-mail de boas-vindas, e a venda cai para o gerente de relacionamento, que faz o primeiro contato no mesmo dia. A trilha não é escolhida aqui.']]},
+  email:{k:'Automático · na compra',t:'E-mail de boas-vindas',meta:['E-mail'],
+    blocks:[['O que o parceiro recebe','',['Acesso ao Harvey.','Nome e contato do seu gerente de relacionamento, para falar com ele na hora, se quiser.']]]},
+  contato:{k:'GR · no mesmo dia',t:'Primeiro contato no WhatsApp',meta:['WhatsApp','Kit de boas-vindas'],
+    blocks:[['O que o GR envia','',['Mensagem de boas-vindas.','Por que o cadastro no Harvey é importante.','Por que preencher a anamnese é importante.','Que é no Harvey que ele marca o horário da Reunião 1.','A pauta da Reunião 1, em PDF.','O treinamento: as 9 aulas abaixo.']],
+            ['Pauta da Reunião 1 (PDF)','',['Conferência do cadastro no Harvey e atrelamento ao gerente de relacionamento.','Conferência do preenchimento da anamnese.','Confirmação da trilha escolhida pelo parceiro.']],
+            ['Treinamento (vídeos)','',['Aula 01 · Cadastro no Harvey','Aula 02 · Preenchimento da anamnese','Aula 03 · Como marcar o horário da Reunião 1','Aula 04 · As jornadas dos parceiros','Aula 05 · Jornada 1: Incorporar para vender','Aula 06 · Jornada 2: Incorporar para alugar','Aula 07 · Jornada 3: Levantamento de recursos','Aula 08 · Jornada 4: Construir para cliente','Aula 09 · Alavancagem patrimonial']],
+            ['Próximo passo','Cada aula vai ganhar também um PDF, para quem prefere ler a assistir.']],
+    checks:[['Respondeu o contato?','Novas tentativas por WhatsApp e ligação. Status Pendente.'],
+            ['Marcou o horário da Reunião 1 no Harvey?','O GR lembra e ajuda a marcar. Status Pendente até marcar.']]},
+  r1:{k:'Reunião 1 · até 48h',t:'Reunião de alinhamento',meta:['Individual','Vídeo','20 a 40 min'],
+    blocks:[['Aulas antes','Aulas 01 a 09, enviadas no primeiro contato.'],
+            ['Pauta','',['Conferir o cadastro no Harvey e o atrelamento ao gerente de relacionamento.','Conferir o preenchimento da anamnese.','Confirmar a trilha da jornada escolhida.']]],
     checks:[['Compareceu?','Remarcar. Status Pendente.'],
-            ['Cadastro no Harvey completo?','O GR completa com o parceiro na própria reunião.'],
+            ['Cadastro no Harvey ok e atrelado ao GR?','O GR acerta com o parceiro na própria reunião.'],
             ['Anamnese preenchida?','Preenchem juntos na reunião.'],
-            ['Qual é o interesse real?','Define uma das 4 trilhas: incorporar para vender, incorporar para alugar, levantamento de recursos ou construir para cliente.']],
+            ['Qual é a trilha?','Confirma uma das 4 jornadas: incorporar para vender, incorporar para alugar, levantamento de recursos ou construir para cliente.']],
     also:'Ainda nesta reunião, o GR marca a Aula de Alavancagem Patrimonial.',
-    ent:['Mapa do Parceiro','Objetivo confirmado, trilha, quanto pode investir, prazo e documentos pendentes. Depois da reunião, o kit físico da trilha é enviado.']},
+    ent:['Mapa do Parceiro','Trilha confirmada, quanto pode investir, prazo e documentos pendentes. Depois da reunião, o kit físico da trilha é enviado.']},
   alav:{k:'Marcada na Reunião 1',t:'Aula de Alavancagem Patrimonial',meta:['Agenda do Consórcio','Em paralelo à trilha'],
-    blocks:[['Para o parceiro','Uma aula sobre como multiplicar o patrimônio.'],
+    blocks:[['Para o parceiro','Uma aula sobre como multiplicar o patrimônio. Ele já viu a Aula 09 em vídeo no primeiro contato.'],
             ['Na prática','É a reunião de venda de consórcio. Acontece junto com a trilha, sem esperar as outras etapas.']],
     priv:'Uso interno: o parceiro não precisa saber que é uma reunião de venda.'},
   final:{k:'Fim da trilha',t:'Check-in mensal',meta:['GR'],
@@ -203,10 +209,11 @@ function renderFlow(){
   const tr=T.find(x=>x.id===trilha);
   let h='';
   h+=btn('compra','start','', 'Compra na R2','R$ 5 mil, ou R$ 6 mil em 12x');
-  h+='<div class="v"></div>'+btn('contato','','GR · mesmo dia','Contato de boas-vindas','Aula 0 e marca a Reunião 1');
-  h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Reunião 1 · até 48h','Reunião de confirmação','Cadastro, anamnese e interesse real')+
+  h+='<div class="v"></div>'+btn('email','','Automático · na compra','E-mail de boas-vindas','Acesso ao Harvey + contato do GR');
+  h+='<div class="v"></div>'+btn('contato','','GR · mesmo dia','Primeiro contato no WhatsApp','Pauta da Reunião 1 + 9 aulas');
+  h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Reunião 1 · até 48h','Reunião de alinhamento','Harvey, anamnese e trilha')+
      `</div><div class="s"><div class="h"></div><button class="chip" data-id="alav" aria-pressed="${sel==='alav'}"><b>Aula de Alavancagem</b><span>marcada na Reunião 1 · em paralelo</span></button></div></div>`;
-  h+='<div class="v"></div><div class="q">Qual é o interesse real?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
+  h+='<div class="v"></div><div class="q">Qual é a trilha?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
   T.forEach(x=>{h+=`<div class="tr"><div class="v"></div><button class="tcard ${x.id===trilha?'sel':''}" data-tr="${x.id}" aria-pressed="${x.id===trilha}"><b>${esc(x.t)}</b><small>${esc(x.p)}</small><span class="badge ${x.ok?'ok':''}">${esc(x.badge)}</span></button></div>`;});
   h+='</div></div><div class="v" style="margin-top:12px"></div>';
   h+=`<div class="trilha-h"><span class="n">Trilha selecionada</span><b>${esc(tr.t)}</b></div><div class="v"></div>`;
@@ -243,7 +250,7 @@ function renderPanel(){
   } else {
     const d=D[sel];
     h+=`<div class="pk">${esc(d.k)}</div><h2>${esc(d.t)}</h2><div class="meta">${d.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
-    d.blocks.forEach(([a,b])=>{h+=`<div class="blk"><h3>${esc(a)}</h3><p>${esc(b)}</p></div>`;});
+    d.blocks.forEach(([a,b,li])=>{h+=`<div class="blk"><h3>${esc(a)}</h3>${b?`<p>${esc(b)}</p>`:''}${li?`<ul>${li.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>`;});
     if(d.checks) h+=`<div class="blk"><h3>Checagens</h3>${chkList(sel==='r1'?d.checks.slice(0,3):d.checks)}${sel==='r1'?chkList2([d.checks[3]]):''}</div>`;
     if(d.also) h+=`<div class="blk"><h3>Também nesta reunião</h3><p>${esc(d.also)}</p></div>`;
     if(d.ent) h+=`<div class="blk ent"><h3>Entrega · mesmo dia</h3><p><b>${esc(d.ent[0])}.</b> ${esc(d.ent[1])}</p></div>`;
