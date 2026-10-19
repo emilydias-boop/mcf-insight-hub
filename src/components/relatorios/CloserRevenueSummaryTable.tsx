@@ -632,7 +632,14 @@ export function CloserRevenueSummaryTable({
                           ) : (
                             <Button
                               variant="link"
-                              className={`h-auto p-0 font-medium text-left whitespace-normal ${row.id.startsWith('__') || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 'text-primary'}`}
+                              className={`h-auto p-0 font-medium text-left whitespace-normal ${
+                                row.id === '__unassigned__' || row.id === '__sem_sdr__' || row.id === '__ex_sdr__' || row.name === CANAL_DIRETO ? 'text-muted-foreground' :
+                                row.id === '__launch__' ? 'text-amber-500' :
+                                row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
+                                row.id === '__renovacao__' ? 'text-teal-400' :
+                                row.id === '__vitalicio__' ? 'text-purple-400' :
+                                'text-primary'
+                              }`}
                               onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
                             >
                               {row.id === '__launch__' ? '🚀 ' :
