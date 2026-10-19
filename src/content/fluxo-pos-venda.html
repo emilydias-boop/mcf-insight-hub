@@ -209,10 +209,11 @@ function renderFlow(){
   const tr=T.find(x=>x.id===trilha);
   let h='';
   h+=btn('compra','start','', 'Compra na R2','R$ 5 mil, ou R$ 6 mil em 12x');
-  h+='<div class="v"></div>'+btn('contato','','GR · mesmo dia','Contato de boas-vindas','Aula 0 e marca a Reunião 1');
-  h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Reunião 1 · até 48h','Reunião de confirmação','Cadastro, anamnese e interesse real')+
+  h+='<div class="v"></div>'+btn('email','','Automático · na compra','E-mail de boas-vindas','Acesso ao Harvey + contato do GR');
+  h+='<div class="v"></div>'+btn('contato','','GR · mesmo dia','Primeiro contato no WhatsApp','Pauta da Reunião 1 + 9 aulas');
+  h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Reunião 1 · até 48h','Reunião de alinhamento','Harvey, anamnese e trilha')+
      `</div><div class="s"><div class="h"></div><button class="chip" data-id="alav" aria-pressed="${sel==='alav'}"><b>Aula de Alavancagem</b><span>marcada na Reunião 1 · em paralelo</span></button></div></div>`;
-  h+='<div class="v"></div><div class="q">Qual é o interesse real?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
+  h+='<div class="v"></div><div class="q">Qual é a trilha?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
   T.forEach(x=>{h+=`<div class="tr"><div class="v"></div><button class="tcard ${x.id===trilha?'sel':''}" data-tr="${x.id}" aria-pressed="${x.id===trilha}"><b>${esc(x.t)}</b><small>${esc(x.p)}</small><span class="badge ${x.ok?'ok':''}">${esc(x.badge)}</span></button></div>`;});
   h+='</div></div><div class="v" style="margin-top:12px"></div>';
   h+=`<div class="trilha-h"><span class="n">Trilha selecionada</span><b>${esc(tr.t)}</b></div><div class="v"></div>`;
@@ -249,7 +250,7 @@ function renderPanel(){
   } else {
     const d=D[sel];
     h+=`<div class="pk">${esc(d.k)}</div><h2>${esc(d.t)}</h2><div class="meta">${d.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
-    d.blocks.forEach(([a,b])=>{h+=`<div class="blk"><h3>${esc(a)}</h3><p>${esc(b)}</p></div>`;});
+    d.blocks.forEach(([a,b,li])=>{h+=`<div class="blk"><h3>${esc(a)}</h3>${b?`<p>${esc(b)}</p>`:''}${li?`<ul>${li.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>`;});
     if(d.checks) h+=`<div class="blk"><h3>Checagens</h3>${chkList(sel==='r1'?d.checks.slice(0,3):d.checks)}${sel==='r1'?chkList2([d.checks[3]]):''}</div>`;
     if(d.also) h+=`<div class="blk"><h3>Também nesta reunião</h3><p>${esc(d.also)}</p></div>`;
     if(d.ent) h+=`<div class="blk ent"><h3>Entrega · mesmo dia</h3><p><b>${esc(d.ent[0])}.</b> ${esc(d.ent[1])}</p></div>`;
