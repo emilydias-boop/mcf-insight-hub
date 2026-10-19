@@ -120,6 +120,7 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 .st-todo{background:#FDE7E4;color:#9A2A1C;}
 .st-conf{background:#FFF3D6;color:#7A5300;}
 .st-wip{background:#E2EEFB;color:#1D4E89;}
+.st-draft{background:#EFE7FB;color:#5B2A9A;}
 .its{list-style:none;padding:0 !important;margin:4px 0 0;}
 .its li{display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13.5px;}
 .its li:last-child{border-bottom:0;}
@@ -151,7 +152,7 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 <script>
 (function(){
 /* Status do que precisa existir: ok = já temos, todo = falta fazer, conf = falta confirmar */
-const ST={ok:'Já temos',wip:'Em teste',todo:'Falta fazer',conf:'A confirmar'};
+const ST={ok:'Já temos',wip:'Em teste',draft:'Rascunho',todo:'Falta fazer',conf:'A confirmar'};
 const D = {
   r1v:{k:'Comercial · Closer de R1',t:'R1 · Reunião de vendas',meta:['Closer de R1','Individual'],
     blocks:[['Hoje','Na R1 o closer vende a caução.'],
@@ -254,6 +255,17 @@ const ITENS_TRILHA_NOVA=[['Sequência de reuniões da trilha','todo'],['Roteiros
 const GERAL=[['Painel Comercial do Pós-Venda (Gestão, Visão Geral)','ok'],['Fluxograma do pós-venda','ok'],['Playbook dos gerentes da trilha Incorporar para vender','ok']];
 const CICLO='Todas as reuniões são individuais; um encontro em grupo, se houver, é uma reunião a mais. Em toda etapa: aula antes, reunião, entrega no mesmo dia (PDF com a marca MCF, anexado no Harvey com a nota e o status) e tarefa. A próxima reunião só é marcada com a tarefa feita; sem ela, lembrete do GR e status Pendente.';
 
+/* Dentro do MCF Gestão, os itens e status vêm da Biblioteca de Materiais (window.__MATERIAIS__) */
+const EXT=window.__MATERIAIS__||null;
+const MAPST={pronto:'ok',em_teste:'wip',falta_fazer:'todo',a_confirmar:'conf',rascunho:'draft'};
+if(EXT){
+  const conv=k=>(EXT[k]||[]).map(([t,s])=>[t,MAPST[s]||'todo']);
+  Object.keys(D).forEach(k=>{D[k].itens=conv(k);});
+  T[0].steps.forEach((s,i)=>{s.itens=conv('vender-'+i);});
+  T.slice(1).forEach(tr=>{tr.itens=conv(tr.id);});
+  GERAL.splice(0,GERAL.length,...conv('geral'));
+}
+const itensTrilha=tr=>tr.itens||ITENS_TRILHA_NOVA;
 let trilha='vender', sel='status';
 const flow=document.getElementById('flow'), panel=document.getElementById('panel');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -276,7 +288,7 @@ function todosItens(){
   g.push(['Reunião 1 de alinhamento',D.r1.itens]);
   g.push(['Aula de Alavancagem Patrimonial',D.alav.itens]);
   T[0].steps.forEach(s=>g.push(['Incorporar para vender · '+s.k.split(' · ')[0]+': '+s.t,s.itens]));
-  T.slice(1).forEach(tr=>g.push(['Trilha '+tr.t,ITENS_TRILHA_NOVA]));
+  T.slice(1).forEach(tr=>g.push(['Trilha '+tr.t,itensTrilha(tr)]));
   g.push(['Check-in mensal',D.final.itens]);
   return g;
 }
@@ -293,7 +305,7 @@ function renderFlow(){
   h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Pós-venda · Reunião 1 · até 48h','Reunião de alinhamento','Harvey, anamnese e trilha')+
      `</div><div class="s"><div class="h"></div><button class="chip" data-id="alav" aria-pressed="${sel==='alav'}"><b>Aula de Alavancagem</b><span>marcada na Reunião 1 · em paralelo</span>${progTag(D.alav.itens)}</button></div></div>`;
   h+='<div class="v"></div><div class="q">Qual é a trilha?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
-  T.forEach(x=>{const it=x.steps?x.steps.flatMap(s=>s.itens):ITENS_TRILHA_NOVA;
+  T.forEach(x=>{const it=x.steps?x.steps.flatMap(s=>s.itens):itensTrilha(x);
     h+=`<div class="tr"><div class="v"></div><button class="tcard ${x.id===trilha?'sel':''}" data-tr="${x.id}" aria-pressed="${x.id===trilha}"><b>${esc(x.t)}</b><small>${esc(x.p)}</small><span class="badge ${x.ok?'ok':''}">${esc(x.badge)}</span>${progTag(it)}</button></div>`;});
   h+='</div></div><div class="v" style="margin-top:12px"></div>';
   h+=`<div class="trilha-h"><span class="n">Trilha selecionada</span><b>${esc(tr.t)}</b></div><div class="v"></div>`;
@@ -301,7 +313,7 @@ function renderFlow(){
     tr.steps.forEach((s,i)=>{ const id=tr.id+'-'+i; const grp=s.meta[0].startsWith('Grupo');
       h+=(i?'<div class="v"></div>':'')+btn(id, grp?'ent':'ind', s.k, s.t, s.ent[0]); });
   } else {
-    h+=`<div class="todo"><b style="color:var(--fg)">Reuniões a definir</b><br>${esc(tr.desc)} A sequência de reuniões desta trilha ainda vai ser destrinchada.${progTag(ITENS_TRILHA_NOVA)}</div>`;
+    h+=`<div class="todo"><b style="color:var(--fg)">Reuniões a definir</b><br>${esc(tr.desc)} A sequência de reuniões desta trilha ainda vai ser destrinchada.${progTag(itensTrilha(tr))}</div>`;
   }
   h+='<div class="v"></div>'+btn('final','end','','Check-in mensal','Dossiê do Projeto impresso');
   h+='<p class="hint">Preto: reunião individual · Tracejado: em paralelo · "x/y prontos": quanto do material daquela etapa já existe</p>';
@@ -315,10 +327,10 @@ function renderPanel(){
   const m=sel.match(/^(\w+)-(\d+)$/);
   if(sel==='status'){
     const g=todosItens(); const all=g.flatMap(x=>x[1]);
-    const c={ok:0,wip:0,todo:0,conf:0}; all.forEach(x=>c[x[1]]++);
-    h+=`<div class="pk">Implementação</div><h2>O que já temos e o que falta</h2><div class="meta"><span class="st st-ok">${c.ok} já temos</span><span class="st st-wip">${c.wip} em teste</span><span class="st st-todo">${c.todo} falta fazer</span><span class="st st-conf">${c.conf} a confirmar</span></div>`;
+    const c={ok:0,wip:0,draft:0,todo:0,conf:0}; all.forEach(x=>c[x[1]]++);
+    h+=`<div class="pk">Implementação</div><h2>O que já temos e o que falta</h2><div class="meta"><span class="st st-ok">${c.ok} já temos</span><span class="st st-wip">${c.wip} em teste</span>${c.draft?`<span class="st st-draft">${c.draft} rascunho</span>`:''}<span class="st st-todo">${c.todo} falta fazer</span><span class="st st-conf">${c.conf} a confirmar</span></div>`;
     g.forEach(([t,it])=>{h+=`<div class="blk"><h3>${esc(t)} · ${prog(it).ok}/${it.length}</h3>${listaItens(it)}</div>`;});
-    h+=`<p class="priv">"A confirmar" é o que eu não consegui verificar se já existe. Clique em qualquer etapa no fluxo para ver o detalhe dela.</p>`;
+    h+=`<p class="priv">"A confirmar" é o que eu não consegui verificar se já existe.${EXT?' Os status vêm da Biblioteca de Materiais do Gestão.':''} Clique em qualquer etapa no fluxo para ver o detalhe dela.</p>`;
   } else if(m){
     const tr=T.find(x=>x.id===m[1]), s=tr.steps[+m[2]];
     h+=`<div class="pk">${esc(tr.t)} · ${esc(s.k)}</div><h2>${esc(s.t)}</h2><div class="meta">${s.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
@@ -334,7 +346,7 @@ function renderPanel(){
     const tr=T.find(x=>x.id===sel.slice(3));
     h+=`<div class="pk">Trilha</div><h2>${esc(tr.t)}</h2><div class="meta">${tr.p.split(' · ').map(x=>`<span>${esc(x)}</span>`).join('')}</div>`;
     if(tr.steps){ h+=`<div class="blk"><h3>Etapas depois da Reunião 1</h3><ul>${tr.steps.map(s=>`<li><b>${esc(s.t)}</b> · ${esc(s.k.split(' · ')[1])} · ${prog(s.itens).ok}/${s.itens.length} prontos</li>`).join('')}</ul></div><p class="priv">Clique numa etapa no fluxo para ver o detalhe.</p>`; }
-    else { h+=`<div class="blk"><h3>Objetivo</h3><p>${esc(tr.desc)}</p></div><div class="blk"><h3>Reuniões</h3><p>A definir. Cada trilha terá a sua própria sequência, porque cada uma tem um objetivo específico.</p></div>`+blocoItens(ITENS_TRILHA_NOVA); }
+    else { h+=`<div class="blk"><h3>Objetivo</h3><p>${esc(tr.desc)}</p></div><div class="blk"><h3>Reuniões</h3><p>A definir. Cada trilha terá a sua própria sequência, porque cada uma tem um objetivo específico.</p></div>`+blocoItens(itensTrilha(tr)); }
   } else {
     const d=D[sel];
     h+=`<div class="pk">${esc(d.k)}</div><h2>${esc(d.t)}</h2><div class="meta">${d.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
