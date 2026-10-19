@@ -263,6 +263,46 @@ export const useCanaisPeriodo = ({ from, to }: { from: string | null; to: string
     },
   });
 
+export const useFunilContratos = ({
+  from,
+  to,
+  grao = 'month',
+  data = 'venda',
+  origem = 'anuncio',
+}: {
+  from: string | null;
+  to: string | null;
+  grao?: Grao;
+  data?: ModeloData;
+  origem?: ModeloOrigem;
+}) =>
+  useQuery<FunilContratoRow[]>({
+    queryKey: ['mkt-funil-contratos', from, to, grao, data, origem],
+    staleTime: 5 * 60 * 1000,
+    enabled: !!from && !!to,
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_contratos', {
+        p_from: from,
+        p_to: to,
+        p_grao: grao,
+        p_data: data,
+        p_origem: origem,
+      });
+      if (error) {
+        if (error.code === '42501') throw new Error(PERM_ERROR);
+        throw error;
+      }
+      return (rows ?? []).map(mapContrato);
+    },
+  });
+
+export const produtoContratoLabel = (produto: string): string => {
+  if (produto === 'A000 - Contrato') return 'A000';
+  if (produto === 'Contrato MCF') return 'Contrato MCF';
+  if (produto === 'Caução - Leopoldo + MCF') return 'Caução Leopoldo';
+  return produto;
+};
+
 export const CANAL_LABELS: Record<string, string> = {
   paid_meta: 'Anúncio Meta',
   organic_form: 'Formulário orgânico',
