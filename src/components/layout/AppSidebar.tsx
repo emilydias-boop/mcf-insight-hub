@@ -240,7 +240,6 @@ const menuItems: MenuItem[] = [
     icon: Building2,
     requiredRoles: ["admin", "gerente_relacionamento"],
     items: [
-      { title: "Painel Comercial", url: "/pos-venda/painel-comercial" },
       { title: "CRM", url: "/pos-venda/crm" },
       { title: "Distribuição de novos licenciados", url: "/pos-venda/distribuicao" },
     ],
