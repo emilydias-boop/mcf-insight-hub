@@ -22911,6 +22911,7 @@ export type Database = {
       }
       mkt_meta_id: { Args: { p: string }; Returns: string }
       mkt_norm_phone: { Args: { p: string }; Returns: string }
+      mkt_periodo: { Args: { p_d: string; p_grao: string }; Returns: string }
       mkt_phone_key: { Args: { p: string }; Returns: string }
       mkt_touch_from_sale: {
         Args: { r: Database["public"]["Tables"]["hubla_transactions"]["Row"] }

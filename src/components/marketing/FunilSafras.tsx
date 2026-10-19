@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Info } from "lucide-react";
 import { useFunilSafras, useFunilContratos, produtoContratoLabel, formatBRL, formatInt, type FunilSafraRow, type FunilContratoRow, type Grao, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
@@ -61,7 +61,7 @@ function periodLabel(period: string, grain: Grao) {
   const start = parseISO(period.slice(0, 10));
   if (Number.isNaN(start.getTime())) return period;
   return grain === "month" ? format(start, "MMM/yy", { locale: ptBR })
-    : grain === "week" ? `semana de ${format(start, "dd/MM")}` : format(start, "dd/MM");
+    : grain === "week" ? `${format(start, "dd/MM")} a ${format(addDays(start, 6), "dd/MM")}` : format(start, "dd/MM");
 }
 
 const numericCell = "whitespace-nowrap px-[12px] py-[12px] text-right tabular-nums";
