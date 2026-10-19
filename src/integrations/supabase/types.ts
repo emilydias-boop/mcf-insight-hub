@@ -20028,6 +20028,23 @@ export type Database = {
       }
       mkt_funnel_events: {
         Row: {
+          canal: string | null
+          first_ad_id: string | null
+          first_paid_at: string | null
+          id: number | null
+          last_ad_id: string | null
+          occurred_at: string | null
+          origem: string | null
+          pago_ok: boolean | null
+          person: string | null
+          tipo: string | null
+          valido: boolean | null
+          valor: number | null
+        }
+        Relationships: []
+      }
+      mkt_funnel_events_v1_old: {
+        Row: {
           first_ad_id: string | null
           first_paid_at: string | null
           id: number | null
@@ -20036,6 +20053,23 @@ export type Database = {
           person: string | null
           ref_id: string | null
           tipo: string | null
+          valor: number | null
+        }
+        Relationships: []
+      }
+      mkt_funnel_events_v2_old: {
+        Row: {
+          canal: string | null
+          first_ad_id: string | null
+          first_paid_at: string | null
+          id: number | null
+          last_ad_id: string | null
+          occurred_at: string | null
+          origem: string | null
+          pago_ok: boolean | null
+          person: string | null
+          tipo: string | null
+          valido: boolean | null
           valor: number | null
         }
         Relationships: []
@@ -20201,6 +20235,17 @@ export type Database = {
           person: string | null
           produto: string | null
           ref_id: string | null
+          valor: number | null
+        }
+        Relationships: []
+      }
+      mkt_sale_person_v2: {
+        Row: {
+          occurred_at: string | null
+          person: string | null
+          produto: string | null
+          ref_id: string | null
+          tipo: string | null
           valor: number | null
         }
         Relationships: []
@@ -22523,6 +22568,40 @@ export type Database = {
           compras_pixel: number
           contratos: number
           entradas: number
+          impressoes: number
+          investimento: number
+          investimento_awareness: number
+          leads: number
+          liq_contrato: number
+          liq_entrada: number
+          liq_parceria: number
+          liq_total: number
+          lpv: number
+          parcerias: number
+          periodo: string
+          r1_agendadas: number
+          r1_realizadas: number
+          r2_realizadas: number
+        }[]
+      }
+      mkt_funil_v3: {
+        Args: {
+          p_data?: string
+          p_from: string
+          p_grao?: string
+          p_origem?: string
+          p_to: string
+          p_toque?: string
+        }
+        Returns: {
+          checkout_iniciado: number
+          cliques_link: number
+          compras_pixel: number
+          contratos: number
+          entradas: number
+          entradas_a010: number
+          entradas_anamnese: number
+          entradas_outras: number
           impressoes: number
           investimento: number
           investimento_awareness: number
