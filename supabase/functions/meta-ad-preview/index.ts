@@ -31,34 +31,75 @@ Deno.serve(async (req) => {
     const formato = body?.formato == null || body.formato === "" ? "MOBILE_FEED_STANDARD" : body.formato;
     if (typeof formato !== "string" || !FORMATOS.includes(formato)) return json({ erro: "Formato inválido" }, 400);
 
-    const { data: ent } = await admin.from("ads_entities").select("ad_id, video_id, creative_id").eq("platform", "meta").eq("ad_id", adId).maybeSingle();
+    const { data: ent } = await admin.from("ads_entities").select("ad_id, video_id, creative_id, account_id").eq("platform", "meta").eq("ad_id", adId).maybeSingle();
     if (!ent) return json({ erro: "Anúncio não encontrado" }, 404);
 
     const token = Deno.env.get("META_ADS_TOKEN");
     if (!token) return json({ erro: "Integração da Meta não configurada" }, 500);
 
     if (modo === "video") {
-      const graph = async (id: string, fields: string) => {
-        const r = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(id)}?fields=${fields}&access_token=${encodeURIComponent(token)}`);
+      const limpa = (s: unknown) => String(s ?? "").replaceAll(token, "").replaceAll(encodeURIComponent(token), "");
+      class MetaErr extends Error { code: number | null; constructor(m: string, c: number | null) { super(m); this.code = c; } }
+      const getMeta = async (path: string, query: string) => {
+        const r = await fetch(`https://graph.facebook.com/v21.0/${path}?${query}&access_token=${encodeURIComponent(token)}`);
         const d = await r.json().catch(() => ({}));
-        if (!r.ok || d?.error) throw new Error(d?.error?.message ?? "Falha ao consultar a Meta");
+        if (!r.ok || d?.error) throw new MetaErr(limpa(d?.error?.message ?? "Falha ao consultar a Meta"), d?.error?.code ?? null);
         return d;
       };
+      const log = (video_id: string | null, etapa: string, ok: boolean, e?: unknown) => {
+        const me = e instanceof MetaErr ? e : null;
+        console.log(JSON.stringify({ fn: "meta-ad-preview", ad_id: adId, video_id, etapa, ok,
+          erro_meta_code: me?.code ?? null, erro_meta_msg: e ? limpa(e instanceof Error ? e.message : e) : null }));
+      };
+      const absFb = (p: string | null | undefined) => p ? (p.startsWith("/") ? `https://www.facebook.com${p}` : p) : null;
+
       let video_src: string | null = null, poster: string | null = null, fb_url: string | null = null, ig_url: string | null = null, aviso: string | null = null;
-      const videoId = (ent as any).video_id ? String((ent as any).video_id) : null;
-      const creativeId = (ent as any).creative_id ? String((ent as any).creative_id) : null;
-      if (videoId) {
+      const e0 = ent as any;
+      const videoId = e0.video_id ? String(e0.video_id) : null;
+      const creativeId = e0.creative_id ? String(e0.creative_id) : null;
+      const accountId = e0.account_id ? String(e0.account_id).replace(/^act_/, "") : null;
+
+      const tentarVideo = async (vid: string, etapaDireta: string) => {
         try {
-          const v = await graph(videoId, "source,permalink_url,picture");
-          video_src = v?.source ?? null;
-          poster = v?.picture ?? null;
-          const p: string | null = v?.permalink_url ?? null;
-          fb_url = p ? (p.startsWith("/") ? `https://www.facebook.com${p}` : p) : null;
-        } catch (e) { aviso = e instanceof Error ? e.message.replaceAll(token, "") : "Falha ao buscar o vídeo"; }
+          const v = await getMeta(encodeURIComponent(vid), "fields=source,permalink_url,picture");
+          if (v?.source) video_src = v.source;
+          poster = poster ?? v?.picture ?? null;
+          fb_url = fb_url ?? absFb(v?.permalink_url);
+          log(vid, etapaDireta, !!v?.source, v?.source ? undefined : "sem source");
+        } catch (e) { aviso = limpa((e as Error).message); log(vid, etapaDireta, false, e); }
+        if (video_src || !accountId) return;
+        try {
+          const filtro = encodeURIComponent(JSON.stringify([{ field: "id", operator: "IN", value: [vid] }]));
+          const d = await getMeta(`act_${encodeURIComponent(accountId)}/advideos`, `fields=id,source,picture,permalink_url&filtering=${filtro}`);
+          const v = d?.data?.[0];
+          if (v?.source) video_src = v.source;
+          poster = poster ?? v?.picture ?? null;
+          fb_url = fb_url ?? absFb(v?.permalink_url);
+          log(vid, "advideos", !!v?.source, v?.source ? undefined : "sem source");
+        } catch (e) { aviso = limpa((e as Error).message); log(vid, "advideos", false, e); }
+      };
+
+      if (videoId) await tentarVideo(videoId, "video_direto");
+
+      if (!video_src) {
+        try {
+          const a = await getMeta(encodeURIComponent(adId),
+            "fields=" + encodeURIComponent("creative{video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos{video_id}}}"));
+          const cr = a?.creative ?? {};
+          const ids = [cr.video_id, cr.object_story_spec?.video_data?.video_id, ...((cr.asset_feed_spec?.videos ?? []).map((x: any) => x?.video_id))]
+            .filter((x: unknown) => x).map(String);
+          const extras = [...new Set(ids)].filter((x) => x !== videoId).slice(0, 2);
+          log(videoId, "creative_alt", extras.length > 0, extras.length ? undefined : "sem video_id alternativo");
+          for (const vid of extras) {
+            if (video_src) break;
+            await tentarVideo(vid, "creative_alt");
+          }
+        } catch (e) { aviso = limpa((e as Error).message); log(videoId, "creative_alt", false, e); }
       }
+
       if (creativeId) {
         try {
-          const c = await graph(creativeId, "effective_object_story_id,instagram_permalink_url");
+          const c = await getMeta(encodeURIComponent(creativeId), "fields=effective_object_story_id,instagram_permalink_url");
           ig_url = c?.instagram_permalink_url ?? null;
           if (!fb_url && c?.effective_object_story_id) fb_url = `https://www.facebook.com/${c.effective_object_story_id}`;
         } catch { /* independente */ }
