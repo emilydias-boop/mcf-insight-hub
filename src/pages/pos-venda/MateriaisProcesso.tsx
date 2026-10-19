@@ -341,7 +341,7 @@ function Editor({ material, processoId, etapas, pessoas, podeEditar, nomePessoa,
       <div className="space-y-1"><Label>Link (Canva, vídeo, Drive)</Label>
         <div className="flex gap-2">
           <Input disabled={ro} value={f.link_url} onChange={(e) => set("link_url", e.target.value)} placeholder="https://" />
-          {f.link_url && <Button variant="outline" size="icon" asChild><a href={f.link_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /></a></Button>}
+          {f.link_url && <Button variant="outline" asChild><a href={f.link_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1" />Abrir</a></Button>}
         </div>
       </div>
       <div className="space-y-1"><Label>Arquivo</Label>
