@@ -79,7 +79,7 @@ function isMaturing(period: string, grain: Grao): boolean {
   return Number.isFinite(end) && today - end < 60 * 86_400_000;
 }
 
-function MetricCells({ row, origem, brutos, reembolsados }: { row: Totals; origem: ModeloOrigem; brutos: number; reembolsados: number }) {
+function MetricCells({ row, origem }: { row: Totals; origem: ModeloOrigem }) {
   return (
     <>
       <TableCell className={numericCell}>{formatBRL(row.investimento)}</TableCell>
@@ -93,8 +93,6 @@ function MetricCells({ row, origem, brutos, reembolsados }: { row: Totals; orige
       <TableCell className={numericCell}>{formatInt(row.r1_agendadas)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.r1_realizadas)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.contratos)}</TableCell>
-      <TableCell className={numericCell}>{formatInt(brutos)}</TableCell>
-      <TableCell className={numericCell}>{formatInt(reembolsados)}</TableCell>
       {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.contratos)}</TableCell>}
       <TableCell className={numericCell}>{formatInt(row.parcerias)}</TableCell>
       {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.parcerias)}</TableCell>}
@@ -129,20 +127,14 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
   const rows: FunilSafraRow[] = [...data].sort((a, b) => b.periodo.localeCompare(a.periodo));
   const totals = Object.fromEntries(numericFields.map(field => [field, rows.reduce((sum, row) => sum + row[field], 0)])) as Totals;
   const contratosRows: FunilContratoRow[] = contratos.data ?? [];
-  const contratosTotais = {
-    brutos: contratosRows.reduce((sum, r) => sum + r.brutos, 0),
-    reembolsados: contratosRows.reduce((sum, r) => sum + r.reembolsados, 0),
-    liquidos: contratosRows.reduce((sum, r) => sum + r.liquidos, 0),
-  };
   const contratosPorProduto = Array.from(
     contratosRows.reduce((map, r) => {
-      const item = map.get(r.produto) ?? { brutos: 0, reembolsados: 0, liquidos: 0 };
-      item.brutos += r.brutos; item.reembolsados += r.reembolsados; item.liquidos += r.liquidos;
+      const item = map.get(r.produto) ?? { brutos: 0 };
+      item.brutos += r.brutos;
       map.set(r.produto, item);
       return map;
-    }, new Map<string, { brutos: number; reembolsados: number; liquidos: number }>()),
+    }, new Map<string, { brutos: number }>()),
   ).map(([produto, v]) => ({ produto, ...v })).sort((a, b) => b.brutos - a.brutos);
-  const contratosPorPeriodo = new Map(contratosRows.map(r => [r.periodo, r]));
   const stageDetail = (field: "entradas" | "r1_agendadas" | "r1_realizadas" | "contratos" | "parcerias", label: string) => {
     if (origem === "anuncio") return `${label} ${cost(totals.investimento, totals[field])}`;
     const adCount = (anuncios.data ?? []).reduce((sum, row) => sum + row[field], 0);
@@ -156,16 +148,12 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
     { label: "R1 realizadas", value: formatInt(totals.r1_realizadas), detail: stageDetail("r1_realizadas", "custo por R1") },
     { label: "Contratos", value: formatInt(totals.contratos), detail: (
       <>
-        <div>Bruto {formatInt(contratosTotais.brutos)} · Reembolsados {formatInt(contratosTotais.reembolsados)}</div>
         {contratosPorProduto.map(p => (
-          <div key={p.produto}>
-            {produtoContratoLabel(p.produto)}: {formatInt(p.liquidos)}
-            {p.reembolsados > 0 ? ` (${formatInt(p.brutos)} − ${formatInt(p.reembolsados)} reemb.)` : ""}
-          </div>
+          <div key={p.produto}>{produtoContratoLabel(p.produto)}: {formatInt(p.brutos)}</div>
         ))}
         <div>{stageDetail("contratos", "custo por contrato")}</div>
       </>
-    ), hint: "Contrato novo = 1º contrato da pessoa (parcelas mensais do A000 e recompras não contam de novo, só entram no líquido em R$). Bruto = todos os contratos novos do período; Reembolsados = estornados (MCF Pay/Hubla); o número grande é o líquido. O Painel Comercial mostra o bruto." },
+    ), hint: "Contrato novo = 1º contrato pago da pessoa (A000, Contrato MCF ou Caução). Parcelas mensais do A000 e recompras não contam de novo. Conta o bruto, sem descontar reembolso — mesma régua do Painel Comercial. O dinheiro (líquido e ROAS) continua descontando os estornos." },
     { label: "Parcerias", value: formatInt(totals.parcerias), detail: stageDetail("parcerias", "custo por parceria") },
     { label: "ROAS líquido", value: origem === "todas" ? "—" : formatRoas(ratio(totals.liq_total, totals.investimento)), detail: origem === "todas" ? "ROAS só em Só anúncio" : `${formatBRL(totals.liq_total)} recebidos`, hint: "Dinheiro líquido que entrou no período (vendas de quem veio de anúncio, já descontados os estornos) ÷ investimento do período." },
   ];
@@ -182,8 +170,7 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
     { label: "Checkout iniciado", hint: "Dado da Meta (pixel)" },
     { label: "Entradas", hint: "Pessoas que entraram no período: compra de A010, formulário de anamnese (sem A010) ou outro produto de entrada (Guia, Planilha, A011, Lucrômetro…). Cada pessoa conta 1 vez por período." },
     { label: "A010" }, { label: "Anamnese", hint: "Negócio com tag ANAMNESE criado no período, sem A010 (mesma régua da Visão Diária)" }, { label: "Outras" },
-    { label: "Custo/entrada" }, { label: "R1 agendadas", hint: "Pessoas que tiveram uma R1 marcada no período (pela data em que foi marcada)" }, { label: "R1 realizadas", hint: "Pessoas com R1 feita no período (completed, contrato pago ou reembolsado)" }, { label: "Contratos", hint: "Contratos líquidos (brutos − reembolsados)" },
-    { label: "Contratos brutos" }, { label: "Reembolsados" },
+    { label: "Custo/entrada" }, { label: "R1 agendadas", hint: "Pessoas que tiveram uma R1 marcada no período (pela data em que foi marcada)" }, { label: "R1 realizadas", hint: "Pessoas com R1 feita no período (completed, contrato pago ou reembolsado)" }, { label: "Contratos", hint: "Contratos novos do período (bruto, sem descontar reembolso)" },
     { label: "Custo/contrato" }, { label: "Parcerias" }, { label: "Custo/parceria" },
     { label: "Líquido recebido" }, { label: "ROAS" },
   ].filter(header => origem === "anuncio" || !["Custo/entrada", "Custo/contrato", "Custo/parceria", "ROAS"].includes(header.label));
@@ -239,14 +226,14 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
                       {periodLabel(row.periodo, grao)}
                       {modeloData === "safra" && isMaturing(row.periodo, grao) && <Hint text="Parte das pessoas dessa safra ainda está no meio do funil"><Badge variant="outline" className="ml-[6px] px-[6px] py-[2px] text-[10px] font-normal">em maturação</Badge></Hint>}
                     </TableCell>
-                    <MetricCells row={row} origem={origem} brutos={contratosPorPeriodo.get(row.periodo)?.brutos ?? 0} reembolsados={contratosPorPeriodo.get(row.periodo)?.reembolsados ?? 0} />
+                    <MetricCells row={row} origem={origem} />
                   </TableRow>
                 ))}
               </TableBody>
               <TableFooter>
                 <TableRow className="hover:bg-muted/50">
                   <TableCell className="whitespace-nowrap px-[12px] py-[12px] font-semibold">TOTAL</TableCell>
-                  <MetricCells row={totals} origem={origem} brutos={contratosTotais.brutos} reembolsados={contratosTotais.reembolsados} />
+                  <MetricCells row={totals} origem={origem} />
                 </TableRow>
               </TableFooter>
             </Table>
