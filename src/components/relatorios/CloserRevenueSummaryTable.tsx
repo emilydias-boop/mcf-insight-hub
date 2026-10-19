@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { calcTicketParceria, TICKET_PARCERIA_TOOLTIP, type TicketParceria, type VendaTicket } from '@/lib/ticketParceria';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -101,6 +102,10 @@ interface CloserRow {
   count: number;
   gross: number;
   net: number;
+  carteira: number;
+  carteiraPagamentos: number;
+  sdrMotivo?: string | null;
+  exSdrs?: { name: string; motivo: string; carteira: number; p2Count: number }[];
   outsideCount: number;
   outsideGross: number;
   aReceber?: number;
@@ -184,6 +189,22 @@ export function CloserRevenueSummaryTable({
     },
   });
 
+  const { data: sdrSituacao, isLoading: loadingSdrSituacao, error: sdrSituacaoError } = useQuery({
+    queryKey: ['closer-revenue-sdr-situacao', sdrIds.join(','), bu ?? 'incorporador'],
+    enabled: sdrIds.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('sdr_situacao_bu', {
+        p_ids: sdrIds, p_bu: bu ?? 'incorporador',
+      });
+      if (error) throw error;
+      return new Map<string, { ativo: boolean; motivo: string | null }>(
+        (data || []).map((r: { profile_id: string; ativo: boolean; motivo: string | null }) =>
+          [r.profile_id, { ativo: r.ativo, motivo: r.motivo }]),
+      );
+    },
+  });
+
   const { summaryData, closerTransactionsMap } = useMemo(() => {
     // Venda = cliente + produto normalizado (pagamentos repetidos viram 1 venda). Só contagem.
     const vendasPorLinha = new Map<string, Map<string, number>>();
@@ -199,8 +220,17 @@ export function CloserRevenueSummaryTable({
       if (tx.sale_status === 'refunded') v.refunded = true;
       m.set(k, v);
     };
+    const brutoPorVenda = new Map<string, number>();
+    for (const tx of filteredTxs) {
+      if (isP2(tx)) continue;
+      const k = vendaKey(tx, donoMap);
+      brutoPorVenda.set(k, (brutoPorVenda.get(k) || 0) + getDeduplicatedGross(tx, globalFirstIds.has(tx.id)));
+    }
+    const isCarteira = (tx: Transaction) => !isP2(tx) && brutoPorVenda.get(vendaKey(tx, donoMap)) === 0;
     let p2Pagamentos = 0;
     let p2Liquido = 0;
+    let outsidePagamentos = 0;
+    let outsideLiquido = 0;
     const track = (rowId: string, tx: Transaction, gross: number, outside = false) => {
       if (isP2(tx)) return;
       const k = vendaKey(tx, donoMap);
@@ -209,6 +239,7 @@ export function CloserRevenueSummaryTable({
         s.add(k); outsidePorLinha.set(rowId, s); outsideTotal.add(k);
         return;
       }
+      if (isCarteira(tx)) return;
       const m = vendasPorLinha.get(rowId) || new Map<string, number>();
       m.set(k, (m.get(k) || 0) + gross); vendasPorLinha.set(rowId, m);
       vendasTotal.set(k, (vendasTotal.get(k) || 0) + gross);
@@ -216,6 +247,23 @@ export function CloserRevenueSummaryTable({
       addTicket(tm, k, tx, gross); ticketPorLinha.set(rowId, tm);
       addTicket(ticketTotal, `${rowId}::${k}`, tx, gross);
     };
+    const addPayment = (row: CloserRow, tx: Transaction, gross: number, aRec: number) => {
+      if (isP2(tx)) {
+        row.p2Count = (row.p2Count || 0) + 1;
+        return;
+      }
+      if (isCarteira(tx)) {
+        row.carteira += tx.net_value || 0;
+        row.carteiraPagamentos++;
+        return;
+      }
+      row.count++;
+      track(row.id, tx, gross);
+      row.gross += gross;
+      row.net += tx.net_value || 0;
+      row.aReceber = (row.aReceber || 0) + aRec;
+    };
+    const hasActivity = (row: CloserRow) => row.count > 0 || row.outsideCount > 0 || row.carteiraPagamentos > 0 || (row.p2Count || 0) > 0;
     const finalize = (rows: CloserRow[]) => {
       for (const row of rows) {
         const m = vendasPorLinha.get(row.id);
@@ -237,17 +285,17 @@ export function CloserRevenueSummaryTable({
     };
     const closerTotals = new Map<string, CloserRow>();
     const txMap = new Map<string, Transaction[]>();
-    let unassigned: CloserRow = { id: '__unassigned__', name: 'Sem closer', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    let unassigned: CloserRow = { id: '__unassigned__', name: 'Sem closer', count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0 };
     const unassignedTxs: Transaction[] = [];
-    let launch: CloserRow = { id: '__launch__', name: 'Lançamento', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    let launch: CloserRow = { id: '__launch__', name: 'Lançamento', count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0 };
     const launchTxs: Transaction[] = [];
-    let lucrometro: CloserRow = { id: '__lucrometro__', name: 'Lucrômetro - Funil', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    let lucrometro: CloserRow = { id: '__lucrometro__', name: 'Lucrômetro - Funil', count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0 };
     const lucrometroTxs: Transaction[] = [];
-    let a010: CloserRow = { id: '__a010__', name: 'A010 - Funil', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    let a010: CloserRow = { id: '__a010__', name: 'A010 - Funil', count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0 };
     const a010Txs: Transaction[] = [];
-    let renovacao: CloserRow = { id: '__renovacao__', name: 'Renovação', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    let renovacao: CloserRow = { id: '__renovacao__', name: 'Renovação', count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0 };
     const renovacaoTxs: Transaction[] = [];
-    let vitalicio: CloserRow = { id: '__vitalicio__', name: 'Vitalício', count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0 };
+    let vitalicio: CloserRow = { id: '__vitalicio__', name: 'Vitalício', count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0 };
     const vitalicioTxs: Transaction[] = [];
     
     // Modo Canal: todas as transações filtradas, sem baldes automáticos e sem outside
@@ -257,16 +305,11 @@ export function CloserRevenueSummaryTable({
         const p2 = isP2(tx);
         if (p2) { p2Pagamentos++; p2Liquido += tx.net_value || 0; }
         const gross = p2 ? 0 : getDeduplicatedGross(tx as any, globalFirstIds.has(tx.id));
-        const net = p2 ? 0 : (tx.net_value || 0);
         const aRec = p2 ? 0 : calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
         const canal = canalMap.get(tx.id)?.canal || CANAL_DIRETO;
         const id = `canal:${canal}`;
-        const row = canalTotals.get(id) || { id, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 };
-        if (p2) row.p2Count = (row.p2Count || 0) + 1; else row.count++;
-        track(id, tx, gross);
-        row.gross += gross;
-        row.net += net;
-        row.aReceber = (row.aReceber || 0) + aRec;
+        const row = canalTotals.get(id) || { id, name: canal, count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 };
+        addPayment(row, tx, gross, aRec);
         canalTotals.set(id, row);
         const arr = txMap.get(id) || [];
         arr.push(tx);
@@ -281,10 +324,10 @@ export function CloserRevenueSummaryTable({
       for (const canal of lista) {
         const row = canalTotals.get(`canal:${canal}`);
         if (row) {
-          if (row.count > 0 || (row.p2Count || 0) > 0) comVendaLista.push(row);
+          if (hasActivity(row)) comVendaLista.push(row);
           else zeradas.push(row);
         } else {
-          zeradas.push({ id: `canal:${canal}`, name: canal, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 });
+          zeradas.push({ id: `canal:${canal}`, name: canal, count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0, aReceber: 0 });
         }
       }
       comVendaLista.sort((a, b) => b.gross - a.gross);
@@ -295,7 +338,7 @@ export function CloserRevenueSummaryTable({
       // "Direto (sem entrada)" sempre por último
       const diretoRow = rows.find((r) => r.name === CANAL_DIRETO);
       if (diretoRow) rows = [...rows.filter((r) => r !== diretoRow), diretoRow];
-      if (!mostrarSemVenda) rows = rows.filter((r) => r.count > 0 || (r.p2Count || 0) > 0);
+      if (!mostrarSemVenda) rows = rows.filter(hasActivity);
       const vt = finalize(rows);
       return {
         summaryData: {
@@ -303,12 +346,15 @@ export function CloserRevenueSummaryTable({
           ...vt,
           totalGross: rows.reduce((s, r) => s + r.gross, 0),
           totalNet: rows.reduce((s, r) => s + r.net, 0),
+          totalCarteira: rows.reduce((s, r) => s + r.carteira, 0),
           totalAReceber: rows.reduce((s, r) => s + (r.aReceber || 0), 0),
           totalCount: rows.reduce((s, r) => s + r.count, 0),
           totalOutsideCount: 0,
           totalOutsideGross: 0,
           p2Pagamentos,
           p2Liquido,
+          outsidePagamentos,
+          outsideLiquido,
         },
         closerTransactionsMap: txMap,
       };
@@ -319,7 +365,6 @@ export function CloserRevenueSummaryTable({
       const p2 = isP2(tx);
       if (p2) { p2Pagamentos++; p2Liquido += tx.net_value || 0; }
       const gross = p2 ? 0 : getDeduplicatedGross(tx as any, isFirst);
-      const net = p2 ? 0 : (tx.net_value || 0);
       const aRec = p2 ? 0 : calcRecebimento(gross, pagamentosMap.get(tx.id)?.pago).aReceber;
       
       // 1. Launch sales — but only if no R1 match (Inside Sales override)
@@ -329,11 +374,7 @@ export function CloserRevenueSummaryTable({
         
         if (!hasR1Match) {
           // Pure launch — isolate
-          if (p2) launch.p2Count = (launch.p2Count || 0) + 1; else launch.count++;
-        track('__launch__', tx, gross);
-          launch.gross += gross;
-        launch.aReceber = (launch.aReceber || 0) + aRec;
-          launch.net += net;
+          addPayment(launch, tx, gross, aRec);
           launchTxs.push(tx);
           continue;
         }
@@ -342,33 +383,21 @@ export function CloserRevenueSummaryTable({
       
       // 2. A010 - Funil de entrada automático
       if (tx.product_category === 'a010') {
-        if (p2) a010.p2Count = (a010.p2Count || 0) + 1; else a010.count++;
-        track('__a010__', tx, gross);
-        a010.gross += gross;
-        a010.aReceber = (a010.aReceber || 0) + aRec;
-        a010.net += net;
+        addPayment(a010, tx, gross, aRec);
         a010Txs.push(tx);
         continue;
       }
       
       // 3. Renovação
       if (tx.product_category === 'renovacao') {
-        if (p2) renovacao.p2Count = (renovacao.p2Count || 0) + 1; else renovacao.count++;
-        track('__renovacao__', tx, gross);
-        renovacao.gross += gross;
-        renovacao.aReceber = (renovacao.aReceber || 0) + aRec;
-        renovacao.net += net;
+        addPayment(renovacao, tx, gross, aRec);
         renovacaoTxs.push(tx);
         continue;
       }
       
       // 4. Vitalício (order bump)
       if (tx.product_category === 'ob_vitalicio') {
-        if (p2) vitalicio.p2Count = (vitalicio.p2Count || 0) + 1; else vitalicio.count++;
-        track('__vitalicio__', tx, gross);
-        vitalicio.gross += gross;
-        vitalicio.aReceber = (vitalicio.aReceber || 0) + aRec;
-        vitalicio.net += net;
+        addPayment(vitalicio, tx, gross, aRec);
         vitalicioTxs.push(tx);
         continue;
       }
@@ -381,17 +410,15 @@ export function CloserRevenueSummaryTable({
         const nome = modo === 'sdr'
           ? (atr.sdr_profile_id ? (sdrNames?.get(atr.sdr_profile_id) || 'SDR sem nome') : 'Sem SDR')
           : atr.closer_nome;
-        const existing = closerTotals.get(key) || { id: key, name: nome, count: 0, gross: 0, net: 0, outsideCount: 0, outsideGross: 0, outraBu: modo === 'sdr' ? false : atr.outra_bu };
+        const existing = closerTotals.get(key) || { id: key, name: nome, count: 0, gross: 0, net: 0, carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0, outraBu: modo === 'sdr' ? false : atr.outra_bu };
         if (atr.is_outside && !p2) {
-          if (!p2) existing.outsideCount++;
+          existing.outsideCount++;
+          outsidePagamentos++;
+          outsideLiquido += tx.net_value || 0;
           track(key, tx, gross, true);
           existing.outsideGross += gross;
         } else {
-          if (p2) existing.p2Count = (existing.p2Count || 0) + 1; else existing.count++;
-          track(key, tx, gross);
-          existing.gross += gross;
-          existing.aReceber = (existing.aReceber || 0) + aRec;
-          existing.net += net;
+          addPayment(existing, tx, gross, aRec);
         }
         closerTotals.set(key, existing);
         const arr = txMap.get(key) || [];
@@ -403,27 +430,46 @@ export function CloserRevenueSummaryTable({
       // 6. Lucrômetro - Funil (sem atribuição)
       const pnLower = (tx.product_name || '').toLowerCase();
       if (pnLower.includes('lucrômetro') || pnLower.includes('lucrometro')) {
-        if (p2) lucrometro.p2Count = (lucrometro.p2Count || 0) + 1; else lucrometro.count++;
-        track('__lucrometro__', tx, gross);
-        lucrometro.gross += gross;
-        lucrometro.aReceber = (lucrometro.aReceber || 0) + aRec;
-        lucrometro.net += net;
+        addPayment(lucrometro, tx, gross, aRec);
         lucrometroTxs.push(tx);
         continue;
       }
 
       // 7. Sem closer
-      if (p2) unassigned.p2Count = (unassigned.p2Count || 0) + 1; else unassigned.count++;
-        track('__unassigned__', tx, gross);
-      unassigned.gross += gross;
-      unassigned.aReceber = (unassigned.aReceber || 0) + aRec;
-      unassigned.net += net;
+      addPayment(unassigned, tx, gross, aRec);
       unassignedTxs.push(tx);
     }
     
+    if (modo === 'sdr') {
+      const exSdr: CloserRow = {
+        id: '__ex_sdr__', name: 'Ex-SDRs / outras BUs (só carteira)', count: 0, gross: 0, net: 0,
+        carteira: 0, carteiraPagamentos: 0, outsideCount: 0, outsideGross: 0, p2Count: 0, exSdrs: [],
+      };
+      const exTxs: Transaction[] = [];
+      for (const [id, row] of closerTotals) {
+        const situacao = sdrSituacao?.get(id);
+        if (situacao?.ativo !== false) continue;
+        if (row.count > 0 || row.outsideCount > 0) {
+          row.sdrMotivo = situacao.motivo;
+          continue;
+        }
+        exSdr.carteira += row.carteira;
+        exSdr.carteiraPagamentos += row.carteiraPagamentos;
+        exSdr.p2Count = (exSdr.p2Count || 0) + (row.p2Count || 0);
+        exSdr.exSdrs?.push({ name: row.name, motivo: situacao.motivo || 'inativo', carteira: row.carteira, p2Count: row.p2Count || 0 });
+        exTxs.push(...(txMap.get(id) || []));
+        txMap.delete(id);
+        closerTotals.delete(id);
+      }
+      if (hasActivity(exSdr)) {
+        closerTotals.set(exSdr.id, exSdr);
+        txMap.set(exSdr.id, exTxs);
+      }
+    }
+    const rowOrder = (r: CloserRow) => r.id === '__sem_sdr__' ? 2 : r.id === '__ex_sdr__' ? 1 : 0;
     const rows: CloserRow[] = Array.from(closerTotals.values())
-      .filter((r) => r.count > 0 || r.outsideCount > 0 || (r.p2Count || 0) > 0)
-      .sort((a, b) => (a.id === '__sem_sdr__' ? 1 : 0) - (b.id === '__sem_sdr__' ? 1 : 0) || b.gross - a.gross);
+      .filter(hasActivity)
+      .sort((a, b) => rowOrder(a) - rowOrder(b) || Number(b.count > 0 || b.outsideCount > 0) - Number(a.count > 0 || a.outsideCount > 0) || b.gross - a.gross);
     
     // Categorias automáticas no final
     const autoCategories = [
@@ -436,7 +482,7 @@ export function CloserRevenueSummaryTable({
     ];
     
     for (const cat of autoCategories) {
-      if (cat.row.count > 0 || (cat.row.p2Count || 0) > 0) {
+      if (hasActivity(cat.row)) {
         rows.push(cat.row);
         txMap.set(cat.key, cat.txs);
       }
@@ -444,6 +490,7 @@ export function CloserRevenueSummaryTable({
     
     const totalGross = rows.reduce((s, r) => s + r.gross, 0);
     const totalNet = rows.reduce((s, r) => s + r.net, 0);
+    const totalCarteira = rows.reduce((s, r) => s + r.carteira, 0);
     const totalAReceber = rows.reduce((s, r) => s + (r.aReceber || 0), 0);
     const totalCount = rows.reduce((s, r) => s + r.count, 0);
     const totalOutsideCount = rows.reduce((s, r) => s + r.outsideCount, 0);
@@ -451,14 +498,14 @@ export function CloserRevenueSummaryTable({
     const vt = finalize(rows);
     
     return {
-      summaryData: { rows, ...vt, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross, p2Pagamentos, p2Liquido },
+      summaryData: { rows, ...vt, totalGross, totalNet, totalAReceber, totalCount, totalOutsideCount, totalOutsideGross, totalCarteira, p2Pagamentos, p2Liquido, outsidePagamentos, outsideLiquido },
       closerTransactionsMap: txMap,
     };
-  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, canaisLista, mostrarSemVenda, donoMap]);
+  }, [filteredTxs, atribuicaoMap, pagamentosMap, globalFirstIds, bu, modo, canalMap, sdrNames, sdrSituacao, canaisLista, mostrarSemVenda, donoMap]);
 
   if (isLoading || loadingAtribuicao) return null;
   if (modo === 'closer' && summaryData.rows.length === 0) return null;
-  const modoCarregando = loadingCanal || loadingDonos || (modo === 'canal' && loadingLista) || (modo === 'sdr' && loadingSdrNames);
+  const modoCarregando = loadingCanal || loadingDonos || (modo === 'canal' && loadingLista) || (modo === 'sdr' && (loadingSdrNames || loadingSdrSituacao));
 
   const selectedTxs = selectedCloser ? (closerTransactionsMap.get(selectedCloser.id) || []) : [];
 
@@ -526,6 +573,8 @@ export function CloserRevenueSummaryTable({
             <CardContent>
               {modoCarregando ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>
+              ) : modo === 'sdr' && sdrSituacaoError ? (
+                <p className="py-6 text-center text-sm text-destructive">Não foi possível consultar a situação dos SDRs.</p>
               ) : (
               <Table>
                 <TableHeader>
@@ -535,6 +584,14 @@ export function CloserRevenueSummaryTable({
                     <TableHead className="text-right">Faturamento Bruto</TableHead>
                     <TableHead className="text-right">A receber</TableHead>
                     <TableHead className="text-right">Receita Líquida</TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Carteira <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger>
+                          <TooltipContent className="max-w-xs">Parcelas e recorrências de vendas fechadas antes do período. Entram no caixa, mas não são venda nova.</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableHead>
                     <TableHead className="text-right">
                       <span className="inline-flex items-center gap-1">
                         Ticket Médio Bruto
@@ -564,40 +621,47 @@ export function CloserRevenueSummaryTable({
                 </TableHeader>
                 <TableBody>
                   {summaryData.rows.map((row) => {
-                    const soP2 = row.count === 0 && row.outsideCount === 0 && (row.p2Count || 0) > 0;
-                    const zerada = row.count === 0 && !soP2;
-                    const semValor = zerada || soP2;
+                    const soP2 = row.count === 0 && row.outsideCount === 0 && row.carteiraPagamentos === 0 && (row.p2Count || 0) > 0;
+                    const zerada = row.count === 0 && row.outsideCount === 0 && row.carteiraPagamentos === 0 && !soP2;
+                    const semValor = row.count === 0;
                     return (
-                      <TableRow key={row.name} className={zerada ? 'text-muted-foreground' : undefined}>
+                      <TableRow key={row.id} className={zerada ? 'text-muted-foreground' : undefined}>
                         <TableCell>
                           {zerada ? (
                             <span className="font-medium">{row.name}</span>
                           ) : (
-                            <button
-                              className={`font-medium text-left hover:underline cursor-pointer ${
-                                row.id === '__unassigned__' || row.id === '__sem_sdr__' || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 
-                                row.id === '__launch__' ? 'text-amber-500' :
-                                row.id === '__a010__' || row.id === '__lucrometro__' ? 'text-blue-400' :
-                                row.id === '__renovacao__' ? 'text-teal-400' :
-                                row.id === '__vitalicio__' ? 'text-purple-400' :
-                                'text-primary'
-                              }`}
+                            <Button
+                              variant="link"
+                              className={`h-auto p-0 font-medium text-left whitespace-normal ${row.id.startsWith('__') || row.name === CANAL_DIRETO ? 'text-muted-foreground' : 'text-primary'}`}
                               onClick={() => setSelectedCloser({ id: row.id, name: row.name })}
                             >
-                              {row.id === '__launch__' ? '🚀 ' : 
-                               row.id === '__a010__' ? '📊 ' : 
+                              {row.id === '__launch__' ? '🚀 ' :
+                               row.id === '__a010__' ? '📊 ' :
                                row.id === '__renovacao__' ? '🔄 ' :
                                row.id === '__vitalicio__' ? '♾️ ' : ''}{row.name}
-                            </button>
+                            </Button>
                           )}
                           {row.outraBu && (
                             <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">outra BU</Badge>
+                          )}
+                          {row.sdrMotivo && (
+                            <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0">{row.sdrMotivo}</Badge>
+                          )}
+                          {row.exSdrs && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild><Info tabIndex={0} aria-label="Pessoas agrupadas em ex-SDRs" className="inline-block ml-2 h-4 w-4 text-muted-foreground" /></TooltipTrigger>
+                                <TooltipContent className="max-w-md">
+                                  {row.exSdrs.map((pessoa, i) => <p key={i}>{pessoa.name} — {pessoa.motivo} — Carteira {formatCurrency(pessoa.carteira)}{pessoa.p2Count > 0 ? ` · P2 ${pessoa.p2Count}` : ''}</p>)}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           )}
                           {soP2 && (
                             <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">só P2</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">{semValor ? '-' : (row.vendas || 0)}</TableCell>
+                        <TableCell className="text-right">{row.carteiraPagamentos > 0 ? (row.vendas || 0) : semValor ? '-' : (row.vendas || 0)}</TableCell>
                         <TableCell className="text-right font-mono">
                           {semValor ? '-' : formatCurrency(row.gross)}
                         </TableCell>
@@ -606,6 +670,9 @@ export function CloserRevenueSummaryTable({
                         </TableCell>
                         <TableCell className={`text-right font-mono ${semValor ? '' : 'text-success'}`}>
                           {semValor ? '-' : formatCurrency(row.net)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">
+                          {row.carteira !== 0 ? formatCurrency(row.carteira) : '-'}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {row.ticketParceria?.ticketBruto != null ? formatCurrency(row.ticketParceria.ticketBruto) : '—'}
@@ -641,6 +708,9 @@ export function CloserRevenueSummaryTable({
                     <TableCell className="text-right font-mono font-bold text-success">
                       {formatCurrency(summaryData.totalNet)}
                     </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-muted-foreground">
+                      {formatCurrency(summaryData.totalCarteira)}
+                    </TableCell>
                     <TableCell className="text-right font-mono font-bold">
                       {summaryData.totalTicketParceria.ticketBruto != null ? formatCurrency(summaryData.totalTicketParceria.ticketBruto) : '—'}
                     </TableCell>
@@ -655,13 +725,12 @@ export function CloserRevenueSummaryTable({
                       {summaryData.totalOutsideGross > 0 ? formatCurrency(summaryData.totalOutsideGross) : '-'}
                     </TableCell>
                   </TableRow>
-                  {summaryData.p2Pagamentos > 0 && (
-                    <TableRow>
-                      <TableCell colSpan={11} className="text-xs text-muted-foreground font-normal">
-                        P2 fora da tabela: {summaryData.p2Pagamentos} pagamentos · líquido {formatCurrency(summaryData.p2Liquido)} — veja no detalhe de cada closer
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  <TableRow>
+                    <TableCell colSpan={12} className="text-xs text-muted-foreground font-normal">
+                      Fora das colunas: P2 {summaryData.p2Pagamentos} pagamentos · líquido {formatCurrency(summaryData.p2Liquido)} · Outside {summaryData.outsidePagamentos} pagamentos · líquido {formatCurrency(summaryData.outsideLiquido)}
+                      <p className="mt-1 text-xs">Receita Líquida + Carteira + P2 + Outside = {formatCurrency(summaryData.totalNet + summaryData.totalCarteira + summaryData.p2Liquido + summaryData.outsideLiquido)}</p>
+                    </TableCell>
+                  </TableRow>
                 </TableFooter>
               </Table>
               )}
