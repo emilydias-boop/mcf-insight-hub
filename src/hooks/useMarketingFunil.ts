@@ -75,6 +75,14 @@ export interface CanalPeriodoRow {
   parcerias: number;
 }
 
+export interface FunilContratoRow {
+  periodo: string;
+  produto: string;
+  brutos: number;
+  reembolsados: number;
+  liquidos: number;
+}
+
 export type Grao = 'day' | 'week' | 'month';
 export type Nivel = 'criativo' | 'ad' | 'adset' | 'campaign';
 export type ModeloData = 'venda' | 'safra';
@@ -158,6 +166,14 @@ const mapCanal = (r: any): CanalPeriodoRow => ({
   r1_realizadas: toNum(r.r1_realizadas),
   contratos: toNum(r.contratos),
   parcerias: toNum(r.parcerias),
+});
+
+const mapContrato = (r: any): FunilContratoRow => ({
+  periodo: r.periodo,
+  produto: r.produto,
+  brutos: Number(r.brutos),
+  reembolsados: Number(r.reembolsados),
+  liquidos: Number(r.liquidos),
 });
 
 export const useFunilSafras = ({
