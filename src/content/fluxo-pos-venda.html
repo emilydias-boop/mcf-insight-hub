@@ -126,6 +126,10 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 .its li{display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13.5px;}
 .its li:last-child{border-bottom:0;}
 .its li .st{margin-top:2px;min-width:78px;text-align:center;}
+.its li .itt{flex:1;min-width:0;}
+.abrir{all:unset;box-sizing:border-box;cursor:pointer;flex:none;font-family:var(--body);font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:12px;border:1px solid var(--brand);color:var(--brand-ink);background:var(--brand-soft);}
+.abrir:hover{background:var(--brand);color:#101010;}
+.abrir:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
 .sumbtn{all:unset;box-sizing:border-box;cursor:pointer;width:min(100%,330px);text-align:center;padding:10px 14px;border-radius:6px;border:1.5px dashed var(--muted);background:var(--surface);color:var(--fg);font-family:var(--body);}
 .sumbtn b{display:block;font-size:14px;font-weight:600;}
 .sumbtn span{display:block;font-size:12px;color:var(--muted);margin-top:2px;}
@@ -260,7 +264,7 @@ const CICLO='Todas as reuniões são individuais; um encontro em grupo, se houve
 const EXT=window.__MATERIAIS__||null;
 const MAPST={pronto:'ok',em_teste:'wip',falta_fazer:'todo',a_confirmar:'conf',rascunho:'draft',falta_anexar:'anexar'};
 if(EXT){
-  const conv=k=>(EXT[k]||[]).map(([t,s])=>[t,MAPST[s]||'todo']);
+  const conv=k=>(EXT[k]||[]).map(([t,s,id,doc])=>[t,MAPST[s]||'todo',id,doc]);
   Object.keys(D).forEach(k=>{D[k].itens=conv(k);});
   T[0].steps.forEach((s,i)=>{s.itens=conv('vender-'+i);});
   T.slice(1).forEach(tr=>{tr.itens=conv(tr.id);});
@@ -274,7 +278,7 @@ const itensDe=id=>{ if(D[id]) return D[id].itens||[]; const m=id.match(/^(\w+)-(
 const prog=it=>{ const ok=it.filter(x=>x[1]==='ok').length; return {ok, n:it.length}; };
 const progTag=it=>{ if(!it.length) return ''; const p=prog(it); const cls=p.ok===p.n?'full':p.ok===0?'zero':'part'; return `<span class="pg ${cls}">${p.ok}/${p.n} prontos</span>`; };
 const stChip=s=>`<span class="st st-${s}">${ST[s]}</span>`;
-const listaItens=it=>'<ul class="its">'+it.map(([t,s])=>`<li>${stChip(s)}<span>${esc(t)}</span></li>`).join('')+'</ul>';
+const listaItens=it=>'<ul class="its">'+it.map(([t,s,id,doc])=>`<li>${stChip(s)}<span class="itt">${esc(t)}</span>${id&&doc?`<button class="abrir" data-mat="${esc(id)}" title="Abrir o documento">Abrir</button>`:''}</li>`).join('')+'</ul>';
 
 function btn(id,cls,k,t,sm){
   return `<button class="step ${cls}" data-id="${id}" aria-pressed="${sel===id}">${k?`<span class="k">${esc(k)}</span>`:''}<b>${esc(t)}</b>${sm?`<small>${esc(sm)}</small>`:''}${progTag(itensDe(id))}<span class="more" aria-hidden="true">›</span></button>`;
@@ -361,6 +365,11 @@ function renderPanel(){
   panel.innerHTML=h;
 }
 function render(){renderFlow();renderPanel();}
+/* Abrir documento: quem abre o popup é a página do Gestão (fora do iframe) */
+panel.addEventListener('click',e=>{
+  const b=e.target.closest('[data-mat]'); if(!b) return;
+  try{ window.parent.postMessage({tipo:'mcf-abrir-material',id:b.dataset.mat},'*'); }catch(_){}
+});
 flow.addEventListener('click',e=>{
   const b=e.target.closest('[data-id],[data-tr]'); if(!b) return;
   if(b.dataset.tr){ trilha=b.dataset.tr; sel='tr:'+trilha; } else { sel=b.dataset.id; }
