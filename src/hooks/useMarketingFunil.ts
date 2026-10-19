@@ -16,6 +16,9 @@ export interface FunilSafraRow {
   compras_pixel: number;
   leads: number;
   entradas: number;
+  entradas_a010: number;
+  entradas_anamnese: number;
+  entradas_outras: number;
   r1_agendadas: number;
   r1_realizadas: number;
   contratos: number;
@@ -76,6 +79,7 @@ export type Grao = 'day' | 'week' | 'month';
 export type Nivel = 'criativo' | 'ad' | 'adset' | 'campaign';
 export type ModeloData = 'venda' | 'safra';
 export type ModeloToque = 'primeiro' | 'ultimo';
+export type ModeloOrigem = 'anuncio' | 'todas';
 
 /** Converte numeric/Postgres (que pode chegar como string) para number. */
 const toNum = (v: unknown): number => Number(v ?? 0);
@@ -97,6 +101,9 @@ const mapSafra = (r: any): FunilSafraRow => ({
   compras_pixel: toNum(r.compras_pixel),
   leads: toNum(r.leads),
   entradas: toNum(r.entradas),
+  entradas_a010: toNum(r.entradas_a010),
+  entradas_anamnese: toNum(r.entradas_anamnese),
+  entradas_outras: toNum(r.entradas_outras),
   r1_agendadas: toNum(r.r1_agendadas),
   r1_realizadas: toNum(r.r1_realizadas),
   contratos: toNum(r.contratos),
@@ -159,24 +166,27 @@ export const useFunilSafras = ({
   grao = 'month',
   data = 'venda',
   toque = 'primeiro',
+  origem = 'anuncio',
 }: {
   from: string | null;
   to: string | null;
   grao?: Grao;
   data?: ModeloData;
   toque?: ModeloToque;
+  origem?: ModeloOrigem;
 }) =>
   useQuery<FunilSafraRow[]>({
-    queryKey: ['mkt-funil-safras', from, to, grao, data, toque],
+    queryKey: ['mkt-funil-safras', from, to, grao, data, toque, origem],
     staleTime: 5 * 60 * 1000,
     enabled: !!from && !!to,
     queryFn: async () => {
-      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_periodo', {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_v3', {
         p_from: from,
         p_to: to,
         p_grao: grao,
         p_data: data,
         p_toque: toque,
+        p_origem: origem,
       });
       if (error) {
         if (error.code === '42501') throw new Error(PERM_ERROR);
