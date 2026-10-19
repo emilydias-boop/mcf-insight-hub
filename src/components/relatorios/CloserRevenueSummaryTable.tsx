@@ -334,7 +334,7 @@ export function CloserRevenueSummaryTable({
       const extras = Array.from(canalTotals.values())
         .filter((r) => !listaSet.has(r.name))
         .sort((a, b) => b.gross - a.gross);
-      let rows = [...comVendaLista, ...extras, ...zeradas];
+      let rows = [...comVendaLista, ...extras].sort((a, b) => Number(b.count > 0) - Number(a.count > 0) || b.gross - a.gross).concat(zeradas);
       // "Direto (sem entrada)" sempre por último
       const diretoRow = rows.find((r) => r.name === CANAL_DIRETO);
       if (diretoRow) rows = [...rows.filter((r) => r !== diretoRow), diretoRow];
