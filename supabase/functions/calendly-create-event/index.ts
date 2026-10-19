@@ -552,6 +552,14 @@ serve(async (req) => {
     if (guardMeetingType === 'r1' && !isConsorcioDeal && !isOutsideDeal) {
     // Guards 1 e 2 (won/paid) podem ser pulados via aprovação.
     if (!approvedRequest) {
+    const { data: situacao, error: situacaoError } = await supabase.rpc(
+      'deal_situacao_contrato',
+      { p_deal_id: dealId },
+    );
+    const contratoReembolsado = !situacaoError && situacao?.teve_contrato && !situacao.contrato_vigente;
+    if (contratoReembolsado) {
+      console.log("🟢 Contrato reembolsado — novo ciclo liberado");
+    }
     // 1) Deal já vendido (status won via crm_deals.status, se existir)
     const { data: dealStatusRow } = await supabase
       .from("crm_deals")
@@ -571,7 +579,7 @@ serve(async (req) => {
       stageNameLower.includes("crédito contratado") ||
       stageNameLower.includes("crédito aprovado");
 
-    if (isWonStage) {
+    if (isWonStage && !contratoReembolsado) {
       console.warn(`🚫 Deal already won (stage: ${stageNameLower})`);
       return new Response(
         JSON.stringify({
@@ -584,16 +592,21 @@ serve(async (req) => {
       );
     }
 
-    // 2) Contrato pago (qualquer attendee histórico)
-    const { data: paidAttendee } = await supabase
-      .from("meeting_slot_attendees")
-      .select("id")
-      .eq("deal_id", dealId)
-      .or("status.eq.contract_paid,contract_paid_at.not.is.null")
-      .limit(1)
-      .maybeSingle();
+    // 2) Só contrato vigente bloqueia; em falha da RPC, consultar attendees.
+    let hasActiveContract = !situacaoError && situacao?.contrato_vigente === true;
+    if (situacaoError) {
+      const { data: paidAttendee } = await supabase
+        .from("meeting_slot_attendees")
+        .select("id")
+        .eq("deal_id", dealId)
+        .or("status.eq.contract_paid,contract_paid_at.not.is.null")
+        .is("refunded_at", null)
+        .limit(1)
+        .maybeSingle();
+      hasActiveContract = Boolean(paidAttendee);
+    }
 
-    if (paidAttendee) {
+    if (hasActiveContract) {
       console.warn("🚫 Deal has contract_paid attendee");
       return new Response(
         JSON.stringify({

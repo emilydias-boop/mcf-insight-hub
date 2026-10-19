@@ -521,16 +521,17 @@ Deno.serve(async (req) => {
   //  b) participante não no_show/desistencia antes dos no_show/desistencia;
   //  c) scheduled_at mais recente primeiro.
   // Sem nenhuma R1 no deal cai no attendee mais recente (comportamento antigo).
-  let attendeeCriterio: "r1" | "fallback_mais_recente" = "r1";
+  let attendeeCriterio: "r1" | "fallback_mais_recente" | "sem_r1_pos_reembolso" = "r1";
   const { data: r1Rows } = await supabase
     .from("meeting_slot_attendees")
-    .select("id, contract_paid_at, status, meeting_slot_id, meeting_slot:meeting_slots!inner(meeting_type, scheduled_at)")
+    .select("id, contract_paid_at, refunded_at, status, meeting_slot_id, meeting_slot:meeting_slots!inner(meeting_type, scheduled_at)")
     .eq("deal_id", resolvedDealId)
     .eq("meeting_slot.meeting_type", "r1")
     .not("status", "in", "(cancelled,rescheduled)");
   const refMs = (paidAt ? new Date(paidAt).getTime() : NaN) || Date.now();
   const limiteMs = refMs + 2 * 60 * 60 * 1000;
-  const r1Candidatas = (r1Rows ?? []).map((r: any) => {
+  const r1ReembolsadasIgnoradas = (r1Rows ?? []).filter((r: any) => r.refunded_at).length;
+  const r1Candidatas = (r1Rows ?? []).filter((r: any) => !r.refunded_at).map((r: any) => {
     const slot = Array.isArray(r.meeting_slot) ? r.meeting_slot[0] : r.meeting_slot;
     const sAt: string | null = slot?.scheduled_at ?? null;
     const ms = sAt ? new Date(sAt).getTime() : NaN;
@@ -551,12 +552,15 @@ Deno.serve(async (req) => {
   const r1ScheduledAt: string | null = r1Escolhida?.scheduled_at ?? null;
   let attendee: { id: string; contract_paid_at: string | null; status: string | null; meeting_slot_id: string | null } | null =
     r1Escolhida?.row ?? null;
-  if (!attendee) {
+  if (!attendee && r1ReembolsadasIgnoradas > 0 && r1ReembolsadasIgnoradas === (r1Rows ?? []).length) {
+    attendeeCriterio = "sem_r1_pos_reembolso";
+  } else if (!attendee) {
     attendeeCriterio = "fallback_mais_recente";
     const { data: attendees } = await supabase
       .from("meeting_slot_attendees")
       .select("id, contract_paid_at, status, meeting_slot_id")
       .eq("deal_id", resolvedDealId)
+      .is("refunded_at", null)
       .order("created_at", { ascending: false })
       .limit(1);
     attendee = attendees?.[0] ?? null;
@@ -641,6 +645,7 @@ Deno.serve(async (req) => {
       attendee_criterio: attendeeCriterio,
       r1_scheduled_at: r1ScheduledAt,
       r1_candidatas: r1Candidatas.length,
+      r1_reembolsadas_ignoradas: r1ReembolsadasIgnoradas,
       applied: isPaid ? "paid" : "refunded",
       contrato: true,
       reembolso_contrato: reemb ?? null,

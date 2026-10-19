@@ -1082,6 +1082,7 @@ export function useSearchDealsForSchedule(
       // E também todos os attendees para classificação de estado
       const dealIds = normalizedDeals.map(d => d.id);
       const lastAttendeeMap: Record<string, { id: string; status: string }> = {};
+      const refundedWithoutActiveContract = new Set<string>();
       const stateMap: Record<
         string,
         {
@@ -1141,7 +1142,7 @@ export function useSearchDealsForSchedule(
         const { data: allAttendees } = await supabase
           .from('meeting_slot_attendees')
           .select(
-            `id, deal_id, status, contract_paid_at, created_at, booked_at,
+            `id, deal_id, status, contract_paid_at, refunded_at, created_at, booked_at,
              meeting_slot:meeting_slots(id, scheduled_at, meeting_type, status, closer:closers(name))`,
           )
           .in('deal_id', dealIds)
@@ -1176,8 +1177,17 @@ export function useSearchDealsForSchedule(
 
           // 1) Contrato pago tem prioridade absoluta
           const hasContractPaid = atts.some(
-            (a: any) => a.status === 'contract_paid' || a.contract_paid_at,
+            (a: any) => (a.status === 'contract_paid' || a.contract_paid_at) && !a.refunded_at,
           );
+          const hadRefundedContract = atts.some(
+            (a: any) => (a.status === 'contract_paid' || a.contract_paid_at) && a.refunded_at,
+          );
+          const lastRefundAt = atts.reduce((latest: Date | null, a: any) => {
+            if (!a.refunded_at) return latest;
+            const refundedAt = new Date(a.refunded_at);
+            return !latest || refundedAt > latest ? refundedAt : latest;
+          }, null);
+          if (hadRefundedContract && !hasContractPaid) refundedWithoutActiveContract.add(deal.id);
           // R2 NÃO bloqueia por contrato pago (pode ser pós-venda).
           // R2 NÃO bloqueia por R1 realizada (esse é o caso normal de R2).
           // R2 só mostra AVISO (warningOnly) quando já existe R2 futura ativa.
@@ -1197,7 +1207,7 @@ export function useSearchDealsForSchedule(
           if (hasContractPaid && meetingType !== 'r2' && !isConsorcio && !isOutside) {
             leadState = 'contract_paid';
             blockReason = 'Lead já tem contrato pago — não é possível agendar nova reunião.';
-          } else if (dealStatus === 'won' && meetingType !== 'r2' && !isConsorcio && !isOutside) {
+          } else if (dealStatus === 'won' && !(hadRefundedContract && !hasContractPaid) && meetingType !== 'r2' && !isConsorcio && !isOutside) {
             leadState = 'won';
             blockReason = 'Lead já fechou contrato — não é possível agendar nova reunião.';
           } else {
@@ -1251,6 +1261,8 @@ export function useSearchDealsForSchedule(
                     // Slots cancelados (status='canceled') NÃO contam no limite
                     // de reagendamentos — o agendamento foi desfeito.
                     if (a.meeting_slot?.status === 'canceled') return false;
+                    // Reembolso encerra o ciclo anterior, como evaluate_sdr_reschedule.
+                    if (lastRefundAt && new Date(a.meeting_slot.scheduled_at) <= lastRefundAt) return false;
                     // A partir da vigência da regra (applies_from), TODO o
                     // histórico de R1 do lead conta para o limite — leads que
                     // já tinham 2+ movimentos ficam imediatamente bloqueados.
@@ -1329,7 +1341,7 @@ export function useSearchDealsForSchedule(
       const openDeals = normalizedDeals.filter(deal => {
         const stageName = deal.stage?.stage_name;
         const status = getDealStatusFromStage(stageName);
-        return status === 'open' || (includeWon && status === 'won');
+        return status === 'open' || (status === 'won' && (includeWon || refundedWithoutActiveContract.has(deal.id)));
       });
 
       // 8. Adicionar informação do último attendee + estado classificado
