@@ -2,6 +2,7 @@ export const MATERIAL_STATUS = [
   { value: "pronto", label: "Pronto", cls: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   { value: "em_teste", label: "Em teste", cls: "bg-blue-100 text-blue-800 border-blue-200" },
   { value: "rascunho", label: "Rascunho", cls: "bg-purple-100 text-purple-800 border-purple-200" },
+  { value: "falta_anexar", label: "Falta anexar", cls: "bg-orange-100 text-orange-800 border-orange-200" },
   { value: "falta_fazer", label: "Falta fazer", cls: "bg-red-100 text-red-800 border-red-200" },
   { value: "a_confirmar", label: "A confirmar", cls: "bg-amber-100 text-amber-800 border-amber-200" },
 ] as const;
