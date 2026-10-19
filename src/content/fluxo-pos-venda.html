@@ -107,6 +107,29 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
   .chip{max-width:330px;width:min(100%,330px);text-align:center;}
 }
 @media (prefers-reduced-motion:reduce){.step{transition:none;}}
+
+/* status do material */
+.pg{display:inline-block;margin-top:6px;font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:1px 7px;border-radius:10px;border:1px solid transparent;}
+.pg.zero{background:#FDE7E4;color:#9A2A1C;border-color:#F3B9B0;}
+.pg.part{background:#FFF3D6;color:#7A5300;border-color:#F0D58C;}
+.pg.full{background:#E3F6D0;color:#2F5A00;border-color:#B9E38E;}
+.step .pg,.tcard .pg,.chip .pg,.todo .pg{display:table;margin:6px auto 0;}
+.chip .pg{margin:6px 0 0;}
+.st{display:inline-block;flex:none;font-size:10.5px;font-weight:600;letter-spacing:.03em;padding:1px 7px;border-radius:10px;white-space:nowrap;}
+.st-ok{background:#E3F6D0;color:#2F5A00;}
+.st-todo{background:#FDE7E4;color:#9A2A1C;}
+.st-conf{background:#FFF3D6;color:#7A5300;}
+.st-wip{background:#E2EEFB;color:#1D4E89;}
+.its{list-style:none;padding:0 !important;margin:4px 0 0;}
+.its li{display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13.5px;}
+.its li:last-child{border-bottom:0;}
+.its li .st{margin-top:2px;min-width:78px;text-align:center;}
+.sumbtn{all:unset;box-sizing:border-box;cursor:pointer;width:min(100%,330px);text-align:center;padding:10px 14px;border-radius:6px;border:1.5px dashed var(--muted);background:var(--surface);color:var(--fg);font-family:var(--body);}
+.sumbtn b{display:block;font-size:14px;font-weight:600;}
+.sumbtn span{display:block;font-size:12px;color:var(--muted);margin-top:2px;}
+.sumbtn[aria-pressed="true"]{box-shadow:0 0 0 3px var(--brand);border-color:var(--brand);}
+.sumbtn:focus-visible{outline:3px solid var(--brand);outline-offset:3px;}
+.sp{height:18px;}
 </style>
 </head><body>
 
@@ -115,7 +138,7 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 <header>
   <div class="eyebrow">Pós-venda · Gerentes de Relacionamento</div>
   <h1>Para onde vai o cliente em cada passo</h1>
-  <p class="intro">Clique em qualquer etapa para ver o que acontece nela: aula, checagens, entrega, tarefa e quem mais participa. Clique numa trilha para ver as reuniões dela.</p>
+  <p class="intro">Clique em qualquer etapa para ver o que acontece nela e o que já temos pronto para ela. O selo em cada etapa mostra quanto do material já existe.</p>
 </header>
 
 <div class="layout">
@@ -127,19 +150,28 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 
 <script>
 (function(){
+/* Status do que precisa existir: ok = já temos, todo = falta fazer, conf = falta confirmar */
+const ST={ok:'Já temos',wip:'Em teste',todo:'Falta fazer',conf:'A confirmar'};
 const D = {
   compra:{k:'Início',t:'Compra na R2',meta:['Closer de R2'],
     blocks:[['O que acontece','O parceiro compra o produto: R$ 5 mil no Pix ou no cartão à vista, ou R$ 6 mil em 12x no cartão.'],
-            ['Depois','Ele recebe na hora o e-mail de boas-vindas, e a venda cai para o gerente de relacionamento, que faz o primeiro contato no mesmo dia. A trilha não é escolhida aqui.']]},
+            ['Depois','Ele recebe na hora o e-mail de boas-vindas, e a venda cai para o gerente de relacionamento, que faz o primeiro contato no mesmo dia. A trilha não é escolhida aqui.']],
+    itens:[['Novo cliente entra sozinho no CRM Pós-Venda quando a venda é paga (Hubla, MCF Pay, Kiwify)','ok'],
+           ['Produto de R$ 5 mil (R$ 6 mil em 12x) vendido na R2: hoje só em teste, sem substituir o produto atual','wip']]},
   email:{k:'Automático · na compra',t:'E-mail de boas-vindas',meta:['E-mail'],
-    blocks:[['O que o parceiro recebe','',['Acesso ao Harvey.','Nome e contato do seu gerente de relacionamento, para falar com ele na hora, se quiser.']]]},
+    blocks:[['O que o parceiro recebe','',['Acesso ao Harvey.','Nome e contato do seu gerente de relacionamento, para falar com ele na hora, se quiser.']]],
+    itens:[['Texto do e-mail','todo'],['Envio automático na hora da compra','todo'],['Gerente definido automaticamente quando o card é criado (distribuição por percentual)','ok']]},
   contato:{k:'GR · no mesmo dia',t:'Primeiro contato no WhatsApp',meta:['WhatsApp','Kit de boas-vindas'],
     blocks:[['O que o GR envia','',['Mensagem de boas-vindas.','Por que o cadastro no Harvey é importante.','Por que preencher a anamnese é importante.','Que é no Harvey que ele marca o horário da Reunião 1.','A pauta da Reunião 1, em PDF.','O treinamento: as 9 aulas abaixo.']],
             ['Pauta da Reunião 1 (PDF)','',['Conferência do cadastro no Harvey e atrelamento ao gerente de relacionamento.','Conferência do preenchimento da anamnese.','Confirmação da trilha escolhida pelo parceiro.']],
-            ['Treinamento (vídeos)','',['Aula 01 · Cadastro no Harvey','Aula 02 · Preenchimento da anamnese','Aula 03 · Como marcar o horário da Reunião 1','Aula 04 · As jornadas dos parceiros','Aula 05 · Jornada 1: Incorporar para vender','Aula 06 · Jornada 2: Incorporar para alugar','Aula 07 · Jornada 3: Levantamento de recursos','Aula 08 · Jornada 4: Construir para cliente','Aula 09 · Alavancagem patrimonial']],
-            ['Próximo passo','Cada aula vai ganhar também um PDF, para quem prefere ler a assistir.']],
+            ['Treinamento (vídeos)','',['Aula 01 · Cadastro no Harvey','Aula 02 · Preenchimento da anamnese','Aula 03 · Como marcar o horário da Reunião 1','Aula 04 · As jornadas dos parceiros','Aula 05 · Jornada 1: Incorporar para vender','Aula 06 · Jornada 2: Incorporar para alugar','Aula 07 · Jornada 3: Levantamento de recursos','Aula 08 · Jornada 4: Construir para cliente','Aula 09 · Alavancagem patrimonial']]],
     checks:[['Respondeu o contato?','Novas tentativas por WhatsApp e ligação. Status Pendente.'],
-            ['Marcou o horário da Reunião 1 no Harvey?','O GR lembra e ajuda a marcar. Status Pendente até marcar.']]},
+            ['Marcou o horário da Reunião 1 no Harvey?','O GR lembra e ajuda a marcar. Status Pendente até marcar.']],
+    itens:[['Distribuição automática do novo cliente para um gerente (Gestão)','ok'],
+           ['Roteiro da mensagem de boas-vindas no WhatsApp','todo'],
+           ['PDF da pauta da Reunião 1','todo'],
+           ['Aulas 01 a 09 gravadas','todo'],
+           ['PDF de cada aula (01 a 09), para quem prefere ler','todo']]},
   r1:{k:'Reunião 1 · até 48h',t:'Reunião de alinhamento',meta:['Individual','Vídeo','20 a 40 min'],
     blocks:[['Aulas antes','Aulas 01 a 09, enviadas no primeiro contato.'],
             ['Pauta','',['Conferir o cadastro no Harvey e o atrelamento ao gerente de relacionamento.','Conferir o preenchimento da anamnese.','Confirmar a trilha da jornada escolhida.']]],
@@ -148,46 +180,60 @@ const D = {
             ['Anamnese preenchida?','Preenchem juntos na reunião.'],
             ['Qual é a trilha?','Confirma uma das 4 jornadas: incorporar para vender, incorporar para alugar, levantamento de recursos ou construir para cliente.']],
     also:'Ainda nesta reunião, o GR marca a Aula de Alavancagem Patrimonial.',
-    ent:['Mapa do Parceiro','Trilha confirmada, quanto pode investir, prazo e documentos pendentes. Depois da reunião, o kit físico da trilha é enviado.']},
+    ent:['Mapa do Parceiro','Trilha confirmada, quanto pode investir, prazo e documentos pendentes. Depois da reunião, o kit físico da trilha é enviado.'],
+    itens:[['Cadastro no Harvey','ok'],
+           ['Formulário de anamnese','ok'],
+           ['Agenda de Reuniões do Pós-Venda no Gestão','ok'],
+           ['Parceiro marca sozinho o horário da Reunião 1 (hoje o Gestão não tem isso; quem marca é o GR)','todo'],
+           ['Roteiro do GR para a Reunião 1 de alinhamento','todo'],
+           ['Modelo do PDF Mapa do Parceiro','todo'],
+           ['Kit físico de cada trilha (pasta e fichas)','todo']]},
   alav:{k:'Marcada na Reunião 1',t:'Aula de Alavancagem Patrimonial',meta:['Agenda do Consórcio','Em paralelo à trilha'],
     blocks:[['Para o parceiro','Uma aula sobre como multiplicar o patrimônio. Ele já viu a Aula 09 em vídeo no primeiro contato.'],
             ['Na prática','É a reunião de venda de consórcio. Acontece junto com a trilha, sem esperar as outras etapas.']],
-    priv:'Uso interno: o parceiro não precisa saber que é uma reunião de venda.'},
+    priv:'Uso interno: o parceiro não precisa saber que é uma reunião de venda.',
+    itens:[['Agenda do Consórcio para marcar a reunião','ok'],
+           ['Apresentação da aula de alavancagem usada na reunião (existe)','ok'],['Melhorar a apresentação da aula de alavancagem','todo']]},
   final:{k:'Fim da trilha',t:'Check-in mensal',meta:['GR'],
     blocks:[['O que acontece','Depois da última entrega, o parceiro passa para um check-in mensal com o GR até o início da obra ou da operação.'],
-            ['Entrega física','Dossiê do Projeto: todas as entregas da trilha impressas e encadernadas.']]}
+            ['Entrega física','Dossiê do Projeto: todas as entregas da trilha impressas e encadernadas.']],
+    itens:[['Rotina de check-in mensal no Gestão','todo'],['Dossiê do Projeto impresso','todo']]}
 };
 const T = [
   {id:'vender',t:'Incorporar para vender',p:'Construção Financiada · Home Equity',badge:'Maior demanda',ok:true,
    steps:[
-    {k:'Etapa 1 · até o 7º dia',t:'Maturidade e mercado',meta:['Grupo, ao vivo (proposta)'],
+    {k:'Etapa 1 · até o 7º dia',t:'Maturidade e mercado',meta:['Individual'],
      aula:'Maturidade e as 10 casas.',
-     o:'Define o condomínio-alvo (antes era na Reunião 1). Calcula a maturidade: casas construídas ÷ total de lotes × 100. Entre 30% e 70% é bom. Revisa a ficha das 10 casas de referência.',
-     checks:[['Foi ao vivo?','Assiste à gravação e faz um plantão de 15 min com o GR.']],
+     o:'Define o condomínio-alvo. Calcula a maturidade: casas construídas ÷ total de lotes × 100. Entre 30% e 70% é bom. Revisa a ficha das 10 casas de referência.',
+     checks:[['O parceiro sabe quantas casas e lotes o condomínio tem?','O GR levanta pelo Google Maps (satélite), sites de venda ou corretores locais.']],
      ent:['Diagnóstico de Maturidade','% de ocupação, leitura (bom ou atenção), nível de concorrência e ficha das 10 casas.'],
      tarefa:'Completar as 10 casas, se faltar alguma, e levantar 2 ou 3 lotes disponíveis, com preço.',
-     outros:'Crédito (Fábio): pré-análise com os documentos do cadastro. IA de condomínios, se ele tiver dúvida.'},
+     outros:'Crédito (Fábio): pré-análise com os documentos do cadastro. IA de condomínios, se ele tiver dúvida.',
+     itens:[['Roteiro do GR (playbook dos gerentes)','ok'],['IA de condomínios','ok'],['Aula gravada da etapa','todo'],['Modelo do PDF Diagnóstico de Maturidade','todo'],['Ficha impressa','todo']]},
     {k:'Etapa 2 · 2ª semana',t:'Apresentação do produto imobiliário',meta:['Individual','Vídeo, tela compartilhada'],
      aula:'Como nasce um produto imobiliário.',
      o:'O GR apresenta a maturidade, os dados das 10 casas e a casa sugerida: m² construídos, terreno, quartos, banheiros, vagas, piscina e faixa de VGV. Usa o script de apresentação.',
      checks:[['O terreno vem de leilão?','Encaminha para a reunião de Leilão.']],
      ent:['Proposta de Produto','A casa sugerida, a comparação com a média do condomínio e a faixa de VGV.'],
      tarefa:'Escolher o lote entre os candidatos e confirmar o preço com o vendedor.',
-     outros:'Leilão, quando for o caso.'},
-    {k:'Etapa 3 · 3ª semana',t:'Viabilidade e orçamento',meta:['Grupo, ao vivo (proposta)'],
+     outros:'Leilão, quando for o caso.',
+     itens:[['Roteiro e script de apresentação (playbook dos gerentes)','ok'],['Aula gravada da etapa','todo'],['Modelo do PDF Proposta de Produto','todo'],['Ficha impressa','todo']]},
+    {k:'Etapa 3 · 3ª semana',t:'Viabilidade e orçamento',meta:['Individual'],
      aula:'Viabilidade sem achismo.',
      o:'Monta a planilha com o lote escolhido e a casa proposta: lote, obra (m² × custo da região), projeto, aprovação, cartório, impostos e valor de venda. Calcula margem e prazo.',
      checks:[['O negócio fecha?','Ajustar: volta para a Etapa 2 com outra casa ou outro lote. Parar: o GR registra o motivo no Harvey. Seguir: vai para a Etapa 4.']],
      ent:['Planilha de Viabilidade','Custo total, valor de venda, margem, prazo e a decisão registrada.'],
      tarefa:'Completar a documentação que faltar para o crédito.',
-     outros:'MCF Projetos: custo de obra por m² da região.'},
+     outros:'MCF Projetos: custo de obra por m² da região.',
+     itens:[['Roteiro do GR (playbook dos gerentes)','ok'],['Planilha de Viabilidade (ninguém confirmou se existe)','conf'],['Tabela padrão de custos MCF: projeto, aprovação, cartório, impostos (ninguém confirmou se existe)','conf'],['Aula gravada da etapa','todo'],['Ficha impressa','todo']]},
     {k:'Etapa 4 · 4ª–5ª semana',t:'Funding e execução',meta:['Individual'],
      aula:'De onde vem o dinheiro.',
      o:'Divide o custo total em fontes: capital próprio, Construção Financiada ou Home Equity (Crédito) e consórcio. Encaminha o projeto e a aprovação. Monta os marcos dos próximos 90 dias.',
      checks:[['O crédito foi aprovado?','Volta para a Etapa 3 para ajustar o produto ou a fonte do dinheiro.']],
      ent:['Plano de Funding + cronograma de 90 dias','Quanto vem de cada fonte, o que já está aprovado e as datas até o início da obra.'],
      tarefa:'Executar os marcos dos 90 dias.',
-     outros:'Crédito (Fábio), Consórcio e MCF Projetos (projeto e aprovação).'}
+     outros:'Crédito (Fábio), Consórcio e MCF Projetos (projeto e aprovação).',
+     itens:[['Roteiro do GR (playbook dos gerentes)','ok'],['Aula gravada da etapa','todo'],['Modelo do PDF Plano de Funding + 90 dias','todo'],['Ficha impressa','todo']]}
    ]},
   {id:'alugar',t:'Incorporar para alugar',p:'Galpão ou kitnet · Home Equity ou Consórcio',badge:'A definir',
    desc:'Construir para viver da renda do aluguel, em vez de vender.'},
@@ -196,43 +242,71 @@ const T = [
   {id:'cliente',t:'Construir para cliente',p:'Construção Financiada · Home Equity',badge:'A definir',
    desc:'Construir sob encomenda para um terceiro.'}
 ];
-const CICLO='Em toda etapa: aula antes, reunião, entrega no mesmo dia (PDF com a marca MCF, anexado no Harvey com a nota e o status) e tarefa. A próxima reunião só é marcada com a tarefa feita; sem ela, lembrete do GR e status Pendente.';
+const ITENS_TRILHA_NOVA=[['Sequência de reuniões da trilha','todo'],['Roteiros do GR','todo'],['Aulas gravadas','todo'],['Modelos de PDF das entregas','todo'],['Fichas impressas','todo']];
+const GERAL=[['Painel Comercial do Pós-Venda (Gestão, Visão Geral)','ok'],['Fluxograma do pós-venda','ok'],['Playbook dos gerentes da trilha Incorporar para vender','ok']];
+const CICLO='Todas as reuniões são individuais; um encontro em grupo, se houver, é uma reunião a mais. Em toda etapa: aula antes, reunião, entrega no mesmo dia (PDF com a marca MCF, anexado no Harvey com a nota e o status) e tarefa. A próxima reunião só é marcada com a tarefa feita; sem ela, lembrete do GR e status Pendente.';
 
-let trilha='vender', sel='r1';
+let trilha='vender', sel='status';
 const flow=document.getElementById('flow'), panel=document.getElementById('panel');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const itensDe=id=>{ if(D[id]) return D[id].itens||[]; const m=id.match(/^(\w+)-(\d+)$/); if(m){const tr=T.find(x=>x.id===m[1]); return tr.steps[+m[2]].itens||[];} return []; };
+const prog=it=>{ const ok=it.filter(x=>x[1]==='ok').length; return {ok, n:it.length}; };
+const progTag=it=>{ if(!it.length) return ''; const p=prog(it); const cls=p.ok===p.n?'full':p.ok===0?'zero':'part'; return `<span class="pg ${cls}">${p.ok}/${p.n} prontos</span>`; };
+const stChip=s=>`<span class="st st-${s}">${ST[s]}</span>`;
+const listaItens=it=>'<ul class="its">'+it.map(([t,s])=>`<li>${stChip(s)}<span>${esc(t)}</span></li>`).join('')+'</ul>';
 
 function btn(id,cls,k,t,sm){
-  return `<button class="step ${cls}" data-id="${id}" aria-pressed="${sel===id}">${k?`<span class="k">${esc(k)}</span>`:''}<b>${esc(t)}</b>${sm?`<small>${esc(sm)}</small>`:''}<span class="more" aria-hidden="true">›</span></button>`;
+  return `<button class="step ${cls}" data-id="${id}" aria-pressed="${sel===id}">${k?`<span class="k">${esc(k)}</span>`:''}<b>${esc(t)}</b>${sm?`<small>${esc(sm)}</small>`:''}${progTag(itensDe(id))}<span class="more" aria-hidden="true">›</span></button>`;
+}
+function todosItens(){
+  const g=[];
+  g.push(['Geral',GERAL]);
+  g.push(['Compra e e-mail',[...D.compra.itens,...D.email.itens]]);
+  g.push(['Primeiro contato no WhatsApp',D.contato.itens]);
+  g.push(['Reunião 1 de alinhamento',D.r1.itens]);
+  g.push(['Aula de Alavancagem Patrimonial',D.alav.itens]);
+  T[0].steps.forEach(s=>g.push(['Incorporar para vender · '+s.k.split(' · ')[0]+': '+s.t,s.itens]));
+  T.slice(1).forEach(tr=>g.push(['Trilha '+tr.t,ITENS_TRILHA_NOVA]));
+  g.push(['Check-in mensal',D.final.itens]);
+  return g;
 }
 function renderFlow(){
   const tr=T.find(x=>x.id===trilha);
-  let h='';
+  const all=todosItens().flatMap(x=>x[1]); const tot=prog(all);
+  let h=`<button class="sumbtn" data-id="status" aria-pressed="${sel==='status'}"><b>O que já temos e o que falta</b><span>${tot.ok} de ${tot.n} itens prontos · clique para ver a lista</span></button><div class="sp"></div>`;
   h+=btn('compra','start','', 'Compra na R2','R$ 5 mil, ou R$ 6 mil em 12x');
   h+='<div class="v"></div>'+btn('email','','Automático · na compra','E-mail de boas-vindas','Acesso ao Harvey + contato do GR');
   h+='<div class="v"></div>'+btn('contato','','GR · mesmo dia','Primeiro contato no WhatsApp','Pauta da Reunião 1 + 9 aulas');
   h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Reunião 1 · até 48h','Reunião de alinhamento','Harvey, anamnese e trilha')+
-     `</div><div class="s"><div class="h"></div><button class="chip" data-id="alav" aria-pressed="${sel==='alav'}"><b>Aula de Alavancagem</b><span>marcada na Reunião 1 · em paralelo</span></button></div></div>`;
+     `</div><div class="s"><div class="h"></div><button class="chip" data-id="alav" aria-pressed="${sel==='alav'}"><b>Aula de Alavancagem</b><span>marcada na Reunião 1 · em paralelo</span>${progTag(D.alav.itens)}</button></div></div>`;
   h+='<div class="v"></div><div class="q">Qual é a trilha?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
-  T.forEach(x=>{h+=`<div class="tr"><div class="v"></div><button class="tcard ${x.id===trilha?'sel':''}" data-tr="${x.id}" aria-pressed="${x.id===trilha}"><b>${esc(x.t)}</b><small>${esc(x.p)}</small><span class="badge ${x.ok?'ok':''}">${esc(x.badge)}</span></button></div>`;});
+  T.forEach(x=>{const it=x.steps?x.steps.flatMap(s=>s.itens):ITENS_TRILHA_NOVA;
+    h+=`<div class="tr"><div class="v"></div><button class="tcard ${x.id===trilha?'sel':''}" data-tr="${x.id}" aria-pressed="${x.id===trilha}"><b>${esc(x.t)}</b><small>${esc(x.p)}</small><span class="badge ${x.ok?'ok':''}">${esc(x.badge)}</span>${progTag(it)}</button></div>`;});
   h+='</div></div><div class="v" style="margin-top:12px"></div>';
   h+=`<div class="trilha-h"><span class="n">Trilha selecionada</span><b>${esc(tr.t)}</b></div><div class="v"></div>`;
   if(tr.steps){
     tr.steps.forEach((s,i)=>{ const id=tr.id+'-'+i; const grp=s.meta[0].startsWith('Grupo');
       h+=(i?'<div class="v"></div>':'')+btn(id, grp?'ent':'ind', s.k, s.t, s.ent[0]); });
   } else {
-    h+=`<div class="todo"><b style="color:var(--fg)">Reuniões a definir</b><br>${esc(tr.desc)} A sequência de reuniões desta trilha ainda vai ser destrinchada.</div>`;
+    h+=`<div class="todo"><b style="color:var(--fg)">Reuniões a definir</b><br>${esc(tr.desc)} A sequência de reuniões desta trilha ainda vai ser destrinchada.${progTag(ITENS_TRILHA_NOVA)}</div>`;
   }
   h+='<div class="v"></div>'+btn('final','end','','Check-in mensal','Dossiê do Projeto impresso');
-  h+='<p class="hint">Preto: reunião individual · Verde-claro: encontro em grupo · Tracejado: em paralelo</p>';
+  h+='<p class="hint">Preto: reunião individual · Tracejado: em paralelo · "x/y prontos": quanto do material daquela etapa já existe</p>';
   flow.innerHTML=h;
 }
 function chkList(c){ return '<ul class="chk">'+c.map(([q,n])=>`<li><span class="d"></span><span>${esc(q)}</span><span class="no"><b>Se não:</b> ${esc(n)}</span></li>`).join('')+'</ul>'; }
 function chkList2(c){ return '<ul class="chk">'+c.map(([q,n])=>`<li><span class="d"></span><span>${esc(q)}</span><span class="no">${esc(n)}</span></li>`).join('')+'</ul>'; }
+const blocoItens=it=>it&&it.length?`<div class="blk"><h3>O que precisa existir · ${prog(it).ok} de ${it.length} prontos</h3>${listaItens(it)}</div>`:'';
 function renderPanel(){
   let h='';
   const m=sel.match(/^(\w+)-(\d+)$/);
-  if(m){
+  if(sel==='status'){
+    const g=todosItens(); const all=g.flatMap(x=>x[1]);
+    const c={ok:0,wip:0,todo:0,conf:0}; all.forEach(x=>c[x[1]]++);
+    h+=`<div class="pk">Implementação</div><h2>O que já temos e o que falta</h2><div class="meta"><span class="st st-ok">${c.ok} já temos</span><span class="st st-wip">${c.wip} em teste</span><span class="st st-todo">${c.todo} falta fazer</span><span class="st st-conf">${c.conf} a confirmar</span></div>`;
+    g.forEach(([t,it])=>{h+=`<div class="blk"><h3>${esc(t)} · ${prog(it).ok}/${it.length}</h3>${listaItens(it)}</div>`;});
+    h+=`<p class="priv">"A confirmar" é o que eu não consegui verificar se já existe. Clique em qualquer etapa no fluxo para ver o detalhe dela.</p>`;
+  } else if(m){
     const tr=T.find(x=>x.id===m[1]), s=tr.steps[+m[2]];
     h+=`<div class="pk">${esc(tr.t)} · ${esc(s.k)}</div><h2>${esc(s.t)}</h2><div class="meta">${s.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
     h+=`<div class="blk"><h3>Aula antes</h3><p>${esc(s.aula)}</p></div>`;
@@ -241,12 +315,13 @@ function renderPanel(){
     h+=`<div class="blk ent"><h3>Entrega · mesmo dia</h3><p><b>${esc(s.ent[0])}.</b> ${esc(s.ent[1])}</p></div>`;
     h+=`<div class="blk"><h3>Tarefa do parceiro</h3><p>${esc(s.tarefa)}</p></div>`;
     h+=`<div class="blk"><h3>Quem mais entra</h3><p>${esc(s.outros)}</p></div>`;
+    h+=blocoItens(s.itens);
     h+=`<p class="priv">${esc(CICLO)}</p>`;
   } else if(sel.startsWith('tr:')){
     const tr=T.find(x=>x.id===sel.slice(3));
     h+=`<div class="pk">Trilha</div><h2>${esc(tr.t)}</h2><div class="meta">${tr.p.split(' · ').map(x=>`<span>${esc(x)}</span>`).join('')}</div>`;
-    if(tr.steps){ h+=`<div class="blk"><h3>Etapas depois da Reunião 1</h3><ul>${tr.steps.map(s=>`<li><b>${esc(s.t)}</b> · ${esc(s.k.split(' · ')[1])}</li>`).join('')}</ul></div><p class="priv">Clique numa etapa no fluxo para ver o detalhe.</p>`; }
-    else { h+=`<div class="blk"><h3>Objetivo</h3><p>${esc(tr.desc)}</p></div><div class="blk"><h3>Reuniões</h3><p>A definir. Cada trilha terá a sua própria sequência, porque cada uma tem um objetivo específico.</p></div>`; }
+    if(tr.steps){ h+=`<div class="blk"><h3>Etapas depois da Reunião 1</h3><ul>${tr.steps.map(s=>`<li><b>${esc(s.t)}</b> · ${esc(s.k.split(' · ')[1])} · ${prog(s.itens).ok}/${s.itens.length} prontos</li>`).join('')}</ul></div><p class="priv">Clique numa etapa no fluxo para ver o detalhe.</p>`; }
+    else { h+=`<div class="blk"><h3>Objetivo</h3><p>${esc(tr.desc)}</p></div><div class="blk"><h3>Reuniões</h3><p>A definir. Cada trilha terá a sua própria sequência, porque cada uma tem um objetivo específico.</p></div>`+blocoItens(ITENS_TRILHA_NOVA); }
   } else {
     const d=D[sel];
     h+=`<div class="pk">${esc(d.k)}</div><h2>${esc(d.t)}</h2><div class="meta">${d.meta.map((x,i)=>`<span class="${i===0?'g':''}">${esc(x)}</span>`).join('')}</div>`;
@@ -254,6 +329,7 @@ function renderPanel(){
     if(d.checks) h+=`<div class="blk"><h3>Checagens</h3>${chkList(sel==='r1'?d.checks.slice(0,3):d.checks)}${sel==='r1'?chkList2([d.checks[3]]):''}</div>`;
     if(d.also) h+=`<div class="blk"><h3>Também nesta reunião</h3><p>${esc(d.also)}</p></div>`;
     if(d.ent) h+=`<div class="blk ent"><h3>Entrega · mesmo dia</h3><p><b>${esc(d.ent[0])}.</b> ${esc(d.ent[1])}</p></div>`;
+    h+=blocoItens(d.itens);
     if(d.priv) h+=`<p class="priv">${esc(d.priv)}</p>`;
   }
   panel.innerHTML=h;
