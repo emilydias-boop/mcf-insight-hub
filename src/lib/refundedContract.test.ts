@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
@@ -48,7 +49,7 @@ assert.equal((await agenda([att('active', null)], 'open')).result[0]?.leadState,
 assert.equal((await agenda([att('old', refund), att('active', null)])).result.length, 0);
 assert.equal((await agenda([], 'won')).result.length, 0);
 assert.equal((await agenda([att('old', refund)], 'lost')).result.length, 0);
-const oldCompleted = { ...att('completed', null), status: 'completed' };
+const oldCompleted = { ...att('completed', null), status: 'completed', contract_paid_at: null };
 assert.equal((await agenda([att('old', refund), oldCompleted])).result[0]?.warningOnly, false);
 assert.equal((await agenda([att('old', refund), { ...oldCompleted, meeting_slot: { ...oldCompleted.meeting_slot, scheduled_at: '2026-10-19T12:00:01Z' } }])).result[0]?.warningOnly, true);
 
