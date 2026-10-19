@@ -121,6 +121,7 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 .st-conf{background:#FFF3D6;color:#7A5300;}
 .st-wip{background:#E2EEFB;color:#1D4E89;}
 .st-draft{background:#EFE7FB;color:#5B2A9A;}
+.st-anexar{background:#FFE9D6;color:#8A3B00;}
 .its{list-style:none;padding:0 !important;margin:4px 0 0;}
 .its li{display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13.5px;}
 .its li:last-child{border-bottom:0;}
@@ -152,12 +153,12 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 <script>
 (function(){
 /* Status do que precisa existir: ok = já temos, todo = falta fazer, conf = falta confirmar */
-const ST={ok:'Já temos',wip:'Em teste',draft:'Rascunho',todo:'Falta fazer',conf:'A confirmar'};
+const ST={ok:'Já temos',wip:'Em teste',draft:'Rascunho',anexar:'Falta anexar',todo:'Falta fazer',conf:'A confirmar'};
 const D = {
   r1v:{k:'Comercial · Closer de R1',t:'R1 · Reunião de vendas',meta:['Closer de R1','Individual'],
     blocks:[['Hoje','Na R1 o closer vende a caução.'],
             ['Quando vendermos só o produto de R$ 5 mil','O Canva desta reunião muda: a R1 deixa de vender a caução e passa a preparar a venda do produto de R$ 5 mil na R2.']],
-    itens:[['Canva da R1 atual (venda da caução)','ok'],
+    itens:[['Canva da R1 atual (venda da caução)','anexar'],
            ['Novo Canva da R1 para quando vendermos só o produto de R$ 5 mil','todo']]},
   compra:{k:'Comercial · Closer de R2',t:'R2 · Apresentação e compra',meta:['Closer de R2','Individual'],
     blocks:[['Canva da R2','',['As vantagens do produto.','A jornada que o parceiro vai trilhar com a MCF: e-mail de boas-vindas, primeiro contato do GR, Reunião 1 de alinhamento, a trilha escolhida e a Aula de Alavancagem Patrimonial.']],
@@ -190,8 +191,8 @@ const D = {
             ['Qual é a trilha?','Confirma uma das 4 jornadas: incorporar para vender, incorporar para alugar, levantamento de recursos ou construir para cliente.']],
     also:'Ainda nesta reunião, o GR marca a Aula de Alavancagem Patrimonial.',
     ent:['Mapa do Parceiro','Trilha confirmada, quanto pode investir, prazo e documentos pendentes. Depois da reunião, o kit físico da trilha é enviado.'],
-    itens:[['Cadastro no Harvey','ok'],
-           ['Formulário de anamnese','ok'],
+    itens:[['Cadastro no Harvey','anexar'],
+           ['Formulário de anamnese','anexar'],
            ['Agenda de Reuniões do Pós-Venda no Gestão','ok'],
            ['Parceiro marca sozinho o horário da Reunião 1 (hoje o Gestão não tem isso; quem marca é o GR)','todo'],
            ['Roteiro do GR para a Reunião 1 de alinhamento','todo'],
@@ -202,7 +203,7 @@ const D = {
             ['Na prática','É a reunião de venda de consórcio. Acontece junto com a trilha, sem esperar as outras etapas.']],
     priv:'Uso interno: o parceiro não precisa saber que é uma reunião de venda.',
     itens:[['Agenda do Consórcio para marcar a reunião','ok'],
-           ['Apresentação da aula de alavancagem usada na reunião (existe)','ok'],['Melhorar a apresentação da aula de alavancagem','todo']]},
+           ['Apresentação da aula de alavancagem usada na reunião (existe)','anexar'],['Melhorar a apresentação da aula de alavancagem','todo']]},
   final:{k:'Fim da trilha',t:'Check-in mensal',meta:['GR'],
     blocks:[['O que acontece','Depois da última entrega, o parceiro passa para um check-in mensal com o GR até o início da obra ou da operação.'],
             ['Entrega física','Dossiê do Projeto: todas as entregas da trilha impressas e encadernadas.']],
@@ -218,7 +219,7 @@ const T = [
      ent:['Diagnóstico de Maturidade','% de ocupação, leitura (bom ou atenção), nível de concorrência e ficha das 10 casas.'],
      tarefa:'Completar as 10 casas, se faltar alguma, e levantar 2 ou 3 lotes disponíveis, com preço.',
      outros:'Crédito (Fábio): pré-análise com os documentos do cadastro. IA de condomínios, se ele tiver dúvida.',
-     itens:[['Roteiro do GR (playbook dos gerentes)','ok'],['IA de condomínios','ok'],['Aula gravada da etapa','todo'],['Modelo do PDF Diagnóstico de Maturidade','todo'],['Ficha impressa','todo']]},
+     itens:[['Roteiro do GR (playbook dos gerentes)','anexar'],['IA de condomínios','anexar'],['Aula gravada da etapa','todo'],['Modelo do PDF Diagnóstico de Maturidade','todo'],['Ficha impressa','todo']]},
     {k:'Etapa 2 · 2ª semana',t:'Apresentação do produto imobiliário',meta:['Individual','Vídeo, tela compartilhada'],
      aula:'Como nasce um produto imobiliário.',
      o:'O GR apresenta a maturidade, os dados das 10 casas e a casa sugerida: m² construídos, terreno, quartos, banheiros, vagas, piscina e faixa de VGV. Usa o script de apresentação.',
@@ -226,7 +227,7 @@ const T = [
      ent:['Proposta de Produto','A casa sugerida, a comparação com a média do condomínio e a faixa de VGV.'],
      tarefa:'Escolher o lote entre os candidatos e confirmar o preço com o vendedor.',
      outros:'Leilão, quando for o caso.',
-     itens:[['Roteiro e script de apresentação (playbook dos gerentes)','ok'],['Aula gravada da etapa','todo'],['Modelo do PDF Proposta de Produto','todo'],['Ficha impressa','todo']]},
+     itens:[['Roteiro e script de apresentação (playbook dos gerentes)','anexar'],['Aula gravada da etapa','todo'],['Modelo do PDF Proposta de Produto','todo'],['Ficha impressa','todo']]},
     {k:'Etapa 3 · 3ª semana',t:'Viabilidade e orçamento',meta:['Individual'],
      aula:'Viabilidade sem achismo.',
      o:'Monta a planilha com o lote escolhido e a casa proposta: lote, obra (m² × custo da região), projeto, aprovação, cartório, impostos e valor de venda. Calcula margem e prazo.',
@@ -234,7 +235,7 @@ const T = [
      ent:['Planilha de Viabilidade','Custo total, valor de venda, margem, prazo e a decisão registrada.'],
      tarefa:'Completar a documentação que faltar para o crédito.',
      outros:'MCF Projetos: custo de obra por m² da região.',
-     itens:[['Roteiro do GR (playbook dos gerentes)','ok'],['Planilha de Viabilidade (ninguém confirmou se existe)','conf'],['Tabela padrão de custos MCF: projeto, aprovação, cartório, impostos (ninguém confirmou se existe)','conf'],['Aula gravada da etapa','todo'],['Ficha impressa','todo']]},
+     itens:[['Roteiro do GR (playbook dos gerentes)','anexar'],['Planilha de Viabilidade (ninguém confirmou se existe)','conf'],['Tabela padrão de custos MCF: projeto, aprovação, cartório, impostos (ninguém confirmou se existe)','conf'],['Aula gravada da etapa','todo'],['Ficha impressa','todo']]},
     {k:'Etapa 4 · 4ª–5ª semana',t:'Funding e execução',meta:['Individual'],
      aula:'De onde vem o dinheiro.',
      o:'Divide o custo total em fontes: capital próprio, Construção Financiada ou Home Equity (Crédito) e consórcio. Encaminha o projeto e a aprovação. Monta os marcos dos próximos 90 dias.',
@@ -242,7 +243,7 @@ const T = [
      ent:['Plano de Funding + cronograma de 90 dias','Quanto vem de cada fonte, o que já está aprovado e as datas até o início da obra.'],
      tarefa:'Executar os marcos dos 90 dias.',
      outros:'Crédito (Fábio), Consórcio e MCF Projetos (projeto e aprovação).',
-     itens:[['Roteiro do GR (playbook dos gerentes)','ok'],['Aula gravada da etapa','todo'],['Modelo do PDF Plano de Funding + 90 dias','todo'],['Ficha impressa','todo']]}
+     itens:[['Roteiro do GR (playbook dos gerentes)','anexar'],['Aula gravada da etapa','todo'],['Modelo do PDF Plano de Funding + 90 dias','todo'],['Ficha impressa','todo']]}
    ]},
   {id:'alugar',t:'Incorporar para alugar',p:'Galpão ou kitnet · Home Equity ou Consórcio',badge:'A definir',
    desc:'Construir para viver da renda do aluguel, em vez de vender.'},
@@ -252,12 +253,12 @@ const T = [
    desc:'Construir sob encomenda para um terceiro.'}
 ];
 const ITENS_TRILHA_NOVA=[['Sequência de reuniões da trilha','todo'],['Roteiros do GR','todo'],['Aulas gravadas','todo'],['Modelos de PDF das entregas','todo'],['Fichas impressas','todo']];
-const GERAL=[['Painel Comercial do Pós-Venda (Gestão, Visão Geral)','ok'],['Fluxograma do pós-venda','ok'],['Playbook dos gerentes da trilha Incorporar para vender','ok']];
+const GERAL=[['Painel Comercial do Pós-Venda (Gestão, Visão Geral)','ok'],['Fluxograma do pós-venda','ok'],['Playbook dos gerentes da trilha Incorporar para vender','anexar']];
 const CICLO='Todas as reuniões são individuais; um encontro em grupo, se houver, é uma reunião a mais. Em toda etapa: aula antes, reunião, entrega no mesmo dia (PDF com a marca MCF, anexado no Harvey com a nota e o status) e tarefa. A próxima reunião só é marcada com a tarefa feita; sem ela, lembrete do GR e status Pendente.';
 
 /* Dentro do MCF Gestão, os itens e status vêm da Biblioteca de Materiais (window.__MATERIAIS__) */
 const EXT=window.__MATERIAIS__||null;
-const MAPST={pronto:'ok',em_teste:'wip',falta_fazer:'todo',a_confirmar:'conf',rascunho:'draft'};
+const MAPST={pronto:'ok',em_teste:'wip',falta_fazer:'todo',a_confirmar:'conf',rascunho:'draft',falta_anexar:'anexar'};
 if(EXT){
   const conv=k=>(EXT[k]||[]).map(([t,s])=>[t,MAPST[s]||'todo']);
   Object.keys(D).forEach(k=>{D[k].itens=conv(k);});
@@ -327,8 +328,8 @@ function renderPanel(){
   const m=sel.match(/^(\w+)-(\d+)$/);
   if(sel==='status'){
     const g=todosItens(); const all=g.flatMap(x=>x[1]);
-    const c={ok:0,wip:0,draft:0,todo:0,conf:0}; all.forEach(x=>c[x[1]]++);
-    h+=`<div class="pk">Implementação</div><h2>O que já temos e o que falta</h2><div class="meta"><span class="st st-ok">${c.ok} já temos</span><span class="st st-wip">${c.wip} em teste</span>${c.draft?`<span class="st st-draft">${c.draft} rascunho</span>`:''}<span class="st st-todo">${c.todo} falta fazer</span><span class="st st-conf">${c.conf} a confirmar</span></div>`;
+    const c={ok:0,wip:0,draft:0,anexar:0,todo:0,conf:0}; all.forEach(x=>c[x[1]]++);
+    h+=`<div class="pk">Implementação</div><h2>O que já temos e o que falta</h2><div class="meta"><span class="st st-ok">${c.ok} já temos</span><span class="st st-wip">${c.wip} em teste</span>${c.draft?`<span class="st st-draft">${c.draft} rascunho</span>`:''}${c.anexar?`<span class="st st-anexar">${c.anexar} falta anexar</span>`:''}<span class="st st-todo">${c.todo} falta fazer</span><span class="st st-conf">${c.conf} a confirmar</span></div>`;
     g.forEach(([t,it])=>{h+=`<div class="blk"><h3>${esc(t)} · ${prog(it).ok}/${it.length}</h3>${listaItens(it)}</div>`;});
     h+=`<p class="priv">"A confirmar" é o que eu não consegui verificar se já existe.${EXT?' Os status vêm da Biblioteca de Materiais do Gestão.':''} Clique em qualquer etapa no fluxo para ver o detalhe dela.</p>`;
   } else if(m){
