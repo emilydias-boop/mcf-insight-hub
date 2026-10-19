@@ -1,14 +1,17 @@
-# Rotas e links para a Biblioteca de Materiais (somente leitura)
+# Pós-Venda: entrada dos novos produtos e busca do cliente
 
-Nada foi alterado. Domínio: https://mcfgestao.com
+## O que a consulta mostrou (só leitura)
+- **NAEMISSON CIRQUEIRA ROCHA já está no Pós-Venda.** A venda A009 da Hubla de 17/10 às 15:06 (pedido f619748f…) criou o card na hora, na etapa "Novos licenciados", com a responsável Karen Nazario.
+- O card foi gravado como **"Naêmisson Cirqueira Rocha"**, com acento no "ê", porque foi assim que a Hubla mandou o nome.
+- **Causa:** a busca de cliente na janela "Nova reunião" da Agenda do Pós-Venda procura só pelo nome e diferencia acento. Quem digita "Naemisson" não encontra "Naêmisson". A busca também não procura por e-mail nem por telefone.
+- Produtos: hoje entram A001, A003, A004, A009, R001, R002, R004 e R009. **R003, A005 e R005 não entram.**
 
-1. Visão Geral do CRM Pós-Venda (com o Painel Comercial) → https://mcfgestao.com/pos-venda/crm → App.tsx (rota `pos-venda/crm`, index = CRMOverview) e menu lateral. A rota antiga `/pos-venda/painel-comercial` só redireciona para lá.
-2. Distribuição de novos licenciados → https://mcfgestao.com/pos-venda/distribuicao → App.tsx e menu lateral (admin e gerente de relacionamento).
-3. Agenda de Reuniões do Pós-Venda → https://mcfgestao.com/pos-venda/crm/agenda → App.tsx (AgendaPosVenda).
-4. Agenda do Consórcio → https://mcfgestao.com/consorcio/crm/agenda → menu lateral. Não existe tela própria de "alavancagem"; a reunião é marcada nessa agenda.
-5. IA de condomínios → não existe no Gestão. Não há rota, menu nem tela. A palavra só aparece numa pergunta de qualificação do Crédito.
-6. Harvey → nenhuma URL do Harvey no código, no .env ou nas tabelas. Existem só campos de identificação nos cards: `harvey_crm_id`, `harvey_cliente_id`, `stage_harvey`. Tela interna de importação: https://mcfgestao.com/pos-venda/importar-harvey (só admin).
-7. Anamnese → nenhuma URL pública de formulário no código ou no banco. O formulário fica no Harvey, e o Gestão só recebe as respostas pelas funções `pos-venda-anamnese` (Pós-Venda) e `crm-externo-encaminhamento` (Consórcio/GR). Não existe tela própria de anamneses: a ficha aparece dentro do card do negócio, pelo botão de anamnese (campo `anamnese_v2`), em https://mcfgestao.com/pos-venda/crm/negocios.
-8. Playbook → https://mcfgestao.com/playbook ("Meu Playbook", App.tsx e menu). Há 1 documento: "IT" (teste, SDR, PDF) → https://rehcfgqvigfcekiipqkc.supabase.co/storage/v1/object/public/playbook-files/sdr/1765311449554-zlnzjp.pdf
-9. Canva, apresentação de alavancagem ou da R1 → nenhum link encontrado em playbook_docs, kb_documents, bu_strategic_documents, process_rules, activity_templates nem processo_materiais. As palavras aparecem só em textos, sem URL.
-10. Criação do card no Pós-Venda → gatilho `zzz_pos_venda_entrada` na tabela `hubla_transactions`, que chama a função `pos_venda_on_venda`, e esta chama `pos_venda_registrar_cliente`. Como todas as vendas são gravadas nessa tabela, ela cobre Hubla, Kiwify e MCF Pay (a fonte vem do campo `source`; o padrão é "hubla"). O gatilho está ativo.
+## O que será feito
+1. **Busca da Agenda do Pós-Venda (Nova reunião):** encontrar o cliente sem diferenciar acento ("naemisson" encontra "Naêmisson"), e também pelo e-mail ou pelo telefone do contato. A busca continua restrita à pipeline do Pós-Venda.
+2. **Produtos que criam card no Pós-Venda:** manter os atuais e somar **R003, A005 e R005**. As outras regras não mudam: reembolso, renovação, ofertas e parcela 2 em diante continuam de fora, e a distribuição para os gerentes também.
+3. Nada é retroativo. Se você quiser, faço depois uma lista, só para leitura, de quem comprou R003, A005 ou R005 e não tem card.
+
+## Detalhes técnicos
+- Front (`AgendaPosVenda.tsx`, `NovaReuniaoDialog`): trocar `ilike('name')` por uma busca que normaliza o termo (sem acento) e procura em `name`, e-mail e telefone dos contatos, via `crm_contacts`, com `contact_id.in.(...)` e sempre filtrada por `POS_VENDA_ORIGIN_ID`. Para ignorar acento no banco, usar a extensão `unaccent`, se já existir. Se não existir, buscar com variações do termo ou fazer uma RPC de leitura (aviso antes).
+- Migração: `CREATE OR REPLACE` de `pos_venda_on_venda`, mudando só a lista `IN (...)` para incluir 'R003','A005','R005'. O gatilho `zzz_pos_venda_entrada` e o resto da função ficam iguais.
+- Verificação: typecheck/build, busca "naemisson" retornando o card 8e608d3b, conferência da definição nova da função. Nada publicado.
