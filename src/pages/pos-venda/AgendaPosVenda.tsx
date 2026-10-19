@@ -484,7 +484,20 @@ function NovaReuniaoDialog({ onClose, onSalvo }: { onClose: () => void; onSalvo:
     queryKey: ['pos-venda-deals-busca', busca],
     queryFn: async () => {
       let q = db.from('crm_deals').select('id, name').eq('origin_id', POS_VENDA_ORIGIN_ID).order('created_at', { ascending: false }).limit(30);
-      if (busca.trim()) q = q.ilike('name', `%${busca.trim()}%`);
+      const termo = busca.trim().replace(/[%,()]/g, ' ').trim();
+      if (termo) {
+        // Ignora acentos: cada letra que pode ter acento vira curinga de 1 caractere.
+        const semAcento = termo.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const padrao = `%${semAcento.replace(/[aeiouc]/gi, '_')}%`;
+        const digitos = termo.replace(/\D/g, '');
+        const filtrosContato = [`name.ilike.${padrao}`, `email.ilike.%${termo}%`];
+        if (digitos.length >= 4) filtrosContato.push(`phone.ilike.%${digitos.slice(-9)}%`);
+        const { data: contatos } = await db.from('crm_contacts').select('id').or(filtrosContato.join(',')).limit(200);
+        const ids = ((contatos ?? []) as { id: string }[]).map((c) => c.id);
+        q = ids.length
+          ? q.or(`name.ilike.${padrao},contact_id.in.(${ids.join(',')})`)
+          : q.ilike('name', padrao);
+      }
       const { data } = await q;
       return (data ?? []) as { id: string; name: string | null }[];
     },
