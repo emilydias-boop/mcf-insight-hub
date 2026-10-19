@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Faturamento Closer/SDR/Canal — carteira separada, ex-SDRs agrupados e P2/Outside conciliados; testes dos três modos e compilação automática OK; navegador com dados simulados confirmou carteira e detalhe. Verificação autenticada indisponível (Supabase externo); sem banco/publicação.
+
 - [x] Abrir documentos da biblioteca em popup no fluxo Pós-venda; 21 testes e compilação automática OK; navegador com dados simulados confirmou popup, recarga e Ir para a tela em computador/celular, sem banco/publicação.
 
 - [x] Academia MCF — aba Atribuir trilhas no Admin RH, trilhas adicionais por nome e todas as fases; 4 testes passaram, compilação OK; atribuição com login real não verificada (Supabase externo sem sessão disponível)
