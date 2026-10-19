@@ -3394,6 +3394,27 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_leopoldo_outside_20261019: {
+        Row: {
+          criado_em: string
+          dados: Json
+          id: string
+          tipo: string
+        }
+        Insert: {
+          criado_em?: string
+          dados: Json
+          id: string
+          tipo: string
+        }
+        Update: {
+          criado_em?: string
+          dados?: Json
+          id?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
       backup_liquido_juros_carrinho: {
         Row: {
           corrigido_em: string
@@ -22248,6 +22269,7 @@ export type Database = {
           via: string
         }[]
       }
+      leopoldo_outside_aplicar: { Args: { p_tx: string }; Returns: Json }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       list_transferable_users: {
         Args: never
