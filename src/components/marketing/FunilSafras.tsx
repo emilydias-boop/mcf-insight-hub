@@ -142,7 +142,7 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
     return share === null ? "— de anúncio" : `${(share * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de anúncio`;
   };
   const kpis = [
-    { label: "Investimento", value: formatBRL(totals.investimento), detail: <Hint text="Conta Distribuição de Conteúdo. Não gera clique para checkout, por isso não entra no custo por venda."><span>+ {formatBRL(totals.investimento_awareness)} em divulgação</span></Hint> },
+    { label: "Investimento", value: formatBRL(totals.investimento), detail: <Hint text="Conta Distribuição de Conteúdo. Não gera clique para checkout, por isso não entra no custo por venda."><span>+ {formatBRL(totals.investimento_awareness)} em divulgação</span></Hint>, hint: "Gasto da Meta × 1,125 (impostos sobre a fatura). Por isso fica 12,5% acima do valor do Gerenciador de Anúncios. O mesmo fator vale para a divulgação, os custos por etapa e o ROAS." },
     { label: "Entradas", value: formatInt(totals.entradas), detail: <><div>A010 {formatInt(totals.entradas_a010)} · Anamnese {formatInt(totals.entradas_anamnese)} · Outras {formatInt(totals.entradas_outras)}</div><div>{stageDetail("entradas", "custo")}</div></> },
     { label: "R1 agendadas", value: formatInt(totals.r1_agendadas), detail: stageDetail("r1_agendadas", "custo por R1 agendada") },
     { label: "R1 realizadas", value: formatInt(totals.r1_realizadas), detail: stageDetail("r1_realizadas", "custo por R1") },
@@ -166,7 +166,7 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
   ];
   const maximum = Math.max(1, ...stages.map(stage => stage.count));
   const headers = [
-    { label: "Investimento" }, { label: "LPV", hint: "Dado da Meta (pixel)" },
+    { label: "Investimento", hint: "Gasto da Meta × 1,125 (impostos)" }, { label: "LPV", hint: "Dado da Meta (pixel)" },
     { label: "Checkout iniciado", hint: "Dado da Meta (pixel)" },
     { label: "Entradas", hint: "Pessoas que entraram no período: compra de A010, formulário de anamnese (sem A010) ou outro produto de entrada (Guia, Planilha, A011, Lucrômetro…). Cada pessoa conta 1 vez por período." },
     { label: "A010" }, { label: "Anamnese", hint: "Negócio com tag ANAMNESE criado no período, sem A010 (mesma régua da Visão Diária)" }, { label: "Outras" },
