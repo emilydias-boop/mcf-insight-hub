@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Info } from "lucide-react";
-import { useFunilSafras, formatBRL, formatInt, type FunilSafraRow, type Grao, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
+import { useFunilSafras, formatBRL, formatInt, type FunilSafraRow, type Grao, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,11 +16,12 @@ interface FunilSafrasProps {
   grao: Grao;
   data: ModeloData;
   toque: ModeloToque;
+  origem: ModeloOrigem;
 }
 
 const numericFields = [
   "investimento", "investimento_awareness", "lpv", "checkout_iniciado",
-  "entradas", "r1_realizadas", "contratos", "parcerias", "liq_total",
+  "entradas", "entradas_a010", "entradas_anamnese", "entradas_outras", "r1_agendadas", "r1_realizadas", "contratos", "parcerias", "liq_total",
 ] as const;
 type Totals = Record<(typeof numericFields)[number], number>;
 
@@ -78,57 +79,71 @@ function isMaturing(period: string, grain: Grao): boolean {
   return Number.isFinite(end) && today - end < 60 * 86_400_000;
 }
 
-function MetricCells({ row }: { row: Totals }) {
+function MetricCells({ row, origem }: { row: Totals; origem: ModeloOrigem }) {
   return (
     <>
       <TableCell className={numericCell}>{formatBRL(row.investimento)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.lpv)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.checkout_iniciado)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.entradas)}</TableCell>
-      <TableCell className={numericCell}>{cost(row.investimento, row.entradas)}</TableCell>
+      <TableCell className={numericCell}>{formatInt(row.entradas_a010)}</TableCell>
+      <TableCell className={numericCell}>{formatInt(row.entradas_anamnese)}</TableCell>
+      <TableCell className={numericCell}>{formatInt(row.entradas_outras)}</TableCell>
+      {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.entradas)}</TableCell>}
+      <TableCell className={numericCell}>{formatInt(row.r1_agendadas)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.r1_realizadas)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.contratos)}</TableCell>
-      <TableCell className={numericCell}>{cost(row.investimento, row.contratos)}</TableCell>
+      {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.contratos)}</TableCell>}
       <TableCell className={numericCell}>{formatInt(row.parcerias)}</TableCell>
-      <TableCell className={numericCell}>{cost(row.investimento, row.parcerias)}</TableCell>
+      {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.parcerias)}</TableCell>}
       <TableCell className={numericCell}>{formatBRL(row.liq_total)}</TableCell>
-      <TableCell className={numericCell}><Roas investment={row.investimento} liquid={row.liq_total} /></TableCell>
+      {origem === "anuncio" && <TableCell className={numericCell}><Roas investment={row.investimento} liquid={row.liq_total} /></TableCell>}
     </>
   );
 }
 
-export function FunilSafras({ from, to, grao, data: modeloData, toque }: FunilSafrasProps) {
-  const { data, isLoading, error } = useFunilSafras({ from, to, grao, data: modeloData, toque });
+export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }: FunilSafrasProps) {
+  const { data, isLoading, error } = useFunilSafras({ from, to, grao, data: modeloData, toque, origem });
+  const anuncios = useFunilSafras({ from: origem === "todas" ? from : null, to: origem === "todas" ? to : null, grao, data: modeloData, toque, origem: "anuncio" });
 
-  if (isLoading) return (
+  if (isLoading || (origem === "todas" && anuncios.isLoading)) return (
     <div role="status" aria-label="Carregando safras" className="space-y-[20px]">
-      <div className="grid grid-cols-2 gap-[12px] md:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-[112px] w-full" />)}
+      <div className="grid grid-cols-2 gap-[12px] md:grid-cols-4 xl:grid-cols-7">
+        {Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-[112px] w-full" />)}
       </div>
       <Skeleton className="h-[240px] w-full" />
       <Skeleton className="h-[280px] w-full" />
     </div>
   );
 
-  if (error) {
-    const message = typeof error === "object" && "message" in error ? String(error.message) : String(error);
+  const queryError = error ?? (origem === "todas" ? anuncios.error : null);
+  if (queryError) {
+    const message = typeof queryError === "object" && "message" in queryError ? String(queryError.message) : String(queryError);
     return <Alert variant="destructive" className="p-[16px]"><AlertDescription className="text-[13px]">{message}</AlertDescription></Alert>;
   }
   if (!data?.length) return <p className="py-[32px] text-center text-[14px] text-muted-foreground">Sem dados no período</p>;
 
   const rows: FunilSafraRow[] = [...data].sort((a, b) => b.periodo.localeCompare(a.periodo));
   const totals = Object.fromEntries(numericFields.map(field => [field, rows.reduce((sum, row) => sum + row[field], 0)])) as Totals;
+  const stageDetail = (field: "entradas" | "r1_agendadas" | "r1_realizadas" | "contratos" | "parcerias", label: string) => {
+    if (origem === "anuncio") return `${label} ${cost(totals.investimento, totals[field])}`;
+    const adCount = (anuncios.data ?? []).reduce((sum, row) => sum + row[field], 0);
+    const share = ratio(adCount, totals[field]);
+    return share === null ? "— de anúncio" : `${(share * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de anúncio`;
+  };
   const kpis = [
     { label: "Investimento", value: formatBRL(totals.investimento), detail: <Hint text="Conta Distribuição de Conteúdo. Não gera clique para checkout, por isso não entra no custo por venda."><span>+ {formatBRL(totals.investimento_awareness)} em divulgação</span></Hint> },
-    { label: "Entradas A010", value: formatInt(totals.entradas), detail: `custo ${cost(totals.investimento, totals.entradas)}` },
-    { label: "R1 realizadas", value: formatInt(totals.r1_realizadas), detail: `custo por R1 ${cost(totals.investimento, totals.r1_realizadas)}` },
-    { label: "Contratos", value: formatInt(totals.contratos), detail: `custo por contrato ${cost(totals.investimento, totals.contratos)}` },
-    { label: "Parcerias", value: formatInt(totals.parcerias), detail: `custo por parceria ${cost(totals.investimento, totals.parcerias)}` },
-    { label: "ROAS líquido", value: formatRoas(ratio(totals.liq_total, totals.investimento)), detail: `${formatBRL(totals.liq_total)} recebidos`, hint: "Dinheiro líquido que entrou no período (vendas de quem veio de anúncio, já descontados os estornos) ÷ investimento do período." },
+    { label: "Entradas", value: formatInt(totals.entradas), detail: <><div>A010 {formatInt(totals.entradas_a010)} · Anamnese {formatInt(totals.entradas_anamnese)} · Outras {formatInt(totals.entradas_outras)}</div><div>{stageDetail("entradas", "custo")}</div></> },
+    { label: "R1 agendadas", value: formatInt(totals.r1_agendadas), detail: stageDetail("r1_agendadas", "custo por R1 agendada") },
+    { label: "R1 realizadas", value: formatInt(totals.r1_realizadas), detail: stageDetail("r1_realizadas", "custo por R1") },
+    { label: "Contratos", value: formatInt(totals.contratos), detail: stageDetail("contratos", "custo por contrato") },
+    { label: "Parcerias", value: formatInt(totals.parcerias), detail: stageDetail("parcerias", "custo por parceria") },
+    { label: "ROAS líquido", value: origem === "todas" ? "—" : formatRoas(ratio(totals.liq_total, totals.investimento)), detail: origem === "todas" ? "ROAS só em Só anúncio" : `${formatBRL(totals.liq_total)} recebidos`, hint: "Dinheiro líquido que entrou no período (vendas de quem veio de anúncio, já descontados os estornos) ÷ investimento do período." },
   ];
   const stages = [
     { label: "Entradas", count: totals.entradas, rate: null },
-    { label: "R1 realizada", count: totals.r1_realizadas, rate: passage(totals.r1_realizadas, totals.entradas, "das entradas") },
+    { label: "R1 agendada", count: totals.r1_agendadas, rate: passage(totals.r1_agendadas, totals.entradas, "das entradas") },
+    { label: "R1 realizada", count: totals.r1_realizadas, rate: passage(totals.r1_realizadas, totals.r1_agendadas, "das agendadas") },
     { label: "Contrato", count: totals.contratos, rate: passage(totals.contratos, totals.r1_realizadas, "das R1") },
     { label: "Parceria", count: totals.parcerias, rate: passage(totals.parcerias, totals.contratos, "dos contratos") },
   ];
@@ -136,16 +151,17 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque }: FunilSa
   const headers = [
     { label: "Investimento" }, { label: "LPV", hint: "Dado da Meta (pixel)" },
     { label: "Checkout iniciado", hint: "Dado da Meta (pixel)" },
-    { label: "Entradas", hint: "Compras de A010 no período de pessoas que vieram de anúncio" },
-    { label: "Custo/entrada" }, { label: "R1 realizadas" }, { label: "Contratos" },
+    { label: "Entradas", hint: "Pessoas que entraram no período: compra de A010, formulário de anamnese (sem A010) ou outro produto de entrada (Guia, Planilha, A011, Lucrômetro…). Cada pessoa conta 1 vez por período." },
+    { label: "A010" }, { label: "Anamnese", hint: "Negócio com tag ANAMNESE criado no período, sem A010 (mesma régua da Visão Diária)" }, { label: "Outras" },
+    { label: "Custo/entrada" }, { label: "R1 agendadas", hint: "Pessoas que tiveram uma R1 marcada no período (pela data em que foi marcada)" }, { label: "R1 realizadas", hint: "Pessoas com R1 feita no período (completed, contrato pago ou reembolsado)" }, { label: "Contratos" },
     { label: "Custo/contrato" }, { label: "Parcerias" }, { label: "Custo/parceria" },
     { label: "Líquido recebido" }, { label: "ROAS" },
-  ];
+  ].filter(header => origem === "anuncio" || !["Custo/entrada", "Custo/contrato", "Custo/parceria", "ROAS"].includes(header.label));
 
   return (
     <TooltipProvider delayDuration={200}>
       <section className="min-w-0 space-y-[20px] text-foreground">
-        <div className="grid grid-cols-2 gap-[12px] md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-[12px] md:grid-cols-4 xl:grid-cols-7">
           {kpis.map(kpi => (
             <Card key={kpi.label} className="min-w-0">
               <CardContent className="space-y-[8px] p-[16px]">
@@ -161,8 +177,8 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque }: FunilSa
           <CardHeader className="space-y-[8px] p-[20px]">
             <CardTitle className="text-[18px] tracking-normal">{modeloData === "venda" ? "Funil por data da venda" : "Funil por safra (data do 1º clique)"}</CardTitle>
             <CardDescription className="text-[12px] leading-[1.6]">{modeloData === "venda"
-              ? `Cada etapa conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes daquela etapa"}. Só entram pessoas que vieram de anúncio.`
-              : "Pessoas agrupadas pelo período do 1º anúncio que clicaram; tudo o que fizeram depois (A010, R1, contrato, parceria) conta nesse período, mesmo meses depois. Safras recentes ainda vão crescer."}</CardDescription>
+              ? `Cada etapa conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes daquela etapa"}.${origem === "anuncio" ? " Só entram pessoas que vieram de anúncio." : ""}`
+              : "Pessoas agrupadas pelo período do 1º anúncio que clicaram; tudo o que fizeram depois (A010, R1, contrato, parceria) conta nesse período, mesmo meses depois. Safras recentes ainda vão crescer."}{origem === "todas" && " Mostrando a BU inteira (todas as origens); custos e ROAS só aparecem em Só anúncio."}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-[24px] p-[20px] pt-0">
             <div className="space-y-[16px]">
@@ -193,14 +209,14 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque }: FunilSa
                       {periodLabel(row.periodo, grao)}
                       {modeloData === "safra" && isMaturing(row.periodo, grao) && <Hint text="Parte das pessoas dessa safra ainda está no meio do funil"><Badge variant="outline" className="ml-[6px] px-[6px] py-[2px] text-[10px] font-normal">em maturação</Badge></Hint>}
                     </TableCell>
-                    <MetricCells row={row} />
+                    <MetricCells row={row} origem={origem} />
                   </TableRow>
                 ))}
               </TableBody>
               <TableFooter>
                 <TableRow className="hover:bg-muted/50">
                   <TableCell className="whitespace-nowrap px-[12px] py-[12px] font-semibold">TOTAL</TableCell>
-                  <MetricCells row={totals} />
+                  <MetricCells row={totals} origem={origem} />
                 </TableRow>
               </TableFooter>
             </Table>

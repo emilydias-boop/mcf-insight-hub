@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FunilSafras } from "@/components/marketing/FunilSafras";
 import { CriativosTable } from "@/components/marketing/CriativosTable";
-import { useCanaisPeriodo, CANAL_LABELS, formatInt, type Grao, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
+import { useCanaisPeriodo, CANAL_LABELS, formatInt, type Grao, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -115,6 +115,7 @@ export default function MarketingMCF() {
   const [grao, setGrao] = useState<Grao>("month");
   const [data, setData] = useState<ModeloData>("venda");
   const [toque, setToque] = useState<ModeloToque>("primeiro");
+  const [origem, setOrigem] = useState<ModeloOrigem>("anuncio");
   const [tab, setTab] = useState("funil");
   const [wasClamped, setWasClamped] = useState(false);
   const from = clampDate(period.from), to = clampDate(period.to);
@@ -162,12 +163,17 @@ export default function MarketingMCF() {
           <div role="group" aria-label="Contar pela" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Contar pela</span>
             <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre a data de contagem" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">Data da venda: a parceria de hoje aparece hoje, no criativo que trouxe a pessoa. Data do 1º clique: a venda volta para o período em que a pessoa clicou no anúncio — serve para medir o retorno do dinheiro gasto naquele período.</TooltipContent></Tooltip>
-            {([{ value: "venda", label: "Data da venda" }, { value: "safra", label: "Data do 1º clique" }] as const).map(item => <Button key={item.value} variant={data === item.value ? "secondary" : "ghost"} aria-pressed={data === item.value} disabled={tab === "canais"} onClick={() => setData(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+            {([{ value: "venda", label: "Data da venda" }, { value: "safra", label: "Data do 1º clique" }] as const).map(item => <Button key={item.value} variant={data === item.value ? "secondary" : "ghost"} aria-pressed={data === item.value} disabled={tab === "canais"} onClick={() => { setData(item.value); if (item.value === "safra") setOrigem("anuncio"); }} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
           </div>
           <div role="group" aria-label="Crédito para" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Crédito para</span>
             <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre o crédito do anúncio" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">1º anúncio: quem trouxe a pessoa. Último anúncio: o último anúncio com que ela interagiu antes daquela compra.</TooltipContent></Tooltip>
             {([{ value: "primeiro", label: "1º anúncio" }, { value: "ultimo", label: "Último anúncio" }] as const).map(item => <Button key={item.value} variant={toque === item.value ? "secondary" : "ghost"} aria-pressed={toque === item.value} disabled={tab === "canais"} onClick={() => setToque(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+          </div>
+          <div role="group" aria-label="Origem" className="flex flex-wrap items-center gap-[6px]">
+            <span className="text-[12px] text-muted-foreground">Origem</span>
+            <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre a origem" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">Só anúncio: pessoas que vieram de anúncio da Meta (base do custo e do ROAS). BU inteira: todas as pessoas da BU Incorporador, de qualquer origem — os números batem com a Visão Diária e o Painel Comercial.</TooltipContent></Tooltip>
+            {([{ value: "anuncio", label: "Só anúncio" }, { value: "todas", label: "BU inteira" }] as const).map(item => <Button key={item.value} variant={origem === item.value ? "secondary" : "ghost"} aria-pressed={origem === item.value} disabled={tab !== "funil" || data === "safra"} onClick={() => setOrigem(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
           </div>
         </div>
       </TooltipProvider>
@@ -185,7 +191,7 @@ export default function MarketingMCF() {
         <TabsTrigger value="canais" className="h-[36px] px-[12px] text-[12px]">Canais</TabsTrigger>
       </TabsList>
       {!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
-        <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} data={data} toque={toque} /></TabsContent>
+        <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} data={data} toque={toque} origem={origem} /></TabsContent>
         <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} data={data} toque={toque} /></TabsContent>
         <TabsContent value="canais" className="m-0"><CanaisPeriodo from={from} to={to} /></TabsContent>
       </>}
