@@ -20,3 +20,5 @@
 - [x] Relatório diário por BU de 15/10 (só leitura) — Grimaldo
 - [x] Relatório de operações 15/10 — retorno jsonb_pretty completo colado (só leitura)
 - [ ] Passar o card do Kawer (Pós Venda) da Karen para o William — aguardando nova aprovação
+
+- [x] Leitura relatorio_diario_bu de 16/10, 17/10 e 18/10 (somente leitura)
