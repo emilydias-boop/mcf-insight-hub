@@ -73,6 +73,7 @@ const ProvisionarPosVenda = lazy(() => import("./pages/pos-venda/ProvisionarUsua
 const ImportarHarvey = lazy(() => import("./pages/pos-venda/ImportarHarvey"));
 const DistribuicaoPosVenda = lazy(() => import("./pages/pos-venda/DistribuicaoNovosLicenciados"));
 const FluxoPosVenda = lazy(() => import("./pages/FluxoPosVenda"));
+const MateriaisProcesso = lazy(() => import("./pages/pos-venda/MateriaisProcesso"));
 const Discador = lazy(() => import("./pages/crm/Discador"));
 const Origens = lazy(() => import("./pages/crm/Origens"));
 const Grupos = lazy(() => import("./pages/crm/Grupos"));
@@ -326,6 +327,7 @@ const App = () => (
               <Route path="pos-venda/painel-comercial" element={<Navigate to="/pos-venda/crm" replace />} />
               {/* Fluxo do Pós-venda — tela só de exibição; qualquer usuário logado pode abrir (sem item no menu). */}
               <Route path="pos-venda/fluxo" element={<FluxoPosVenda />} />
+              <Route path="pos-venda/materiais" element={<MateriaisProcesso />} />
               <Route path="credito/painel-comercial" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra']}><BUProvider bu="credito" basePath="/credito/crm"><PainelComercialCredito /></BUProvider></RoleGuard>} />
               <Route path="credito/crm" element={<ResourceGuard resource="crm"><BUCRMLayout bu="credito" basePath="/credito/crm" /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
