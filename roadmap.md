@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Faturamento Closer/SDR/Canal — separar carteira, agrupar ex-SDRs e conciliar P2/Outside; somente front-end, sem publicação.
+
 - [x] Abrir documentos da biblioteca em popup no fluxo Pós-venda; 21 testes e compilação automática OK; navegador com dados simulados confirmou popup, recarga e Ir para a tela em computador/celular, sem banco/publicação.
 
 - [x] Academia MCF — aba Atribuir trilhas no Admin RH, trilhas adicionais por nome e todas as fases; 4 testes passaram, compilação OK; atribuição com login real não verificada (Supabase externo sem sessão disponível)
