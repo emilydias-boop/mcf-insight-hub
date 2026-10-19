@@ -23392,6 +23392,14 @@ export type Database = {
           tipo: string
         }[]
       }
+      sdr_situacao_bu: {
+        Args: { p_bu: string; p_ids: string[] }
+        Returns: {
+          ativo: boolean
+          motivo: string
+          profile_id: string
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sonax_casar_evento_com_campanha: {
