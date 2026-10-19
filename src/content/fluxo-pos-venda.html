@@ -153,10 +153,18 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(26px,4vw,38px);lin
 /* Status do que precisa existir: ok = já temos, todo = falta fazer, conf = falta confirmar */
 const ST={ok:'Já temos',wip:'Em teste',todo:'Falta fazer',conf:'A confirmar'};
 const D = {
-  compra:{k:'Início',t:'Compra na R2',meta:['Closer de R2'],
-    blocks:[['O que acontece','O parceiro compra o produto: R$ 5 mil no Pix ou no cartão à vista, ou R$ 6 mil em 12x no cartão.'],
+  r1v:{k:'Comercial · Closer de R1',t:'R1 · Reunião de vendas',meta:['Closer de R1','Individual'],
+    blocks:[['Hoje','Na R1 o closer vende a caução.'],
+            ['Quando vendermos só o produto de R$ 5 mil','O Canva desta reunião muda: a R1 deixa de vender a caução e passa a preparar a venda do produto de R$ 5 mil na R2.']],
+    itens:[['Canva da R1 atual (venda da caução)','ok'],
+           ['Novo Canva da R1 para quando vendermos só o produto de R$ 5 mil','todo']]},
+  compra:{k:'Comercial · Closer de R2',t:'R2 · Apresentação e compra',meta:['Closer de R2','Individual'],
+    blocks:[['Canva da R2','',['As vantagens do produto.','A jornada que o parceiro vai trilhar com a MCF: e-mail de boas-vindas, primeiro contato do GR, Reunião 1 de alinhamento, a trilha escolhida e a Aula de Alavancagem Patrimonial.']],
+            ['O que acontece','O parceiro compra o produto: R$ 5 mil no Pix ou no cartão à vista, ou R$ 6 mil em 12x no cartão.'],
             ['Depois','Ele recebe na hora o e-mail de boas-vindas, e a venda cai para o gerente de relacionamento, que faz o primeiro contato no mesmo dia. A trilha não é escolhida aqui.']],
-    itens:[['Novo cliente entra sozinho no CRM Pós-Venda quando a venda é paga (Hubla, MCF Pay, Kiwify)','ok'],
+    itens:[['Canva da R2: vantagens do produto','todo'],
+           ['Canva da R2: a jornada que o parceiro vai trilhar com a MCF','todo'],
+           ['Novo cliente entra sozinho no CRM Pós-Venda quando a venda é paga (Hubla, MCF Pay, Kiwify)','ok'],
            ['Produto de R$ 5 mil (R$ 6 mil em 12x) vendido na R2: hoje só em teste, sem substituir o produto atual','wip']]},
   email:{k:'Automático · na compra',t:'E-mail de boas-vindas',meta:['E-mail'],
     blocks:[['O que o parceiro recebe','',['Acesso ao Harvey.','Nome e contato do seu gerente de relacionamento, para falar com ele na hora, se quiser.']]],
@@ -172,7 +180,7 @@ const D = {
            ['PDF da pauta da Reunião 1','todo'],
            ['Aulas 01 a 09 gravadas','todo'],
            ['PDF de cada aula (01 a 09), para quem prefere ler','todo']]},
-  r1:{k:'Reunião 1 · até 48h',t:'Reunião de alinhamento',meta:['Individual','Vídeo','20 a 40 min'],
+  r1:{k:'Pós-venda · Reunião 1 · até 48h',t:'Reunião de alinhamento',meta:['Individual','Vídeo','20 a 40 min'],
     blocks:[['Aulas antes','Aulas 01 a 09, enviadas no primeiro contato.'],
             ['Pauta','',['Conferir o cadastro no Harvey e o atrelamento ao gerente de relacionamento.','Conferir o preenchimento da anamnese.','Confirmar a trilha da jornada escolhida.']]],
     checks:[['Compareceu?','Remarcar. Status Pendente.'],
@@ -261,7 +269,9 @@ function btn(id,cls,k,t,sm){
 function todosItens(){
   const g=[];
   g.push(['Geral',GERAL]);
-  g.push(['Compra e e-mail',[...D.compra.itens,...D.email.itens]]);
+  g.push(['R1 de vendas (closer)',D.r1v.itens]);
+  g.push(['R2 e compra (closer)',D.compra.itens]);
+  g.push(['E-mail de boas-vindas',D.email.itens]);
   g.push(['Primeiro contato no WhatsApp',D.contato.itens]);
   g.push(['Reunião 1 de alinhamento',D.r1.itens]);
   g.push(['Aula de Alavancagem Patrimonial',D.alav.itens]);
@@ -274,10 +284,13 @@ function renderFlow(){
   const tr=T.find(x=>x.id===trilha);
   const all=todosItens().flatMap(x=>x[1]); const tot=prog(all);
   let h=`<button class="sumbtn" data-id="status" aria-pressed="${sel==='status'}"><b>O que já temos e o que falta</b><span>${tot.ok} de ${tot.n} itens prontos · clique para ver a lista</span></button><div class="sp"></div>`;
-  h+=btn('compra','start','', 'Compra na R2','R$ 5 mil, ou R$ 6 mil em 12x');
+  h+='<div class="q">Comercial · closers</div>';
+  h+=btn('r1v','start','','R1 · Reunião de vendas','Hoje: venda da caução');
+  h+='<div class="v"></div>'+btn('compra','ind','Closer de R2','R2 · Apresentação e compra','R$ 5 mil, ou R$ 6 mil em 12x');
+  h+='<div class="v"></div><div class="q">Pós-venda · gerentes de relacionamento</div>';
   h+='<div class="v"></div>'+btn('email','','Automático · na compra','E-mail de boas-vindas','Acesso ao Harvey + contato do GR');
   h+='<div class="v"></div>'+btn('contato','','GR · mesmo dia','Primeiro contato no WhatsApp','Pauta da Reunião 1 + 9 aulas');
-  h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Reunião 1 · até 48h','Reunião de alinhamento','Harvey, anamnese e trilha')+
+  h+='<div class="v"></div><div class="r1row"><div class="c">'+btn('r1','ind','Pós-venda · Reunião 1 · até 48h','Reunião de alinhamento','Harvey, anamnese e trilha')+
      `</div><div class="s"><div class="h"></div><button class="chip" data-id="alav" aria-pressed="${sel==='alav'}"><b>Aula de Alavancagem</b><span>marcada na Reunião 1 · em paralelo</span>${progTag(D.alav.itens)}</button></div></div>`;
   h+='<div class="v"></div><div class="q">Qual é a trilha?</div><div class="fan"><div class="bar"></div><div class="trilhas">';
   T.forEach(x=>{const it=x.steps?x.steps.flatMap(s=>s.itens):ITENS_TRILHA_NOVA;
