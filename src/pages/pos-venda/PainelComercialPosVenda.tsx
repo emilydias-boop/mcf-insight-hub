@@ -29,10 +29,19 @@ type Reuniao = {
   id: string; deal_id: string; gerente_id: string; tipo: string; inicio: string; created_at: string; status: string;
   crm_deals?: { name: string | null } | null; profiles?: { full_name: string | null; email: string | null } | null;
 };
-type Lead = { id: string; name: string | null; created_at: string; crm_stages?: { stage_name: string | null } | null };
+type Lead = { id: string; name: string | null; created_at: string; custom_fields?: Record<string, unknown> | null; crm_stages?: { stage_name: string | null } | null; fonte?: string };
 
 type Linha = { cliente: string; data: string; gerente: string; status: string };
-type Detalhe = { titulo: string; linhas: Linha[] };
+type Detalhe = { titulo: string; linhas: Linha[]; colunaGerente?: string };
+
+const FONTE_LABEL: Record<string, string> = { hubla: 'Hubla', mcfpay: 'MCF Pay', kiwify: 'Kiwify' };
+/** Lead conta só se entrou por venda (pos_venda_fonte) ou outro meio; base importada do Harvey (harvey_crm_id) fica fora. */
+const fonteDoLead = (cf: Record<string, unknown> | null | undefined): string | null => {
+  const f = cf?.pos_venda_fonte;
+  if (typeof f === 'string' && f.trim()) return FONTE_LABEL[f.trim().toLowerCase()] ?? f.trim();
+  if (cf && 'harvey_crm_id' in cf) return null;
+  return 'Outro';
+};
 
 const ymdHoje = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const ymd = (d: Date) => format(d, 'yyyy-MM-dd');
@@ -80,7 +89,7 @@ export default function PainelComercialPosVenda() {
     staleTime: 60_000,
     queryFn: async () => {
       const [leads, criadas, doPeriodo] = await Promise.all([
-        buscarTudo<Lead>((a, b) => db.from('crm_deals').select('id, name, created_at, crm_stages(stage_name)')
+        buscarTudo<Lead>((a, b) => db.from('crm_deals').select('id, name, created_at, custom_fields, crm_stages(stage_name)')
           .eq('origin_id', POS_VENDA_ORIGIN_ID).gte('created_at', isoBrt(from)).lt('created_at', isoBrt(ate))
           .order('created_at').range(a, b)),
         buscarTudo<Reuniao>((a, b) => db.from('pos_venda_reunioes')
@@ -90,7 +99,9 @@ export default function PainelComercialPosVenda() {
           .select('id, deal_id, gerente_id, tipo, inicio, created_at, status, crm_deals(name), profiles:gerente_id(full_name, email)')
           .eq('tipo', 'viabilidade_1').gte('inicio', isoBrt(from)).lt('inicio', isoBrt(ate)).order('inicio').range(a, b)),
       ]);
-      const unicos = [...new Map(leads.map((l) => [l.id, l])).values()];
+      const unicos = [...new Map(leads.map((l) => [l.id, l])).values()]
+        .map((l) => ({ ...l, fonte: fonteDoLead(l.custom_fields) ?? undefined, custom_fields: undefined }))
+        .filter((l) => !!l.fonte);
       return { leads: unicos, criadas, doPeriodo };
     },
   });
@@ -116,11 +127,18 @@ export default function PainelComercialPosVenda() {
   }));
   const abrir = (titulo: string, lista: Reuniao[], campo: 'inicio' | 'created_at' = 'inicio') => setDetalhe({ titulo, linhas: linhasReuniao(lista, campo) });
 
+  const quebraFonte = useMemo(() => {
+    const c = new Map<string, number>();
+    m.leads.forEach((l) => c.set(l.fonte ?? 'Outro', (c.get(l.fonte ?? 'Outro') ?? 0) + 1));
+    return [...c.entries()].sort((a, b) => (a[0] === 'Outro' ? 1 : b[0] === 'Outro' ? -1 : b[1] - a[1])).map(([f, n]) => `${f} ${fmtInt(n)}`).join(' · ');
+  }, [m.leads]);
+
   const cards: TeamKpiCardDefinition[] = [
     {
       title: 'Leads que entraram', value: fmtInt(m.leads.length), icon: Users, color: 'text-sky-500', bgColor: 'bg-sky-500/10',
-      tooltip: 'Negócios da pipeline Relacionamento - Pós venda criados no período (data de criação, horário de Brasília).',
-      customOnClick: () => setDetalhe({ titulo: 'Leads que entraram', linhas: m.leads.map((l) => ({ cliente: l.name ?? 'Cliente', data: fmtBrt(l.created_at), gerente: '—', status: l.crm_stages?.stage_name ?? '—' })) }),
+      tooltip: 'Negócios da pipeline Relacionamento - Pós venda criados no período (horário de Brasília) que entraram por venda (Hubla, MCF Pay, Kiwify...) ou outro meio. A base importada do Harvey não conta.',
+      subline: quebraFonte || undefined,
+      customOnClick: () => setDetalhe({ titulo: 'Leads que entraram', colunaGerente: 'Fonte', linhas: m.leads.map((l) => ({ cliente: l.name ?? 'Cliente', data: fmtBrt(l.created_at), gerente: l.fonte ?? 'Outro', status: l.crm_stages?.stage_name ?? '—' })) }),
     },
     {
       title: 'Agendamentos', value: fmtInt(m.agendamentos.length), icon: CalendarPlus, color: 'text-indigo-500', bgColor: 'bg-indigo-500/10',
@@ -270,7 +288,7 @@ export default function PainelComercialPosVenda() {
           <div className="max-h-[60vh] overflow-auto">
             <Table>
               <TableHeader>
-                <TableRow><TableHead>Cliente</TableHead><TableHead>Data</TableHead><TableHead>Gerente</TableHead><TableHead>Status</TableHead></TableRow>
+                <TableRow><TableHead>Cliente</TableHead><TableHead>Data</TableHead><TableHead>{detalhe?.colunaGerente ?? 'Gerente'}</TableHead><TableHead>Status</TableHead></TableRow>
               </TableHeader>
               <TableBody>
                 {detalhe?.linhas.map((l, i) => (
