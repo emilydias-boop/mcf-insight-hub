@@ -20226,6 +20226,7 @@ export type Database = {
           origem: string | null
           pago_ok: boolean | null
           person: string | null
+          produto: string | null
           tipo: string | null
           valido: boolean | null
           valor: number | null
@@ -20247,6 +20248,23 @@ export type Database = {
         Relationships: []
       }
       mkt_funnel_events_v2_old: {
+        Row: {
+          canal: string | null
+          first_ad_id: string | null
+          first_paid_at: string | null
+          id: number | null
+          last_ad_id: string | null
+          occurred_at: string | null
+          origem: string | null
+          pago_ok: boolean | null
+          person: string | null
+          tipo: string | null
+          valido: boolean | null
+          valor: number | null
+        }
+        Relationships: []
+      }
+      mkt_funnel_events_v3_old: {
         Row: {
           canal: string | null
           first_ad_id: string | null
@@ -22673,6 +22691,22 @@ export type Database = {
           thruplays: number
           thumbnail_url: string
           video_3s: number
+        }[]
+      }
+      mkt_funil_contratos: {
+        Args: {
+          p_data?: string
+          p_from: string
+          p_grao?: string
+          p_origem?: string
+          p_to: string
+        }
+        Returns: {
+          brutos: number
+          liquidos: number
+          periodo: string
+          produto: string
+          reembolsados: number
         }[]
       }
       mkt_funil_criativos: {

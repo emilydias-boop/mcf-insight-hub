@@ -75,6 +75,14 @@ export interface CanalPeriodoRow {
   parcerias: number;
 }
 
+export interface FunilContratoRow {
+  periodo: string;
+  produto: string;
+  brutos: number;
+  reembolsados: number;
+  liquidos: number;
+}
+
 export type Grao = 'day' | 'week' | 'month';
 export type Nivel = 'criativo' | 'ad' | 'adset' | 'campaign';
 export type ModeloData = 'venda' | 'safra';
@@ -158,6 +166,14 @@ const mapCanal = (r: any): CanalPeriodoRow => ({
   r1_realizadas: toNum(r.r1_realizadas),
   contratos: toNum(r.contratos),
   parcerias: toNum(r.parcerias),
+});
+
+const mapContrato = (r: any): FunilContratoRow => ({
+  periodo: r.periodo,
+  produto: r.produto,
+  brutos: Number(r.brutos),
+  reembolsados: Number(r.reembolsados),
+  liquidos: Number(r.liquidos),
 });
 
 export const useFunilSafras = ({
@@ -246,6 +262,46 @@ export const useCanaisPeriodo = ({ from, to }: { from: string | null; to: string
       return (data ?? []).map(mapCanal);
     },
   });
+
+export const useFunilContratos = ({
+  from,
+  to,
+  grao = 'month',
+  data = 'venda',
+  origem = 'anuncio',
+}: {
+  from: string | null;
+  to: string | null;
+  grao?: Grao;
+  data?: ModeloData;
+  origem?: ModeloOrigem;
+}) =>
+  useQuery<FunilContratoRow[]>({
+    queryKey: ['mkt-funil-contratos', from, to, grao, data, origem],
+    staleTime: 5 * 60 * 1000,
+    enabled: !!from && !!to,
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_contratos', {
+        p_from: from,
+        p_to: to,
+        p_grao: grao,
+        p_data: data,
+        p_origem: origem,
+      });
+      if (error) {
+        if (error.code === '42501') throw new Error(PERM_ERROR);
+        throw error;
+      }
+      return (rows ?? []).map(mapContrato);
+    },
+  });
+
+export const produtoContratoLabel = (produto: string): string => {
+  if (produto === 'A000 - Contrato') return 'A000';
+  if (produto === 'Contrato MCF') return 'Contrato MCF';
+  if (produto === 'Caução - Leopoldo + MCF') return 'Caução Leopoldo';
+  return produto;
+};
 
 export const CANAL_LABELS: Record<string, string> = {
   paid_meta: 'Anúncio Meta',
