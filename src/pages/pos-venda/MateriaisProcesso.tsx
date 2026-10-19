@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Archive, ExternalLink, FileUp, Loader2, Plus, Search } from "lucide-react";
+import { Archive, ExternalLink, FileUp, Loader2, Paperclip, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,6 +19,12 @@ import { MATERIAL_STATUS, MATERIAL_TIPOS, PROCESSO_POS_VENDA, statusInfo } from 
 
 const db = supabase as any;
 const BUCKET = "processo-materiais";
+
+async function abrirArquivoPath(path: string) {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 600);
+  if (error || !data) { toast.error("Não foi possível abrir o arquivo"); return; }
+  window.open(data.signedUrl, "_blank", "noopener");
+}
 
 type Etapa = { id: string; chave: string; titulo: string; ordem: number };
 type Material = {
@@ -151,14 +157,33 @@ export default function MateriaisProcesso() {
               {itens.map((m) => {
                 const s = statusInfo(m.status);
                 return (
-                  <button key={m.id} onClick={() => setAberto(m)}
-                    className={cn("w-full grid grid-cols-12 gap-2 px-4 py-2 text-left text-sm border-b last:border-0 hover:bg-muted/50", !m.ativo && "opacity-50")}>
+                  <div key={m.id} role="button" tabIndex={0} onClick={() => setAberto(m)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAberto(m); } }}
+                    className={cn("w-full grid grid-cols-12 gap-2 px-4 py-2 text-left text-sm border-b last:border-0 hover:bg-muted/50 cursor-pointer items-center", !m.ativo && "opacity-50")}>
                     <span className="col-span-2"><Badge variant="outline" className={s.cls}>{s.label}</Badge></span>
-                    <span className="col-span-5">{m.titulo}{!m.ativo && " (arquivado)"}</span>
+                    <span className="col-span-4 min-w-0">
+                      <span className="block">{m.titulo}{!m.ativo && " (arquivado)"}</span>
+                      {m.observacao && <span className="block truncate text-xs text-muted-foreground" title={m.observacao}>{m.observacao}</span>}
+                    </span>
                     <span className="col-span-1 text-muted-foreground">{MATERIAL_TIPOS[m.tipo] ?? m.tipo}</span>
+                    <span className="col-span-1 flex items-center gap-1">
+                      {m.link_url ? (
+                        <Button variant="outline" size="sm" className="h-7 px-2" asChild>
+                          <a href={m.link_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                            <ExternalLink className="h-3 w-3 mr-1" />Abrir
+                          </a>
+                        </Button>
+                      ) : !m.arquivo_path && <span className="text-muted-foreground">—</span>}
+                      {m.arquivo_path && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title={m.arquivo_nome ?? "Arquivo anexado"}
+                          onClick={(e) => { e.stopPropagation(); abrirArquivoPath(m.arquivo_path!); }}>
+                          <Paperclip className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </span>
                     <span className="col-span-2 text-muted-foreground truncate">{nomePessoa(m.responsavel_id)}</span>
                     <span className="col-span-2 text-muted-foreground text-right">{fmt(m.updated_at ?? m.created_at)}</span>
-                  </button>
+                  </div>
                 );
               })}
             </CardContent>
