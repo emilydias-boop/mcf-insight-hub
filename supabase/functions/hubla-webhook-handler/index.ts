@@ -91,6 +91,15 @@ const PRODUCT_MAPPING: Record<string, string> = {
 function mapProductCategory(productName: string, productCode?: string): string {
   const name = productName?.toUpperCase() || '';
   const code = productCode?.toUpperCase() || '';
+
+  // ===== PRIORIDADE -1: Caução (contrato de caução, ex.: "Caução - Leopoldo + MCF") =====
+  // Deve vir ANTES do Guia CAIXA e das regras de Clube do Arremate: o match
+  // parcial da chave curta 'CA' pegava "CAUÇÃO" e classificava como
+  // clube_arremate, quando comercialmente é um contrato pago.
+  if (name.includes('CAUÇÃO') || name.includes('CAUCAO')) {
+    return 'contrato';
+  }
+
   
   // ===== PRIORIDADE 0: Guia CAIXA (infoproduto de topo → Inside Sales) =====
   // Deve vir ANTES da regra de Clube do Arremate porque o produto está
