@@ -15102,6 +15102,195 @@ export type Database = {
         }
         Relationships: []
       }
+      processo_etapas: {
+        Row: {
+          chave: string
+          id: string
+          ordem: number
+          processo_id: string
+          titulo: string
+        }
+        Insert: {
+          chave: string
+          id?: string
+          ordem?: number
+          processo_id: string
+          titulo: string
+        }
+        Update: {
+          chave?: string
+          id?: string
+          ordem?: number
+          processo_id?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processo_etapas_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processo_materiais: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_path: string | null
+          assunto: string | null
+          ativo: boolean
+          conteudo: string | null
+          created_at: string | null
+          created_by: string | null
+          etapa_id: string
+          id: string
+          link_url: string | null
+          observacao: string | null
+          ordem: number
+          processo_id: string
+          responsavel_id: string | null
+          status: string
+          tipo: string
+          titulo: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_path?: string | null
+          assunto?: string | null
+          ativo?: boolean
+          conteudo?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          etapa_id: string
+          id?: string
+          link_url?: string | null
+          observacao?: string | null
+          ordem?: number
+          processo_id: string
+          responsavel_id?: string | null
+          status?: string
+          tipo: string
+          titulo: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_path?: string | null
+          assunto?: string | null
+          ativo?: boolean
+          conteudo?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          etapa_id?: string
+          id?: string
+          link_url?: string | null
+          observacao?: string | null
+          ordem?: number
+          processo_id?: string
+          responsavel_id?: string | null
+          status?: string
+          tipo?: string
+          titulo?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processo_materiais_etapa_id_fkey"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "processo_etapas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processo_materiais_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processo_materiais_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processo_materiais_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      processo_materiais_historico: {
+        Row: {
+          alterado_em: string | null
+          alterado_por: string | null
+          campo: string
+          id: string
+          material_id: string
+          valor_antigo: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          alterado_em?: string | null
+          alterado_por?: string | null
+          campo: string
+          id?: string
+          material_id: string
+          valor_antigo?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          alterado_em?: string | null
+          alterado_por?: string | null
+          campo?: string
+          id?: string
+          material_id?: string
+          valor_antigo?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processo_materiais_historico_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "processo_materiais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processos: {
+        Row: {
+          chave: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string
+        }
+        Insert: {
+          chave: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+        }
+        Update: {
+          chave?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+        }
+        Relationships: []
+      }
       product_configurations: {
         Row: {
           count_in_dashboard: boolean | null
