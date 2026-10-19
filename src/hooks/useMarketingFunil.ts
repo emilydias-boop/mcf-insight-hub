@@ -338,3 +338,34 @@ export const formatBRL = (n: number): string =>
 
 export const formatInt = (n: number): string =>
   new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(n);
+
+export type AdPreviewFormato =
+  | 'MOBILE_FEED_STANDARD'
+  | 'INSTAGRAM_STANDARD'
+  | 'INSTAGRAM_REELS'
+  | 'INSTAGRAM_STORY'
+  | 'FACEBOOK_REELS_MOBILE';
+
+export const useAdPreview = (adId: string | null, formato: AdPreviewFormato) =>
+  useQuery<{ src: string; formato: string }>({
+    queryKey: ['mkt-ad-preview', adId, formato],
+    enabled: !!adId,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('meta-ad-preview', { body: { ad_id: adId, formato } });
+      if (error) {
+        let msg = error.message;
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const b = await ctx.json();
+            if (b?.erro) msg = b.erro;
+          }
+        } catch { /* mantém mensagem original */ }
+        throw new Error(msg);
+      }
+      if (!data?.src) throw new Error(data?.erro ?? 'Prévia indisponível');
+      return data;
+    },
+  });
