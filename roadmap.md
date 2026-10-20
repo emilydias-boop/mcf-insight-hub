@@ -26,3 +26,5 @@
 - [ ] Passar o card do Kawer (Pós Venda) da Karen para o William — aguardando nova aprovação
 
 - [x] Leitura relatorio_diario_bu de 16/10, 17/10 e 18/10 (somente leitura)
+
+- [x] Relatório diário por BU de 19/10 (somente leitura)
