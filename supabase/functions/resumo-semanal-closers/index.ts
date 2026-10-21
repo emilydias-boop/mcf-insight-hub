@@ -62,9 +62,13 @@ Deno.serve(async (req) => {
       porBu.set(l.bu, [...(porBu.get(l.bu) ?? []), l]);
     }
 
-    const { data: gestores } = await sb.from("user_roles")
-      .select("role, profiles!inner(email, full_name, squad, access_status)")
-      .in("role", ["coordenador", "manager"]);
+    const { data: papeis } = await sb.from("user_roles")
+      .select("user_id").in("role", ["coordenador", "manager"]);
+    const ids = [...new Set((papeis ?? []).map((p) => p.user_id))];
+    const { data: perfis } = ids.length
+      ? await sb.from("profiles").select("email, squad, access_status").in("id", ids)
+      : { data: [] };
+    const gestores = (perfis ?? []).map((p) => ({ profiles: p }));
 
     const resultado: Record<string, string> = {};
     for (const [bu, linhas] of porBu) {
