@@ -2980,6 +2980,33 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_contato_trocado_por_telefone: {
+        Row: {
+          criado_em: string
+          dados_antes: Json
+          id: number
+          motivo: string | null
+          registro_id: string
+          tabela: string
+        }
+        Insert: {
+          criado_em?: string
+          dados_antes: Json
+          id?: number
+          motivo?: string | null
+          registro_id: string
+          tabela: string
+        }
+        Update: {
+          criado_em?: string
+          dados_antes?: Json
+          id?: number
+          motivo?: string | null
+          registro_id?: string
+          tabela?: string
+        }
+        Relationships: []
+      }
       backup_contrato_duplicado_sarah_20261014: {
         Row: {
           already_builds: boolean | null
