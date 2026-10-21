@@ -62,20 +62,22 @@ Deno.serve(async (req) => {
       porBu.set(l.bu, [...(porBu.get(l.bu) ?? []), l]);
     }
 
-    const { data: papeis } = await sb.from("user_roles")
-      .select("user_id").in("role", ["coordenador", "manager"]);
-    const ids = [...new Set((papeis ?? []).map((p) => p.user_id))];
-    const { data: perfis } = ids.length
-      ? await sb.from("profiles").select("email, squad, access_status").in("id", ids)
-      : { data: [] };
-    const gestores = (perfis ?? []).map((p) => ({ profiles: p }));
+    // Destinatários definidos pela diretoria (21/10/2026). BUs fora desta lista não recebem e-mail.
+    const DESTINATARIOS_POR_BU: Record<string, string[]> = {
+      incorporador: [
+        "jessica.bellini@minhacasafinanciada.com",
+        "grimaldo.neto@minhacasafinanciada.com",
+        "thobson.motta@minhacasafinanciada.com",
+      ],
+      consorcio: [
+        "grimaldo.neto@minhacasafinanciada.com",
+        "thobson.motta@minhacasafinanciada.com",
+      ],
+    };
 
     const resultado: Record<string, string> = {};
     for (const [bu, linhas] of porBu) {
-      const dest = [...new Set(((gestores ?? []) as any[])
-        .map((g) => g.profiles)
-        .filter((p) => p?.email && p.access_status === "ativo" && Array.isArray(p.squad) && p.squad.includes(bu))
-        .map((p) => String(p.email).toLowerCase()))];
+      const dest = DESTINATARIOS_POR_BU[bu] ?? [];
       if (dest.length === 0) { resultado[bu] = "sem destinatário"; continue; }
 
       const { data: ja } = await sb.from("resumo_semanal_closers_envios")
