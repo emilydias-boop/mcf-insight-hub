@@ -297,3 +297,9 @@ verify_jwt = false
 
 [functions.consorcio-venda-webhook-dispatcher]
 verify_jwt = false
+
+[functions.resumo-semanal-closers]
+verify_jwt = false
+
+[functions.gerar-script-piloto]
+verify_jwt = false

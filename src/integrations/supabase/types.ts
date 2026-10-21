@@ -16143,6 +16143,39 @@ export type Database = {
         }
         Relationships: []
       }
+      resumo_semanal_closers_envios: {
+        Row: {
+          bu: string
+          created_at: string
+          destinatarios: string[]
+          erro: string | null
+          id: string
+          semana_inicio: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          bu: string
+          created_at?: string
+          destinatarios?: string[]
+          erro?: string | null
+          id?: string
+          semana_inicio: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          bu?: string
+          created_at?: string
+          destinatarios?: string[]
+          erro?: string | null
+          id?: string
+          semana_inicio?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rh_announcements: {
         Row: {
           ativo: boolean
@@ -23354,9 +23387,38 @@ export type Database = {
       }
       resolve_owner_label: { Args: { _owner: string }; Returns: string }
       resolve_stage_name: { Args: { _stage_id: string }; Returns: string }
+      resumo_semanal_closers: {
+        Args: { _fim: string; _inicio: string }
+        Returns: {
+          bu: string
+          closer_id: string
+          closer_nome: string
+          contratos_pagos: number
+          conversao_pct: number
+          participantes_atendidos: number
+          reunioes_realizadas: number
+        }[]
+      }
       salvar_metas_agendamento: {
         Args: { p_ano_mes: string; p_itens: Json }
         Returns: number
+      }
+      script_piloto_reunioes: {
+        Args: { _dias?: number }
+        Returns: {
+          aderencia_pct: number
+          closer_bu: string
+          closer_id: string
+          closer_nome: string
+          duracao_min: number
+          meeting_slot_id: string
+          nota_geral: number
+          pagos: number
+          participantes: Json
+          recording_id: string
+          scheduled_at: string
+          tem_transcricao: boolean
+        }[]
       }
       script_publicar_versao: {
         Args: { _etapas: Json; _icp_segment?: string; _meeting_type: string }
@@ -23374,6 +23436,17 @@ export type Database = {
           ordem: number
           peso: number
           versao: number
+        }[]
+      }
+      script_saude_faixas: {
+        Args: { _meeting_type?: string }
+        Returns: {
+          contratos: number
+          faixa: string
+          ordem: number
+          participantes: number
+          reunioes: number
+          taxa_pct: number
         }[]
       }
       sdr_ia_agenda_livre: {
