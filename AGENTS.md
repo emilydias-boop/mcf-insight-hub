@@ -11,3 +11,5 @@
 - Manual Academy track assignment uses the admin/RH-validated academia_atribuir_trilhas RPC; additional tracks reuse extension records and expose every assigned phase, preserving existing tasks and progress.
 - Process materials library (processos/processo_etapas/processo_materiais) is display/edit-only: it never feeds automation_templates or any sending path; /pos-venda/fluxo injects it as window.__MATERIAIS__ and falls back to the HTML's embedded data.
 - Flow document dialogs live outside the sandboxed iframe; accept material messages only from its contentWindow and queried material IDs, and keep dialog state independent of flow refetches.
+- Script Piloto pilots are derived on read by script_piloto_reunioes (R1 completed, 2–3 unrefunded paid attendees), so they enter and leave automatically without a table or job; AI-generated drafts are never stored and only become official through script_publicar_versao.
+- Weekly closer summary is sent only by the resumo-semanal-closers edge function (Monday cron), deduplicated per week+BU in resumo_semanal_closers_envios, so re-runs never double-send.
