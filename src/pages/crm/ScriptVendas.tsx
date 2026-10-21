@@ -27,6 +27,7 @@ import {
   type IcpSegment,
   type ScriptStepInput,
 } from '@/hooks/useSalesScript';
+import { ScriptPilotosSection } from '@/components/crm/ScriptPilotosSection';
 
 interface DraftStep extends ScriptStepInput {
   key: string;
@@ -279,6 +280,26 @@ export default function ScriptVendas() {
           </AlertDescription>
         </Alert>
       )}
+
+      <ScriptPilotosSection
+        meetingType={meetingType}
+        onRascunho={(etapas) => {
+          setDraft(
+            etapas.map((e, i) => ({
+              key: novaKey(),
+              ordem: i + 1,
+              etapa: e.etapa,
+              descricao: [e.descricao, e.exemplo ? `Exemplo real: "${e.exemplo}"` : null]
+                .filter(Boolean)
+                .join('\n\n'),
+              criterio: e.criterio,
+              peso: Number(e.peso) || 1,
+              obrigatoria: e.obrigatoria,
+            })),
+          );
+          setErros({});
+        }}
+      />
 
       <Alert>
         <Info className="h-4 w-4" />
