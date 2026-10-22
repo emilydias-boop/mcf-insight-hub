@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { distribuirResumo } from './anamneseResumo';
 
 interface AnamneseCampo {
   tag?: string | null;
@@ -59,9 +60,14 @@ interface Props {
 export const AnamneseExternaButton = ({ anamnese, clienteNome }: Props) => {
   const [open, setOpen] = useState(false);
 
-  const secoes = (anamnese.estruturada?.secoes ?? []).filter(
-    (s): s is AnamneseSecao => !!s && typeof s === 'object',
+  const distribuido = distribuirResumo(
+    anamnese.resumo,
+    (anamnese.estruturada?.secoes ?? []).filter(
+      (s): s is AnamneseSecao => !!s && typeof s === 'object',
+    ),
   );
+  const secoes = distribuido.secoes as AnamneseSecao[];
+  const resumoRestante = distribuido.resto;
   const temLink = !!anamnese.pdf_url;
   const temSecoes = secoes.length > 0;
   const semAnamnese = anamnese.preenchida === false || (!temLink && !temSecoes);
@@ -140,13 +146,13 @@ export const AnamneseExternaButton = ({ anamnese, clienteNome }: Props) => {
 
           <ScrollArea className="max-h-[72vh]">
             <div className="space-y-4 px-6 pb-5 pt-2">
-              {anamnese.resumo && (
+              {resumoRestante && (
                 <div className="rounded-xl border border-border bg-muted/30 p-5">
                   <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                     📝 Resumo
                   </h3>
                   <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
-                    {anamnese.resumo}
+                    {resumoRestante}
                   </p>
                 </div>
               )}
