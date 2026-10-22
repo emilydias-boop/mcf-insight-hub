@@ -59,9 +59,14 @@ interface Props {
 export const AnamneseExternaButton = ({ anamnese, clienteNome }: Props) => {
   const [open, setOpen] = useState(false);
 
-  const secoes = (anamnese.estruturada?.secoes ?? []).filter(
-    (s): s is AnamneseSecao => !!s && typeof s === 'object',
+  const distribuido = distribuirResumo(
+    anamnese.resumo,
+    (anamnese.estruturada?.secoes ?? []).filter(
+      (s): s is AnamneseSecao => !!s && typeof s === 'object',
+    ),
   );
+  const secoes = distribuido.secoes as AnamneseSecao[];
+  const resumoRestante = distribuido.resto;
   const temLink = !!anamnese.pdf_url;
   const temSecoes = secoes.length > 0;
   const semAnamnese = anamnese.preenchida === false || (!temLink && !temSecoes);
