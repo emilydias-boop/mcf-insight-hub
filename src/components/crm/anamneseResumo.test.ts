@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { distribuirResumo } from './anamneseResumo';
 
 const resumo = `Contato: Nascimento — 02/05/1974; Profissão — Advogado
