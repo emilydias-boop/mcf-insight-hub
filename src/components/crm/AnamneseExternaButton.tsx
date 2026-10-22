@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, FileText } from 'lucide-react';
+import { ClipboardList, ExternalLink, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -40,6 +40,16 @@ export function getAnamneseV2(deal: unknown): AnamneseV2 | null {
   if (!a || typeof a !== 'object' || Array.isArray(a)) return null;
   return a as AnamneseV2;
 }
+
+const normalizar = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const EMOJIS: [string, string][] = [
+  ['contato', '📋'], ['objetivo', '🎯'], ['patrimonio', '🏛️'], ['financ', '💰'],
+  ['planej', '🗺️'], ['cliente', '👤'],
+];
+const emojiSecao = (s: AnamneseSecao) => {
+  const t = normalizar(`${s.chave ?? ''} ${s.titulo ?? ''}`);
+  return EMOJIS.find(([k]) => t.includes(k))?.[1] ?? '📄';
+};
 
 interface Props {
   anamnese: AnamneseV2;
@@ -114,10 +124,10 @@ export const AnamneseExternaButton = ({ anamnese, clienteNome }: Props) => {
           className="max-w-3xl gap-0 p-0"
           onClick={(e) => e.stopPropagation()}
         >
-          <DialogHeader className="space-y-1 border-b border-border px-6 py-4">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <FileText className="h-4 w-4 text-primary" />
-              Anamnese do cliente
+          <DialogHeader className="space-y-1 px-6 pb-2 pt-5">
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+              <ClipboardList className="h-5 w-5 text-primary" />
+              Respostas da Anamnese
             </DialogTitle>
             <DialogDescription className="text-xs">
               {clienteNome ? clienteNome : 'Relatório de anamnese'}
@@ -128,12 +138,12 @@ export const AnamneseExternaButton = ({ anamnese, clienteNome }: Props) => {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="max-h-[68vh]">
-            <div className="space-y-4 px-6 py-5">
+          <ScrollArea className="max-h-[72vh]">
+            <div className="space-y-4 px-6 pb-5 pt-2">
               {anamnese.resumo && (
-                <div className="rounded-lg border border-border bg-muted/40 p-4">
-                  <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Resumo
+                <div className="rounded-xl border border-border bg-muted/30 p-5">
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    📝 Resumo
                   </h3>
                   <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
                     {anamnese.resumo}
@@ -143,37 +153,60 @@ export const AnamneseExternaButton = ({ anamnese, clienteNome }: Props) => {
 
               {temSecoes ? (
                 secoes.map((secao, i) => {
-                  const campos = (secao.campos ?? []).filter(Boolean);
+                  const campos = (secao.campos ?? []).filter(Boolean) as AnamneseCampo[];
+                  const ehObjetivos = normalizar(`${secao.chave ?? ''} ${secao.titulo ?? ''}`).includes('objetivo');
+                  const idxDestaque = ehObjetivos
+                    ? campos.findIndex((c) => {
+                        const t = normalizar(`${c.tag ?? ''} ${c.label ?? ''}`);
+                        return t.includes('objetivo') && !t.includes('12');
+                      })
+                    : -1;
+                  const destaque = idxDestaque >= 0 ? campos[idxDestaque] : null;
+                  const restantes = campos.filter((_, j) => j !== idxDestaque);
                   return (
                     <section
                       key={secao.chave ?? i}
-                      className="overflow-hidden rounded-lg border border-border"
+                      className="rounded-xl border border-border bg-muted/30 p-5"
                     >
-                      <header className="border-b border-border bg-muted/50 px-4 py-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
-                          {secao.titulo || 'Seção'}
-                        </h3>
-                      </header>
-                      {campos.length ? (
-                        <dl className="divide-y divide-border">
-                          {campos.map((campo, j) => (
-                            <div
-                              key={campo?.tag ?? j}
-                              className="grid gap-1 px-4 py-2.5 sm:grid-cols-[minmax(0,14rem)_1fr] sm:gap-4"
-                            >
-                              <dt className="text-xs font-medium text-muted-foreground sm:text-sm">
-                                {campo?.label || campo?.tag || '—'}
-                              </dt>
-                              <dd className="whitespace-pre-line break-words text-sm text-foreground">
-                                {formatarValor(campo?.valor ?? campo?.valor_bruto)}
-                              </dd>
-                            </div>
-                          ))}
+                      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        {emojiSecao(secao)} {secao.titulo || 'Seção'}
+                      </h3>
+                      {destaque && formatarValor(destaque.valor ?? destaque.valor_bruto) !== '—' && (
+                        <span className="mb-3 inline-block rounded-full bg-highlight px-4 py-1 text-sm font-semibold text-highlight-foreground">
+                          {formatarValor(destaque.valor ?? destaque.valor_bruto)}
+                        </span>
+                      )}
+                      {restantes.length ? (
+                        <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
+                          {restantes.map((campo, j) => {
+                            const bruto = campo.valor ?? campo.valor_bruto;
+                            const label = campo.label || campo.tag || '—';
+                            if (Array.isArray(bruto) && bruto.length) {
+                              return (
+                                <div key={campo.tag ?? j} className="sm:col-span-2">
+                                  <dt className="mb-1.5 text-sm font-medium text-foreground">{label}:</dt>
+                                  <dd className="flex flex-wrap gap-2">
+                                    {bruto.map((v, k) => (
+                                      <span key={k} className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+                                        {formatarValor(v)}
+                                      </span>
+                                    ))}
+                                  </dd>
+                                </div>
+                              );
+                            }
+                            const texto = formatarValor(bruto);
+                            const longo = texto.length > 40;
+                            return (
+                              <div key={campo.tag ?? j} className={longo ? 'sm:col-span-2' : ''}>
+                                <span className="text-sm font-medium text-foreground">{label}: </span>
+                                <span className="whitespace-pre-line break-words text-sm text-muted-foreground">{texto}</span>
+                              </div>
+                            );
+                          })}
                         </dl>
                       ) : (
-                        <p className="px-4 py-3 text-sm text-muted-foreground">
-                          Sem informações nesta seção.
-                        </p>
+                        !destaque && <p className="text-sm text-muted-foreground">Sem informações nesta seção.</p>
                       )}
                     </section>
                   );
