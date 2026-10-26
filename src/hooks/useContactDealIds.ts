@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { dealsDoContatoKey, fetchDealsDoContato } from './useDealsDoContato';
 import { supabase } from '@/integrations/supabase/client';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -12,6 +13,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * 2. Try matching contact by deal name
  */
 export function useContactDealIds(dealId: string | undefined, contactId?: string | null) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['contact-deal-ids', dealId, contactId],
     queryFn: async (): Promise<string[]> => {
@@ -62,11 +64,14 @@ export function useContactDealIds(dealId: string | undefined, contactId?: string
       if (!resolvedContactId) return dealId ? [dealId] : [];
 
       // Fetch all deals for this contact
-      const { data: deals } = await supabase
-        .from('crm_deals')
-        .select('id, clint_id')
-        .eq('contact_id', resolvedContactId)
-        .eq('is_archived', false);
+      // Mesma consulta (e cache) usada pelo CrossPipelineHistory.
+      const deals = await queryClient
+        .fetchQuery({
+          queryKey: dealsDoContatoKey(resolvedContactId),
+          queryFn: () => fetchDealsDoContato(resolvedContactId as string),
+          staleTime: 60000,
+        })
+        .catch(() => null);
 
       if (!deals || deals.length === 0) return dealId ? [dealId] : [];
 
