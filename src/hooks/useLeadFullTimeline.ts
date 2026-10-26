@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useContactDealIds } from './useContactDealIds';
 import type { LeadReportMeeting } from './useLeadReport';
 
-export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry' | 'tag_change' | 'owner_change' | 'automation' | 'refund';
+export type TimelineEventType = 'stage_change' | 'call' | 'note' | 'ai_summary' | 'attendee_note' | 'scheduling_note' | 'meeting' | 'task' | 'purchase' | 'qualification' | 'closer_note' | 'entry' | 'tag_change' | 'owner_change' | 'automation' | 'refund';
 
 // Rótulos PT-BR para os tipos que antes caíam no catch-all de "Notas"
 const OWNERSHIP_TYPES: Record<string, string> = {
@@ -238,7 +238,7 @@ export function useLeadFullTimeline({
 
           if ((actType === 'ligacao_sonax_atendimento' || actType === 'click_to_call') && hasCorrespondingHangup(act, hangups)) continue;
           const eventStart = events.length;
-          const author = resolveAuthor(act.user_id, metadataAuthor(meta));
+          const author = resolveAuthor(act.user_id, metadataAuthor(meta, actType));
           const automatic = activityIsAutomatic(actType, act.user_id, meta);
           if (actType === 'ligacao_sonax_desligamento' || actType === 'ligacao_sonax_atendimento' || actType === 'click_to_call') {
             const answered = String(meta.STATUS_ATENDIMENTO || '').toUpperCase() === 'S';
@@ -252,7 +252,7 @@ export function useLeadFullTimeline({
                 ramal: meta.ALIASRAMAL || meta.RAMAL, sdr_name: meta.sdr_name || meta.sdr_email },
             });
           } else if (actType === 'ai_call_summary') {
-            events.push({ id: act.id, type: 'note', title: 'Resumo IA da ligação', description: act.description,
+            events.push({ id: act.id, type: 'ai_summary', title: 'Resumo IA da ligação', description: act.description,
               date: act.created_at, author, metadata: { ...meta, original_type: actType } });
           } else if (actType === 'lead_entered') {
             // Webhook entry event — show source info
@@ -267,7 +267,7 @@ export function useLeadFullTimeline({
               title: titleParts.join(' '),
               description: act.description,
               date: act.created_at,
-              author: resolveAuthor(act.user_id, meta.owner_email, meta.changed_by),
+              author,
               metadata: { endpoint_name: endpointName, pipeline_name: pipelineName, ...meta },
             });
           } else if (actType === 'stage_change' || actType === 'stage_changed') {
@@ -280,7 +280,7 @@ export function useLeadFullTimeline({
               title: `${fromName} → ${toName}`,
               description: act.description,
               date: act.created_at,
-              author: resolveAuthor(act.user_id, meta.owner_email, meta.deal_user, meta.changed_by),
+              author,
               metadata: { from_stage: fromName, to_stage: toName, pipeline_name: pipelineName, ...meta },
             });
           } else if (actType === 'note' || actType === 'manual_note') {
@@ -364,7 +364,10 @@ export function useLeadFullTimeline({
               metadata: { original_type: actType, ...meta },
             });
           } else if (actType) {
-            const presentation = otherActivityPresentation(actType, meta);
+            const target = meta.target_origin_id ? dealIdToPipelineName[meta.target_deal_id] : null;
+            const destination = target || act.description?.match(/pipeline "([^"]+)"/i)?.[1]
+              || (act.description?.includes('Inside Sales') ? 'Inside Sales' : null);
+            const presentation = otherActivityPresentation(actType, { ...meta, target_pipeline_name: meta.target_pipeline_name || destination });
             events.push({
               id: act.id, ...presentation, description: act.description, date: act.created_at,
               author, metadata: { ...meta, original_type: actType },
@@ -455,7 +458,7 @@ export function useLeadFullTimeline({
           });
 
           if (att.notes?.trim()) {
-            events.push({ id: `${att.id}-sdr-note`, type: 'note', title: `Nota de agendamento ${slot?.meeting_type?.toUpperCase() || ''}`,
+            events.push({ id: `${att.id}-sdr-note`, type: 'scheduling_note', title: `Nota de agendamento ${slot?.meeting_type?.toUpperCase() || ''}`,
               description: att.notes, date: att.booked_at || att.created_at || '', author: bookedByName,
               metadata: { attendee_id: att.id, original_type: 'scheduling_note' } });
           }
@@ -506,7 +509,7 @@ export function useLeadFullTimeline({
         for (const note of attendeeNotesRes.data) {
           events.push({
             id: note.id,
-            type: 'note',
+            type: note.note_type === 'call_summary' ? 'ai_summary' : 'attendee_note',
             title: note.note_type === 'reschedule' ? 'Reagendamento' : note.note_type === 'call_summary' ? 'Resumo IA' : 'Nota da reunião',
             description: note.note,
             date: note.created_at || '',

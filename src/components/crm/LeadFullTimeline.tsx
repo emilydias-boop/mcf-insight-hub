@@ -41,6 +41,8 @@ interface LeadFullTimelineProps {
 const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; label: string }> = {
   stage_change: { icon: ArrowRightLeft, label: 'Etapa' }, call: { icon: Phone, label: 'Ligação' },
   note: { icon: FileText, label: 'Nota' }, meeting: { icon: Calendar, label: 'Reunião' },
+  ai_summary: { icon: Star, label: 'Resumo IA' }, attendee_note: { icon: MessageSquare, label: 'Nota de reunião' },
+  scheduling_note: { icon: Calendar, label: 'Nota de agendamento' },
   task: { icon: CheckSquare, label: 'Próxima ação' }, purchase: { icon: ShoppingCart, label: 'Compra' },
   qualification: { icon: Star, label: 'Qualificação' }, closer_note: { icon: MessageSquare, label: 'Nota Closer' },
   entry: { icon: LogIn, label: 'Entrada' }, tag_change: { icon: Tag, label: 'Tag' },
@@ -51,7 +53,7 @@ const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; label: 
 const FILTER_OPTIONS = [
   { key: 'all', label: 'Tudo', types: [] },
   { key: 'call', label: 'Ligações', types: ['call'] },
-  { key: 'notes', label: 'Notas e qualificação', types: ['note', 'qualification', 'closer_note'] },
+  { key: 'notes', label: 'Notas e qualificação', types: ['note', 'qualification', 'closer_note', 'ai_summary', 'attendee_note', 'scheduling_note'] },
   { key: 'meeting', label: 'Reuniões', types: ['meeting'] },
   { key: 'stage', label: 'Etapas', types: ['stage_change', 'entry', 'tag_change', 'task', 'automation'] },
   { key: 'owner', label: 'Responsável', types: ['owner_change'] },
@@ -71,7 +73,7 @@ function dayLabel(key: string): string {
 }
 
 function TimelineEventItem({ event }: { event: TimelineEvent }) {
-  const [open, setOpen] = useState(['note', 'qualification', 'closer_note'].includes(event.type));
+  const [open, setOpen] = useState(['note', 'qualification', 'closer_note', 'ai_summary', 'attendee_note', 'scheduling_note'].includes(event.type));
   const config = EVENT_CONFIG[event.type];
   const Icon = config.icon;
 

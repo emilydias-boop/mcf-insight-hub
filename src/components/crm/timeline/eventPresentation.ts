@@ -4,16 +4,17 @@ export const MEETING_STATUS: Record<string, string> = {
   canceled: 'cancelada', contract_paid: 'contrato pago', pre_scheduled: 'pré-agendada',
 };
 
-export function metadataAuthor(meta: Record<string, any>): string | null {
-  return meta.moved_by_name || meta.moved_by_email || meta.deal_user_name || meta.deal_user
-    || meta.sdr_name || meta.sdr_email || meta.author || meta.user_name || meta.created_by || null;
+export function metadataAuthor(meta: Record<string, any>, type?: string): string | null {
+  const actor = meta.moved_by_name || meta.moved_by_email || meta.deal_user_name || meta.deal_user;
+  if (type === 'stage_change' || type === 'stage_changed') return actor || null;
+  return actor || meta.sdr_name || meta.sdr_email || meta.author || meta.user_name || meta.created_by || null;
 }
 
 export function activityIsAutomatic(type: string, userId: string | null | undefined, meta: Record<string, any>): boolean {
   const system = ['auto_move', 'owner_auto_rule', 'tags_added', 'replication', 'creation', 'deal_created',
     'lead_distributed', 'lead_distribution', 'webhook_reentry', 'partner_detected', 'outside_detected', 'pos_venda_anamnese'];
   return system.includes(type) || type.startsWith('refund_') || (type === 'tags_changed' && !userId)
-    || (!userId && !metadataAuthor(meta));
+    || (!userId && !metadataAuthor(meta, type));
 }
 
 export function hasCorrespondingHangup(activity: { deal_id: string; created_at: string; metadata?: any },
@@ -27,8 +28,8 @@ export function hasCorrespondingHangup(activity: { deal_id: string; created_at: 
   });
 }
 
-export function otherActivityPresentation(type: string, meta: Record<string, any>): { type: 'stage_change' | 'entry' | 'owner_change' | 'task' | 'automation' | 'call'; title: string } {
-  const labels: Record<string, { type: 'stage_change' | 'entry' | 'owner_change' | 'task' | 'automation' | 'call'; title: string }> = {
+export function otherActivityPresentation(type: string, meta: Record<string, any>): { type: 'stage_change' | 'entry' | 'owner_change' | 'task' | 'automation' | 'call' | 'meeting' | 'purchase' | 'refund'; title: string } {
+  const labels: Record<string, { type: 'stage_change' | 'entry' | 'owner_change' | 'task' | 'automation' | 'call' | 'meeting' | 'purchase' | 'refund'; title: string }> = {
     loss_marked: { type: 'stage_change', title: 'Marcado como perdido' },
     creation: { type: 'entry', title: 'Entrada' }, deal_created: { type: 'entry', title: 'Entrada' },
     replication: { type: 'entry', title: `Replicado para ${meta.target_pipeline_name || meta.to_pipeline_name || meta.pipeline_name || meta.target_pipeline || 'outra pipeline'}` },
@@ -36,13 +37,13 @@ export function otherActivityPresentation(type: string, meta: Record<string, any
     next_action_scheduled: { type: 'task', title: 'Próxima ação agendada' },
     next_action_completed: { type: 'task', title: 'Próxima ação concluída' },
     bu_transfer: { type: 'stage_change', title: 'Transferido entre BUs' },
-    attendee_transferred: { type: 'meeting' as 'stage_change', title: 'Participante transferido' },
+    attendee_transferred: { type: 'meeting', title: 'Participante transferido' },
     merge: { type: 'entry', title: 'Negócios unificados' },
     recompra_a010_reativada: { type: 'entry', title: 'Lead reativado por recompra A010' },
     call_result: { type: 'call', title: 'Resultado da ligação registrado' },
   };
   if (labels[type]) return labels[type];
-  if (type.startsWith('venda_direta_')) return { type: 'automation', title: `Venda direta · ${humanize(type.slice(13))}` };
+  if (type.startsWith('venda_direta_')) return { type: type.includes('estornada') ? 'refund' : 'purchase', title: `Venda direta · ${humanize(type.slice(13))}` };
   if (type.startsWith('pos_venda_')) return { type: 'automation', title: `Pós-venda · ${humanize(type.slice(10))}` };
   return { type: 'automation', title: humanize(type) };
 }
