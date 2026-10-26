@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { RefreshCw, X } from "lucide-react";
 
 const CHECK_INTERVAL_MS = 60_000; // 60 seconds
@@ -18,23 +18,31 @@ function isProductionHost(): boolean {
   return false;
 }
 
+/**
+ * Compara apenas as referências de build do Vite (arquivos em /assets/) em vez
+ * de fazer SHA-256 do index.html inteiro.
+ *
+ * Motivo: a hospedagem publicada injeta no index.html um
+ * `<script src="/__l5e/events...js" data-context-token="...">` cujo token muda
+ * a cada requisição. Com o hash do documento inteiro, a "assinatura" mudava em
+ * toda checagem e o banner aparecia ~65s depois de abrir o app mesmo sem
+ * publicação. As refs de /assets/ só mudam quando há build novo.
+ */
 function useUpdateChecker() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const initialHash = useRef<string | null>(null);
-
-  const computeHash = useCallback(async (text: string) => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  }, []);
+  const signatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Skip entirely in preview/dev — evita banner falso a cada rebuild
     if (!isProductionHost()) return;
 
-    let timer: ReturnType<typeof setInterval>;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let initialTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      if (initialTimer) clearTimeout(initialTimer);
+    };
 
     const check = async () => {
       try {
@@ -45,12 +53,19 @@ function useUpdateChecker() {
         if (!res.ok) return;
 
         const text = await res.text();
-        const hash = await computeHash(text);
+        const assets = (text.match(/\/assets\/[^"'\s>]+\.(?:js|css)/g) ?? []).sort().join("|");
 
-        if (initialHash.current === null) {
-          initialHash.current = hash;
-        } else if (hash !== initialHash.current) {
+        // Resposta inesperada (ex. página de erro): não decide nada.
+        if (!assets) return;
+
+        if (signatureRef.current === null) {
+          signatureRef.current = assets;
+          return;
+        }
+
+        if (assets !== signatureRef.current) {
           setUpdateAvailable(true);
+          stop();
         }
       } catch {
         // silently ignore network errors
@@ -58,14 +73,14 @@ function useUpdateChecker() {
     };
 
     // First check after a short delay to get baseline
-    const initialTimer = setTimeout(check, 5_000);
+    initialTimer = setTimeout(check, 5_000);
     timer = setInterval(check, CHECK_INTERVAL_MS);
 
     return () => {
-      clearTimeout(initialTimer);
-      clearInterval(timer);
+      if (initialTimer) clearTimeout(initialTimer);
+      if (timer) clearInterval(timer);
     };
-  }, [computeHash]);
+  }, []);
 
   return updateAvailable;
 }
