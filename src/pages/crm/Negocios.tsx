@@ -1000,8 +1000,8 @@ const Negocios = () => {
     if (filters.inactivityDays !== null) {
       chips.push({
         key: 'inactivity',
-        label: 'Inatividade',
-        value: `+ ${filters.inactivityDays} dia(s)`,
+        label: 'Sem contato',
+        value: `há ${filters.inactivityDays}+ ${filters.inactivityDays === 1 ? 'dia' : 'dias'}`,
         onRemove: () => setFilters(f => ({ ...f, inactivityDays: null })),
       });
     }
@@ -1083,10 +1083,16 @@ const Negocios = () => {
     }
     
     if (filters.temperature !== 'all') {
+      const temperaturaMap: Record<string, string> = {
+        quente: 'Quente',
+        morno: 'Morno',
+        frio: 'Frio',
+        none: 'Sem classificação',
+      };
       chips.push({
         key: 'temperature',
         label: 'Temperatura',
-        value: filters.temperature,
+        value: temperaturaMap[filters.temperature] || filters.temperature,
         onRemove: () => setFilters(f => ({ ...f, temperature: 'all' })),
       });
     }
@@ -1108,6 +1114,30 @@ const Negocios = () => {
         label: 'Resgate',
         value: filters.resgate === 'only' ? 'Só Resgate' : 'Sem Resgate',
         onRemove: () => setFilters(f => ({ ...f, resgate: 'all' })),
+      });
+    }
+
+    filters.tagFilters.forEach((rule, idx) => {
+      chips.push({
+        key: `tagFilter-${idx}-${rule.tag}`,
+        label: rule.mode === 'not_has' ? 'Sem tag' : 'Tag',
+        value: rule.tag,
+        onRemove: () => setFilters(f => ({ ...f, tagFilters: f.tagFilters.filter((_, i) => i !== idx) })),
+      });
+    });
+
+    if ((filters.projeto ?? 'all') !== 'all') {
+      const projetoMap: Record<string, string> = {
+        sem_projeto: 'Sem projeto',
+        aprovado: 'Projeto aprovado',
+        nenhum: 'Sem interesse',
+        sem_info: 'Sem informação',
+      };
+      chips.push({
+        key: 'projeto',
+        label: 'Projeto',
+        value: projetoMap[filters.projeto as string] || String(filters.projeto),
+        onRemove: () => setFilters(f => ({ ...f, projeto: 'all' })),
       });
     }
 

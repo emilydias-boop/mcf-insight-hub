@@ -21,7 +21,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle, Ban, LifeBuoy } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone, Activity, DollarSign, User, CalendarDays, HelpCircle, Ban, LifeBuoy, SlidersHorizontal } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -107,6 +108,7 @@ export const DealFilters = ({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
   const [isLossReasonPopoverOpen, setIsLossReasonPopoverOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { all: lossReasonOptions } = useLossReasons();
 
   // Alterna um motivo no filtro de "Sem Interesse" (multi-seleção)
@@ -192,390 +194,152 @@ export const DealFilters = ({
     (filters.projeto ?? 'all') !== 'all',
   ].filter(Boolean).length;
   
+  const drawerFiltersCount = [
+    filters.dealStatus !== 'all',
+    filters.activityPriority !== 'all',
+    filters.outsideFilter !== 'all',
+    (filters.lossReasons?.length ?? 0) > 0,
+    (filters.resgate ?? 'all') !== 'all',
+    (filters.projeto ?? 'all') !== 'all',
+    filters.tagFilters.length > 0,
+    filters.productFilters.length > 0,
+    !!filters.dateRange?.from,
+    filters.attemptsRange !== null,
+    !!filters.closerEmail,
+  ].filter(Boolean).length;
+
+  const triggerCls = (active: boolean) =>
+    `h-9 w-auto min-w-[150px] gap-2 text-sm ${active ? 'border-primary' : ''}`;
+  const fieldName = (name: string) => (
+    <span className="shrink-0 text-muted-foreground">{name}</span>
+  );
+
   return (
-    <div className="flex flex-wrap gap-2 items-center p-4 bg-muted/20 border-b">
-      {/* Campo de busca expandido */}
-      <div className="relative flex-1 min-w-[280px]">
+    <div className="flex flex-wrap gap-2 items-center px-4 py-3 border-b">
+      {/* Busca */}
+      <div className="relative flex-1 min-w-[260px]">
         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar por nome, email ou telefone..."
           value={filters.search}
           onChange={(e) => onChange({ ...filters, search: e.target.value })}
-          className="pl-8"
+          className="pl-8 h-9 text-sm"
         />
       </div>
-      
-      {/* Filtro de Status */}
-      <Select
-        value={filters.dealStatus}
-        onValueChange={(value) => onChange({ 
-          ...filters, 
-          dealStatus: value as 'all' | 'open' | 'won' | 'lost' 
-        })}
-      >
-        <SelectTrigger className="w-[140px]">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos</SelectItem>
-          <SelectItem value="open">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              Abertos
-            </span>
-          </SelectItem>
-          <SelectItem value="won">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Ganhos
-            </span>
-          </SelectItem>
-          <SelectItem value="lost">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              Perdidos
-            </span>
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      
-      {/* Filtro de Responsável - usa ownerOptions se fornecido, senão fallback */}
+
+      {/* Responsável */}
       <TooltipProvider delayDuration={100}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Select
-              value={filters.owner || 'all'}
-              onValueChange={(value) => onChange({ ...filters, owner: value === 'all' ? null : value })}
-            >
-              <SelectTrigger className="w-[220px]">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder="Responsável (dono)" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-          <SelectItem value="all">Todos os responsáveis</SelectItem>
-          <SelectItem value="__no_owner__">Sem dono</SelectItem>
-          
-          {/* Se ownerOptions foi fornecido, usar ele */}
-          {ownerOptions ? (
-            <>
-              {/* Ativos */}
-              {ownerOptions.filter(o => !o.isInactive).map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
-                </SelectItem>
-              ))}
-              {/* Inativos/ex-funcionários não são oferecidos como opção de seleção */}
-            </>
-          ) : (
-            /* Fallback: query antiga (para reuso em outros lugares) */
-            <>
-              {dealOwners?.active && dealOwners.active.length > 0 && (
-                <>
-                  {dealOwners.active.map((user: any) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.full_name || user.email?.split('@')[0]} ({user.user_roles?.[0]?.role?.toUpperCase() || 'SDR'})
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-            </>
-          )}
-        </SelectContent>
-      </Select>
+            <div>
+              <Select
+                value={filters.owner || 'all'}
+                onValueChange={(value) => onChange({ ...filters, owner: value === 'all' ? null : value })}
+              >
+                <SelectTrigger className={triggerCls(!!filters.owner)}>
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    {fieldName('Responsável')}
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="__no_owner__">Sem dono</SelectItem>
+                  {ownerOptions ? (
+                    ownerOptions.filter(o => !o.isInactive).map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    (dealOwners?.active || []).map((user: any) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.full_name || user.email?.split('@')[0]} ({user.user_roles?.[0]?.role?.toUpperCase() || 'SDR'})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs">
             <p>Filtro pelo <strong>dono do negócio</strong> (owner_profile_id).</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      
-      {/* Filtro de Closer (R1/R2) — baseado em r1_closer_email / r2_closer_email */}
+
+      {/* Canal de entrada */}
       <TooltipProvider delayDuration={100}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Select
-              value={filters.closerEmail || 'all'}
-              onValueChange={(value) =>
-                onChange({ ...filters, closerEmail: value === 'all' ? null : value })
-              }
-            >
-              <SelectTrigger className="w-[240px]">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder="Closer da Reunião (R1/R2)" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os closers (R1/R2)</SelectItem>
-                {(closerFilterOptions || []).map((opt) => (
-                  <SelectItem key={opt.email} value={opt.email}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs">
-            <p>Filtra pelo closer que realizou <strong>R1 ou R2</strong>, não pelo dono do negócio.</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      
-      <Select
-        value={filters.inactivityDays?.toString() || 'all'}
-        onValueChange={(value) => onChange({ 
-          ...filters, 
-          inactivityDays: value === 'all' ? null : parseInt(value) 
-        })}
-      >
-        <SelectTrigger className="w-[160px]">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="Sem atividade" />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Qualquer</SelectItem>
-          <SelectItem value="1">+ de 1 dia</SelectItem>
-          <SelectItem value="3">+ de 3 dias</SelectItem>
-          <SelectItem value="7">+ de 7 dias</SelectItem>
-          <SelectItem value="15">+ de 15 dias</SelectItem>
-          <SelectItem value="30">+ de 30 dias</SelectItem>
-        </SelectContent>
-      </Select>
-      
-      {/* Filtro de Canal de Entrada */}
-      <TooltipProvider delayDuration={100}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Select
-              value={filters.canalEntrada || 'all'}
-              onValueChange={(value) => onChange({ ...filters, canalEntrada: value })}
-            >
-              <SelectTrigger className="w-[200px]">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <Radio className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder="Canal de entrada" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os canais</SelectItem>
-                {canaisEntrada.map((canal) => (
-                  <SelectItem key={canal.codigo} value={canal.codigo}>
-                    {canal.rotulo} ({canal.total.toLocaleString('pt-BR')})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div>
+              <Select
+                value={filters.canalEntrada || 'all'}
+                onValueChange={(value) => onChange({ ...filters, canalEntrada: value })}
+              >
+                <SelectTrigger className={triggerCls((filters.canalEntrada ?? 'all') !== 'all')}>
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    {fieldName('Canal')}
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {canaisEntrada.map((canal) => (
+                    <SelectItem key={canal.codigo} value={canal.codigo}>
+                      {canal.rotulo} ({canal.total.toLocaleString('pt-BR')})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs">
             <p>Por onde o lead entrou no CRM. Não muda depois: quem entrou pela Anamnese e comprou o A010 continua Anamnese (a compra do A010 está no filtro Produtos).</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      
-      {/* Filtro de Tentativas (Range) */}
-      <Popover open={isAttemptsPopoverOpen} onOpenChange={setIsAttemptsPopoverOpen}>
-        <PopoverTrigger asChild>
-          <Button 
-            variant={filters.attemptsRange ? "default" : "outline"} 
-            className="justify-start text-left font-normal"
-          >
-            <Phone className="mr-2 h-4 w-4" />
-            {filters.attemptsRange 
-              ? `${filters.attemptsRange.min} a ${filters.attemptsRange.max} tent.`
-              : "Tentativas"
-            }
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-64" align="start">
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Quantidade de tentativas</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={0}
-                placeholder="Mín"
-                value={localMinAttempts}
-                onChange={(e) => setLocalMinAttempts(e.target.value)}
-                className="w-20"
-              />
-              <span className="text-muted-foreground">a</span>
-              <Input
-                type="number"
-                min={0}
-                placeholder="Máx"
-                value={localMaxAttempts}
-                onChange={(e) => setLocalMaxAttempts(e.target.value)}
-                className="w-20"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleApplyAttemptsFilter} className="flex-1">
-                Aplicar
-              </Button>
-              {filters.attemptsRange && (
-                <Button size="sm" variant="ghost" onClick={handleClearAttemptsFilter}>
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-      
-      {/* Filtro de Tags (Avançado) */}
-      <TagFilterPopover
-        availableTags={availableTags}
-        tagFilters={filters.tagFilters}
-        tagOperator={filters.tagOperator}
-        onChangeFilters={(tagFilters, tagOperator) => onChange({ ...filters, tagFilters, tagOperator })}
-        isLoading={isLoadingTags}
-      />
-      
-      {/* Filtro de Produtos Adquiridos */}
-      <ProductFilterPopover
-        availableProducts={availableProducts}
-        productFilters={filters.productFilters}
-        productOperator={filters.productOperator}
-        onChangeFilters={(productFilters, productOperator) => onChange({ ...filters, productFilters, productOperator })}
-        isLoading={isLoadingProducts}
-      />
-      
-      {/* Filtro de Prioridade de Atividade */}
+
+      {/* Sem contato */}
       <Select
-        value={filters.activityPriority}
-        onValueChange={(value) => onChange({ 
-          ...filters, 
-          activityPriority: value as ActivityPriorityFilter 
+        value={filters.inactivityDays?.toString() || 'all'}
+        onValueChange={(value) => onChange({
+          ...filters,
+          inactivityDays: value === 'all' ? null : parseInt(value)
         })}
       >
-        <SelectTrigger className="w-[160px]">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="Prioridade" />
+        <SelectTrigger className={triggerCls(filters.inactivityDays !== null)}>
+          <div className="flex items-center gap-2 overflow-hidden">
+            {fieldName('Sem contato')}
+            <SelectValue />
           </div>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Qualquer</SelectItem>
-          <SelectItem value="high">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              Alta (0 ativ.)
-            </span>
-          </SelectItem>
-          <SelectItem value="medium">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-yellow-500" />
-              Média (1-3 ativ.)
-            </span>
-          </SelectItem>
-          <SelectItem value="low">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Baixa (4+ ativ.)
-            </span>
-          </SelectItem>
+          <SelectItem value="1">há 1+ dia</SelectItem>
+          <SelectItem value="3">há 3+ dias</SelectItem>
+          <SelectItem value="7">há 7+ dias</SelectItem>
+          <SelectItem value="15">há 15+ dias</SelectItem>
+          <SelectItem value="30">há 30+ dias</SelectItem>
         </SelectContent>
       </Select>
-      
-      {/* Filtro Outside */}
-      <Select
-        value={filters.outsideFilter}
-        onValueChange={(value) => onChange({ 
-          ...filters, 
-          outsideFilter: value as OutsideFilter 
-        })}
-      >
-        <SelectTrigger className="w-[160px]">
-          <div className="flex items-center gap-2">
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="Outside" />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos</SelectItem>
-          <SelectItem value="outside_only">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-yellow-500" />
-              Todos Outside
-            </span>
-          </SelectItem>
-          <SelectItem value="outside_not_worked">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              Outside Não Trabalhados
-            </span>
-          </SelectItem>
-          <SelectItem value="outside_worked">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Outside Trabalhados
-            </span>
-          </SelectItem>
-          <SelectItem value="not_outside">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-gray-400" />
-              Sem Outside
-            </span>
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      
-      {/* Filtro de Data */}
-      <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className="justify-start text-left font-normal">
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {filters.dateRange?.from ? (
-              filters.dateRange.to ? (
-                <>
-                  {format(filters.dateRange.from, "dd/MM/yy", { locale: ptBR })} -{" "}
-                  {format(filters.dateRange.to, "dd/MM/yy", { locale: ptBR })}
-                </>
-              ) : (
-                format(filters.dateRange.from, "dd/MM/yy", { locale: ptBR })
-              )
-            ) : (
-              filters.selectedTags && filters.selectedTags.length > 0
-                ? "Data de criação/atualização"
-                : "Data de criação"
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            initialFocus
-            mode="range"
-            defaultMonth={filters.dateRange?.from}
-            selected={filters.dateRange}
-            onSelect={(range) => onChange({ ...filters, dateRange: range })}
-            numberOfMonths={2}
-            locale={ptBR}
-            className="pointer-events-auto"
-          />
-        </PopoverContent>
-      </Popover>
 
-      {/* Filtro de Temperatura do Lead */}
+      {/* Temperatura */}
       <Select
         value={filters.temperature}
         onValueChange={(value) => onChange({ ...filters, temperature: value as TemperatureFilter })}
       >
-        <SelectTrigger className="w-[150px]">
-          <div className="flex items-center gap-2">
-            {filters.temperature !== 'all' && filters.temperature !== 'none' ? (
-              <span className={`w-2 h-2 rounded-full ${TEMPERATURE_META[filters.temperature as Exclude<LeadTemperature, null>].dot}`} />
-            ) : (
-              <span className="w-2 h-2 rounded-full border border-muted-foreground" />
+        <SelectTrigger className={triggerCls(filters.temperature !== 'all')}>
+          <div className="flex items-center gap-2 overflow-hidden">
+            {fieldName('Temperatura')}
+            {filters.temperature !== 'all' && filters.temperature !== 'none' && (
+              <span className={`w-2 h-2 shrink-0 rounded-full ${TEMPERATURE_META[filters.temperature as Exclude<LeadTemperature, null>].dot}`} />
             )}
-            <SelectValue placeholder="Temperatura" />
+            <SelectValue />
           </div>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todas temperaturas</SelectItem>
+          <SelectItem value="all">Todas</SelectItem>
           <SelectItem value="quente">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500" />
@@ -603,97 +367,329 @@ export const DealFilters = ({
         </SelectContent>
       </Select>
 
-      {/* Filtro Motivo (Sem Interesse) */}
-      <Popover open={isLossReasonPopoverOpen} onOpenChange={setIsLossReasonPopoverOpen}>
-        <PopoverTrigger asChild>
+      {/* Mais filtros */}
+      <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+        <SheetTrigger asChild>
           <Button
-            variant={(filters.lossReasons?.length ?? 0) > 0 ? "default" : "outline"}
-            className="justify-start text-left font-normal"
+            variant="outline"
+            className={`h-9 text-sm ${drawerFiltersCount > 0 ? 'border-primary' : ''}`}
           >
-            <Ban className="mr-2 h-4 w-4" />
-            {(filters.lossReasons?.length ?? 0) > 0
-              ? `Motivo (${filters.lossReasons?.length})`
-              : "Motivo"}
+            <SlidersHorizontal className="mr-2 h-4 w-4" />
+            Mais filtros{drawerFiltersCount > 0 ? ` (${drawerFiltersCount})` : ''}
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72" align="start">
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Mostra só negócios na etapa Sem Interesse com o motivo escolhido.
-            </p>
-            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                <Checkbox
-                  checked={(filters.lossReasons ?? []).includes(SEM_MOTIVO_FILTER_VALUE)}
-                  onCheckedChange={() => toggleLossReason(SEM_MOTIVO_FILTER_VALUE)}
-                />
-                <span>Sem motivo registrado</span>
-              </label>
-              {lossReasonOptions.map((reason) => (
-                <label key={reason.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={(filters.lossReasons ?? []).includes(reason.label)}
-                    onCheckedChange={() => toggleLossReason(reason.label)}
+        </SheetTrigger>
+        <SheetContent side="right" className="flex w-[380px] flex-col gap-0 p-0 sm:max-w-[380px]">
+          <SheetHeader className="border-b px-5 py-4 text-left">
+            <SheetTitle>Mais filtros</SheetTitle>
+            <SheetDescription>
+              Filtros de uso eventual. Os ativos aparecem como chips acima do kanban.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
+            {/* Situação do negócio */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Situação do negócio</h4>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Status</Label>
+                <Select
+                  value={filters.dealStatus}
+                  onValueChange={(value) => onChange({ ...filters, dealStatus: value as 'all' | 'open' | 'won' | 'lost' })}
+                >
+                  <SelectTrigger className={`h-9 w-full text-sm ${filters.dealStatus !== 'all' ? 'border-primary' : ''}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="open">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500" />Abertos</span>
+                    </SelectItem>
+                    <SelectItem value="won">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" />Ganhos</span>
+                    </SelectItem>
+                    <SelectItem value="lost">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" />Perdidos</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Prioridade de atividade</Label>
+                <Select
+                  value={filters.activityPriority}
+                  onValueChange={(value) => onChange({ ...filters, activityPriority: value as ActivityPriorityFilter })}
+                >
+                  <SelectTrigger className={`h-9 w-full text-sm ${filters.activityPriority !== 'all' ? 'border-primary' : ''}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Qualquer</SelectItem>
+                    <SelectItem value="high">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" />Alta (0 ativ.)</span>
+                    </SelectItem>
+                    <SelectItem value="medium">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" />Média (1-3 ativ.)</span>
+                    </SelectItem>
+                    <SelectItem value="low">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" />Baixa (4+ ativ.)</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Outside</Label>
+                <Select
+                  value={filters.outsideFilter}
+                  onValueChange={(value) => onChange({ ...filters, outsideFilter: value as OutsideFilter })}
+                >
+                  <SelectTrigger className={`h-9 w-full text-sm ${filters.outsideFilter !== 'all' ? 'border-primary' : ''}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="outside_only">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500" />Todos Outside</span>
+                    </SelectItem>
+                    <SelectItem value="outside_not_worked">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" />Outside Não Trabalhados</span>
+                    </SelectItem>
+                    <SelectItem value="outside_worked">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500" />Outside Trabalhados</span>
+                    </SelectItem>
+                    <SelectItem value="not_outside">
+                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-gray-400" />Sem Outside</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Motivo de sem interesse</Label>
+                  {(filters.lossReasons?.length ?? 0) > 0 && (
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => onChange({ ...filters, lossReasons: [] })}>
+                      Limpar
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Mostra só negócios na etapa Sem Interesse com o motivo escolhido.
+                </p>
+                <div className={`max-h-56 space-y-2 overflow-y-auto rounded-md border p-2 ${(filters.lossReasons?.length ?? 0) > 0 ? 'border-primary' : ''}`}>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={(filters.lossReasons ?? []).includes(SEM_MOTIVO_FILTER_VALUE)}
+                      onCheckedChange={() => toggleLossReason(SEM_MOTIVO_FILTER_VALUE)}
+                    />
+                    <span>Sem motivo registrado</span>
+                  </label>
+                  {lossReasonOptions.map((reason) => (
+                    <label key={reason.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={(filters.lossReasons ?? []).includes(reason.label)}
+                        onCheckedChange={() => toggleLossReason(reason.label)}
+                      />
+                      <span>
+                        {reason.label}
+                        {!reason.is_active && <span className="text-muted-foreground"> (antigo)</span>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Resgate</Label>
+                <Select
+                  value={filters.resgate ?? 'all'}
+                  onValueChange={(value) => onChange({ ...filters, resgate: value as 'all' | 'only' | 'none' })}
+                >
+                  <SelectTrigger className={`h-9 w-full text-sm ${(filters.resgate ?? 'all') !== 'all' ? 'border-primary' : ''}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="only">Só Resgate</SelectItem>
+                    <SelectItem value="none">Sem Resgate</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Projeto</Label>
+                <Select
+                  value={filters.projeto ?? 'all'}
+                  onValueChange={(value) => onChange({ ...filters, projeto: value as ProjetoFiltro })}
+                >
+                  <SelectTrigger className={`h-9 w-full text-sm ${(filters.projeto ?? 'all') !== 'all' ? 'border-primary' : ''}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="sem_projeto">Sem projeto</SelectItem>
+                    <SelectItem value="aprovado">Projeto aprovado</SelectItem>
+                    <SelectItem value="nenhum">Sem interesse</SelectItem>
+                    <SelectItem value="sem_info">Sem informação</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </section>
+
+            {/* Origem e produto */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Origem e produto</h4>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm">Tags</Label>
+                <div className="[&>button]:h-9 [&>button]:w-full [&>button]:justify-start">
+                  <TagFilterPopover
+                    availableTags={availableTags}
+                    tagFilters={filters.tagFilters}
+                    tagOperator={filters.tagOperator}
+                    onChangeFilters={(tagFilters, tagOperator) => onChange({ ...filters, tagFilters, tagOperator })}
+                    isLoading={isLoadingTags}
                   />
-                  <span>
-                    {reason.label}
-                    {!reason.is_active && (
-                      <span className="text-muted-foreground"> (antigo)</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <div className="flex justify-end border-t pt-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => onChange({ ...filters, lossReasons: [] })}
-              >
-                Limpar
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+                </div>
+              </div>
 
-      {/* Filtro Resgate (selo à parte do A/B/C) */}
-      <Select
-        value={filters.resgate ?? 'all'}
-        onValueChange={(value) => onChange({ ...filters, resgate: value as 'all' | 'only' | 'none' })}
-      >
-        <SelectTrigger className="w-[150px]">
-          <div className="flex items-center gap-2">
-            <LifeBuoy className="h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="Resgate" />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos (resgate)</SelectItem>
-          <SelectItem value="only">Só Resgate</SelectItem>
-          <SelectItem value="none">Sem Resgate</SelectItem>
-        </SelectContent>
-      </Select>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Produtos</Label>
+                <div className="[&>button]:h-9 [&>button]:w-full [&>button]:justify-start">
+                  <ProductFilterPopover
+                    availableProducts={availableProducts}
+                    productFilters={filters.productFilters}
+                    productOperator={filters.productOperator}
+                    onChangeFilters={(productFilters, productOperator) => onChange({ ...filters, productFilters, productOperator })}
+                    isLoading={isLoadingProducts}
+                  />
+                </div>
+              </div>
 
-      {/* Filtro Projeto (custom_fields.admissao.projeto_status, vindo da Admissão) */}
-      <Select
-        value={filters.projeto ?? 'all'}
-        onValueChange={(value) => onChange({ ...filters, projeto: value as ProjetoFiltro })}
-      >
-        <SelectTrigger className="w-[170px]">
-          <SelectValue placeholder="Projeto" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos (projeto)</SelectItem>
-          <SelectItem value="sem_projeto">Sem projeto</SelectItem>
-          <SelectItem value="aprovado">Projeto aprovado</SelectItem>
-          <SelectItem value="nenhum">Sem interesse</SelectItem>
-          <SelectItem value="sem_info">Sem informação</SelectItem>
-        </SelectContent>
-      </Select>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Data de criação</Label>
+                <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={`h-9 w-full justify-start text-left text-sm font-normal ${filters.dateRange?.from ? 'border-primary' : ''}`}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filters.dateRange?.from ? (
+                        filters.dateRange.to ? (
+                          <>
+                            {format(filters.dateRange.from, "dd/MM/yy", { locale: ptBR })} -{" "}
+                            {format(filters.dateRange.to, "dd/MM/yy", { locale: ptBR })}
+                          </>
+                        ) : (
+                          format(filters.dateRange.from, "dd/MM/yy", { locale: ptBR })
+                        )
+                      ) : (
+                        <span className="text-muted-foreground">Qualquer</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={filters.dateRange?.from}
+                      selected={filters.dateRange}
+                      onSelect={(range) => onChange({ ...filters, dateRange: range })}
+                      numberOfMonths={2}
+                      locale={ptBR}
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </section>
+
+            {/* Atividade */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Atividade</h4>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Tentativas</Label>
+                <Popover open={isAttemptsPopoverOpen} onOpenChange={setIsAttemptsPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={`h-9 w-full justify-start text-left text-sm font-normal ${filters.attemptsRange ? 'border-primary' : ''}`}
+                    >
+                      <Phone className="mr-2 h-4 w-4" />
+                      {filters.attemptsRange
+                        ? `${filters.attemptsRange.min} a ${filters.attemptsRange.max} tent.`
+                        : <span className="text-muted-foreground">Qualquer</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64" align="start">
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Quantidade de tentativas</Label>
+                      <div className="flex items-center gap-2">
+                        <Input type="number" min={0} placeholder="Mín" value={localMinAttempts} onChange={(e) => setLocalMinAttempts(e.target.value)} className="w-20" />
+                        <span className="text-muted-foreground">a</span>
+                        <Input type="number" min={0} placeholder="Máx" value={localMaxAttempts} onChange={(e) => setLocalMaxAttempts(e.target.value)} className="w-20" />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleApplyAttemptsFilter} className="flex-1">Aplicar</Button>
+                        {filters.attemptsRange && (
+                          <Button size="sm" variant="ghost" onClick={handleClearAttemptsFilter}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </section>
+
+            {/* Reunião */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reunião</h4>
+              <div className="space-y-1.5">
+                <TooltipProvider delayDuration={100}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Label className="inline-flex items-center gap-1 text-sm">
+                        Closer da reunião (R1/R2)
+                        <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Label>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p>Filtra pelo closer que realizou <strong>R1 ou R2</strong>, não pelo dono do negócio.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <Select
+                  value={filters.closerEmail || 'all'}
+                  onValueChange={(value) => onChange({ ...filters, closerEmail: value === 'all' ? null : value })}
+                >
+                  <SelectTrigger className={`h-9 w-full text-sm ${filters.closerEmail ? 'border-primary' : ''}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {(closerFilterOptions || []).map((opt) => (
+                      <SelectItem key={opt.email} value={opt.email}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </section>
+          </div>
+
+          <SheetFooter className="flex-row gap-2 border-t px-5 py-3 sm:justify-between">
+            <Button variant="ghost" onClick={onClear}>Limpar filtros</Button>
+            <Button onClick={() => setIsDrawerOpen(false)}>Ver resultados</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {activeFiltersCount > 0 && (
-        <Button variant="ghost" size="sm" onClick={onClear}>
+        <Button variant="ghost" size="sm" className="h-9" onClick={onClear}>
           <X className="h-4 w-4 mr-1" />
           Limpar ({activeFiltersCount})
         </Button>
