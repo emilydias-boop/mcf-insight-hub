@@ -130,8 +130,17 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
           </div>
         ) : deal ? (
           <div className="flex flex-col h-full">
-            {/* ===== 1. CABEÇALHO COMPACTO ===== */}
-            <SdrCompactHeader deal={deal} contact={contact} />
+            {/* ===== 1. CABEÇALHO FIXO ===== */}
+            <SdrCompactHeader deal={deal} contact={contact} onChanged={() => refetchDeal()} />
+
+            {/* ===== 2. BARRA DE AÇÕES FIXA ===== */}
+            <QuickActionsBlock 
+              deal={deal} 
+              contact={contact}
+              onStageChange={() => refetchDeal()}
+              onQualify={() => setShowQualification(true)}
+              onDeleted={() => onOpenChange(false)}
+            />
             
             {/* ===== CONTEÚDO PRINCIPAL ===== */}
             <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
@@ -180,35 +189,6 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               {/* ===== ESTEIRA DO CRÉDITO (somente BU Crédito) ===== */}
               {(deal.origin_id === 'c4ed1700-0000-4000-8000-000000000002' || activeBU === 'credito') && (
                 <CreditoEsteiraActions dealId={deal.id} />
-              )}
-
-              {/* ===== 2. AÇÕES RÁPIDAS (acima da dobra) ===== */}
-              <QuickActionsBlock 
-                deal={deal} 
-                contact={contact}
-                onStageChange={() => refetchDeal()}
-                onQualify={() => setShowQualification(true)}
-                onDeleted={() => onOpenChange(false)}
-              />
-
-              {/* ===== TEMPERATURA DO LEAD (Quente/Morno/Frio) ===== */}
-              <div className="rounded-lg border bg-muted/20 px-3 py-2 flex items-center justify-between">
-                <LeadTemperatureSelector
-                  dealId={deal.id}
-                  value={(deal as any).lead_temperature as LeadTemperature}
-                  onChanged={() => refetchDeal()}
-                />
-              </div>
-
-              {/* ===== CLICK-TO-CALL (Sonax) ===== */}
-              {contact?.phone && (
-                <div className="flex items-center justify-between gap-2 rounded-lg border p-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{contact.phone}</span>
-                  </div>
-                  <LeadCallButton phone={contact.phone} dealId={deal.id} size="sm" />
-                </div>
               )}
 
               {/* ===== OUTROS CONTATOS (aliases) ===== */}
