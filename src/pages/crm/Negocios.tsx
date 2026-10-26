@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet, ExternalLink, X, User, CalendarDays } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, Settings, FileSpreadsheet, ExternalLink, X, User, CalendarDays, MoreHorizontal, Users as UsersIcon, UserCheck } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -948,6 +949,10 @@ const Negocios = () => {
     return p?.display_name || p?.name || '';
   }, [selectedPipelineId, pipelines]);
   
+  const canGerenciarAcoes = role === 'admin' || role === 'manager' || role === 'coordenador';
+  const [outsideDialogOpen, setOutsideDialogOpen] = useState(false);
+  const [movePartnersDialogOpen, setMovePartnersDialogOpen] = useState(false);
+
   // Chips de filtros ativos para exibir acima do Kanban
   const activeFilterChips = useMemo(() => {
     const chips: { key: string; label: string; value: string; icon?: React.ReactNode; onRemove: () => void }[] = [];
@@ -1170,7 +1175,12 @@ const Negocios = () => {
           <div className="flex items-center gap-2">
             <div>
               <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2">
-                {restringirDono ? 'Meus Negócios' : hasSinglePipeline && selectedPipelineName ? selectedPipelineName : 'Pipeline de Vendas'}
+                {restringirDono ? 'Meus Negócios' : (() => {
+                  const origem = selectedOriginId && Array.isArray(pipelineOrigins)
+                    ? (pipelineOrigins as any[]).find((o: any) => o.id === selectedOriginId)
+                    : null;
+                  return (origem && (origem.display_name || origem.name)) || selectedPipelineName || 'Pipeline de Vendas';
+                })()}
                 {hasSinglePipeline && (
                   <Button
                     variant="ghost"
@@ -1225,40 +1235,50 @@ const Negocios = () => {
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto">
-            {(role === 'admin' || role === 'manager' || role === 'coordenador') && (
+            {canGerenciarAcoes && (
               <>
-                <OutsideDistributionButton />
-                <MovePartnersButton />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSpreadsheetDialogOpen(true)}
-                  className="flex-1 sm:flex-none"
-                >
-                  <FileSpreadsheet className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Importar Planilha</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setExportDialogOpen(true)}
-                  className="flex-1 sm:flex-none"
-                >
-                  <Download className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Exportar</span>
-                </Button>
+                <OutsideDistributionButton open={outsideDialogOpen} onOpenChange={setOutsideDialogOpen} />
+                <MovePartnersButton open={movePartnersDialogOpen} onOpenChange={setMovePartnersDialogOpen} />
               </>
             )}
-            <Button 
-              variant="outline" 
-              onClick={handleSync}
-              disabled={syncMutation.isPending}
-              size="sm"
-              className="flex-1 sm:flex-none"
-            >
-              <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Sincronizar</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
+                  <MoreHorizontal className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Ações</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {canGerenciarAcoes && (
+                  <>
+                    <DropdownMenuItem onSelect={() => setOutsideDialogOpen(true)}>
+                      <UsersIcon className="h-4 w-4 mr-2" />
+                      Distribuir outsides
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setMovePartnersDialogOpen(true)}>
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Mover parceiros
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setSpreadsheetDialogOpen(true)}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                      Importar planilha
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setExportDialogOpen(true)}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Exportar
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem
+                  disabled={syncMutation.isPending}
+                  onSelect={() => handleSync()}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+                  {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DealFormDialog
               defaultOriginId={effectiveOriginId}
               defaultOriginName={
