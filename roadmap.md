@@ -29,4 +29,4 @@
 
 - [x] Relatório diário por BU de 19/10 (somente leitura)
 
-- [ ] Painel do Negócio — etapa 2A: Atividade completa (itens 1–10), renderizadores compartilhados e validação; sem remover abas nem alterar banco.
+- [x] Painel do Negócio — etapa 2A: itens 1–10 implementados, players/notas compartilhados; 46 assertions passaram e navegador com dados simulados conferiu filtros, gravação sob demanda, qualificação e resumo IA em desktop/mobile. Compilação automática OK; fluxo autenticado real indisponível (Supabase externo); sem remover abas, banco ou publicação.
