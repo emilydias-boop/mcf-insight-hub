@@ -16,10 +16,12 @@ export function resolveToStageId(row: StageChangeRow, stages: StageRef[]): strin
 
 export type StageMoveKind = 'perda' | 'terminal' | 'avanco' | null;
 
-/** Classifica a movimentação: perda, terminal (ganho/fechado) ou avanço; null se etapa desconhecida. */
+/** Classifica a movimentação: perda, terminal (ganho/fechado) ou avanço; null sem etapa destino. */
 export function classifyStageMove(row: StageChangeRow, stages: StageRef[], lossIds: Set<string>, terminalIds: Set<string>): StageMoveKind {
+  if (!row.to_stage && !((row.metadata as any)?.to_stage_id)) return null;
   const id = resolveToStageId(row, stages);
-  if (!id) return null;
+  // Etapa não encontrada mantém a regra anterior: conta como avanço.
+  if (!id) return 'avanco';
   if (lossIds.has(id)) return 'perda';
   if (terminalIds.has(id)) return 'terminal';
   return 'avanco';
