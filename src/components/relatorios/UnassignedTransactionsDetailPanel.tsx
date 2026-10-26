@@ -55,7 +55,11 @@ const REGRA_LABELS: Record<Atribuicao['regra'], string> = {
   r1_anterior: 'R1 anterior',
   r1_posterior: 'R1 posterior (outside)',
   manual: 'Manual (gestão)',
+  vinculo_r2: 'Vínculo R2',
+  r2_anterior: 'R2 anterior (sem R1)',
+  r2_posterior: 'R2 posterior (outside)',
 };
+
 
 export function UnassignedTransactionsDetailPanel({
   transactions,
