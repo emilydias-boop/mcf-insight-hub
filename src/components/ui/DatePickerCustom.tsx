@@ -27,6 +27,11 @@ export function DatePickerCustom({
   placeholder = "Selecione uma data" 
 }: DatePickerCustomProps) {
   const [open, setOpen] = React.useState(false);
+  // true depois do 1º clique: o próximo clique define o fim do período.
+  const awaitingEndRef = React.useRef(false);
+  React.useEffect(() => {
+    if (open) awaitingEndRef.current = false;
+  }, [open]);
 
   const getDisplayText = () => {
     if (!selected) return placeholder;
@@ -34,8 +39,8 @@ export function DatePickerCustom({
     if (mode === "range" && selected && typeof selected === 'object' && 'from' in selected) {
       const range = selected as DateRange;
       if (range.from) {
-        if (range.to) {
-          return `${format(range.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(range.to, "dd/MM/yyyy", { locale: ptBR })}`;
+        if (range.to && format(range.to, "yyyy-MM-dd") !== format(range.from, "yyyy-MM-dd")) {
+          return `${format(range.from, "dd/MM/yyyy", { locale: ptBR })} — ${format(range.to, "dd/MM/yyyy", { locale: ptBR })}`;
         }
         return format(range.from, "dd/MM/yyyy", { locale: ptBR });
       }
@@ -68,11 +73,26 @@ export function DatePickerCustom({
           <Calendar
             mode="range"
             selected={selected as DateRange}
-            onSelect={(range) => {
-              if (onSelect) onSelect(range);
-              if (range?.from && range?.to) {
+            onSelect={(_range, day) => {
+              // Seleção própria: o padrão do react-day-picker devolve to=undefined
+              // no 1º clique e desmarca ao clicar de novo no mesmo dia.
+              const current = selected as DateRange | undefined;
+              let next: DateRange;
+              if (awaitingEndRef.current && current?.from) {
+                const from = current.from;
+                if (day.getTime() < from.getTime()) {
+                  next = { from: day, to: current.to ?? from };
+                } else {
+                  next = { from, to: day };
+                }
+                awaitingEndRef.current = false;
+                onSelect?.(next);
                 setOpen(false);
+                return;
               }
+              next = { from: day, to: day };
+              awaitingEndRef.current = true;
+              onSelect?.(next);
             }}
             numberOfMonths={2}
             locale={ptBR}
