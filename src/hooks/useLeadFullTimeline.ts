@@ -1,5 +1,5 @@
 import { OUTCOME_LABELS, STATUS_LABELS, formatDuration, getCallDuration } from '@/components/crm/timeline/callPresentation';
-import { MEETING_STATUS, metadataAuthor, activityIsAutomatic, hasCorrespondingHangup, otherActivityPresentation, contatoRegistradoPresentation } from '@/components/crm/timeline/eventPresentation';
+import { MEETING_STATUS, metadataAuthor, activityIsAutomatic, hasCorrespondingHangup, otherActivityPresentation, contatoRegistradoPresentation, isAutoStageCopyRow } from '@/components/crm/timeline/eventPresentation';
 import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';

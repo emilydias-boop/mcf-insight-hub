@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { isAutoStageCopyRow } from "@/components/crm/timeline/eventPresentation";
 import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
 
 // Stage name patterns for classification
@@ -311,7 +312,8 @@ export const useDealTimeline = (dealId: string | null) => {
       
       if (error) throw error;
       
-      const timeline: DealTimelineEvent[] = (data || []).map(activity => ({
+      // Só visual: esconde a cópia com UUIDs de movimento automático.
+      const timeline: DealTimelineEvent[] = (data || []).filter(a => !isAutoStageCopyRow(a)).map(activity => ({
         id: activity.id,
         stageName: activity.to_stage || 'Desconhecido',
         stageClassification: classifyStage(activity.to_stage || ''),
