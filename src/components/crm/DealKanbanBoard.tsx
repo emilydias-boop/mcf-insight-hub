@@ -86,6 +86,7 @@ export const DealKanbanBoard = ({
   const { user, role } = useAuth();
   
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [selectedDealRow, setSelectedDealRow] = useState<any>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   
   // State para virtualização por coluna - quantos cards mostrar por estágio
@@ -222,6 +223,8 @@ export const DealKanbanBoard = ({
   const selectionEnabled = !!(onSelectionChange && onSelectAllInStage);
 
   const handleDealClick = (dealId: string) => {
+    // Linha já carregada no kanban: o painel abre com ela enquanto busca o dado completo.
+    setSelectedDealRow(deals.find(d => d.id === dealId) ?? dealsServidorRef.current.get(dealId) ?? null);
     setSelectedDealId(dealId);
     setDrawerOpen(true);
   };
@@ -529,6 +532,7 @@ export const DealKanbanBoard = ({
       <DealDetailsDrawer
         key={selectedDealId}
         dealId={selectedDealId}
+        initialDeal={selectedDealRow}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
       />

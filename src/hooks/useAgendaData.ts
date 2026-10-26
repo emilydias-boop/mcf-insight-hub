@@ -1374,9 +1374,11 @@ export function useSearchDealsForSchedule(
 }
 
 // Hook to search weekly meeting leads with optional BU closer filtering
-export function useSearchWeeklyMeetingLeads(statusFilter?: string, closerIds?: string[]) {
+export function useSearchWeeklyMeetingLeads(statusFilter?: string, closerIds?: string[], enabled = true) {
   return useQuery({
     queryKey: ['weekly-meeting-leads', statusFilter, closerIds],
+    // Sem closers a consulta leria a semana inteira de todas as BUs.
+    enabled: enabled && (closerIds?.length ?? 0) > 0,
     queryFn: async () => {
       const now = new Date();
       const weekStart = startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });

@@ -48,22 +48,31 @@ interface DealDetailsDrawerProps {
   dealId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Linha do negócio já carregada (ex.: card do kanban), usada até a busca real chegar. */
+  initialDeal?: any;
 }
 
-export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDrawerProps) => {
+export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: DealDetailsDrawerProps) => {
   const { role } = useAuth();
   const { activeBU } = useBUContext();
   const { setDrawerState } = useTwilio();
-  const { data: deal, isLoading: dealLoading, refetch: refetchDeal } = useCRMDeal(dealId || '');
-  const { data: contact, isLoading: contactLoading } = useCRMContact(deal?.contact_id || '');
+  const { data: deal, isFetching: dealFetching, refetch: refetchDeal } = useCRMDeal(dealId || '', initialDeal);
+  const { data: contactData } = useCRMContact(deal?.contact_id || '');
+  // Enquanto o contato completo carrega, usa o contato que já vem junto do negócio.
+  const contact = contactData ?? ((deal as any)?.crm_contacts || undefined);
   const { data: qualificationNote } = useQualificationNote(dealId || '');
   
   // State para modal de agendamento
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  // O SdrScheduleDialog fecha a si mesmo e abre a agenda interna (estado próprio);
+  // por isso fica montado depois da 1ª abertura, em vez de desmontar ao fechar.
+  const [scheduleMontado, setScheduleMontado] = useState(false);
+  useEffect(() => { if (showScheduleDialog) setScheduleMontado(true); }, [showScheduleDialog]);
   const [leadSummaryForSchedule, setLeadSummaryForSchedule] = useState('');
   const [showQualification, setShowQualification] = useState(false);
   
-  const isLoading = dealLoading || contactLoading;
+  // Skeleton só enquanto não há negócio (nem o do card).
+  const isLoading = !deal && dealFetching;
 
   // Relatório do Lead é um documento de consórcio — não faz sentido em outras BUs.
   const isConsorcioDeal = useMemo(() => {
@@ -348,9 +357,9 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
       </SheetContent>
       
       {/* Modal de qualificação manual */}
-      {dealId && (
+      {dealId && showQualification && (
         <QualificationAndScheduleModal
-          open={showQualification}
+          open
           onOpenChange={(open) => {
             setShowQualification(open);
             if (!open) refetchDeal();
@@ -361,7 +370,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
       )}
       
       {/* Modal de agendamento para SDR */}
-      {dealId && (
+      {dealId && scheduleMontado && (
         <SdrScheduleDialog
           open={showScheduleDialog}
           onOpenChange={setShowScheduleDialog}

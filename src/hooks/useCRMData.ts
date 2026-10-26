@@ -173,13 +173,13 @@ const fetchCRMStages = async (originOrGroupId?: string) => {
 };
 
 export const useCRMStages = (originOrGroupId?: string, options?: UseCRMStagesOptions) => {
-  const { enabled = true, staleTime = 30000 } = options || {};
+  // 5 min: as telas que criam/editam/reordenam etapas invalidam ['crm-stages'] no onSuccess.
+  const { enabled = true, staleTime = 5 * 60 * 1000 } = options || {};
   
   return useQuery({
     queryKey: ['crm-stages', originOrGroupId],
     enabled: enabled && (originOrGroupId !== undefined || true), // Always enabled if no originId, or based on options
     staleTime,
-    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     queryFn: () => fetchCRMStages(originOrGroupId),
   });
@@ -492,9 +492,14 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
   });
 };
 
-export const useCRMDeal = (id: string) => {
+/**
+ * `placeholder`: linha do negócio já carregada (ex.: card do kanban). Entra como
+ * placeholderData — aparece no primeiro render, mas a busca real continua e substitui.
+ */
+export const useCRMDeal = (id: string, placeholder?: any) => {
   return useQuery({
     queryKey: ['crm-deal', id],
+    placeholderData: placeholder && placeholder.id === id ? placeholder : undefined,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('crm_deals')

@@ -283,7 +283,7 @@ export function QuickScheduleModal({
     'r1',
     activeBU,
   );
-  const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU);
+  const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU, open);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
 

@@ -50,7 +50,10 @@ export function useLeadFullTimeline({
   meetings: externalMeetings,
   enabled = true,
 }: UseLeadFullTimelineParams) {
-  const { data: allDealIds = [dealUuid, dealId] } = useContactDealIds(dealUuid, contactId);
+  const idsQuery = useContactDealIds(dealUuid, contactId);
+  const allDealIds = idsQuery.data ?? [dealUuid, dealId];
+  // Só busca depois de saber todos os negócios do contato (evita rodar duas vezes).
+  const idsProntos = idsQuery.isSuccess || idsQuery.isError || (!dealUuid && !contactId);
 
   // Deduplicate IDs
   const uniqueIds = [...new Set([...allDealIds, dealUuid, dealId].filter(Boolean))];
@@ -517,7 +520,7 @@ export function useLeadFullTimeline({
 
       return events;
     },
-    enabled: enabled && uniqueIds.length > 0,
+    enabled: enabled && idsProntos && uniqueIds.length > 0,
     staleTime: 30000,
   });
 }
