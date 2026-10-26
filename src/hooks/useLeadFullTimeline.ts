@@ -394,6 +394,7 @@ export function useLeadFullTimeline({
             description: call.notes,
             date: call.started_at || call.created_at || '',
             author: resolveAuthor(call.user_id),
+            automatic: !call.user_id,
             metadata: {
               direction: call.direction,
               duration,
@@ -443,6 +444,7 @@ export function useLeadFullTimeline({
             date: att.booked_at || att.created_at || '',
             // Mostra quem agendou ao lado da data; cai para o closer se desconhecido
             author: bookedByName || closerName,
+            automatic: !bookedByName && !closerName,
             metadata: {
               status: att.status,
               scheduled_at: scheduledAt,
@@ -514,6 +516,7 @@ export function useLeadFullTimeline({
             description: note.note,
             date: note.created_at || '',
             author: resolveAuthor(note.created_by),
+            automatic: !note.created_by,
             metadata: { note_type: note.note_type, attendee_id: note.attendee_id, original_type: 'attendee_notes' },
           });
         }

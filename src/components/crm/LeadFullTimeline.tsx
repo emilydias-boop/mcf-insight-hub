@@ -55,7 +55,7 @@ const FILTER_OPTIONS = [
   { key: 'call', label: 'Ligações', types: ['call'] },
   { key: 'notes', label: 'Notas e qualificação', types: ['note', 'qualification', 'closer_note', 'ai_summary', 'attendee_note', 'scheduling_note'] },
   { key: 'meeting', label: 'Reuniões', types: ['meeting'] },
-  { key: 'stage', label: 'Etapas', types: ['stage_change', 'entry', 'tag_change', 'task', 'automation'] },
+  { key: 'stage', label: 'Etapas', types: ['stage_change'] },
   { key: 'owner', label: 'Responsável', types: ['owner_change'] },
   { key: 'purchase', label: 'Compras', types: ['purchase'] },
   { key: 'refund', label: 'Reembolsos', types: ['refund'] },
