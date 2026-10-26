@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MessageCircle, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList, RotateCcw, Check, MoreHorizontal } from 'lucide-react';
@@ -72,6 +72,10 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   const [selectedStageId, setSelectedStageId] = useState<string>('');
   const [showLostModal, setShowLostModal] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  // O SdrScheduleDialog fecha a si mesmo e abre a agenda interna (estado próprio);
+  // por isso fica montado depois da 1ª abertura, em vez de desmontar ao fechar.
+  const [scheduleMontado, setScheduleMontado] = useState(false);
+  useEffect(() => { if (showScheduleDialog) setScheduleMontado(true); }, [showScheduleDialog]);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -380,9 +384,9 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
 
       
       {/* Modal de Agendamento */}
-      {showScheduleDialog && (
+      {scheduleMontado && (
         <SdrScheduleDialog
-          open
+          open={showScheduleDialog}
           onOpenChange={setShowScheduleDialog}
           dealId={deal?.id}
           contactName={contact?.name || deal?.name}

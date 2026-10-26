@@ -64,6 +64,10 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
   
   // State para modal de agendamento
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  // O SdrScheduleDialog fecha a si mesmo e abre a agenda interna (estado próprio);
+  // por isso fica montado depois da 1ª abertura, em vez de desmontar ao fechar.
+  const [scheduleMontado, setScheduleMontado] = useState(false);
+  useEffect(() => { if (showScheduleDialog) setScheduleMontado(true); }, [showScheduleDialog]);
   const [leadSummaryForSchedule, setLeadSummaryForSchedule] = useState('');
   const [showQualification, setShowQualification] = useState(false);
   
@@ -366,9 +370,9 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
       )}
       
       {/* Modal de agendamento para SDR */}
-      {dealId && showScheduleDialog && (
+      {dealId && scheduleMontado && (
         <SdrScheduleDialog
-          open
+          open={showScheduleDialog}
           onOpenChange={setShowScheduleDialog}
           dealId={dealId}
           contactName={contact?.name}
