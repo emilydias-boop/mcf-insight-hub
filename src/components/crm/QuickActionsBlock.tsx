@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList, RotateCcw } from 'lucide-react';
+import { MessageCircle, Loader2, XCircle, Calendar, CalendarClock, FolderInput, Trash2, ClipboardList, RotateCcw, Check, MoreHorizontal } from 'lucide-react';
+import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
+import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUpdateCRMDeal, useCRMStages, useDeleteCRMDeal } from '@/hooks/useCRMData';
@@ -76,6 +81,9 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   const isQualified = qualStatus?.isQualified ?? false;
   
   const alreadyRefunded = deal?.custom_fields?.reembolso_solicitado === true;
+  const { data: totaisCliente } = useTotalCliente(contact?.email);
+  const temCompra = (totaisCliente?.qtd_pagamentos ?? 0) > 0 || !!contratoReembolsoInfo(deal?.custom_fields ?? null);
+  const podeReembolsar = temCompra && !alreadyRefunded;
   
   const isTestDeal = deal ? isTestPipeline(deal.origin_id) : false;
   const currentStageOrder = deal?.crm_stages?.stage_order || 0;
@@ -248,157 +256,113 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Controles inline aparecem ACIMA durante a chamada, mas mantemos os
-            botões de qualificar/agendar/WhatsApp visíveis para o SDR poder
-            qualificar o lead durante a ligação. */}
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-border shrink-0">
+        {/* Controles inline aparecem ACIMA durante a chamada */}
         {isInCallWithThisDeal && deal?.id && (
           <div className="w-full">
             <InlineCallControls dealId={deal.id} />
           </div>
         )}
-        <>
-            {/* Botão Ligar — motor resolvido por usuário (Sonax ou Twilio) */}
-            <LeadCallButton
-              phone={hasPhone}
-              dealId={deal?.id}
-              size="sm"
-              className="h-8 bg-primary text-primary-foreground border-transparent hover:bg-primary/90 hover:text-primary-foreground"
-            />
-            
-            {/* Botão WhatsApp — abre no MCF - Atendimento quando há acesso; senão wa.me */}
-            <Button
-              size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
-              onClick={handleWhatsApp}
-              disabled={!hasPhone || abrirConversa.isPending}
-              title={hasAccess ? 'Abrir conversa no MCF - Atendimento' : undefined}
-            >
-              {abrirConversa.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
-              )}
-              WhatsApp
-            </Button>
-            
-            {/* Botão Agendar — bloqueado até qualificação (resumo IA ou WhatsApp) */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={`h-8 ${isNoShowStage ? 'border-amber-500/50 text-amber-600 hover:bg-amber-50' : 'border-blue-500/50 text-blue-600 hover:bg-blue-50'}`}
-                      onClick={() => setShowScheduleDialog(true)}
-                      disabled={!isQualified && !isNoShowStage}
-                    >
-                      {isNoShowStage ? <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> : <Calendar className="h-3.5 w-3.5 mr-1.5" />}
-                      {isNoShowStage ? 'Reagendar' : 'Agendar'}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                {!isQualified && !isNoShowStage && (
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    {qualStatus?.reason || 'Qualifique o lead antes de agendar R1 (ligação com resumo IA ou WhatsApp com print).'}
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
-            
-            {/* Botão Qualificar */}
-            {onQualify && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-purple-500/50 text-purple-600 hover:bg-purple-50"
-                onClick={onQualify}
-              >
-                <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
-                Qualificar
-              </Button>
+
+        {/* Ligar — motor resolvido por usuário (Sonax ou Twilio) */}
+        <LeadCallButton
+          phone={hasPhone}
+          dealId={deal?.id}
+          size="sm"
+          className="h-9 bg-primary text-primary-foreground border-transparent hover:bg-primary/90 hover:text-primary-foreground"
+        />
+
+        {/* WhatsApp — MCF - Atendimento quando há acesso; senão wa.me */}
+        <Button
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white h-9"
+          onClick={handleWhatsApp}
+          disabled={!hasPhone || abrirConversa.isPending}
+          title={hasAccess ? 'Abrir conversa no MCF - Atendimento' : undefined}
+        >
+          {abrirConversa.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          WhatsApp
+        </Button>
+
+        {/* Agendar — bloqueado até qualificação */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`h-9 ${isNoShowStage ? 'border-amber-500/50 text-amber-600 hover:bg-amber-50' : 'border-blue-500/50 text-blue-600 hover:bg-blue-50'}`}
+                  onClick={() => setShowScheduleDialog(true)}
+                  disabled={!isQualified && !isNoShowStage}
+                >
+                  {isNoShowStage ? <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> : <Calendar className="h-3.5 w-3.5 mr-1.5" />}
+                  {isNoShowStage ? 'Reagendar' : 'Agendar'}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!isQualified && !isNoShowStage && (
+              <TooltipContent side="bottom" className="max-w-xs">
+                {qualStatus?.reason || 'Qualifique o lead antes de agendar R1 (ligação com resumo IA ou WhatsApp com print).'}
+              </TooltipContent>
             )}
-        </>
-        
-        {/* Mover estágio inline */}
-        {futureStages.length > 0 && (
-          <>
-            <div className="h-4 w-px bg-border mx-1" />
-            <Select value={selectedStageId} onValueChange={setSelectedStageId}>
-              <SelectTrigger className="w-[140px] h-8 bg-background text-xs">
-                <SelectValue placeholder="Mover para..." />
-              </SelectTrigger>
-              <SelectContent>
-                {futureStages.map((stage) => (
-                  <SelectItem key={stage.id} value={stage.id}>
-                    {stage.stage_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-8 w-8"
-              onClick={handleMoveStage}
-              disabled={!selectedStageId || updateDeal.isPending}
-            >
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Qualificar */}
+        {onQualify && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={`h-9 ${isQualified ? 'border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/10' : 'border-purple-500/50 text-purple-600 hover:bg-purple-50'}`}
+            onClick={onQualify}
+          >
+            {isQualified ? <Check className="h-3.5 w-3.5 mr-1.5" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+            {isQualified ? 'Qualificado' : 'Qualificar'}
+          </Button>
         )}
-        
-        {/* Botões Perdido, Mover Pipeline, Excluir - esconder quando em chamada */}
-        {!isInCallWithThisDeal && (
-          <>
-            <div className="h-4 w-px bg-border mx-1" />
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
-              onClick={() => setShowLostModal(true)}
-            >
-              <XCircle className="h-3.5 w-3.5 mr-1.5" />
-              Perdido
+
+        <div className="flex-1" />
+
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="outline" className="h-9 w-9" aria-label="Mais ações">
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
-            
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8"
-              onClick={() => setShowMoveModal(true)}
-            >
-              <FolderInput className="h-3.5 w-3.5 mr-1.5" />
-              Mover Pipeline
-            </Button>
-            
-            {!alreadyRefunded && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-orange-600 border-orange-500/50 hover:bg-orange-50"
-                onClick={() => setShowRefundModal(true)}
-              >
-                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                Reembolso
-              </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setShowMoveModal(true)}>
+              <FolderInput className="h-3.5 w-3.5 mr-2" />
+              Mover para outra pipeline
+            </DropdownMenuItem>
+            {podeReembolsar && (
+              <DropdownMenuItem onSelect={() => setShowRefundModal(true)}>
+                <RotateCcw className="h-3.5 w-3.5 mr-2" />
+                Registrar reembolso
+              </DropdownMenuItem>
             )}
-            
+            <DropdownMenuItem onSelect={() => setShowLostModal(true)}>
+              <XCircle className="h-3.5 w-3.5 mr-2" />
+              Marcar como perdido
+            </DropdownMenuItem>
             {['admin', 'manager', 'coordenador'].includes(role || '') && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                Excluir
-              </Button>
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => setShowDeleteDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  Excluir lead
+                </DropdownMenuItem>
+              </>
             )}
-          </>
-        )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Modal de Perda */}
