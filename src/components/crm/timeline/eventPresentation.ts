@@ -75,3 +75,12 @@ export function contatoRegistradoPresentation(meta: Record<string, any>): { titl
   if (!r) return null;
   return { title: meta.resultado_rotulo || CONTATO_ROTULO[r] || 'Contato registrado', body: meta.nota || null, icon: CONTATO_ICONE[r] || 'phone' };
 }
+
+/** Cópia com UUIDs de movimento automático; a linha do gatilho (nomes) é a exibida. Só visual. */
+const AUTO_STAGE_COPY_SOURCES = new Set(['manual_activity', 'contract_paid_trigger']);
+export function isAutoStageCopyRow(act: { activity_type?: string | null; metadata?: unknown }): boolean {
+  const t = act.activity_type || '';
+  if (t !== 'stage_change' && t !== 'stage_changed') return false;
+  const meta = (act.metadata as Record<string, any> | null) || {};
+  return AUTO_STAGE_COPY_SOURCES.has(meta.source);
+}
