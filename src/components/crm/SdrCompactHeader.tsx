@@ -1,38 +1,182 @@
-import { Badge } from '@/components/ui/badge';
-import { MapPin, Package, ShoppingBag, Tv, DollarSign, ClipboardList } from 'lucide-react';
-import { useA010Journey } from '@/hooks/useA010Journey';
+import { useState } from 'react';
+import { format, differenceInDays } from 'date-fns';
+import { ChevronDown, Copy, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
+import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
+import { useDealHeaderInfo, CANAL_DOT_CLASSES } from '@/hooks/useDealHeaderInfo';
 import { formatCurrency } from '@/lib/formatters';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
 import { ResgateBadge } from '@/components/crm/ResgateBadge';
-
+import { formatarNomeExibicao } from '@/components/crm/DealKanbanCard';
+import { LeadTemperatureSelector, type LeadTemperature } from '@/components/crm/LeadTemperatureSelector';
+import { LossReasonDialog } from './LossReasonDialog';
+import { isSemInteresseStageName, registrarMotivoSemInteresse } from '@/lib/lossReasons';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface SdrCompactHeaderProps {
   deal: any;
   contact: any;
+  onChanged?: () => void;
 }
 
-export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
-  const { data: a010Data } = useA010Journey(contact?.email, contact?.phone);
+// Mesma regra do antigo "Mover para..." do QuickActionsBlock.
+const ALWAYS_AVAILABLE_PATTERNS = [
+  'sem sucesso', 'sem interesse', 'não quer', 'perdido',
+  'desistente', 'cancelado', 'reembolsado', 'a reembolsar',
+];
+const isAlwaysAvailable = (name: string) => {
+  const lower = name.toLowerCase().trim();
+  return ALWAYS_AVAILABLE_PATTERNS.some(p => lower.includes(p));
+};
+
+const NEXT_ACTION_LABEL: Record<string, string> = {
+  ligar: 'Ligar', whatsapp: 'WhatsApp', email: 'E-mail', reuniao: 'Reunião',
+};
+
+const iniciais = (nome: string) =>
+  nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+
+export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderProps) => {
   const { data: totaisCliente } = useTotalCliente(contact?.email);
-  
+  const { data: info } = useDealHeaderInfo(deal);
+  const { data: stages } = useCRMStages(deal?.origin_id);
+  const updateDeal = useUpdateCRMDeal();
+  const [pendingStageId, setPendingStageId] = useState<string | null>(null);
+
   const customFields = deal?.custom_fields as Record<string, any> | null;
-  const originName = deal?.crm_origins?.name || customFields?.origem || 'Não informada';
-  const productName = deal?.product_name || customFields?.produto || customFields?.product_name || null;
   const estado = customFields?.estado || null;
   const faixaRenda = customFields?.faixa_de_renda || null;
-  
-  // Detect sales channel based on actual purchase data
-  const isA010 = a010Data?.hasA010 === true;
-  const isQuiz = customFields?.source === 'quiz-mapa' || customFields?.lead_channel === 'QUIZ-MAPA';
-  
+
+  const nomeOriginal = deal?.name || '';
+  const nomeExibicao = formatarNomeExibicao(contact?.name || nomeOriginal);
+
+  // ===== Etapa =====
+  const currentStageOrder = deal?.crm_stages?.stage_order || 0;
+  const futureStages = stages?.filter((s: any) =>
+    s.stage_order > currentStageOrder || isAlwaysAvailable(s.stage_name)
+  ).filter((s: any) => s.id !== deal?.stage_id) || [];
+
+  const executeMoveStage = async (stageId: string) => {
+    try {
+      await updateDeal.mutateAsync({ id: deal.id, stage_id: stageId });
+      toast.success('Estágio atualizado!');
+      onChanged?.();
+    } catch {
+      // Error handled by hook
+    }
+  };
+
+  const handleSelectStage = async (stageId: string) => {
+    const targetStage = stages?.find((s: any) => s.id === stageId);
+    const currentStage = stages?.find((s: any) => s.id === deal?.stage_id);
+    if (isSemInteresseStageName(targetStage?.stage_name) && !isSemInteresseStageName(currentStage?.stage_name)) {
+      setPendingStageId(stageId);
+      return;
+    }
+    await executeMoveStage(stageId);
+  };
+
+  const diasNaEtapa = deal?.stage_moved_at
+    ? Math.max(0, differenceInDays(new Date(), new Date(deal.stage_moved_at)))
+    : null;
+
+  // ===== Sem contato (mesma regra do card) =====
+  const resumo = info?.resumo;
+  const ultimoToque = resumo?.lastTouchAt ?? resumo?.lastContactAttempt ?? null;
+  const DIA = 86_400_000;
+  const agora = Date.now();
+  let semContato: { text: string; cls: string } | null = null;
+  if (!resumo) {
+    semContato = null;
+  } else if (!ultimoToque && (resumo.totalActivities || 0) === 0) {
+    const criado = deal.created_at ? new Date(deal.created_at).getTime() : agora;
+    const dias = Math.floor((agora - criado) / DIA);
+    semContato = dias < 1
+      ? { text: 'Nunca contatado · novo', cls: 'text-amber-400' }
+      : { text: `Nunca contatado · ${dias}d`, cls: 'text-red-400' };
+  } else if (ultimoToque) {
+    const dias = Math.max(0, Math.floor((agora - new Date(ultimoToque).getTime()) / DIA));
+    semContato = {
+      text: dias === 0 ? 'Contato hoje' : `${dias}d sem contato`,
+      cls: dias <= 1 ? 'text-emerald-400' : dias <= 3 ? 'text-amber-400' : 'text-red-400',
+    };
+  }
+
+  // ===== Retorno =====
+  let retorno: { text: string; vencido: boolean } | null = null;
+  if (deal?.next_action_date) {
+    const d = new Date(deal.next_action_date);
+    if (!isNaN(d.getTime())) {
+      const tipo = NEXT_ACTION_LABEL[deal.next_action_type] || deal.next_action_type || '';
+      retorno = { text: `Retorno: ${tipo ? tipo + ' ' : ''}${format(d, 'dd/MM HH:mm')}`, vencido: d.getTime() < agora };
+    }
+  }
+
+  const corDot = info?.canalCor
+    ? (CANAL_DOT_CLASSES[info.canalCor.toLowerCase().trim()] || CANAL_DOT_CLASSES.gray)
+    : CANAL_DOT_CLASSES.gray;
+  const mesEntrada = deal?.created_at ? format(new Date(deal.created_at), 'MMM/yy', { locale: undefined }) : null;
+  const mesEntradaPt = deal?.created_at
+    ? new Date(deal.created_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'America/Sao_Paulo' })
+        .replace('.', '').replace(' de ', '/').toLowerCase()
+    : mesEntrada;
+
+  const phone = contact?.phone || null;
+  const copiarTelefone = async () => {
+    if (!phone) return;
+    try {
+      await navigator.clipboard.writeText(phone);
+      toast.success('Telefone copiado');
+    } catch {
+      toast.error('Não foi possível copiar');
+    }
+  };
+
+  const stageColor = deal?.crm_stages?.color || undefined;
+
   return (
-    <div className="bg-secondary/50 border-b border-border p-4 space-y-3">
-      {/* Linha 1: Nome + Valor */}
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-bold text-foreground truncate flex-1">
-          {deal.name}
-        </h2>
+    <div className="bg-secondary/50 border-b border-border px-4 pt-4 pb-3 space-y-2 shrink-0">
+      {/* Linha A: etapa (o X de fechar é o do Sheet, no canto) */}
+      <div className="flex items-center gap-2 pr-8">
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild disabled={futureStages.length === 0 || updateDeal.isPending}>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-70"
+              aria-label="Mudar etapa"
+            >
+              <span className="h-2 w-2 rounded-full bg-primary" style={stageColor ? { backgroundColor: stageColor } : undefined} />
+              {deal?.crm_stages?.stage_name || 'Sem etapa'}
+              {futureStages.length > 0 && <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+            {futureStages.map((s: any) => (
+              <DropdownMenuItem key={s.id} onSelect={() => handleSelectStage(s.id)}>
+                {s.stage_name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {diasNaEtapa !== null && (
+          <span className="text-xs text-muted-foreground">
+            há {diasNaEtapa} {diasNaEtapa === 1 ? 'dia' : 'dias'} nesta etapa
+          </span>
+        )}
+      </div>
+
+      {/* Linha B: nome + valor */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+          <h2 className="text-[22px] font-bold leading-7 text-foreground truncate" title={nomeOriginal}>
+            {nomeExibicao}
+          </h2>
+          <LeadSegmentBadge segment={deal?.icp_segment} />
+          <ResgateBadge resgateEm={deal?.resgate_em} />
+        </div>
         <div className="flex flex-col items-end shrink-0">
           {totaisCliente && totaisCliente.total_liquido_pago > 0 ? (
             <>
@@ -51,79 +195,76 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
           )}
         </div>
       </div>
-      
-      {/* Linha 2: Badge do estágio */}
-      {deal.crm_stages?.stage_name && (
-        <Badge 
-          className="bg-primary/20 text-primary border-0 font-medium"
-          style={{ 
-            backgroundColor: deal.crm_stages.color ? `${deal.crm_stages.color}20` : undefined,
-            color: deal.crm_stages.color || undefined
-          }}
-        >
-          {deal.crm_stages.stage_name}
-        </Badge>
-      )}
-      
-      {/* Linha 3: Chips de contexto (Canal, Origem, Produto, Compras A010) */}
-      <div className="flex flex-wrap gap-2">
-        <LeadSegmentBadge segment={deal?.icp_segment} />
-        <ResgateBadge resgateEm={deal?.resgate_em} />
 
-        {/* Badge de Canal de Venda (A010 vs LIVE) - baseado em compra real */}
+      {/* Linha C: canal, mês, dono, closer, telefone */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground">
+        {info?.canalRotulo && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-[7px] w-[7px] rounded-[2px] ${corDot}`} />
+            {info.canalRotulo}
+            {mesEntradaPt && <span>· {mesEntradaPt}</span>}
+          </span>
+        )}
+        {!info?.canalRotulo && mesEntradaPt && <span>{mesEntradaPt}</span>}
+        {info?.ownerName && (
+          <span className="inline-flex items-center gap-1.5">
+            Dono
+            <span className="h-5 w-5 rounded-full bg-muted text-[10px] font-semibold text-foreground flex items-center justify-center">
+              {iniciais(info.ownerName)}
+            </span>
+            <span className="text-foreground">{info.ownerName}</span>
+          </span>
+        )}
+        {info?.closerR1Name && (
+          <span>Closer R1 <span className="text-foreground">{info.closerR1Name}</span></span>
+        )}
+        {phone && (
+          <span className="inline-flex items-center gap-1">
+            <span className="text-foreground">{phone}</span>
+            <button
+              type="button"
+              onClick={copiarTelefone}
+              aria-label="Copiar telefone"
+              className="h-6 w-6 rounded hover:bg-muted flex items-center justify-center"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        )}
+        {estado && <span>{estado}</span>}
+        {faixaRenda && <span>{faixaRenda}</span>}
+      </div>
 
-        <Badge 
-          variant="outline" 
-          className={`text-xs ${
-            isA010 
-              ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400' 
-              : isQuiz
-                ? 'border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 dark:text-amber-400'
-                : 'border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950 dark:text-purple-400'
-          }`}
-        >
-          {isA010 ? (
-            <><ShoppingBag className="h-3 w-3 mr-1" />A010</>
-          ) : isQuiz ? (
-            <><ClipboardList className="h-3 w-3 mr-1" />Quiz</>
-          ) : (
-            <><Tv className="h-3 w-3 mr-1" />LIVE</>
-          )}
-        </Badge>
-        
-        {/* Total real comprado (todas as BUs / gateways) - fonte única no banco */}
-        {totaisCliente && totaisCliente.qtd_pagamentos > 0 && (
-          <Badge variant="outline" className="text-xs border-primary/50 text-primary bg-primary/5">
-            {totaisCliente.qtd_pagamentos} compra{totaisCliente.qtd_pagamentos > 1 ? 's' : ''} • {formatCurrency(totaisCliente.total_liquido_pago)}
-          </Badge>
-        )}
-        
-        <Badge variant="outline" className="text-xs bg-background/50">
-          <MapPin className="h-3 w-3 mr-1" />
-          {originName}
-        </Badge>
-        
-        {productName && (
-          <Badge variant="outline" className="text-xs bg-background/50">
-            <Package className="h-3 w-3 mr-1" />
-            {productName}
-          </Badge>
-        )}
-        
-        {estado && (
-          <Badge variant="outline" className="text-xs bg-background/50">
-            <MapPin className="h-3 w-3 mr-1" />
-            {estado}
-          </Badge>
-        )}
-        
-        {faixaRenda && (
-          <Badge variant="outline" className="text-xs bg-background/50">
-            <DollarSign className="h-3 w-3 mr-1" />
-            {faixaRenda}
-          </Badge>
+      {/* Linha D: temperatura, sem contato, retorno */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
+        <LeadTemperatureSelector
+          dealId={deal.id}
+          value={(deal as any).lead_temperature as LeadTemperature}
+          onChanged={() => onChanged?.()}
+          size="sm"
+          showLabel={false}
+        />
+        {semContato && <span className={`font-medium whitespace-nowrap ${semContato.cls}`}>{semContato.text}</span>}
+        {retorno && (
+          <span className={`inline-flex items-center gap-1 ${retorno.vencido ? 'text-amber-400 font-medium' : 'text-muted-foreground'}`}>
+            <Clock className="h-3.5 w-3.5" />
+            {retorno.text}
+          </span>
         )}
       </div>
+
+      <LossReasonDialog
+        open={!!pendingStageId}
+        onOpenChange={(o) => { if (!o) setPendingStageId(null); }}
+        dealCount={1}
+        dealName={deal?.name}
+        onConfirm={async (motivo, justificativa) => {
+          const id = pendingStageId;
+          await registrarMotivoSemInteresse([deal.id], motivo, justificativa);
+          setPendingStageId(null);
+          if (id) await executeMoveStage(id);
+        }}
+      />
     </div>
   );
 };
