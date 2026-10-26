@@ -13,3 +13,4 @@
 - Flow document dialogs live outside the sandboxed iframe; accept material messages only from its contentWindow and queried material IDs, and keep dialog state independent of flow refetches.
 - Script Piloto pilots are derived on read by script_piloto_reunioes (R1 completed, 2–3 unrefunded paid attendees), so they enter and leave automatically without a table or job; AI-generated drafts are never stored and only become official through script_publicar_versao.
 - Weekly closer summary is sent only by the resumo-semanal-closers edge function (Monday cron), deduplicated per week+BU in resumo_semanal_closers_envios, so re-runs never double-send.
+- CRM timeline, notes, and call history share presentation-only recording and note renderers under timeline/; data fetching and mutations stay in their original hooks so legacy tabs keep their behavior.

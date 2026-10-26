@@ -4,6 +4,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
+import { SonaxRecording, TwilioRecording } from './timeline/CallRecording';
+import { sonaxRecordingProxy } from '@/lib/sonaxRecording';
+import { AISummaryContent, formatAISummary, QualificationContent } from './timeline/NoteContent';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { useAddDealNote } from '@/hooks/useNextAction';
 import { ptBR } from 'date-fns/locale';
 import { formatCurrency } from '@/lib/formatters';
 import {
@@ -32,56 +38,60 @@ interface LeadFullTimelineProps {
   contactId?: string | null;
 }
 
-const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
-  stage_change: { icon: ArrowRightLeft, color: 'text-blue-600 dark:text-blue-400', bgColor: 'bg-blue-100 dark:bg-blue-900/40', label: 'Estágio' },
-  call: { icon: Phone, color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900/40', label: 'Ligação' },
-  note: { icon: FileText, color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-100 dark:bg-amber-900/40', label: 'Nota' },
-  meeting: { icon: Calendar, color: 'text-purple-600 dark:text-purple-400', bgColor: 'bg-purple-100 dark:bg-purple-900/40', label: 'Reunião' },
-  task: { icon: CheckSquare, color: 'text-teal-600 dark:text-teal-400', bgColor: 'bg-teal-100 dark:bg-teal-900/40', label: 'Tarefa' },
-  purchase: { icon: ShoppingCart, color: 'text-pink-600 dark:text-pink-400', bgColor: 'bg-pink-100 dark:bg-pink-900/40', label: 'Compra' },
-  qualification: { icon: Star, color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-100 dark:bg-orange-900/40', label: 'Qualificação' },
-  closer_note: { icon: MessageSquare, color: 'text-indigo-600 dark:text-indigo-400', bgColor: 'bg-indigo-100 dark:bg-indigo-900/40', label: 'Nota Closer' },
-  entry: { icon: LogIn, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-100 dark:bg-emerald-900/40', label: 'Entrada' },
-  tag_change: { icon: Tag, color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-100 dark:bg-sky-900/40', label: 'Tag' },
-  owner_change: { icon: UserCog, color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-100 dark:bg-rose-900/40', label: 'Responsável' },
-  automation: { icon: Zap, color: 'text-violet-600 dark:text-violet-400', bgColor: 'bg-violet-100 dark:bg-violet-900/40', label: 'Automação' },
-  refund: { icon: Undo2, color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-100 dark:bg-orange-900/40', label: 'Reembolso' },
+const EVENT_CONFIG: Record<TimelineEventType, { icon: React.ElementType; label: string }> = {
+  stage_change: { icon: ArrowRightLeft, label: 'Etapa' }, call: { icon: Phone, label: 'Ligação' },
+  note: { icon: FileText, label: 'Nota' }, meeting: { icon: Calendar, label: 'Reunião' },
+  ai_summary: { icon: Star, label: 'Resumo IA' }, attendee_note: { icon: MessageSquare, label: 'Nota de reunião' },
+  scheduling_note: { icon: Calendar, label: 'Nota de agendamento' },
+  task: { icon: CheckSquare, label: 'Próxima ação' }, purchase: { icon: ShoppingCart, label: 'Compra' },
+  qualification: { icon: Star, label: 'Qualificação' }, closer_note: { icon: MessageSquare, label: 'Nota Closer' },
+  entry: { icon: LogIn, label: 'Entrada' }, tag_change: { icon: Tag, label: 'Tag' },
+  owner_change: { icon: UserCog, label: 'Responsável' }, automation: { icon: Zap, label: 'Evento' },
+  refund: { icon: Undo2, label: 'Reembolso' },
 };
 
-const FILTER_OPTIONS: { type: TimelineEventType | 'all'; label: string }[] = [
-  { type: 'all', label: 'Todos' },
-  { type: 'stage_change', label: 'Estágios' },
-  { type: 'call', label: 'Ligações' },
-  { type: 'meeting', label: 'Reuniões' },
-  { type: 'note', label: 'Notas' },
-  { type: 'purchase', label: 'Compras' },
-  { type: 'task', label: 'Tarefas' },
-  { type: 'qualification', label: 'Qualif.' },
-  { type: 'entry', label: 'Entrada' },
-  { type: 'tag_change', label: 'Tags' },
-  { type: 'owner_change', label: 'Responsável' },
-  { type: 'automation', label: 'Automações' },
+const FILTER_OPTIONS = [
+  { key: 'all', label: 'Tudo', types: [] },
+  { key: 'call', label: 'Ligações', types: ['call'] },
+  { key: 'notes', label: 'Notas e qualificação', types: ['note', 'qualification', 'closer_note', 'ai_summary', 'attendee_note', 'scheduling_note'] },
+  { key: 'meeting', label: 'Reuniões', types: ['meeting'] },
+  { key: 'stage', label: 'Etapas', types: ['stage_change'] },
+  { key: 'owner', label: 'Responsável', types: ['owner_change'] },
+  { key: 'purchase', label: 'Compras', types: ['purchase'] },
+  { key: 'refund', label: 'Reembolsos', types: ['refund'] },
 ];
 
+const dateParts = (date: string) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date(date));
+const timeLabel = (date: string) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(new Date(date));
+function dayLabel(key: string): string {
+  const now = new Date();
+  if (key === dateParts(now.toISOString())) return 'Hoje';
+  if (key === dateParts(new Date(now.getTime() - 86400000).toISOString())) return 'Ontem';
+  const date = new Date(`${key}T12:00:00-03:00`);
+  const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone: 'America/Sao_Paulo' }).format(date).replace('.', '');
+  return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${key.slice(8, 10)}/${key.slice(5, 7)}`;
+}
+
 function TimelineEventItem({ event }: { event: TimelineEvent }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(['note', 'qualification', 'closer_note', 'ai_summary', 'attendee_note', 'scheduling_note'].includes(event.type));
   const config = EVENT_CONFIG[event.type];
   const Icon = config.icon;
 
   const formattedDate = event.date
-    ? format(new Date(event.date), "dd/MM/yy 'às' HH:mm", { locale: ptBR })
+    ? timeLabel(event.date)
     : '—';
 
   const hasDetails = !!(event.description || Object.keys(event.metadata).length > 0);
 
   return (
-    <div className="relative flex gap-3 pb-4 last:pb-0">
+    <div className={cn('relative flex gap-3 pb-4 last:pb-0', event.automatic && 'text-muted-foreground')}>
+      <span className="w-10 shrink-0 pt-1.5 text-[11px] tabular-nums text-muted-foreground">{formattedDate}</span>
       {/* Vertical line */}
-      <div className="absolute left-[15px] top-8 bottom-0 w-px bg-border last:hidden" />
+      <div className="absolute left-[67px] top-8 bottom-0 w-px bg-border last:hidden" />
 
       {/* Icon */}
-      <div className={cn('relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', config.bgColor)}>
-        <Icon className={cn('h-4 w-4', config.color)} />
+      <div className={cn('relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full', 'bg-secondary')}>
+        <Icon className={cn('h-4 w-4', event.automatic ? 'text-muted-foreground' : 'text-primary')} />
       </div>
 
       {/* Content */}
@@ -92,7 +102,7 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-tight truncate">{event.title}</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-xs text-muted-foreground">{formattedDate}</span>
+                  {event.automatic && <Badge variant="secondary" className="text-[10px]">Automático</Badge>}
                   {event.author && (
                     <span className="text-xs text-muted-foreground">• {event.author}</span>
                   )}
@@ -107,9 +117,11 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
           {hasDetails && (
             <CollapsibleContent className="mt-1.5">
               <div className="rounded-md border bg-muted/30 p-2.5 text-xs space-y-1.5">
-                {event.description && (
+                {event.metadata.original_type === 'ai_call_summary' && event.metadata.summary ? (
+                  <AISummaryContent content={formatAISummary(event.metadata.summary)} />
+                ) : event.description ? (
                   <p className="text-foreground whitespace-pre-wrap">{event.description}</p>
-                )}
+                ) : null}
                 {/* Type-specific metadata badges */}
                 <TimelineMetadata event={event} />
               </div>
@@ -124,30 +136,26 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
 function TimelineMetadata({ event }: { event: TimelineEvent }) {
   const meta = event.metadata;
 
+  if (event.type === 'qualification') {
+    return <QualificationContent answers={meta.answers} channel={meta.channel} whatsappPrintPath={meta.whatsapp_print_url} />;
+  }
+
   if (event.type === 'call') {
-    const rawUrl: string | undefined = meta.recording_url;
-    let playableUrl: string | null = null;
-    if (rawUrl) {
-      const match = rawUrl.match(/Recordings\/([^.\/]+)/);
-      playableUrl = match && match[1]
-        ? `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/get-recording?recordingSid=${match[1]}`
-        : rawUrl;
-    }
+    const rawUrl = typeof meta.recording_url === 'string' ? meta.recording_url : null;
     return (
       <div className="space-y-2">
         <div className="flex flex-wrap gap-1.5">
-          {meta.direction && <Badge variant="outline" className="text-[10px]">{meta.direction === 'outbound' ? '📞 Saída' : '📲 Entrada'}</Badge>}
-          {meta.duration && <Badge variant="outline" className="text-[10px]">⏱ {meta.duration}</Badge>}
-          {meta.outcome && <Badge variant="outline" className="text-[10px]">{meta.outcome}</Badge>}
+          {meta.source === 'sonax' && <Badge variant="outline">Sonax</Badge>}
+          {meta.direction && <Badge variant="outline">{meta.direction === 'outbound' ? 'Saída' : 'Entrada'}</Badge>}
+          {meta.duration && <Badge variant="outline">{meta.duration}</Badge>}
+          {meta.status_label && <Badge variant="outline">{meta.status_label}</Badge>}
+          {meta.outcome_label && <Badge variant="outline">{meta.outcome_label}</Badge>}
+          {meta.ramal && <Badge variant="outline">Ramal {meta.ramal}</Badge>}
+          {meta.sdr_name && <Badge variant="outline">{meta.sdr_name}</Badge>}
         </div>
-        {playableUrl && (
-          <div className="pt-1">
-            <div className="text-[10px] text-muted-foreground mb-1">🎙 Gravação</div>
-            <audio controls preload="none" src={playableUrl} className="w-full h-8">
-              Seu navegador não suporta o player de áudio.
-            </audio>
-          </div>
-        )}
+        {meta.source === 'sonax'
+          ? <SonaxRecording recording={sonaxRecordingProxy(rawUrl)} recordingRaw={rawUrl} />
+          : <TwilioRecording recordingUrl={rawUrl} />}
       </div>
     );
   }
@@ -160,12 +168,15 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
       ? format(new Date(meta.booked_at as string), "dd/MM/yy 'às' HH:mm", { locale: ptBR })
       : null;
     return (
-      <div className="flex flex-wrap gap-1.5">
-        {meta.status && <Badge variant="outline" className="text-[10px]">{meta.status}</Badge>}
+      <div className="space-y-2">
+        {meta.sdr_notes && <p className="whitespace-pre-wrap"><strong>Nota do SDR: </strong>{meta.sdr_notes}</p>}
+        {meta.closer_notes && <p className="whitespace-pre-wrap"><strong>Nota do closer: </strong>{meta.closer_notes}</p>}
+        <div className="flex flex-wrap gap-1.5">
+        {meta.status && <Badge variant="outline" className="text-[10px]">{meta.status_label || meta.status}</Badge>}
         {scheduledAt && <Badge variant="outline" className="text-[10px]">📅 {scheduledAt}</Badge>}
         {meta.closer_name && <Badge variant="outline" className="text-[10px]">👤 {meta.closer_name}</Badge>}
         {meta.booked_by_name && (
-          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">
+          <Badge variant="outline" className="text-[10px] border-border text-foreground">
             ✍️ Agendado por: {meta.booked_by_name as string}{bookedAt ? ` em ${bookedAt}` : ''}
           </Badge>
         )}
@@ -174,6 +185,7 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
             🔗 Meet
           </a>
         )}
+        </div>
       </div>
     );
   }
@@ -206,7 +218,7 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
           {meta.gateway && <Badge variant="outline" className="text-[10px]">{meta.gateway}</Badge>}
           {meta.bu && <Badge variant="outline" className="text-[10px]">{meta.bu}</Badge>}
           {meta.reembolsado && (
-            <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-700 dark:text-rose-400">
+            <Badge variant="outline" className="text-[10px] border-border text-foreground">
               reembolsado
             </Badge>
           )}
@@ -232,10 +244,10 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
       <div className="flex flex-wrap gap-1.5">
         {meta.source && <Badge variant="secondary" className="text-[10px] font-semibold">Fonte: {meta.source}</Badge>}
         {added.map(t => (
-          <Badge key={`a-${t}`} variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">+ {t}</Badge>
+          <Badge key={`a-${t}`} variant="outline" className="text-[10px] border-border text-foreground">+ {t}</Badge>
         ))}
         {removed.map(t => (
-          <Badge key={`r-${t}`} variant="outline" className="text-[10px] border-rose-500/40 text-rose-700 dark:text-rose-400">− {t}</Badge>
+          <Badge key={`r-${t}`} variant="outline" className="text-[10px] border-border text-foreground">− {t}</Badge>
         ))}
       </div>
     );
@@ -245,80 +257,59 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
 }
 
 export function LeadFullTimeline({ dealId, dealUuid, contactEmail, contactId }: LeadFullTimelineProps) {
-  const [activeFilter, setActiveFilter] = useState<TimelineEventType | 'all'>('all');
-  const { data: events, isLoading } = useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId });
-
-  const filteredEvents = useMemo(() => {
-    if (!events) return [];
-    if (activeFilter === 'all') return events;
-    return events.filter(e => e.type === activeFilter);
-  }, [events, activeFilter]);
-
-  // Count per type for filter badges
-  const typeCounts = useMemo(() => {
-    if (!events) return {} as Record<string, number>;
-    const counts: Record<string, number> = {};
-    for (const e of events) {
-      counts[e.type] = (counts[e.type] || 0) + 1;
-    }
-    return counts;
-  }, [events]);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-3 p-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex gap-3">
-            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-            <div className="flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [showAutomatic, setShowAutomatic] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const addNote = useAddDealNote();
+  const { data: events = [], isLoading, isError } = useLeadFullTimeline({ dealId, dealUuid, contactEmail, contactId });
+  const visibleEvents = useMemo(() => events.filter(e => showAutomatic || !e.automatic), [events, showAutomatic]);
+  const automaticCount = events.filter(e => e.automatic).length;
+  const counts = FILTER_OPTIONS.map(opt => opt.key === 'all' ? visibleEvents.length : visibleEvents.filter(e => opt.types.includes(e.type)).length);
+  const selected = FILTER_OPTIONS.find(o => o.key === activeFilter);
+  const filteredEvents = selected && activeFilter !== 'all' ? visibleEvents.filter(e => selected.types.includes(e.type)) : visibleEvents;
+  const days = new Map<string, TimelineEvent[]>();
+  for (const event of filteredEvents) {
+    if (!event.date || Number.isNaN(new Date(event.date).getTime())) continue;
+    const key = dateParts(event.date);
+    days.set(key, [...(days.get(key) || []), event]);
   }
-
-  if (!events?.length) {
-    return (
-      <div className="text-center py-8 text-muted-foreground text-sm">
-        Nenhum evento encontrado para este lead.
-      </div>
-    );
-  }
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !dealUuid || addNote.isPending) return;
+    try {
+      await addNote.mutateAsync({ dealId: dealUuid, note: newNote.trim() });
+      setNewNote('');
+    } catch { /* O hook mantém o texto e apresenta o erro. */ }
+  };
 
   return (
     <div className="space-y-3">
-      {/* Filters */}
-      <div className="flex items-center gap-1.5 flex-wrap px-1">
-        <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        {FILTER_OPTIONS.map(opt => {
-          const count = opt.type === 'all' ? events.length : (typeCounts[opt.type] || 0);
-          if (opt.type !== 'all' && count === 0) return null;
-          return (
-            <button
-              key={opt.type}
-              onClick={() => setActiveFilter(opt.type)}
-              className={cn(
-                'px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors border',
-                activeFilter === opt.type
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted/50 text-muted-foreground border-transparent hover:bg-muted'
-              )}
-            >
-              {opt.label} ({count})
-            </button>
-          );
-        })}
+      <div className="space-y-2">
+        <Textarea placeholder="Escreva uma observação... (Ctrl+Enter para enviar)" aria-label="Nova nota"
+          value={newNote} onChange={e => setNewNote(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); void handleAddNote(); } }}
+          className="min-h-[80px] bg-background resize-none" />
+        <Button onClick={handleAddNote} disabled={!newNote.trim() || addNote.isPending} className="w-full">
+          <FileText className="h-4 w-4 mr-2" />{addNote.isPending ? 'Salvando...' : 'Adicionar Nota'}
+        </Button>
       </div>
-
-      {/* Timeline */}
-      <div className="px-1">
-        {filteredEvents.map(event => (
-          <TimelineEventItem key={event.id} event={event} />
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+        {FILTER_OPTIONS.map((opt, index) => counts[index] > 0 && (
+          <Button key={opt.key} size="sm" variant={activeFilter === opt.key ? 'default' : 'outline'}
+            className="h-7 px-2 text-[11px]" onClick={() => setActiveFilter(opt.key)}>{opt.label} ({counts[index]})</Button>
         ))}
       </div>
+      {automaticCount > 0 && <Button variant="ghost" size="sm" className="text-xs text-muted-foreground"
+        onClick={() => setShowAutomatic(v => !v)}>{showAutomatic ? 'Ocultar' : 'Mostrar'} eventos automáticos ({automaticCount})</Button>}
+      {isLoading ? <div className="space-y-3">{Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        : isError ? <p role="alert" className="text-sm text-destructive">Erro ao carregar atividade.</p>
+        : filteredEvents.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">Nenhum evento neste filtro.</p>
+        : <div className="space-y-4">{[...days].map(([day, dayEvents]) => (
+          <section key={day} className="space-y-3">
+            <h4 className="text-xs font-semibold text-muted-foreground border-b pb-2">{dayLabel(day)}</h4>
+            {dayEvents.map(event => <TimelineEventItem key={event.id} event={event} />)}
+          </section>
+        ))}</div>}
     </div>
   );
 }

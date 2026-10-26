@@ -124,7 +124,9 @@ export const useAddDealNote = () => {
       return data;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['all-deal-notes', variables.dealId] });
+      queryClient.invalidateQueries({ queryKey: ['all-deal-notes'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-full-timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
       queryClient.invalidateQueries({ queryKey: ['deal-notes', variables.dealId] });
       queryClient.invalidateQueries({ queryKey: ['deal-activities', variables.dealId] });
       toast.success('Nota adicionada');

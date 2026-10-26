@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { SonaxRecording, TwilioRecording } from './timeline/CallRecording';
+import { OUTCOME_LABELS, STATUS_LABELS, formatDuration, getCallDuration } from './timeline/callPresentation';
 import { useQuery } from '@tanstack/react-query';
-import { supabase, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Phone, Clock, User, FileText, Volume2 } from 'lucide-react';
+import { Phone, Clock, User, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useContactDealIds } from '@/hooks/useContactDealIds';
 import { useSonaxCallEventsByDeal, sonaxClientPhone } from '@/hooks/useSonaxCallEvents';
 import { sonaxRecordingProxy, sonaxDurationSeconds, sonaxParseDate } from '@/lib/sonaxRecording';
 
-const SUPABASE_URL = "https://rehcfgqvigfcekiipqkc.supabase.co";
+
 
 interface CallHistorySectionProps {
   contactId?: string;
@@ -32,59 +33,6 @@ interface CallRecord {
   created_at: string;
   recording_url: string | null;
   profiles?: { full_name: string | null };
-}
-
-const OUTCOME_LABELS: Record<string, { label: string; color: string }> = {
-  sem_contato: { label: 'Sem contato', color: 'bg-gray-100 text-gray-700' },
-  ocupado: { label: 'Ocupado', color: 'bg-yellow-100 text-yellow-700' },
-  caixa_postal: { label: 'Caixa postal', color: 'bg-gray-100 text-gray-700' },
-  numero_errado: { label: 'Número errado', color: 'bg-red-100 text-red-700' },
-  interessado: { label: 'Interessado', color: 'bg-green-100 text-green-700' },
-  nao_interessado: { label: 'Não interessado', color: 'bg-red-100 text-red-700' },
-  agendou_r1: { label: 'Agendou R1', color: 'bg-blue-100 text-blue-700' },
-  agendou_r2: { label: 'Agendou R2', color: 'bg-blue-100 text-blue-700' },
-  follow_up: { label: 'Follow-up', color: 'bg-orange-100 text-orange-700' },
-  outro: { label: 'Outro', color: 'bg-gray-100 text-gray-700' },
-};
-
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  initiated: { label: 'Iniciada', color: 'bg-gray-100 text-gray-700' },
-  ringing: { label: 'Chamando', color: 'bg-yellow-100 text-yellow-700' },
-  'in-progress': { label: 'Em andamento', color: 'bg-blue-100 text-blue-700' },
-  completed: { label: 'Completada', color: 'bg-green-100 text-green-700' },
-  failed: { label: 'Falhou', color: 'bg-red-100 text-red-700' },
-  busy: { label: 'Ocupado', color: 'bg-yellow-100 text-yellow-700' },
-  'no-answer': { label: 'Não atendeu', color: 'bg-orange-100 text-orange-700' },
-  canceled: { label: 'Cancelada', color: 'bg-gray-100 text-gray-700' },
-};
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds || seconds <= 0) return '0s';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (mins === 0) return `${secs}s`;
-  return `${mins}m ${secs}s`;
-}
-
-// Calculate duration from timestamps if duration_seconds is 0
-function getCallDuration(call: CallRecord): number {
-  if (call.duration_seconds && call.duration_seconds > 0) {
-    return call.duration_seconds;
-  }
-  if (call.started_at && call.ended_at) {
-    return Math.floor((new Date(call.ended_at).getTime() - new Date(call.started_at).getTime()) / 1000);
-  }
-  return 0;
-}
-
-// Get proxy URL for recording playback
-function getRecordingProxyUrl(recordingUrl: string): string {
-  // Extract RecordingSid from URL like: https://api.twilio.com/.../Recordings/RE123.mp3
-  const match = recordingUrl.match(/Recordings\/([^.\/]+)/);
-  if (match && match[1]) {
-    return `${SUPABASE_URL}/functions/v1/get-recording?recordingSid=${match[1]}`;
-  }
-  return recordingUrl;
 }
 
 export function CallHistorySection({ contactId, dealId }: CallHistorySectionProps) {
@@ -212,71 +160,7 @@ type TimelineEntry =
   | { at: Date; kind: 'sonax'; item: SonaxItem }
   | { at: Date; kind: 'twilio'; call: CallRecord };
 
-// Player para gravações que só existem na API da Sonax (marcador sonax-api:<id>).
-function SonaxApiRecording({ idChamada }: { idChamada: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState(false);
-  const objectUrlRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-    };
-  }, []);
-
-  const buscar = async () => {
-    setLoading(true);
-    setErro(false);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/get-sonax-recording`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token ?? ''}`,
-          apikey: SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ id_chamada: idChamada }),
-      });
-      if (!resp.ok) {
-        setErro(true);
-        return;
-      }
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      objectUrlRef.current = url;
-      setSrc(url);
-    } catch {
-      setErro(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="mt-2 pt-2 border-t border-border">
-      <div className="flex items-center gap-2 mb-1">
-        <Volume2 className="h-3 w-3 text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Gravação</span>
-        {!src && !loading && !erro && (
-          <button type="button" onClick={buscar} className="text-xs text-primary hover:underline">
-            ouvir gravação
-          </button>
-        )}
-        {loading && <span className="text-xs text-muted-foreground">Buscando gravação na Sonax…</span>}
-        {erro && <span className="text-xs text-muted-foreground">Gravação indisponível na Sonax</span>}
-      </div>
-      {src && <audio controls className="w-full h-8" src={src} preload="none" />}
-    </div>
-  );
-}
-
 function SonaxCallCard({ item }: { item: SonaxItem }) {
-  const apiCallId = item.recordingRaw?.startsWith('sonax-api:')
-    ? item.recordingRaw.slice('sonax-api:'.length).trim()
-    : null;
-
   return (
 
     <div className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
@@ -305,31 +189,7 @@ function SonaxCallCard({ item }: { item: SonaxItem }) {
         </Badge>
       </div>
 
-      {item.recording && (
-        <div className="mt-2 pt-2 border-t border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <Volume2 className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Gravação</span>
-            <a
-              href={item.recordingRaw!}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline"
-            >
-              abrir na Sonax
-            </a>
-          </div>
-          <audio controls className="w-full h-8" preload="none">
-            <source src={item.recording} type="audio/mpeg" />
-          </audio>
-        </div>
-      )}
-
-      {/* Sem URL pública: o webhook gravou o marcador `sonax-api:<id_chamada>`.
-          Buscamos o áudio na API somente quando o usuário pede para ouvir. */}
-      {!item.recording && apiCallId && (
-        <SonaxApiRecording idChamada={apiCallId} />
-      )}
+      <SonaxRecording recording={item.recording} recordingRaw={item.recordingRaw} />
 
     </div>
   );
@@ -371,17 +231,8 @@ function TwilioCallCard({ call }: { call: CallRecord }) {
         </div>
       )}
 
-      {call.recording_url && (
-        <div className="mt-2 pt-2 border-t border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <Volume2 className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Gravação</span>
-          </div>
-          <audio controls className="w-full h-8" src={getRecordingProxyUrl(call.recording_url)} preload="none">
-            Seu navegador não suporta o player de áudio.
-          </audio>
-        </div>
-      )}
+      <TwilioRecording recordingUrl={call.recording_url} />
+
     </div>
   );
 }
