@@ -1,3 +1,6 @@
+import { OUTCOME_LABELS, STATUS_LABELS, formatDuration, getCallDuration } from '@/components/crm/timeline/callPresentation';
+import { MEETING_STATUS, metadataAuthor, activityIsAutomatic, hasCorrespondingHangup, otherActivityPresentation } from '@/components/crm/timeline/eventPresentation';
+import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useContactDealIds } from './useContactDealIds';
@@ -10,6 +13,7 @@ const OWNERSHIP_TYPES: Record<string, string> = {
   owner_change: 'Responsável alterado',
   closer_change: 'Closer alterado',
   lead_distribution: 'Lead distribuído',
+  lead_distributed: 'Lead distribuído',
 };
 
 const AUTOMATION_TYPES: Record<string, string> = {
@@ -26,6 +30,7 @@ export interface TimelineEvent {
   description: string | null;
   date: string;
   author: string | null;
+  automatic?: boolean;
   metadata: Record<string, any>;
 }
 
@@ -103,6 +108,7 @@ export function useLeadFullTimeline({
                 created_at: m.created_at,
                 updated_at: m.updated_at,
                 closer_notes: m.closer_notes,
+                notes: m.notes,
                 booked_by_name: m.booked_by_name,
                 meeting_slots: {
                   scheduled_at: m.scheduled_at,
@@ -218,21 +224,37 @@ export function useLeadFullTimeline({
         return val;
       };
 
-      const resolveAuthor = (userId: string | null | undefined, ...fallbacks: (string | null | undefined)[]): string | null => {
-        for (const fb of fallbacks) {
-          if (fb) return fb;
-        }
-        if (userId && profileMap[userId]) return profileMap[userId];
-        return null;
+      const resolveAuthor = (userId: string | null | undefined, ...fallbacks: (string | null | undefined)[]): string => {
+        if (userId) return profileMap[userId] || userId;
+        return fallbacks.find(Boolean) || 'Automático';
       };
 
       // Process deal_activities
       if (activitiesRes.data) {
+        const hangups = activitiesRes.data.filter(a => a.activity_type === 'ligacao_sonax_desligamento');
         for (const act of activitiesRes.data) {
           const actType = act.activity_type || '';
           const meta = (act.metadata as Record<string, any>) || {};
 
-          if (actType === 'lead_entered') {
+          if ((actType === 'ligacao_sonax_atendimento' || actType === 'click_to_call') && hasCorrespondingHangup(act, hangups)) continue;
+          const eventStart = events.length;
+          const author = resolveAuthor(act.user_id, metadataAuthor(meta));
+          const automatic = activityIsAutomatic(actType, act.user_id, meta);
+          if (actType === 'ligacao_sonax_desligamento' || actType === 'ligacao_sonax_atendimento' || actType === 'click_to_call') {
+            const answered = String(meta.STATUS_ATENDIMENTO || '').toUpperCase() === 'S';
+            const seconds = sonaxDurationSeconds(String(meta.DURACAO_CHAMADA || ''));
+            events.push({
+              id: act.id, type: 'call',
+              title: actType === 'ligacao_sonax_desligamento' ? (answered ? 'Ligação atendida' : 'Ligação não atendida') : 'Tentativa de ligação',
+              description: act.description, date: act.created_at, author, automatic,
+              metadata: { ...meta, original_type: actType, source: 'sonax', duration: formatDuration(seconds),
+                duration_seconds: seconds, recording_url: answered ? meta.URL_GRAVACAO : null,
+                ramal: meta.ALIASRAMAL || meta.RAMAL, sdr_name: meta.sdr_name || meta.sdr_email },
+            });
+          } else if (actType === 'ai_call_summary') {
+            events.push({ id: act.id, type: 'note', title: 'Resumo IA da ligação', description: act.description,
+              date: act.created_at, author, metadata: { ...meta, original_type: actType } });
+          } else if (actType === 'lead_entered') {
             // Webhook entry event — show source info
             const endpointName = meta.endpoint_name || meta.endpoint_slug || meta.source || '';
             const pipelineName = dealIdToPipelineName[act.deal_id] || meta.pipeline_name || '';
@@ -321,7 +343,7 @@ export function useLeadFullTimeline({
               author: resolveAuthor(act.user_id, meta.transferred_by, meta.moved_by_name, meta.moved_by_email),
               metadata: { original_type: actType, ...meta },
             });
-          } else if (actType === 'refund_mcf_pay' || actType === 'refund_hubla') {
+          } else if (actType.startsWith('refund_')) {
             events.push({
               id: act.id,
               type: 'refund',
@@ -342,16 +364,16 @@ export function useLeadFullTimeline({
               metadata: { original_type: actType, ...meta },
             });
           } else if (actType) {
-            // Other activity types
+            const presentation = otherActivityPresentation(actType, meta);
             events.push({
-              id: act.id,
-              type: 'note',
-              title: actType.replace(/_/g, ' '),
-              description: act.description,
-              date: act.created_at,
-              author: resolveAuthor(act.user_id, meta.author, meta.user_name),
-              metadata: { original_type: actType, ...meta },
+              id: act.id, ...presentation, description: act.description, date: act.created_at,
+              author, metadata: { ...meta, original_type: actType },
             });
+          }
+          for (const event of events.slice(eventStart)) {
+            event.author = author;
+            event.automatic = automatic;
+            event.metadata.original_type = actType;
           }
         }
       }
@@ -359,10 +381,9 @@ export function useLeadFullTimeline({
       // Process calls
       if (callsRes.data) {
         for (const call of callsRes.data) {
-          const duration = call.duration_seconds
-            ? `${Math.floor(call.duration_seconds / 60)}m${call.duration_seconds % 60}s`
-            : null;
-          const outcomeLabel = call.outcome || call.status || 'Sem resultado';
+          const seconds = getCallDuration(call);
+          const duration = formatDuration(seconds);
+          const outcomeLabel = (call.outcome && OUTCOME_LABELS[call.outcome]?.label) || STATUS_LABELS[call.status]?.label || 'Sem resultado';
           events.push({
             id: call.id,
             type: 'call',
@@ -373,7 +394,9 @@ export function useLeadFullTimeline({
             metadata: {
               direction: call.direction,
               duration,
-              duration_seconds: call.duration_seconds,
+              duration_seconds: seconds,
+              status_label: STATUS_LABELS[call.status]?.label,
+              outcome_label: call.outcome ? OUTCOME_LABELS[call.outcome]?.label : null,
               outcome: call.outcome,
               status: call.status,
               to_number: call.to_number,
@@ -412,7 +435,7 @@ export function useLeadFullTimeline({
           events.push({
             id: att.id,
             type: 'meeting',
-            title: `Reunião ${att.status === 'completed' ? 'realizada' : att.status === 'no_show' ? 'No-Show' : 'agendada'}${closerName ? ` com ${closerName}` : ''}`,
+            title: `Reunião ${slot?.meeting_type?.toUpperCase() || ''} · ${MEETING_STATUS[att.status] || 'status não informado'}${closerName ? ` com ${closerName}` : ''}`,
             description: att.closer_notes || null,
             date: att.booked_at || att.created_at || '',
             // Mostra quem agendou ao lado da data; cai para o closer se desconhecido
@@ -426,9 +449,16 @@ export function useLeadFullTimeline({
               meeting_type: slot?.meeting_type,
               google_meet_link: slot?.google_meet_link,
               closer_notes: att.closer_notes,
-              sdr_notes: null,
+              sdr_notes: att.notes || null,
+              status_label: MEETING_STATUS[att.status] || att.status,
             },
           });
+
+          if (att.notes?.trim()) {
+            events.push({ id: `${att.id}-sdr-note`, type: 'note', title: `Nota de agendamento ${slot?.meeting_type?.toUpperCase() || ''}`,
+              description: att.notes, date: att.booked_at || att.created_at || '', author: bookedByName,
+              metadata: { attendee_id: att.id, original_type: 'scheduling_note' } });
+          }
 
           // Add closer_notes as separate event if present
           if (att.closer_notes) {
@@ -477,11 +507,11 @@ export function useLeadFullTimeline({
           events.push({
             id: note.id,
             type: 'note',
-            title: `Nota: ${note.note_type || 'Geral'}`,
+            title: note.note_type === 'reschedule' ? 'Reagendamento' : note.note_type === 'call_summary' ? 'Resumo IA' : 'Nota da reunião',
             description: note.note,
             date: note.created_at || '',
             author: resolveAuthor(note.created_by),
-            metadata: { note_type: note.note_type, attendee_id: note.attendee_id },
+            metadata: { note_type: note.note_type, attendee_id: note.attendee_id, original_type: 'attendee_notes' },
           });
         }
       }
@@ -504,7 +534,8 @@ export function useLeadFullTimeline({
               title: pipelineName ? `Entrada: ${pipelineName}` : 'Entrada na Pipeline',
               description: pipelineName ? `Lead entrou na pipeline ${pipelineName}` : 'Lead entrou na pipeline',
               date: deal.created_at,
-              author: resolveAuthor(deal.owner_id),
+              author: 'Automático',
+              automatic: true,
               metadata: { deal_id: deal.id, origin_id: deal.origin_id, pipeline_name: pipelineName, synthetic: true },
             });
           }
