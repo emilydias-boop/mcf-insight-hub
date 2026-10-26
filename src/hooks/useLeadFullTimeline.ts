@@ -1,5 +1,5 @@
 import { OUTCOME_LABELS, STATUS_LABELS, formatDuration, getCallDuration } from '@/components/crm/timeline/callPresentation';
-import { MEETING_STATUS, metadataAuthor, activityIsAutomatic, hasCorrespondingHangup, otherActivityPresentation } from '@/components/crm/timeline/eventPresentation';
+import { MEETING_STATUS, metadataAuthor, activityIsAutomatic, hasCorrespondingHangup, otherActivityPresentation, contatoRegistradoPresentation } from '@/components/crm/timeline/eventPresentation';
 import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -237,6 +237,9 @@ export function useLeadFullTimeline({
           const meta = (act.metadata as Record<string, any>) || {};
 
           if ((actType === 'ligacao_sonax_atendimento' || actType === 'click_to_call') && hasCorrespondingHangup(act, hangups)) continue;
+          // Registro só com próxima ação: o next_action_scheduled gravado junto já mostra o evento.
+          const contato = actType === 'contato_registrado' ? contatoRegistradoPresentation(meta) : null;
+          if (actType === 'contato_registrado' && !contato) continue;
           const eventStart = events.length;
           const author = resolveAuthor(act.user_id, metadataAuthor(meta, actType));
           const automatic = activityIsAutomatic(actType, act.user_id, meta);
@@ -251,6 +254,9 @@ export function useLeadFullTimeline({
                 duration_seconds: seconds, recording_url: answered ? meta.URL_GRAVACAO : null,
                 ramal: meta.ALIASRAMAL || meta.RAMAL, sdr_name: meta.sdr_name || meta.sdr_email },
             });
+          } else if (contato) {
+            events.push({ id: act.id, type: 'call', title: contato.title, description: contato.body, date: act.created_at,
+              author, metadata: { ...meta, original_type: actType, contato_icone: contato.icon } });
           } else if (actType === 'ai_call_summary') {
             events.push({ id: act.id, type: 'ai_summary', title: 'Resumo IA da ligação', description: act.description,
               date: act.created_at, author, metadata: { ...meta, original_type: actType } });

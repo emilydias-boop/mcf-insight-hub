@@ -28,6 +28,7 @@ import {
   UserCog,
   Zap,
   Undo2,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -75,7 +76,8 @@ function dayLabel(key: string): string {
 function TimelineEventItem({ event }: { event: TimelineEvent }) {
   const [open, setOpen] = useState(['note', 'qualification', 'closer_note', 'ai_summary', 'attendee_note', 'scheduling_note'].includes(event.type));
   const config = EVENT_CONFIG[event.type];
-  const Icon = config.icon;
+  const Icon = event.metadata.contato_icone === 'message' ? MessageSquare
+    : event.metadata.contato_icone === 'alert' ? AlertTriangle : config.icon;
 
   const formattedDate = event.date
     ? timeLabel(event.date)

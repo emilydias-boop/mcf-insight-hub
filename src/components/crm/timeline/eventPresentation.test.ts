@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { activityIsAutomatic, hasCorrespondingHangup, metadataAuthor, MEETING_STATUS, otherActivityPresentation } from './eventPresentation';
+import { contatoRegistradoPresentation } from './eventPresentation';
 import { getCallDuration } from './callPresentation';
 const at = '2026-10-26T12:00:00Z';
 const event = { deal_id: 'a', created_at: at };
@@ -25,4 +26,13 @@ assert.equal(activityIsAutomatic('ligacao_sonax_desligamento', null, { sdr_name:
 assert.equal(otherActivityPresentation('loss_marked', {}).type, 'stage_change');
 assert.equal(otherActivityPresentation('replication', { target_pipeline_name: 'Inside Sales' }).title, 'Replicado para Inside Sales');
 assert.equal(otherActivityPresentation('unknown_system_event', {}).type, 'automation');
-console.log('24 assertions passed — timeline presentation');
+const cr = (resultado: string, extra: Record<string, any> = {}) => contatoRegistradoPresentation({ resultado, ...extra });
+assert.deepEqual(cr('atendeu', { resultado_rotulo: 'Atendeu', nota: 'Falou do preço' }), { title: 'Atendeu', body: 'Falou do preço', icon: 'phone' });
+assert.equal(cr('nao_atendeu')?.title, 'Não atendeu'); assert.equal(cr('nao_atendeu')?.icon, 'phone');
+assert.equal(cr('caixa_postal')?.title, 'Caixa postal'); assert.equal(cr('caixa_postal')?.icon, 'phone');
+assert.equal(cr('primeira_mensagem')?.title, 'Primeira mensagem enviada'); assert.equal(cr('primeira_mensagem')?.icon, 'message');
+assert.equal(cr('respondeu_whatsapp')?.title, 'Respondeu no WhatsApp'); assert.equal(cr('respondeu_whatsapp')?.icon, 'message');
+assert.equal(cr('numero_errado')?.title, 'Número errado'); assert.equal(cr('numero_errado')?.icon, 'alert');
+assert.equal(contatoRegistradoPresentation({ proxima_acao_tipo: 'ligar' }), null);
+assert.equal(activityIsAutomatic('contato_registrado', null, {}), false);
+console.log('37 assertions passed — timeline presentation');
