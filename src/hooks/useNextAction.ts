@@ -64,20 +64,7 @@ export const useSaveNextAction = () => {
           }
         });
         
-        // 3. Criar notificação (alertas) para o usuário que criou
-        if (userId) {
-          await supabase.from('alertas').insert({
-            user_id: userId,
-            tipo: 'proxima_acao',
-            titulo: `⏰ ${actionLabel}: ${dealName || 'Deal'}`,
-            descricao: `Agendado para ${formattedDate}${actionNote ? ` - ${actionNote}` : ''}`,
-            metadata: {
-              deal_id: dealId,
-              action_type: actionType,
-              scheduled_date: actionDate.toISOString()
-            }
-          });
-        }
+        // Lembretes vêm do cron do banco (alertas tipo 'aviso', metadata.kind='proxima_acao').
       }
       
       return data;

@@ -14,6 +14,8 @@ import { DealTasksSection } from './DealTasksSection';
 import { SdrCompactHeader } from './SdrCompactHeader';
 import { SdrSummaryBlock } from './SdrSummaryBlock';
 import { NextActionBlockCompact } from './NextActionBlockCompact';
+import { RegistrarContatoFooter } from './drawer/RegistrarContatoFooter';
+import { RetornoAgendadoCard } from './drawer/RetornoAgendadoCard';
 import { A010JourneyCollapsible } from './A010JourneyCollapsible';
 import { QuickActionsBlock } from './QuickActionsBlock';
 import { LeadJourneyCard } from './LeadJourneyCard';
@@ -259,16 +261,17 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
                 />
               )}
 
-              {/* ===== 3. PRÓXIMA AÇÃO (compacta) ===== */}
-              <NextActionBlockCompact
-                dealId={dealId}
-                currentType={deal.next_action_type}
-                currentDate={deal.next_action_date}
-                currentNote={deal.next_action_note}
-                onSaved={() => refetchDeal()}
-                encaminharArea={isPosVendaDeal(deal) && deal.stage_id === POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID
-                  ? { dealName: deal.name } : undefined}
-              />
+              {/* ===== PRÓXIMA AÇÃO: substituída pelo rodapé, exceto Pós Venda "Novos licenciados" (encaminhar área) ===== */}
+              {isPosVendaDeal(deal) && deal.stage_id === POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID && (
+                <NextActionBlockCompact
+                  dealId={dealId}
+                  currentType={deal.next_action_type}
+                  currentDate={deal.next_action_date}
+                  currentNote={deal.next_action_note}
+                  onSaved={() => refetchDeal()}
+                  encaminharArea={{ dealName: deal.name }}
+                />
+              )}
 
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
               <LeadJourneyCard dealId={dealId} dealCreatedAt={deal.created_at} />
@@ -320,7 +323,16 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
                   />
                 </TabsContent>
 
-                <TabsContent value="tarefas" className="mt-0 p-4">
+                <TabsContent value="tarefas" className="mt-0 p-4 space-y-3">
+                  {deal.next_action_date && (
+                    <RetornoAgendadoCard
+                      dealId={deal.id}
+                      tipo={deal.next_action_type}
+                      data={deal.next_action_date}
+                      nota={deal.next_action_note}
+                      onChanged={() => refetchDeal()}
+                    />
+                  )}
                   <div className="border rounded-lg min-h-[300px]">
                     <DealTasksSection
                       dealId={deal.id}
@@ -345,6 +357,17 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
                 </TabsContent>
               </Tabs>
             </div>
+
+            {/* ===== 3. RODAPÉ FIXO: REGISTRAR CONTATO ===== */}
+            <RegistrarContatoFooter
+              key={deal.id}
+              dealId={deal.id}
+              isNoShow={(deal.crm_stages as any)?.stage_name === 'No-Show'}
+              onRegistrado={(comResultado) => {
+                refetchDeal();
+                if (comResultado && aba === 'resumo') trocarAba('atividade');
+              }}
+            />
           </div>
         ) : (
           <div className="text-center py-12 text-muted-foreground">
