@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -54,8 +54,20 @@ async function callMovePartners(dryRun: boolean): Promise<MovePartnersResponse> 
   return res.json();
 }
 
-export const MovePartnersButton = () => {
-  const [open, setOpen] = useState(false);
+interface MovePartnersButtonProps {
+  /** Quando informado, o diálogo é controlado por fora e o botão próprio não é renderizado. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export const MovePartnersButton = ({ open: controlledOpen, onOpenChange }: MovePartnersButtonProps = {}) => {
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (isControlled) onOpenChange?.(value);
+    else setInternalOpen(value);
+  };
   const [isRunning, setIsRunning] = useState(false);
   const [isDryRun, setIsDryRun] = useState(true);
   const [response, setResponse] = useState<MovePartnersResponse | null>(null);
@@ -105,8 +117,21 @@ export const MovePartnersButton = () => {
 
   const showConfirmButton = response?.dry_run && (response?.stats?.partner_deals_found ?? 0) > 0 && response?.success;
 
+  // Modo controlado: ao abrir por fora, faz o mesmo que o clique no botão próprio.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (!isControlled) return;
+    if (controlledOpen && !wasOpenRef.current) {
+      setResponse(null);
+      setTimeout(runDryRun, 100);
+    }
+    wasOpenRef.current = !!controlledOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlledOpen, isControlled]);
+
   return (
     <>
+      {!isControlled && (
       <Button
         variant="outline"
         size="sm"
@@ -117,6 +142,7 @@ export const MovePartnersButton = () => {
         <UserCheck className="h-4 w-4" />
         <span className="hidden sm:inline">Mover Parceiros</span>
       </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">

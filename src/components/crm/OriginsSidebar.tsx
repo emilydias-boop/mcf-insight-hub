@@ -12,8 +12,7 @@ import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { PipelineSelector } from './PipelineSelector';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PipelineContextMenu } from './PipelineContextMenu';
 import { PipelineConfigModal } from './PipelineConfigModal';
 import { CreatePipelineWizard } from './wizard/CreatePipelineWizard';
@@ -63,6 +62,20 @@ const getGroupIcon = (name: string): LucideIcon => {
   return Layers; // Ícone padrão
 };
 
+// Monograma de 2 letras: iniciais das duas primeiras palavras significativas
+const MONOGRAM_STOPWORDS = new Set(['PIPELINE', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'E', '-']);
+export const getMonogram = (name: string): string => {
+  const words = (name || '')
+    .split(/[\s\-–—_/]+/)
+    .map(w => w.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(w => w && !MONOGRAM_STOPWORDS.has(w.toUpperCase()));
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+};
+
+const COLLAPSED_STORAGE_KEY = 'crm-origins-sidebar-collapsed';
+
 // Hook para gerenciar favoritos com localStorage
 const useFavorites = () => {
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -96,7 +109,20 @@ const useFavorites = () => {
 };
 
 export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline, allowedOriginIds, allowedGroupIds, hideFilters }: OriginsSidebarProps) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_STORAGE_KEY, String(isCollapsed));
+    } catch {
+      // ignore
+    }
+  }, [isCollapsed]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
@@ -141,43 +167,6 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   
   // Se tem filtro de BU, não deduplicar (para manter IDs mapeados)
   const skipDedup = hasBUFilter;
-  
-  // Query separada para buscar grupos (para o modo collapsed)
-  const { data: allGroups } = useQuery({
-    queryKey: ['crm-groups-for-collapsed-sidebar', skipDedup],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('crm_groups')
-        .select('id, name, display_name, created_at, is_archived')
-        .order('created_at', { ascending: false }); // Mais recentes primeiro
-      
-      if (!data) return [];
-      
-      // Filtrar arquivados
-      const activeGroups = data.filter(g => g.is_archived !== true);
-      
-      // Se tem filtro de BU, pular deduplicação
-      if (skipDedup) {
-        return activeGroups.sort((a, b) => 
-          (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
-        );
-      }
-      
-      // Deduplicar por nome (manter o mais recente de cada)
-      const seen = new Map<string, typeof activeGroups[0]>();
-      activeGroups.forEach(g => {
-        const key = (g.display_name ?? g.name).trim().toLowerCase();
-        if (!seen.has(key)) {
-          seen.set(key, g);
-        }
-      });
-      
-      // Converter de volta para array e ordenar alfabeticamente
-      return Array.from(seen.values()).sort((a, b) => 
-        (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
-      );
-    },
-  });
   
   // Usar dados filtrados por BU
   const dataToUse = filteredByBU || originData;
@@ -375,17 +364,64 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     );
   };
   
+  const renderMonogram = (item: { key: string; name: string; total: number; active: boolean; favorite?: boolean; onClick: () => void }) => (
+    <Tooltip key={item.key}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={item.onClick}
+          aria-label={item.name}
+          className={cn(
+            "relative flex h-9 w-9 items-center justify-center rounded-md text-xs font-semibold transition-colors",
+            item.active
+              ? "bg-primary/15 text-primary ring-1 ring-primary/40"
+              : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          )}
+        >
+          {getMonogram(item.name)}
+          {item.favorite && (
+            <Star className="h-2.5 w-2.5 absolute -top-0.5 -right-0.5 fill-yellow-400 text-yellow-400" />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        <p className="font-medium">{item.name}</p>
+        <p className="text-xs text-muted-foreground">
+          {item.total.toLocaleString('pt-BR')} negócio{item.total !== 1 ? 's' : ''}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  );
+
   return (
     <div className={cn(
       "border-r bg-muted/10 flex flex-col h-full transition-all duration-300",
-      isCollapsed ? "w-12" : "w-72"
+      isCollapsed ? "w-14" : "w-72"
     )}>
       {/* Header com toggle */}
       <div className="p-4 border-b flex items-center justify-between">
         {!isCollapsed && (
-          <h3 className="font-semibold text-sm uppercase text-muted-foreground">
-            Origens
-          </h3>
+          <div className="flex items-center gap-1">
+            <h3 className="font-semibold text-sm uppercase text-muted-foreground">
+              Pipelines
+            </h3>
+            <TooltipProvider delayDuration={100}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Criar pipeline"
+                    onClick={() => setWizardOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Criar pipeline</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         )}
         <Button
           variant="ghost"
@@ -416,19 +452,6 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             </div>
           )}
 
-          {/* Botão Criar Pipeline - sempre visível */}
-          <div className="p-3 border-b">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full" 
-              onClick={() => setWizardOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Criar Pipeline
-            </Button>
-          </div>
-          
           {/* Busca - oculta quando hideFilters */}
           {!hideFilters && (
             <div className="p-3 border-b">
@@ -478,53 +501,45 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         </>
       )}
       
-      {/* Versão mini quando collapsed - mostrar ícones dos grupos */}
+      {/* Versão mini quando collapsed - monogramas dos mesmos itens do modo expandido */}
       {isCollapsed && (
         <ScrollArea className="flex-1">
-          <div className="flex flex-col items-center py-2 gap-1">
-            {/* Favoritos no modo collapsed */}
-            {favoriteOrigins.length > 0 && (
-              <>
-                {favoriteOrigins.map(origin => {
-                  const Icon = getGroupIcon(origin.name);
-                  const displayName = origin.display_name || origin.name;
-                  return (
-                    <Button
-                      key={`fav-${origin.id}`}
-                      variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
-                      size="icon"
-                      onClick={() => onSelectOrigin(origin.id)}
-                      title={`⭐ ${displayName}`}
-                      className="h-8 w-8 relative"
-                    >
-                      <Icon className="h-4 w-4" />
-                      <Star className="h-2 w-2 absolute -top-0.5 -right-0.5 fill-yellow-400 text-yellow-400" />
-                    </Button>
-                  );
-                })}
-                <div className="w-6 border-b my-1" />
-              </>
-            )}
-            
-            {/* Sempre mostrar ícones dos grupos principais */}
-            {allGroups?.map((group) => {
-              const Icon = getGroupIcon(group.name);
-              const displayName = group.display_name || group.name;
-              
-              return (
-                <Button
-                  key={group.id}
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsCollapsed(false)}
-                  title={displayName}
-                  className="h-8 w-8"
-                >
-                  <Icon className="h-4 w-4" />
-                </Button>
-              );
-            })}
-          </div>
+          <TooltipProvider delayDuration={100}>
+            <div className="flex flex-col items-center py-2 gap-1.5">
+              {favoriteOrigins.length > 0 && (
+                <>
+                  {favoriteOrigins.map(origin => renderMonogram({
+                    key: `fav-${origin.id}`,
+                    name: origin.display_name || origin.name,
+                    total: origin.deal_count || 0,
+                    active: selectedOriginId === origin.id,
+                    favorite: true,
+                    onClick: () => onSelectOrigin(origin.id),
+                  }))}
+                  <div className="w-6 border-b my-1" />
+                </>
+              )}
+
+              {isGroupedTree
+                ? (dataToUse as Group[]).map(group => renderMonogram({
+                    key: group.id,
+                    name: group.display_name || group.name,
+                    total: group.children.reduce((sum, c) => sum + (c.deal_count || 0), 0),
+                    active: !!selectedOriginId && (group.id === selectedOriginId || group.children.some(c => c.id === selectedOriginId)),
+                    onClick: () => {
+                      setExpandedGroups(prev => new Set([...prev, group.id]));
+                      setIsCollapsed(false);
+                    },
+                  }))
+                : ((dataToUse as Origin[]) || []).map(origin => renderMonogram({
+                    key: origin.id,
+                    name: origin.display_name || origin.name,
+                    total: origin.deal_count || 0,
+                    active: selectedOriginId === origin.id,
+                    onClick: () => onSelectOrigin(origin.id),
+                  }))}
+            </div>
+          </TooltipProvider>
         </ScrollArea>
       )}
 

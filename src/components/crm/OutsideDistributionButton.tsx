@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -62,8 +62,20 @@ async function callDistributeOutside(dryRun: boolean): Promise<DistributionRespo
   return res.json();
 }
 
-export const OutsideDistributionButton = () => {
-  const [open, setOpen] = useState(false);
+interface OutsideDistributionButtonProps {
+  /** Quando informado, o diálogo é controlado por fora e o botão próprio não é renderizado. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export const OutsideDistributionButton = ({ open: controlledOpen, onOpenChange }: OutsideDistributionButtonProps = {}) => {
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (isControlled) onOpenChange?.(value);
+    else setInternalOpen(value);
+  };
   const [isRunning, setIsRunning] = useState(false);
   const [isDryRun, setIsDryRun] = useState(true);
   const [response, setResponse] = useState<DistributionResponse | null>(null);
@@ -201,8 +213,22 @@ export const OutsideDistributionButton = () => {
     ...(response?.no_contact_contracts || []),
   ];
 
+  // Modo controlado: ao abrir por fora, faz o mesmo que o clique no botão próprio.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (!isControlled) return;
+    if (controlledOpen && !wasOpenRef.current) {
+      setResponse(null);
+      setCreatedDeals(new Set());
+      setTimeout(runDryRun, 100);
+    }
+    wasOpenRef.current = !!controlledOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlledOpen, isControlled]);
+
   return (
     <>
+      {!isControlled && (
       <Button
         variant="outline"
         size="sm"
@@ -213,6 +239,7 @@ export const OutsideDistributionButton = () => {
         <Users className="h-4 w-4" />
         <span className="hidden sm:inline">Distribuir Outsides</span>
       </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
