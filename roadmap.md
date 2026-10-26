@@ -28,3 +28,5 @@
 - [x] Leitura relatorio_diario_bu de 16/10, 17/10 e 18/10 (somente leitura)
 
 - [x] Relatório diário por BU de 19/10 (somente leitura)
+
+- [ ] Painel do Negócio — etapa 2A: Atividade completa (itens 1–10), renderizadores compartilhados e validação; sem remover abas nem alterar banco.
