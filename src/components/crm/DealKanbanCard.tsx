@@ -396,7 +396,9 @@ export const DealKanbanCard = ({
   const DIA = 86_400_000;
   const agora = Date.now();
   let semContato: { text: string; cls: string } | null = null;
-  if (!ultimoToque && (activitySummary?.totalActivities || 0) === 0) {
+  if (!activitySummary) {
+    semContato = null;
+  } else if (!ultimoToque && (activitySummary?.totalActivities || 0) === 0) {
     const criado = deal.created_at ? new Date(deal.created_at).getTime() : agora;
     const dias = Math.floor((agora - criado) / DIA);
     semContato = dias < 1
@@ -506,7 +508,7 @@ export const DealKanbanCard = ({
 
         {/* Linha 3: status */}
         {temStatus && (
-          <div className="flex items-center gap-1 flex-wrap">
+          <div className="flex items-center gap-1 flex-wrap empty:hidden">
             {temReembolso && (
               <Badge
                 variant="outline"
