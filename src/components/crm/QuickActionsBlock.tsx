@@ -366,81 +366,98 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
       </div>
 
       {/* Modal de Perda */}
-      <MarkAsLostModal
-        open={showLostModal}
-        onOpenChange={setShowLostModal}
-        dealId={deal?.id}
-        dealName={deal?.name || 'Lead'}
-        originId={deal?.origin_id}
-        currentCustomFields={deal?.custom_fields || {}}
-        onSuccess={onStageChange}
-      />
+      {showLostModal && (
+        <MarkAsLostModal
+          open
+          onOpenChange={setShowLostModal}
+          dealId={deal?.id}
+          dealName={deal?.name || 'Lead'}
+          originId={deal?.origin_id}
+          currentCustomFields={deal?.custom_fields || {}}
+          onSuccess={onStageChange}
+        />
+      )}
+
       
       {/* Modal de Agendamento */}
-      <SdrScheduleDialog
-        open={showScheduleDialog}
-        onOpenChange={setShowScheduleDialog}
-        dealId={deal?.id}
-        contactName={contact?.name || deal?.name}
-        isReschedule={isNoShowStage}
-        onScheduled={onStageChange}
-      />
+      {showScheduleDialog && (
+        <SdrScheduleDialog
+          open
+          onOpenChange={setShowScheduleDialog}
+          dealId={deal?.id}
+          contactName={contact?.name || deal?.name}
+          isReschedule={isNoShowStage}
+          onScheduled={onStageChange}
+        />
+      )}
+
       
       {/* Modal Mover Pipeline */}
-      <MoveToPipelineModal
-        open={showMoveModal}
-        onOpenChange={setShowMoveModal}
-        dealId={deal?.id}
-        dealName={deal?.name || 'Lead'}
-        currentOriginId={deal?.origin_id}
-        currentStageName={deal?.crm_stages?.stage_name}
-        onSuccess={onStageChange}
-      />
+      {showMoveModal && (
+        <MoveToPipelineModal
+          open
+          onOpenChange={setShowMoveModal}
+          dealId={deal?.id}
+          dealName={deal?.name || 'Lead'}
+          currentOriginId={deal?.origin_id}
+          currentStageName={deal?.crm_stages?.stage_name}
+          onSuccess={onStageChange}
+        />
+      )}
+
       
       {/* Modal Reembolso */}
-      <RefundModal
-        open={showRefundModal}
-        onOpenChange={setShowRefundModal}
-        dealId={deal?.id}
-        dealName={deal?.name || 'Lead'}
-        originId={deal?.origin_id}
-        currentCustomFields={deal?.custom_fields || {}}
-        onSuccess={onStageChange}
-      />
+      {showRefundModal && (
+        <RefundModal
+          open
+          onOpenChange={setShowRefundModal}
+          dealId={deal?.id}
+          dealName={deal?.name || 'Lead'}
+          originId={deal?.origin_id}
+          currentCustomFields={deal?.custom_fields || {}}
+          onSuccess={onStageChange}
+        />
+      )}
+
       
       {/* AlertDialog Excluir */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir lead</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir <strong>{deal?.name || 'este lead'}</strong>? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteDeal.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {showDeleteDialog && (
+        <AlertDialog open onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir lead</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir <strong>{deal?.name || 'este lead'}</strong>? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleteDeal.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
-      <LossReasonDialog
-        open={showLossReasonDialog}
-        onOpenChange={setShowLossReasonDialog}
-        dealCount={1}
-        dealName={deal?.name}
-        onConfirm={async (motivo, justificativa) => {
-          await registrarMotivoSemInteresse([deal.id], motivo, justificativa);
-          setShowLossReasonDialog(false);
-          await executeMoveStage();
-        }}
-      />
+      {showLossReasonDialog && (
+        <LossReasonDialog
+          open
+          onOpenChange={setShowLossReasonDialog}
+          dealCount={1}
+          dealName={deal?.name}
+          onConfirm={async (motivo, justificativa) => {
+            await registrarMotivoSemInteresse([deal.id], motivo, justificativa);
+            setShowLossReasonDialog(false);
+            await executeMoveStage();
+          }}
+        />
+      )}
+
     </>
   );
 };

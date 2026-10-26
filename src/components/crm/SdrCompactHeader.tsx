@@ -55,7 +55,9 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
 
   // ===== Etapa =====
   const currentStageOrder = deal?.crm_stages?.stage_order || 0;
-  const futureStages = stages?.filter((s: any) =>
+  // Sem stage_order (dado do card ainda sem a busca completa), espera o dado real.
+  const stageOrderPronto = deal?.crm_stages?.stage_order !== undefined;
+  const futureStages = !stageOrderPronto ? [] : stages?.filter((s: any) =>
     s.stage_order > currentStageOrder || isAlwaysAvailable(s.stage_name)
   ).filter((s: any) => s.id !== deal?.stage_id) || [];
 
@@ -253,18 +255,21 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
         )}
       </div>
 
-      <LossReasonDialog
-        open={!!pendingStageId}
-        onOpenChange={(o) => { if (!o) setPendingStageId(null); }}
-        dealCount={1}
-        dealName={deal?.name}
-        onConfirm={async (motivo, justificativa) => {
-          const id = pendingStageId;
-          await registrarMotivoSemInteresse([deal.id], motivo, justificativa);
-          setPendingStageId(null);
-          if (id) await executeMoveStage(id);
-        }}
-      />
+      {pendingStageId && (
+        <LossReasonDialog
+          open
+          onOpenChange={(o) => { if (!o) setPendingStageId(null); }}
+          dealCount={1}
+          dealName={deal?.name}
+          onConfirm={async (motivo, justificativa) => {
+            const id = pendingStageId;
+            await registrarMotivoSemInteresse([deal.id], motivo, justificativa);
+            setPendingStageId(null);
+            if (id) await executeMoveStage(id);
+          }}
+        />
+      )}
+
     </div>
   );
 };
