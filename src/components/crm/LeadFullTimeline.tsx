@@ -142,6 +142,7 @@ function TimelineMetadata({ event }: { event: TimelineEvent }) {
     return <QualificationContent answers={meta.answers} channel={meta.channel} whatsappPrintPath={meta.whatsapp_print_url} />;
   }
 
+  if (meta.original_type === 'contato_registrado') return null;
   if (event.type === 'call') {
     const rawUrl = typeof meta.recording_url === 'string' ? meta.recording_url : null;
     return (
