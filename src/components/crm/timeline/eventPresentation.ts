@@ -11,6 +11,7 @@ export function metadataAuthor(meta: Record<string, any>, type?: string): string
 }
 
 export function activityIsAutomatic(type: string, userId: string | null | undefined, meta: Record<string, any>): boolean {
+  if (type === 'contato_registrado') return false;
   const system = ['auto_move', 'owner_auto_rule', 'tags_added', 'replication', 'creation', 'deal_created',
     'lead_distributed', 'lead_distribution', 'webhook_reentry', 'partner_detected', 'outside_detected', 'pos_venda_anamnese'];
   return system.includes(type) || type.startsWith('refund_') || (type === 'tags_changed' && !userId)
@@ -57,4 +58,20 @@ function humanize(value: string): string {
     owner: 'Responsável', change: 'alterado', detected: 'detectado', paid: 'paga', reativada: 'reativada' };
   const label = value.split('_').map(w => words[w] || w).join(' ');
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+export type ContatoIcone = 'phone' | 'message' | 'alert';
+const CONTATO_ICONE: Record<string, ContatoIcone> = {
+  atendeu: 'phone', nao_atendeu: 'phone', caixa_postal: 'phone',
+  primeira_mensagem: 'message', respondeu_whatsapp: 'message', numero_errado: 'alert',
+};
+const CONTATO_ROTULO: Record<string, string> = {
+  atendeu: 'Atendeu', nao_atendeu: 'Não atendeu', caixa_postal: 'Caixa postal',
+  primeira_mensagem: 'Primeira mensagem enviada', respondeu_whatsapp: 'Respondeu no WhatsApp', numero_errado: 'Número errado',
+};
+
+/** Evento humano `contato_registrado`. Sem resultado → null (o next_action_scheduled já representa o registro). */
+export function contatoRegistradoPresentation(meta: Record<string, any>): { title: string; body: string | null; icon: ContatoIcone } | null {
+  const r = meta.resultado;
+  if (!r) return null;
+  return { title: meta.resultado_rotulo || CONTATO_ROTULO[r] || 'Contato registrado', body: meta.nota || null, icon: CONTATO_ICONE[r] || 'phone' };
 }

@@ -14,3 +14,4 @@
 - Script Piloto pilots are derived on read by script_piloto_reunioes (R1 completed, 2–3 unrefunded paid attendees), so they enter and leave automatically without a table or job; AI-generated drafts are never stored and only become official through script_publicar_versao.
 - Weekly closer summary is sent only by the resumo-semanal-closers edge function (Monday cron), deduplicated per week+BU in resumo_semanal_closers_envios, so re-runs never double-send.
 - CRM timeline, notes, and call history share presentation-only recording and note renderers under timeline/; data fetching and mutations stay in their original hooks so legacy tabs keep their behavior.
+- Deal drawer contact logging goes only through the registrar_contato RPC (src/components/crm/drawer/); next-action reminders come from the DB cron, so the front end never inserts into alertas for them.

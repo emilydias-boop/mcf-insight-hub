@@ -22659,6 +22659,7 @@ export type Database = {
           via: string
         }[]
       }
+      lembrar_proximas_acoes: { Args: never; Returns: number }
       leopoldo_outside_aplicar: { Args: { p_tx: string }; Returns: Json }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       list_transferable_users: {
@@ -23283,6 +23284,16 @@ export type Database = {
         Returns: undefined
       }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
+      registrar_contato: {
+        Args: {
+          p_deal_id: string
+          p_nota?: string
+          p_proxima_em?: string
+          p_proxima_tipo?: string
+          p_resultado?: string
+        }
+        Returns: Json
+      }
       registrar_motivo_sem_interesse: {
         Args: {
           p_deal_ids: string[]
