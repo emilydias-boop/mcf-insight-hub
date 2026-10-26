@@ -326,7 +326,9 @@ export function useKanbanBuscaOutrasPipelines(originIds: string[], filtros: Reco
 
 /** O kanban_resumo vem da RPC no mesmo formato de ActivitySummary. */
 export function resumoDoDeal(deal: any): ActivitySummary | undefined {
-  return deal?.kanban_resumo as ActivitySummary | undefined;
+  const r = deal?.kanban_resumo as ActivitySummary | undefined;
+  if (!r) return undefined;
+  return { ...r, lastTouchAt: (r as any).lastTouchAt ?? null };
 }
 
 // ---------------------------------------------------------------------------
