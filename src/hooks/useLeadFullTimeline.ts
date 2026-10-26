@@ -1,5 +1,5 @@
 import { OUTCOME_LABELS, STATUS_LABELS, formatDuration, getCallDuration } from '@/components/crm/timeline/callPresentation';
-import { MEETING_STATUS, metadataAuthor, activityIsAutomatic, hasCorrespondingHangup, otherActivityPresentation, contatoRegistradoPresentation } from '@/components/crm/timeline/eventPresentation';
+import { MEETING_STATUS, metadataAuthor, activityIsAutomatic, hasCorrespondingHangup, otherActivityPresentation, contatoRegistradoPresentation, isAutoStageCopyRow } from '@/components/crm/timeline/eventPresentation';
 import { sonaxDurationSeconds } from '@/lib/sonaxRecording';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -79,7 +79,7 @@ export function useLeadFullTimeline({
       const uuidIds = uniqueIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
       // Run all queries in parallel
-      const [activitiesRes, callsRes, meetingsRes, transactionsRes, attendeeNotesRes, dealsRes] = await Promise.all([
+      const [activitiesResRaw, callsRes, meetingsRes, transactionsRes, attendeeNotesRes, dealsRes] = await Promise.all([
         // 1. Deal activities (stage changes, notes, tasks, qualification) - ALL deals
         supabase
           .from('deal_activities')
@@ -147,6 +147,9 @@ export function useLeadFullTimeline({
               .in('id', uuidIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
+
+      // Só visual: esconde a cópia com UUIDs de movimento automático (a linha do gatilho é exibida).
+      const activitiesRes = { ...activitiesResRaw, data: (activitiesResRaw.data || []).filter(a => !isAutoStageCopyRow(a)) };
 
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

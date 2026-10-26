@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { classifyStageMove, type StageRef } from '@/lib/crmStageClassification';
 import { format, differenceInDays, differenceInHours } from 'date-fns';
 
 // Terminal stage patterns — deals in these stages are considered "closed"
@@ -142,7 +143,7 @@ export function useCRMOverviewData(
         // Activities in period
         supabase
           .from('deal_activities')
-          .select('id, deal_id, activity_type, from_stage, to_stage, created_at')
+          .select('id, deal_id, activity_type, from_stage, to_stage, metadata, created_at')
           .gte('created_at', startISO)
           .lte('created_at', endISO)
           .limit(10000),
@@ -216,17 +217,15 @@ export function useCRMOverviewData(
       const stageChanges = buActivities.filter(a => 
         a.activity_type === 'stage_change' || a.activity_type === 'stage_changed'
       );
+      const stageRefs = (allStages || []) as StageRef[];
+      const moveKind = (a: any) => classifyStageMove(a, stageRefs, lossStageIds, terminalStageIds);
       const leadsAvancados = new Set(
-        stageChanges
-          .filter(a => a.to_stage && !lossStageIds.has(a.to_stage) && !terminalStageIds.has(a.to_stage))
-          .map(a => a.deal_id)
+        stageChanges.filter(a => moveKind(a) === 'avanco').map(a => a.deal_id)
       ).size;
 
       // Lost = stage changed to loss stage in period
       const leadsPerdidos = new Set(
-        stageChanges
-          .filter(a => a.to_stage && lossStageIds.has(a.to_stage))
-          .map(a => a.deal_id)
+        stageChanges.filter(a => moveKind(a) === 'perda').map(a => a.deal_id)
       ).size;
 
       // Sem movimentação = open deals where last_worked_at < periodStart or null

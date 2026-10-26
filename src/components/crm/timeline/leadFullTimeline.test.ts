@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { OUTCOME_LABELS, STATUS_LABELS, formatDuration, getCallDuration } from './callPresentation';
-import { activityIsAutomatic, hasCorrespondingHangup, metadataAuthor, MEETING_STATUS, otherActivityPresentation } from './eventPresentation';
+import { activityIsAutomatic, hasCorrespondingHangup, metadataAuthor, MEETING_STATUS, otherActivityPresentation, isAutoStageCopyRow } from './eventPresentation';
 import { sonaxDurationSeconds } from '../../../lib/sonaxRecording';
 const id = '00000000-0000-4000-8000-000000000001';
 const actor = '00000000-0000-4000-8000-000000000002';
@@ -25,9 +25,9 @@ const rows: Record<string, any[]> = {
 const db = {from(table:string) { const chain:any={}; for (const method of ['select','or','in','order','limit']) chain[method]=()=>chain;
   chain.then=(resolve:any)=>Promise.resolve({data:rows[table]||[],error:null}).then(resolve); return chain; }};
 const source=readFileSync('src/hooks/useLeadFullTimeline.ts','utf8').replace(/^import .*;\n/gm,'').replace(/export /g,'');
-const run = new Function('useQuery','useContactDealIds','supabase','OUTCOME_LABELS','STATUS_LABELS','formatDuration','getCallDuration','MEETING_STATUS','metadataAuthor','activityIsAutomatic','hasCorrespondingHangup','otherActivityPresentation','sonaxDurationSeconds',
+const run = new Function('useQuery','useContactDealIds','supabase','OUTCOME_LABELS','STATUS_LABELS','formatDuration','getCallDuration','MEETING_STATUS','metadataAuthor','activityIsAutomatic','hasCorrespondingHangup','otherActivityPresentation','sonaxDurationSeconds','isAutoStageCopyRow',
   ts.transpile(source+'\nreturn useLeadFullTimeline;', {target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}));
-const hook=run((x:any)=>x,()=>({data:[id],isSuccess:true}),db,OUTCOME_LABELS,STATUS_LABELS,formatDuration,getCallDuration,MEETING_STATUS,metadataAuthor,activityIsAutomatic,hasCorrespondingHangup,otherActivityPresentation,sonaxDurationSeconds);
+const hook=run((x:any)=>x,()=>({data:[id],isSuccess:true}),db,OUTCOME_LABELS,STATUS_LABELS,formatDuration,getCallDuration,MEETING_STATUS,metadataAuthor,activityIsAutomatic,hasCorrespondingHangup,otherActivityPresentation,sonaxDurationSeconds,isAutoStageCopyRow);
 const events=await hook({dealId:id,dealUuid:id}).queryFn();
 const event=(id:string)=>events.find((e:any)=>e.id===id);
 assert.equal(event('stage').author,'Actual actor');

@@ -36,3 +36,11 @@ assert.equal(cr('numero_errado')?.title, 'Número errado'); assert.equal(cr('num
 assert.equal(contatoRegistradoPresentation({ proxima_acao_tipo: 'ligar' }), null);
 assert.equal(activityIsAutomatic('contato_registrado', null, {}), false);
 console.log('37 assertions passed — timeline presentation');
+
+{
+  const { isAutoStageCopyRow } = await import('./eventPresentation');
+  assert.equal(isAutoStageCopyRow({ activity_type: 'stage_change', metadata: { source: 'manual_activity' } }), true);
+  assert.equal(isAutoStageCopyRow({ activity_type: 'stage_change', metadata: { source: 'contract_paid_trigger' } }), true);
+  assert.equal(isAutoStageCopyRow({ activity_type: 'stage_change', metadata: { source: 'trigger', auto: true, origem_auto: 'manual_activity' } }), false);
+  assert.equal(isAutoStageCopyRow({ activity_type: 'note', metadata: { source: 'manual_activity' } }), false);
+}

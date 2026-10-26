@@ -15,3 +15,4 @@
 - Weekly closer summary is sent only by the resumo-semanal-closers edge function (Monday cron), deduplicated per week+BU in resumo_semanal_closers_envios, so re-runs never double-send.
 - CRM timeline, notes, and call history share presentation-only recording and note renderers under timeline/; data fetching and mutations stay in their original hooks so legacy tabs keep their behavior.
 - Deal drawer contact logging goes only through the registrar_contato RPC (src/components/crm/drawer/); next-action reminders come from the DB cron, so the front end never inserts into alertas for them.
+- CRM Overview classifies stage moves via src/lib/crmStageClassification.ts (metadata.to_stage_id > UUID to_stage > name resolved in crm_stages), because trigger rows store stage names.
