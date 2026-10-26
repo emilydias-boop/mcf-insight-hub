@@ -56,7 +56,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
   const { role } = useAuth();
   const { activeBU } = useBUContext();
   const { setDrawerState } = useTwilio();
-  const { data: deal, refetch: refetchDeal } = useCRMDeal(dealId || '', initialDeal);
+  const { data: deal, isFetching: dealFetching, refetch: refetchDeal } = useCRMDeal(dealId || '', initialDeal);
   const { data: contactData } = useCRMContact(deal?.contact_id || '');
   // Enquanto o contato completo carrega, usa o contato que já vem junto do negócio.
   const contact = contactData ?? ((deal as any)?.crm_contacts || undefined);
@@ -68,7 +68,6 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
   const [showQualification, setShowQualification] = useState(false);
   
   // Skeleton só enquanto não há negócio (nem o do card).
-  const { isFetching: dealFetching } = useCRMDeal(dealId || '', initialDeal);
   const isLoading = !deal && dealFetching;
 
   // Relatório do Lead é um documento de consórcio — não faz sentido em outras BUs.
