@@ -1241,7 +1241,9 @@ const Negocios = () => {
                 <MovePartnersButton open={movePartnersDialogOpen} onOpenChange={setMovePartnersDialogOpen} />
               </>
             )}
-            <DropdownMenu>
+            {/* modal={false}: os itens abrem Dialogs do Radix; com menu modal,
+                o pointer-events: none do body pode ficar preso após fechar o diálogo */}
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
                   <MoreHorizontal className="h-4 w-4 sm:mr-2" />
