@@ -251,7 +251,7 @@ export function CloserRevenueDetailDialog({
     if (a.is_outside) {
       return (
         <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap border-amber-500/60 text-amber-500">
-          Outside · R1 {fmtDiaMes(a.r1_at)}{sufixo}
+          Outside · {a.reuniao_tipo === 'r2' ? 'R2' : 'R1'} {fmtDiaMes(a.r1_at)}{sufixo}
         </Badge>
       );
     }
@@ -259,7 +259,10 @@ export function CloserRevenueDetailDialog({
     if (a.regra === 'vinculo') label = 'Vínculo manual';
     else if (a.regra === 'manual') label = 'Manual (gestão)';
     else if (a.regra === 'r1_contrato_pago') label = `R1 c/ contrato · ${fmtDiaMes(a.r1_at)}`;
+    else if (a.regra === 'vinculo_r2') label = `Vínculo R2 · ${fmtDiaMes(a.r1_at)}`;
+    else if (a.regra === 'r2_anterior') label = `R2 · ${fmtDiaMes(a.r1_at)} (sem R1)`;
     else label = `R1 · ${fmtDiaMes(a.r1_at)}`;
+
     return (
       <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap">
         {label}{sufixo}

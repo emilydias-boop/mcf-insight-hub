@@ -13,7 +13,10 @@ export interface Atribuicao {
   deal_tags: string[];
   r1_at: string | null;
   is_outside: boolean;
-  regra: 'vinculo' | 'r1_contrato_pago' | 'r1_anterior' | 'r1_posterior' | 'manual';
+  regra: 'vinculo' | 'r1_contrato_pago' | 'r1_anterior' | 'r1_posterior' | 'manual' | 'vinculo_r2' | 'r2_anterior' | 'r2_posterior';
+  /** Qual reunião sustentou a atribuição: R1 (padrão) ou R2, quando o lead não tem R1. */
+  reuniao_tipo?: 'r1' | 'r2' | null;
+
   sdr_profile_id: string | null;
 }
 
