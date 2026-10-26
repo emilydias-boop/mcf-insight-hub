@@ -10,9 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCRMDeal, useCRMContact } from '@/hooks/useCRMData';
 import { useQualificationNote } from '@/hooks/useQualificationNote';
 import { useTwilio } from '@/contexts/TwilioContext';
-import { DealHistory } from './DealHistory';
-import { CallHistorySection } from './CallHistorySection';
-import { DealNotesTab } from './DealNotesTab';
 import { DealTasksSection } from './DealTasksSection';
 import { SdrCompactHeader } from './SdrCompactHeader';
 import { SdrSummaryBlock } from './SdrSummaryBlock';
@@ -32,7 +29,9 @@ import { LeadTemperatureSelector, type LeadTemperature } from './LeadTemperature
 import { LeadTagsManager } from './LeadTagsManager';
 import { LeadCallButton } from './LeadCallButton';
 import { OutrosContatosLead } from './OutrosContatosLead';
-import { Phone, History, StickyNote, CheckSquare, AlertTriangle, Clock, Package } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import { useDealTasks } from '@/hooks/useDealTasks';
+import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
 import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
@@ -50,9 +49,25 @@ interface DealDetailsDrawerProps {
   onOpenChange: (open: boolean) => void;
   /** Linha do negócio já carregada (ex.: card do kanban), usada até a busca real chegar. */
   initialDeal?: any;
+  /** Abre outro negócio no próprio painel (ex.: linha do histórico em outras pipelines). */
+  onSelectDeal?: (id: string) => void;
 }
 
-export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: DealDetailsDrawerProps) => {
+type AbaDrawer = 'resumo' | 'atividade' | 'tarefas' | 'compras';
+const ABAS: AbaDrawer[] = ['resumo', 'atividade', 'tarefas', 'compras'];
+const ABA_KEY = 'deal-drawer-tab';
+const TAB_TRIGGER =
+  'rounded-none border-b-2 border-transparent bg-transparent px-0 py-2.5 text-[13.5px] font-normal text-muted-foreground shadow-none ' +
+  'data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none';
+
+const lerAba = (): AbaDrawer => {
+  try {
+    const v = localStorage.getItem(ABA_KEY) as AbaDrawer | null;
+    return v && ABAS.includes(v) ? v : 'resumo';
+  } catch { return 'resumo'; }
+};
+
+export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onSelectDeal }: DealDetailsDrawerProps) => {
   const { role } = useAuth();
   const { activeBU } = useBUContext();
   const { setDrawerState } = useTwilio();
@@ -61,6 +76,16 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
   // Enquanto o contato completo carrega, usa o contato que já vem junto do negócio.
   const contact = contactData ?? ((deal as any)?.crm_contacts || undefined);
   const { data: qualificationNote } = useQualificationNote(dealId || '');
+  const { data: tarefas } = useDealTasks(dealId || '');
+  const tarefasAbertas = tarefas?.filter(t => t.status === 'pending').length || 0;
+  const { data: totalCliente } = useTotalCliente(contact?.email);
+  const qtdPagamentos = totalCliente?.qtd_pagamentos || 0;
+
+  const [aba, setAba] = useState<AbaDrawer>(lerAba);
+  const trocarAba = (v: string) => {
+    setAba(v as AbaDrawer);
+    try { localStorage.setItem(ABA_KEY, v); } catch { /* ignora */ }
+  };
   
   // State para modal de agendamento
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
@@ -151,12 +176,22 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
               onDeleted={() => onOpenChange(false)}
             />
             
-            {/* ===== CONTEÚDO PRINCIPAL ===== */}
-            <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+            {/* ===== CONTEÚDO PRINCIPAL (abas) ===== */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <Tabs value={aba} onValueChange={trocarAba}>
+                <div className="sticky top-0 z-10 bg-card border-b border-border px-4">
+                  <TabsList className="h-auto bg-transparent p-0 gap-5 rounded-none">
+                    <TabsTrigger value="resumo" className={TAB_TRIGGER}>Resumo</TabsTrigger>
+                    <TabsTrigger value="atividade" className={TAB_TRIGGER}>Atividade</TabsTrigger>
+                    <TabsTrigger value="tarefas" className={TAB_TRIGGER}>{`Tarefas${tarefasAbertas ? ` (${tarefasAbertas})` : ''}`}</TabsTrigger>
+                    <TabsTrigger value="compras" className={TAB_TRIGGER}>{`Compras${qtdPagamentos ? ` (${qtdPagamentos})` : ''}`}</TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="resumo" className="mt-0 p-4 space-y-3">
               {/* ===== ORIGEM HARVEY (custom_fields.stage_harvey) ===== */}
               <HarveyOrigemCard customFields={deal.custom_fields as Record<string, unknown> | null} />
-              
-              
+
               {/* ===== CONTRATO REEMBOLSADO (custom_fields.contrato_reembolsado_em) ===== */}
               {(() => {
                 const info = contratoReembolsoInfo(deal.custom_fields as Record<string, unknown> | null);
@@ -200,18 +235,30 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
                 <CreditoEsteiraActions dealId={deal.id} />
               )}
 
-              {/* ===== OUTROS CONTATOS (aliases) ===== */}
-              <OutrosContatosLead contactId={deal.contact_id || undefined} />
+              {/* ===== 5d. ENTREGÁVEIS — só pipeline Relacionamento - Pós venda ===== */}
+              {isPosVendaDeal(deal) && (
+                <PosVendaEntregaveisSection dealId={deal.id} stageId={(deal as any).stage_id} />
+              )}
 
-              {/* ===== TAGS DO LEAD ===== */}
-              <LeadTagsManager
-                dealId={deal.id}
-                originId={deal.origin_id}
-                tags={(deal as any).tags}
-                customFields={deal.custom_fields as any}
-                onChanged={() => refetchDeal()}
-              />
-              
+              {/* ===== MOTIVO DE PERDA (apenas para stages de perda) ===== */}
+              {stageInfo.isLostStage && (
+                <LossReasonCard
+                  stageName={(deal.crm_stages as any)?.stage_name}
+                  reason={(deal.custom_fields as any)?.motivo_sem_interesse}
+                />
+              )}
+
+              {/* ===== QUALIFICAÇÃO RESUMO (qualquer etapa, quando existir) ===== */}
+              {qualificationNote && (
+                <QualificationSummaryCard
+                  data={(qualificationNote.metadata as any)?.qualification_data || {}}
+                  summary={qualificationNote.description || ''}
+                  sdrName={(qualificationNote.metadata as any)?.sdr_name}
+                  qualifiedAt={(qualificationNote.metadata as any)?.qualified_at}
+                  compact
+                />
+              )}
+
               {/* ===== 3. PRÓXIMA AÇÃO (compacta) ===== */}
               <NextActionBlockCompact
                 dealId={dealId}
@@ -222,35 +269,28 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
                 encaminharArea={isPosVendaDeal(deal) && deal.stage_id === POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID
                   ? { dealName: deal.name } : undefined}
               />
-              
+
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
               <LeadJourneyCard dealId={dealId} dealCreatedAt={deal.created_at} />
-              
-              {/* ===== HISTÓRICO CROSS-PIPELINE ===== */}
-              <CrossPipelineHistory contactId={deal.contact_id} currentDealId={deal.id} dealName={deal.name} />
-              
-              {/* ===== MOTIVO DE PERDA (apenas para stages de perda) ===== */}
-              {stageInfo.isLostStage && (
-                <LossReasonCard
-                  stageName={(deal.crm_stages as any)?.stage_name}
-                  reason={(deal.custom_fields as any)?.motivo_sem_interesse}
-                />
-              )}
-              
-              {/* ===== QUALIFICAÇÃO RESUMO (stages avançadas ou de perda) ===== */}
-              {(stageInfo.isAdvancedStage || stageInfo.isLostStage) && qualificationNote && (
-                <QualificationSummaryCard
-                  data={(qualificationNote.metadata as any)?.qualification_data || {}}
-                  summary={qualificationNote.description || ''}
-                  sdrName={(qualificationNote.metadata as any)?.sdr_name}
-                  qualifiedAt={(qualificationNote.metadata as any)?.qualified_at}
-                  compact
-                />
-              )}
 
               {/* ===== PERFIL DO QUIZ (respostas do quiz-mapa) — aparece em qualquer etapa ===== */}
               <QuizProfileCard customFields={deal.custom_fields as Record<string, unknown> | null} />
-              
+
+              {/* ===== TAGS DO LEAD ===== */}
+              <LeadTagsManager
+                dealId={deal.id}
+                originId={deal.origin_id}
+                tags={(deal as any).tags}
+                customFields={deal.custom_fields as any}
+                onChanged={() => refetchDeal()}
+              />
+
+              {/* ===== OUTROS CONTATOS (aliases) ===== */}
+              <OutrosContatosLead contactId={deal.contact_id || undefined} />
+
+              {/* ===== HISTÓRICO CROSS-PIPELINE ===== */}
+              <CrossPipelineHistory contactId={deal.contact_id} currentDealId={deal.id} dealName={deal.name} onSelectDeal={onSelectDeal} />
+
               {/* ===== 5. RESUMO (contato + negócio unificado) ===== */}
               <SdrSummaryBlock deal={deal} contact={contact} />
               
@@ -269,42 +309,9 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
                   Relatório do Lead
                 </Button>
               )}
-              
-              {/* ===== 5d. ENTREGÁVEIS — só pipeline Relacionamento - Pós venda ===== */}
-              {isPosVendaDeal(deal) && (
-                <PosVendaEntregaveisSection dealId={deal.id} stageId={(deal as any).stage_id} />
-              )}
+                </TabsContent>
 
-              {/* ===== 6. ABAS (com scroll) ===== */}
-              <Tabs defaultValue="timeline" className="mt-2">
-                <TabsList className="w-full bg-secondary">
-                  <TabsTrigger value="timeline" className="text-xs">
-                    <Clock className="h-3.5 w-3.5 mr-1" />
-                    Timeline
-                  </TabsTrigger>
-                  <TabsTrigger value="tarefas" className="text-xs">
-                    <CheckSquare className="h-3.5 w-3.5 mr-1" />
-                    Tarefas
-                  </TabsTrigger>
-                  <TabsTrigger value="atividades" className="text-xs">
-                    <History className="h-3.5 w-3.5 mr-1" />
-                    Histórico
-                  </TabsTrigger>
-                  <TabsTrigger value="ligacoes" className="text-xs">
-                    <Phone className="h-3.5 w-3.5 mr-1" />
-                    Ligações
-                  </TabsTrigger>
-                  <TabsTrigger value="notas" className="text-xs">
-                    <StickyNote className="h-3.5 w-3.5 mr-1" />
-                    Notas
-                  </TabsTrigger>
-                  <TabsTrigger value="produtos" className="text-xs">
-                    <Package className="h-3.5 w-3.5 mr-1" />
-                    Produtos
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="timeline" className="mt-3 border rounded-lg min-h-[300px] p-2">
+                <TabsContent value="atividade" className="mt-0 p-4">
                   <LeadFullTimeline
                     dealId={deal.id}
                     dealUuid={deal.id}
@@ -312,41 +319,31 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal }: D
                     contactId={deal.contact_id}
                   />
                 </TabsContent>
-                
-                <TabsContent value="tarefas" className="mt-3 border rounded-lg min-h-[300px]">
-                  <DealTasksSection 
-                    dealId={deal.id} 
-                    originId={deal.origin_id || undefined}
-                    stageId={deal.stage_id || undefined}
-                    ownerId={deal.owner_id || undefined}
-                    contactPhone={contact?.phone}
-                    contactEmail={contact?.email}
-                    contactName={contact?.name}
-                  />
+
+                <TabsContent value="tarefas" className="mt-0 p-4">
+                  <div className="border rounded-lg min-h-[300px]">
+                    <DealTasksSection
+                      dealId={deal.id}
+                      originId={deal.origin_id || undefined}
+                      stageId={deal.stage_id || undefined}
+                      ownerId={deal.owner_id || undefined}
+                      contactPhone={contact?.phone}
+                      contactEmail={contact?.email}
+                      contactName={contact?.name}
+                    />
+                  </div>
                 </TabsContent>
-                
-                <TabsContent value="atividades" className="mt-3">
-                  <DealHistory dealId={deal.id} dealUuid={deal.id} contactId={deal.contact_id} limit={5} />
-                </TabsContent>
-                
-                <TabsContent value="ligacoes" className="mt-3">
-                  <CallHistorySection dealId={deal.id} contactId={deal.contact_id} />
-                </TabsContent>
-                
-                <TabsContent value="notas" className="mt-3">
-                  <DealNotesTab dealUuid={deal.id} dealClintId={deal.clint_id} contactId={deal.contact_id} />
-                </TabsContent>
-                
-                <TabsContent value="produtos" className="mt-3 border rounded-lg min-h-[300px]">
-                  <DealProdutosAdquiridosTab dealId={deal.id} email={contact?.email} />
+
+                <TabsContent value="compras" className="mt-0 p-4 space-y-3">
+                  <div className="border rounded-lg min-h-[300px]">
+                    <DealProdutosAdquiridosTab dealId={deal.id} email={contact?.email} />
+                  </div>
+                  {/* Sem e-mail, a jornada A010 é o único caminho que acha compras (busca por telefone). */}
+                  {!contact?.email && (
+                    <A010JourneyCollapsible email={contact?.email} phone={contact?.phone} />
+                  )}
                 </TabsContent>
               </Tabs>
-              
-              {/* ===== 6. JORNADA A010 DETALHADA (colapsável) ===== */}
-              <A010JourneyCollapsible 
-                email={contact?.email} 
-                phone={contact?.phone}
-              />
             </div>
           </div>
         ) : (

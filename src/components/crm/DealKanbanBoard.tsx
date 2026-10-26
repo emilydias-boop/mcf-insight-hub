@@ -535,6 +535,7 @@ export const DealKanbanBoard = ({
         initialDeal={selectedDealRow}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        onSelectDeal={(id) => { setSelectedDealRow(null); setSelectedDealId(id); }}
       />
       
       <StageChangeModal

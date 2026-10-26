@@ -10,9 +10,11 @@ interface CrossPipelineHistoryProps {
   contactId: string | undefined;
   currentDealId: string;
   dealName?: string;
+  /** Quando informado, cada linha vira um botão que abre aquele negócio. */
+  onSelectDeal?: (id: string) => void;
 }
 
-export const CrossPipelineHistory = ({ contactId, currentDealId, dealName }: CrossPipelineHistoryProps) => {
+export const CrossPipelineHistory = ({ contactId, currentDealId, dealName, onSelectDeal }: CrossPipelineHistoryProps) => {
   const [isOpen, setIsOpen] = useState(true);
   const { data: deals, isLoading } = useContactDeals(contactId, currentDealId, dealName);
 
@@ -39,7 +41,15 @@ export const CrossPipelineHistory = ({ contactId, currentDealId, dealName }: Cro
           return (
             <div
               key={deal.id}
-              className="p-3 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
+              className={`p-3 rounded-lg border bg-card hover:bg-accent/30 transition-colors${onSelectDeal ? ' cursor-pointer w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}`}
+              {...(onSelectDeal ? {
+                role: 'button',
+                tabIndex: 0,
+                onClick: () => onSelectDeal(deal.id),
+                onKeyDown: (e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectDeal(deal.id); }
+                },
+              } : {})}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1.5 min-w-0 flex-1">
