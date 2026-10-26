@@ -15,15 +15,10 @@ import {
   Phone,
   MessageCircle,
   Loader2,
-  Flame,
-  Thermometer,
-  Snowflake,
   Mail,
   RefreshCw,
   Clock,
   Video,
-  AlertCircle,
-  Star,
 } from "lucide-react";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { useDialerEngine } from "@/hooks/useDialerEngine";
@@ -55,30 +50,35 @@ const NEXT_ACTION_ICONS: Record<string, React.ReactNode> = {
   reuniao: <Video className="h-2.5 w-2.5" />,
 };
 
-// Helper para calcular badge de prioridade de atividade
-const getActivityPriorityBadge = (totalActivities: number) => {
-  if (totalActivities === 0) {
-    return { 
-      color: 'bg-red-500', 
-      textColor: 'text-white',
-      label: '0', 
-      tooltip: 'Alta prioridade - sem atividades' 
-    };
+const CANAL_DOT_CLASSES: Record<string, string> = {
+  blue: 'bg-blue-400', teal: 'bg-teal-400', orange: 'bg-orange-400', cyan: 'bg-cyan-400',
+  purple: 'bg-purple-400', green: 'bg-green-400', indigo: 'bg-indigo-400', pink: 'bg-pink-400',
+  amber: 'bg-amber-400', slate: 'bg-slate-400', zinc: 'bg-zinc-400', gray: 'bg-gray-400',
+};
+const SALES_CHANNEL_COR: Record<string, string> = { a010: 'blue', bio: 'green', live: 'purple' };
+
+const TAGS_REDUNDANTES = ['a010', 'anamnese', 'planilha', 'lead-lançamento'];
+const TAG_ROTULOS: Record<string, string> = {
+  'a010 kiwify': 'Kiwify',
+  'a010 - construa para vender': 'Construa p/ Vender',
+  'anamnese-incompleta': 'Anamnese incompleta',
+  'base resgatada': 'Base resgatada',
+  'a010 em aberto': 'em aberto',
+};
+const rotuloTag = (t: string) => TAG_ROTULOS[t.trim().toLowerCase()] ?? t;
+
+const PARTICULAS = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+export const formatarNomeExibicao = (raw: string): string => {
+  let n = (raw || '').split('|')[0];
+  n = n.replace(/\s*-\s*A0\d{2}\s*$/i, '').replace(/\s+/g, ' ').trim();
+  if (!n) return raw || '';
+  const temLetra = /\p{L}/u.test(n);
+  if (temLetra && (n === n.toUpperCase() || n === n.toLowerCase())) {
+    n = n.toLowerCase().split(' ').map((w, i) =>
+      i > 0 && PARTICULAS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)
+    ).join(' ');
   }
-  if (totalActivities <= 3) {
-    return { 
-      color: 'bg-yellow-500', 
-      textColor: 'text-black',
-      label: totalActivities.toString(), 
-      tooltip: 'Média prioridade - poucas atividades' 
-    };
-  }
-  return { 
-    color: 'bg-green-500', 
-    textColor: 'text-white',
-    label: totalActivities.toString(), 
-    tooltip: 'Baixa prioridade - bastante trabalhado' 
-  };
+  return n;
 };
 
 interface DealKanbanCardProps {
@@ -186,7 +186,7 @@ export const DealKanbanCard = ({
     const date = new Date(createdAt);
     const month = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
     const year = date.getFullYear().toString().slice(-2);
-    return `${month.charAt(0).toUpperCase() + month.slice(1)}/${year}`;
+    return `${month.toLowerCase()}/${year}`;
   };
   const entryMonth = getEntryMonth(deal.created_at);
 
@@ -196,13 +196,13 @@ export const DealKanbanCard = ({
     const tagNames = tags.map((t: any) => (typeof t === "string" ? t : t.name)?.toLowerCase() || "");
 
     if (tagNames.some((t: string) => t.includes("quente") || t.includes("hot"))) {
-      return { icon: <Flame className="h-3 w-3" />, color: "text-red-400" };
+      return "quente" as const;
     }
     if (tagNames.some((t: string) => t.includes("morno") || t.includes("warm"))) {
-      return { icon: <Thermometer className="h-3 w-3" />, color: "text-orange-400" };
+      return "morno" as const;
     }
     if (tagNames.some((t: string) => t.includes("frio") || t.includes("cold"))) {
-      return { icon: <Snowflake className="h-3 w-3" />, color: "text-blue-400" };
+      return "frio" as const;
     }
     return null;
   };
@@ -331,6 +331,102 @@ export const DealKanbanCard = ({
   const maxAttempts = activitySummary?.maxAttempts || 5;
   const displayPhone = contactPhone || extractPhoneFromDeal(deal, contact);
 
+  const cf = (deal.custom_fields ?? null) as Record<string, unknown> | null;
+  const displayName = formatarNomeExibicao(contactName || deal.name || '');
+  const temperatura = ((deal.lead_temperature ?? priority) ?? null) as LeadTemperature;
+
+  // Linha 2: canal + tags úteis + mês
+  const canalLabel = channelBadge.label;
+  const canalDotClass = canalEntradaRotulo?.trim()
+    ? (CANAL_DOT_CLASSES[canalEntradaCorNormalizada] || CANAL_DOT_CLASSES.gray)
+    : (CANAL_DOT_CLASSES[SALES_CHANNEL_COR[salesChannel] || 'purple']);
+  const primaryTag = (cf?.primary_tag as string | undefined)?.trim() || null;
+  const todasTags: string[] = [];
+  if (primaryTag) todasTags.push(primaryTag);
+  for (const t of deal.tags || []) {
+    const name = (typeof t === 'string' ? t : t?.name)?.trim();
+    if (!name || isHarveyTag(name)) continue;
+    if (todasTags.some((x) => x.toLowerCase() === name.toLowerCase())) continue;
+    todasTags.push(name);
+  }
+  const visiveis: string[] = [];
+  const escondidas: string[] = [];
+  for (const t of todasTags) {
+    const low = t.toLowerCase();
+    if (TAGS_REDUNDANTES.includes(low)) continue;
+    if (low === 'base clint' || low.includes('disparo') || low.includes('tentativa') || low === canalLabel.toLowerCase()) {
+      escondidas.push(t);
+      continue;
+    }
+    if (visiveis.length < 2) visiveis.push(rotuloTag(t));
+    else escondidas.push(t);
+  }
+  const harveyTags = (deal.tags || []).filter((tag: any) => {
+    const name = typeof tag === 'string' ? tag : tag?.name;
+    return isHarveyTag(name) && !cf?.stage_harvey;
+  });
+
+  // Próxima ação
+  const proximaAcao = deal.next_action_type && deal.next_action_date ? (() => {
+    const nextDate = new Date(deal.next_action_date);
+    return { overdue: nextDate < new Date(), text: format(nextDate, "dd/MM HH:mm", { locale: ptBR }) };
+  })() : null;
+
+  // Status
+  const contratoInfo = contratoReembolsoInfo(cf as any);
+  const temReembolso = !!(cf?.reembolso_solicitado || contratoInfo);
+  const motivoSemInteresse = (() => {
+    const motivo = String(cf?.motivo_sem_interesse ?? '').trim();
+    if (!motivo || !isSemInteresseStageName(deal.crm_stages?.stage_name)) return null;
+    if (motivo.toLowerCase() === 'reembolso') return null;
+    const justificativa = String(cf?.justificativa_perda ?? '').trim();
+    return { motivo, title: justificativa ? `${motivo} — ${justificativa}` : motivo };
+  })();
+  const verificarHarvey = isPosVendaDeal(deal) && precisaVerificarHarvey(deal);
+  const adm = (cf as any)?.admissao;
+  const temAdm = !!adm && typeof adm === 'object';
+  const temHarveyStage = !!cf?.stage_harvey;
+  const temTotais = !!totaisCliente;
+  const temStatus = temReembolso || !!motivoSemInteresse || verificarHarvey || !!anamneseExterna || temAdm ||
+    isRescheduled || harveyTags.length > 0 || temHarveyStage || !!deal.resgate_em || temTotais ||
+    !!outsideInfo?.isOutside || !!proximaAcao;
+
+  // Sem contato
+  const ultimoToque = activitySummary?.lastTouchAt ?? activitySummary?.lastContactAttempt ?? null;
+  const DIA = 86_400_000;
+  const agora = Date.now();
+  let semContato: { text: string; cls: string } | null = null;
+  if (!ultimoToque && (activitySummary?.totalActivities || 0) === 0) {
+    const criado = deal.created_at ? new Date(deal.created_at).getTime() : agora;
+    const dias = Math.floor((agora - criado) / DIA);
+    semContato = dias < 1
+      ? { text: 'Nunca contatado · novo', cls: 'text-amber-400' }
+      : { text: `Nunca contatado · ${dias}d`, cls: 'text-red-400' };
+  } else if (ultimoToque) {
+    const dias = Math.max(0, Math.floor((agora - new Date(ultimoToque).getTime()) / DIA));
+    semContato = {
+      text: dias === 0 ? 'Contato hoje' : `${dias}d sem contato`,
+      cls: dias <= 1 ? 'text-emerald-400' : dias <= 3 ? 'text-amber-400' : 'text-red-400',
+    };
+  }
+
+  const tentativas = (() => {
+    if (activitySummary?.attemptsExhausted) {
+      return <span className="text-destructive font-medium">{totalCalls} lig. · esgotado</span>;
+    }
+    if (totalCalls > maxAttempts) return <span className="text-muted-foreground">{totalCalls} lig.</span>;
+    return (
+      <span className="flex items-center gap-1 text-muted-foreground">
+        <span className="flex items-center gap-[3px]">
+          {Array.from({ length: maxAttempts }).map((_, i) => (
+            <span key={i} className={cn("h-1.5 w-1.5 rounded-full", i < totalCalls ? "bg-zinc-200" : "bg-zinc-700")} />
+          ))}
+        </span>
+        {totalCalls}/{maxAttempts}
+      </span>
+    );
+  })();
+
   return (
     <TooltipProvider>
       <Tooltip delayDuration={400}>
@@ -339,287 +435,217 @@ export const DealKanbanCard = ({
       ref={provided.innerRef}
       {...provided.draggableProps}
       {...provided.dragHandleProps}
-      className={`cursor-pointer hover:shadow-md transition-shadow ${
-        isDragging ? "shadow-lg ring-2 ring-primary" : ""
-      } ${activitySummary?.attemptsExhausted ? "border-l-2 border-l-destructive" : ""} ${
-        isSelected ? "ring-2 ring-primary bg-primary/5" : ""
-      }`}
+      className={cn(
+        "group relative cursor-pointer rounded-lg hover:shadow-md hover:border-zinc-600 transition-[box-shadow,border-color]",
+        isDragging && "shadow-lg ring-2 ring-primary",
+        isSelected && "ring-2 ring-primary bg-primary/5",
+      )}
       onClick={onClick}
     >
-      <CardContent className="p-2.5 space-y-1.5">
-        {/* Linha 1: Checkbox (modo seleção) + Canal + Mês + Tags + Prioridade */}
-        <div className="flex items-center gap-1 flex-wrap">
+      {/* Ações rápidas */}
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+        <button
+          type="button"
+          aria-label="Ligar"
+          onClick={handleCall}
+          className={cn(
+            "flex h-7 w-7 items-center justify-center rounded-md border bg-card transition-colors",
+            isTestDeal ? "text-green-500 hover:text-green-400" : "text-muted-foreground hover:text-primary",
+          )}
+        >
+          {isSearchingPhone ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Phone className="h-3.5 w-3.5" />}
+        </button>
+        <button
+          type="button"
+          aria-label="WhatsApp"
+          onClick={handleWhatsApp}
+          className="flex h-7 w-7 items-center justify-center rounded-md border bg-card text-muted-foreground hover:text-green-500 transition-colors"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <CardContent className="p-3 space-y-2">
+        {/* Linha 1: quem é */}
+        <div className="flex items-center gap-1.5 min-w-0">
           {selectionMode && (
-            <div onClick={handleCheckboxChange} className="mr-1">
-              <Checkbox 
-                checked={isSelected} 
-                className="data-[state=checked]:bg-primary"
-              />
+            <div onClick={handleCheckboxChange} className="mr-0.5">
+              <Checkbox checked={isSelected} className="data-[state=checked]:bg-primary" />
             </div>
           )}
-          {/* Badge de Canal de Venda (A010 vs BIO vs LIVE) */}
-          <Badge 
-            variant="outline" 
-            className={`text-[10px] px-1.5 py-0 font-semibold ${channelBadge.className}`}
-          >
-            {channelBadge.label}
-          </Badge>
-          
-          {/* Badge de Mês de Entrada */}
-          {entryMonth && (
-            <Badge 
-              variant="outline" 
-              className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground border-border"
-            >
-              {entryMonth}
-            </Badge>
+          <LeadTemperatureDot value={temperatura} />
+          <span className="text-[15px] font-semibold leading-5 truncate min-w-0 flex-1" title={contactName || deal.name}>
+            {displayName}
+          </span>
+          <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0 shrink-0" />
+        </div>
+
+        {/* Linha 2: de onde veio */}
+        <div className="flex items-center gap-1.5 text-xs min-w-0">
+          <span className={cn("h-[7px] w-[7px] shrink-0 rounded-[2px]", canalDotClass)} />
+          <span className="truncate min-w-0">
+            <span className="text-foreground/80">{canalLabel}</span>
+            <span className="text-muted-foreground">
+              {visiveis.length > 0 && ` · ${visiveis.join(' · ')}`}
+              {entryMonth && ` · ${entryMonth}`}
+            </span>
+          </span>
+          {escondidas.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="shrink-0 rounded border border-border px-1 text-[11px] leading-4 text-muted-foreground">
+                  +{escondidas.length}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs max-w-xs">
+                {todasTags.join(', ')}
+              </TooltipContent>
+            </Tooltip>
           )}
-          
-          {/* Badge de Reembolso (prioridade visual) */}
-          {(() => {
-            const cf = deal.custom_fields as Record<string, unknown> | null | undefined;
-            const contratoInfo = contratoReembolsoInfo(cf);
-            if (!cf?.reembolso_solicitado && !contratoInfo) return null;
-            return (
-              <Badge 
-                variant="outline" 
+        </div>
+
+        {/* Linha 3: status */}
+        {temStatus && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {temReembolso && (
+              <Badge
+                variant="outline"
                 title={contratoInfo?.tooltip}
                 className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
               >
                 Reembolso
               </Badge>
-            );
-          })()}
-          {/* Badge do Motivo de "Sem Interesse" (Reembolso já tem badge próprio logo acima) */}
-          {(() => {
-            const cf = deal.custom_fields as Record<string, unknown> | null | undefined;
-            const motivo = String(cf?.motivo_sem_interesse ?? '').trim();
-            if (!motivo || !isSemInteresseStageName(deal.crm_stages?.stage_name)) return null;
-            if (motivo.toLowerCase() === 'reembolso') return null;
-            const justificativa = String(cf?.justificativa_perda ?? '').trim();
-            return (
+            )}
+            {motivoSemInteresse && (
               <Badge
                 variant="outline"
                 className="text-[10px] px-1.5 py-0 max-w-[140px] truncate bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700"
-                title={justificativa ? `${motivo} — ${justificativa}` : motivo}
+                title={motivoSemInteresse.title}
               >
-                {motivo}
+                {motivoSemInteresse.motivo}
               </Badge>
-            );
-          })()}
-          {/* Pós Venda: anamnese não preenchida → verificar no HARVEY */}
-          {isPosVendaDeal(deal) && precisaVerificarHarvey(deal) && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-destructive/40 text-destructive" title="A ficha de anamnese ainda não chegou. Verifique o cadastro do cliente no HARVEY.">
-              Verificar anamnese no HARVEY
-            </Badge>
-          )}
-          {/* Anamnese vinda do encaminhamento externo (ENCAMINHADO GR) */}
-          {anamneseExterna && (
-            <AnamneseExternaButton anamnese={anamneseExterna} clienteNome={deal.name} />
-          )}
-          {/* Contato da Admissão de clientes (área "admissao") */}
-          {(() => {
-            const adm = (deal as any)?.custom_fields?.admissao;
-            if (!adm || typeof adm !== 'object') return null;
-            const linhas = [
-              adm.nota ? `Nota: ${adm.nota}` : null,
-              adm.projeto_status_descricao || adm.projeto_status ? `Projeto: ${adm.projeto_status_descricao || adm.projeto_status}` : null,
-              adm.credito_os?.numero ? `OS de crédito: ${adm.credito_os.numero}` : null,
-              adm.venda?.produto ? `Venda: ${adm.venda.produto}` : null,
-              adm.registrado_por?.nome ? `Registrado por: ${adm.registrado_por.nome}` : null,
-              adm.gerente?.nome ? `Gerente: ${adm.gerente.nome}` : null,
-            ].filter(Boolean).join('\n');
-            return (
-              <div className="w-full mt-1 space-y-0.5">
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0" title={linhas}>
-                  Admissão{adm.projeto_status_descricao ? ` · ${adm.projeto_status_descricao}` : ''}
-                </Badge>
-                {adm.nota && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-2" title={adm.nota}>
-                    {adm.nota}
-                  </p>
-                )}
-              </div>
-            );
-          })()}
-
-          {isRescheduled && (
-            <Badge 
-              variant="outline" 
-              className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-700 gap-0.5"
-            >
-              <RefreshCw className="h-2.5 w-2.5" />
-              Remarcado
-            </Badge>
-          )}
-          {/* Tag Principal (destacada) */}
-          {(() => {
-            const primary = (deal.custom_fields as Record<string, unknown>)?.primary_tag as string | undefined;
-            if (!primary) return null;
-            return (
-              <Badge
-                variant="default"
-                className="text-[10px] px-1.5 py-0 gap-0.5 bg-amber-500 hover:bg-amber-500 text-white border-0"
-                title={`Tag principal: ${primary}`}
-              >
-                <Star className="h-2.5 w-2.5 fill-white" />
-                {primary}
+            )}
+            {verificarHarvey && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-destructive/40 text-destructive" title="A ficha de anamnese ainda não chegou. Verifique o cadastro do cliente no HARVEY.">
+                Verificar anamnese no HARVEY
               </Badge>
-            );
-          })()}
-          {deal.tags
-            ?.filter((tag: any) => {
-              const name = typeof tag === 'string' ? tag : tag.name;
-              const primary = (deal.custom_fields as Record<string, unknown>)?.primary_tag as string | undefined;
-              if (primary && name?.toLowerCase() === primary.toLowerCase()) return false;
-              if (isHarveyTag(name) && (deal.custom_fields as Record<string, unknown>)?.stage_harvey) return false;
-              return name?.toLowerCase() !== 'base clint';
-            })
-            .slice(0, 2)
-            .map((tag: any, idx: number) => (
+            )}
+            {anamneseExterna && (
+              <AnamneseExternaButton anamnese={anamneseExterna} clienteNome={deal.name} />
+            )}
+            {temAdm && (() => {
+              const linhas = [
+                adm.nota ? `Nota: ${adm.nota}` : null,
+                adm.projeto_status_descricao || adm.projeto_status ? `Projeto: ${adm.projeto_status_descricao || adm.projeto_status}` : null,
+                adm.credito_os?.numero ? `OS de crédito: ${adm.credito_os.numero}` : null,
+                adm.venda?.produto ? `Venda: ${adm.venda.produto}` : null,
+                adm.registrado_por?.nome ? `Registrado por: ${adm.registrado_por.nome}` : null,
+                adm.gerente?.nome ? `Gerente: ${adm.gerente.nome}` : null,
+              ].filter(Boolean).join('\n');
+              return (
+                <div className="w-full space-y-0.5">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0" title={linhas}>
+                    Admissão{adm.projeto_status_descricao ? ` · ${adm.projeto_status_descricao}` : ''}
+                  </Badge>
+                  {adm.nota && (
+                    <p className="text-[11px] text-muted-foreground line-clamp-2" title={adm.nota}>
+                      {adm.nota}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+            {isRescheduled && (
               <Badge
-                key={idx}
-                variant="secondary"
-                className="text-[10px] px-1.5 py-0"
-                style={isHarveyTag(typeof tag === 'string' ? tag : tag.name) ? harveyTagStyle : { backgroundColor: tag.color || undefined }}
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-700 gap-0.5"
               >
-                {typeof tag === "string" ? tag : tag.name}
+                <RefreshCw className="h-2.5 w-2.5" />
+                Remarcado
+              </Badge>
+            )}
+            {harveyTags.map((tag: any, idx: number) => (
+              <Badge key={idx} variant="secondary" className="text-[10px] px-1.5 py-0" style={harveyTagStyle}>
+                {typeof tag === 'string' ? tag : tag.name}
               </Badge>
             ))}
-          <HarveyStageBadge customFields={deal.custom_fields as Record<string, unknown> | null} />
-          <LeadSegmentBadge segment={deal.icp_segment} className="text-[10px] px-1.5 py-0" />
-          <ResgateBadge resgateEm={deal.resgate_em} />
-          {/* Quanto esse lead já comprou (líquido, todas as BUs) */}
-          <LeadTotalCompradoBadge totais={totaisCliente} />
-          {outsideInfo?.isOutside && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge 
-                  variant="outline" 
-                  className="text-[10px] px-1.5 py-0 font-semibold bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-700 gap-0.5"
-                >
-                  $ Outside
-                </Badge>
-              </TooltipTrigger>
-              {outsideInfo.productName && (
-                <TooltipContent side="top" className="text-xs">
-                  {outsideInfo.productName}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          )}
-          {priority && <span className={priority.color}>{priority.icon}</span>}
-          
-          {/* Badge de Prioridade de Atividade */}
-          {activitySummary && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge 
-                  variant="outline"
-                  className={`text-[10px] px-1 py-0 ${getActivityPriorityBadge(activitySummary.totalActivities || 0).color} ${getActivityPriorityBadge(activitySummary.totalActivities || 0).textColor} border-0`}
-                >
-                  {getActivityPriorityBadge(activitySummary.totalActivities || 0).label}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {getActivityPriorityBadge(activitySummary.totalActivities || 0).tooltip}
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-
-        {/* Badge de Próxima Ação */}
-        {deal.next_action_type && deal.next_action_date && (() => {
-          const nextDate = new Date(deal.next_action_date);
-          const isActionOverdue = nextDate < new Date();
-          const formattedNextDate = format(nextDate, "dd/MM HH:mm", { locale: ptBR });
-          return (
-            <div className={cn(
-              "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md font-medium",
-              isActionOverdue
-                ? "bg-destructive/15 text-destructive border border-destructive/30 animate-pulse"
-                : "bg-primary/10 text-primary border border-primary/20"
-            )}>
-              {NEXT_ACTION_ICONS[deal.next_action_type] || <Phone className="h-2.5 w-2.5" />}
-              <span>{formattedNextDate}</span>
-              {isActionOverdue && <AlertCircle className="h-2.5 w-2.5" />}
-            </div>
-          );
-        })()}
-
-        {/* Linha 2: Nome do Lead + tempo na stage */}
-        <div className="flex items-center justify-between gap-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <LeadTemperatureDot value={(deal.lead_temperature ?? null) as LeadTemperature} />
-            <span className="font-medium text-sm truncate">{contactName || deal.name}</span>
-          </div>
-          {stageTimeShort && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
-                  <Clock className="h-3 w-3" />
-                  {stageTimeShort}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p>Há {stageTimeShort} nesta stage</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-
-        {/* Linha 3: Barra inferior compacta */}
-        <div className="flex items-center justify-between text-xs border-t border-border/50 pt-1.5">
-          {/* Lado esquerdo: Avatar + Ações */}
-          <div className="flex items-center gap-1.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Avatar 
-                  className={`h-5 w-5 ${canChangeOwner ? 'cursor-pointer hover:ring-2 hover:ring-primary transition-all' : ''}`}
-                  onClick={(e) => {
-                    if (canChangeOwner) {
-                      e.stopPropagation();
-                      setOwnerDialogOpen(true);
-                    }
-                  }}
-                >
-                  <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
-                    {sdrInitials || getInitials(contactName || deal.name)}
-                  </AvatarFallback>
-                </Avatar>
-              </TooltipTrigger>
-              {canChangeOwner && (
-                <TooltipContent side="top" className="text-xs">
-                  Clique para transferir lead
-                </TooltipContent>
-              )}
-            </Tooltip>
-
-            {isSearchingPhone ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-            ) : (
-              <Phone
-                className={`h-3.5 w-3.5 cursor-pointer transition-colors ${
-                  isTestDeal ? "text-green-500 hover:text-green-400" : "text-muted-foreground hover:text-primary"
-                }`}
-                onClick={handleCall}
-              />
+            <HarveyStageBadge customFields={cf} />
+            <ResgateBadge resgateEm={deal.resgate_em} />
+            <LeadTotalCompradoBadge totais={totaisCliente} />
+            {outsideInfo?.isOutside && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 font-semibold bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-700 gap-0.5"
+                  >
+                    $ Outside
+                  </Badge>
+                </TooltipTrigger>
+                {outsideInfo.productName && (
+                  <TooltipContent side="top" className="text-xs">
+                    {outsideInfo.productName}
+                  </TooltipContent>
+                )}
+              </Tooltip>
             )}
-            <MessageCircle
-              className="h-3.5 w-3.5 cursor-pointer text-muted-foreground hover:text-green-500 transition-colors"
-              onClick={handleWhatsApp}
-            />
-            <Mail className="h-3.5 w-3.5 text-muted-foreground/40" />
+            {proximaAcao && (proximaAcao.overdue ? (
+              <span className="flex items-center gap-1 text-[12px] font-medium text-amber-400">
+                <Clock className="h-3 w-3" />
+                Retorno vencido · {proximaAcao.text}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                {NEXT_ACTION_ICONS[deal.next_action_type] || <Phone className="h-2.5 w-2.5" />}
+                Próx.: {proximaAcao.text}
+              </span>
+            ))}
           </div>
+        )}
 
-          {/* Lado direito: Tentativas + Tempo */}
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className={`flex items-center gap-0.5 ${activitySummary?.attemptsExhausted ? "text-destructive" : ""}`}>
-              <Phone className="h-2.5 w-2.5" />
-              {totalCalls}/{maxAttempts}
-            </span>
-            {timeAgoShort && <span>{timeAgoShort}</span>}
-          </div>
+        {/* Rodapé */}
+        <div className="flex items-center gap-2 text-xs border-t border-border/50 pt-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Avatar
+                className={`h-5 w-5 ${canChangeOwner ? 'cursor-pointer hover:ring-2 hover:ring-primary transition-all' : ''}`}
+                onClick={(e) => {
+                  if (canChangeOwner) {
+                    e.stopPropagation();
+                    setOwnerDialogOpen(true);
+                  }
+                }}
+              >
+                <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
+                  {sdrInitials || getInitials(contactName || deal.name)}
+                </AvatarFallback>
+              </Avatar>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              {deal.owner_id || 'Sem responsável'}
+              {canChangeOwner && <div className="text-muted-foreground">Clique para transferir lead</div>}
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>{tentativas}</TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">Tentativas de ligação</TooltipContent>
+          </Tooltip>
+
+          <span className="flex-1" />
+
+          {semContato && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={cn("font-medium whitespace-nowrap", semContato.cls)}>{semContato.text}</span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs space-y-0.5">
+                <div>{ultimoToque ? `Último contato: ${format(new Date(ultimoToque), "dd/MM HH:mm")}` : 'Nunca contatado'}</div>
+                {stageTimeShort && <div>Na etapa há {stageTimeShort}</div>}
+                {timeAgoShort && <div>Lead criado há {timeAgoShort}</div>}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </CardContent>
     </Card>

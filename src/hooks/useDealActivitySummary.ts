@@ -11,6 +11,8 @@ export interface ActivitySummary {
   maxAttempts: number;
   totalActivities: number;
   notesCount: number;
+  /** Último toque (mesma regra do filtro "Sem atividade"), vindo do kanban_resumo. */
+  lastTouchAt?: string | null;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 5;
