@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { diasCalendarioDesde, rotuloContato } from '@/lib/diasCalendario';
 import { ChevronDown, Copy, Clock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -120,7 +120,7 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
     const d = new Date(deal.next_action_date);
     if (!isNaN(d.getTime())) {
       const tipo = NEXT_ACTION_LABEL[deal.next_action_type] || deal.next_action_type || '';
-      retorno = { text: `Retorno: ${tipo ? tipo + ' ' : ''}${format(d, 'dd/MM HH:mm')}`, vencido: d.getTime() < agora };
+      retorno = { text: `Retorno: ${tipo ? tipo + ' ' : ''}${format(d, 'dd/MM HH:mm')}`, vencido: d.getTime() < Date.now() };
     }
   }
 
