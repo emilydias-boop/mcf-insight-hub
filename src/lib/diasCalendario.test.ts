@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { diasCalendarioDesde, rotuloContato } from './diasCalendario';
 
-// "2026-10-28T13:36:00" aqui significa 13:36 de SP, montado como offset -03:00.
+// "2026-10-27T15:21:00-03:00" aqui significa 15:21 de SP, montado com offset -03:00.
 const sp = (s: string) => new Date(s);
 
 // 27/10 15:21 SP vs 28/10 10:36 SP → 1 (bug reportado: dava 0 em blocos de 24h)

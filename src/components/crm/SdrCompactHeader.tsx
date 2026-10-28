@@ -81,8 +81,9 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
     await executeMoveStage(stageId);
   };
 
+  // Dias de calendário em São Paulo (mesma regra do banco), não blocos de 24h.
   const diasNaEtapa = deal?.stage_moved_at
-    ? Math.max(0, differenceInDays(new Date(), new Date(deal.stage_moved_at)))
+    ? diasCalendarioDesde(deal.stage_moved_at)
     : null;
 
   // ===== Sem contato (mesma regra do card) =====
