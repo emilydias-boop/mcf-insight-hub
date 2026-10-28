@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelector";
 import { AnamneseExternaButton, getAnamneseV2 } from "./AnamneseExternaButton";
 import { isPosVendaDeal, precisaVerificarHarvey } from "@/lib/posVenda";
+import { diasCalendarioDesde, rotuloContato } from "@/lib/diasCalendario";
 import { LeadTotalCompradoBadge } from "./LeadTotalCompradoBadge";
 import type { TotaisCliente } from "@/hooks/useTotaisPorCliente";
 import { isSemInteresseStageName } from '@/lib/lossReasons';
