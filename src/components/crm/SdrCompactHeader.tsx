@@ -253,7 +253,7 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
           size="sm"
           showLabel={false}
         />
-        {semContato && <span className={`font-medium whitespace-nowrap ${semContato.cls}`}>{semContato.text}</span>}
+        {semContato && <span className={`font-medium whitespace-nowrap ${semContato.cls}`} title={semContato.title}>{semContato.text}</span>}
         {retorno && (
           <span className={`inline-flex items-center gap-1 ${retorno.vencido ? 'text-amber-400 font-medium' : 'text-muted-foreground'}`}>
             <Clock className="h-3.5 w-3.5" />
