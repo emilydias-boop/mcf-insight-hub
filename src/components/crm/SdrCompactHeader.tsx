@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { format, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
+import { diasCalendarioDesde, rotuloContato } from '@/lib/diasCalendario';
 import { ChevronDown, Copy, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
@@ -38,6 +39,13 @@ const NEXT_ACTION_LABEL: Record<string, string> = {
 
 const iniciais = (nome: string) =>
   nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+
+// dd/MM HH:mm no fuso America/Sao_Paulo, independente do fuso do navegador.
+const formatarDataSP = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
 
 export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderProps) => {
   const { data: totaisCliente } = useTotalCliente(contact?.email);
@@ -81,29 +89,28 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
     await executeMoveStage(stageId);
   };
 
+  // Dias de calendário em São Paulo (mesma regra do banco), não blocos de 24h.
   const diasNaEtapa = deal?.stage_moved_at
-    ? Math.max(0, differenceInDays(new Date(), new Date(deal.stage_moved_at)))
+    ? diasCalendarioDesde(deal.stage_moved_at)
     : null;
 
   // ===== Sem contato (mesma regra do card) =====
   const resumo = info?.resumo;
   const ultimoToque = resumo?.lastTouchAt ?? resumo?.lastContactAttempt ?? null;
-  const DIA = 86_400_000;
-  const agora = Date.now();
-  let semContato: { text: string; cls: string } | null = null;
+  let semContato: { text: string; cls: string; title?: string } | null = null;
   if (!resumo) {
     semContato = null;
   } else if (!ultimoToque && (resumo.totalActivities || 0) === 0) {
-    const criado = deal.created_at ? new Date(deal.created_at).getTime() : agora;
-    const dias = Math.floor((agora - criado) / DIA);
+    const dias = deal.created_at ? diasCalendarioDesde(deal.created_at) : 0;
     semContato = dias < 1
       ? { text: 'Nunca contatado · novo', cls: 'text-amber-400' }
       : { text: `Nunca contatado · ${dias}d`, cls: 'text-red-400' };
   } else if (ultimoToque) {
-    const dias = Math.max(0, Math.floor((agora - new Date(ultimoToque).getTime()) / DIA));
+    const dias = diasCalendarioDesde(ultimoToque);
     semContato = {
-      text: dias === 0 ? 'Contato hoje' : `${dias}d sem contato`,
+      text: rotuloContato(dias),
       cls: dias <= 1 ? 'text-emerald-400' : dias <= 3 ? 'text-amber-400' : 'text-red-400',
+      title: `Último contato: ${formatarDataSP(ultimoToque)}`,
     };
   }
 
@@ -113,7 +120,7 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
     const d = new Date(deal.next_action_date);
     if (!isNaN(d.getTime())) {
       const tipo = NEXT_ACTION_LABEL[deal.next_action_type] || deal.next_action_type || '';
-      retorno = { text: `Retorno: ${tipo ? tipo + ' ' : ''}${format(d, 'dd/MM HH:mm')}`, vencido: d.getTime() < agora };
+      retorno = { text: `Retorno: ${tipo ? tipo + ' ' : ''}${format(d, 'dd/MM HH:mm')}`, vencido: d.getTime() < Date.now() };
     }
   }
 
@@ -246,7 +253,7 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
           size="sm"
           showLabel={false}
         />
-        {semContato && <span className={`font-medium whitespace-nowrap ${semContato.cls}`}>{semContato.text}</span>}
+        {semContato && <span className={`font-medium whitespace-nowrap ${semContato.cls}`} title={semContato.title}>{semContato.text}</span>}
         {retorno && (
           <span className={`inline-flex items-center gap-1 ${retorno.vencido ? 'text-amber-400 font-medium' : 'text-muted-foreground'}`}>
             <Clock className="h-3.5 w-3.5" />

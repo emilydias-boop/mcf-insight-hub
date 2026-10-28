@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelector";
 import { AnamneseExternaButton, getAnamneseV2 } from "./AnamneseExternaButton";
 import { isPosVendaDeal, precisaVerificarHarvey } from "@/lib/posVenda";
+import { diasCalendarioDesde, rotuloContato } from "@/lib/diasCalendario";
 import { LeadTotalCompradoBadge } from "./LeadTotalCompradoBadge";
 import type { TotaisCliente } from "@/hooks/useTotaisPorCliente";
 import { isSemInteresseStageName } from '@/lib/lossReasons';
@@ -391,23 +392,20 @@ export const DealKanbanCard = ({
     isRescheduled || harveyTags.length > 0 || temHarveyStage || !!deal.resgate_em || temTotais ||
     !!outsideInfo?.isOutside || !!proximaAcao;
 
-  // Sem contato
+  // Sem contato (dias de calendário em São Paulo, mesma regra do banco)
   const ultimoToque = activitySummary?.lastTouchAt ?? activitySummary?.lastContactAttempt ?? null;
-  const DIA = 86_400_000;
-  const agora = Date.now();
   let semContato: { text: string; cls: string } | null = null;
   if (!activitySummary) {
     semContato = null;
   } else if (!ultimoToque && (activitySummary?.totalActivities || 0) === 0) {
-    const criado = deal.created_at ? new Date(deal.created_at).getTime() : agora;
-    const dias = Math.floor((agora - criado) / DIA);
+    const dias = deal.created_at ? diasCalendarioDesde(deal.created_at) : 0;
     semContato = dias < 1
       ? { text: 'Nunca contatado · novo', cls: 'text-amber-400' }
       : { text: `Nunca contatado · ${dias}d`, cls: 'text-red-400' };
   } else if (ultimoToque) {
-    const dias = Math.max(0, Math.floor((agora - new Date(ultimoToque).getTime()) / DIA));
+    const dias = diasCalendarioDesde(ultimoToque);
     semContato = {
-      text: dias === 0 ? 'Contato hoje' : `${dias}d sem contato`,
+      text: rotuloContato(dias),
       cls: dias <= 1 ? 'text-emerald-400' : dias <= 3 ? 'text-amber-400' : 'text-red-400',
     };
   }
