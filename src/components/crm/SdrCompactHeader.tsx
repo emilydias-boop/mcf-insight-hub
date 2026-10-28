@@ -89,22 +89,20 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
   // ===== Sem contato (mesma regra do card) =====
   const resumo = info?.resumo;
   const ultimoToque = resumo?.lastTouchAt ?? resumo?.lastContactAttempt ?? null;
-  const DIA = 86_400_000;
-  const agora = Date.now();
-  let semContato: { text: string; cls: string } | null = null;
+  let semContato: { text: string; cls: string; title?: string } | null = null;
   if (!resumo) {
     semContato = null;
   } else if (!ultimoToque && (resumo.totalActivities || 0) === 0) {
-    const criado = deal.created_at ? new Date(deal.created_at).getTime() : agora;
-    const dias = Math.floor((agora - criado) / DIA);
+    const dias = deal.created_at ? diasCalendarioDesde(deal.created_at) : 0;
     semContato = dias < 1
       ? { text: 'Nunca contatado · novo', cls: 'text-amber-400' }
       : { text: `Nunca contatado · ${dias}d`, cls: 'text-red-400' };
   } else if (ultimoToque) {
-    const dias = Math.max(0, Math.floor((agora - new Date(ultimoToque).getTime()) / DIA));
+    const dias = diasCalendarioDesde(ultimoToque);
     semContato = {
-      text: dias === 0 ? 'Contato hoje' : `${dias}d sem contato`,
+      text: rotuloContato(dias),
       cls: dias <= 1 ? 'text-emerald-400' : dias <= 3 ? 'text-amber-400' : 'text-red-400',
+      title: `Último contato: ${formatarDataSP(ultimoToque)}`,
     };
   }
 
