@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { format, differenceInDays } from 'date-fns';
+import { diasCalendarioDesde, rotuloContato } from '@/lib/diasCalendario';
 import { ChevronDown, Copy, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
@@ -38,6 +39,13 @@ const NEXT_ACTION_LABEL: Record<string, string> = {
 
 const iniciais = (nome: string) =>
   nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+
+// dd/MM HH:mm no fuso America/Sao_Paulo, independente do fuso do navegador.
+const formatarDataSP = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
 
 export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderProps) => {
   const { data: totaisCliente } = useTotalCliente(contact?.email);
