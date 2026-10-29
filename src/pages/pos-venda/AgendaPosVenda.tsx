@@ -9,7 +9,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, ExternalLink, Loa
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { POS_VENDA_ORIGIN_ID } from '@/lib/posVenda';
-import { horariosLivresPosVenda, inicioSlotSP, type DisponibilidadePosVenda } from '@/lib/posVendaDisponibilidade';
+import { horariosLivresPosVenda, horariosTravadosPosVenda, inicioSlotSP, type DisponibilidadePosVenda } from '@/lib/posVendaDisponibilidade';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,6 +54,7 @@ const BLOCO_CLASS: Record<string, string> = {
 
 const HORA_INICIO = 8;
 const HORA_FIM = 20;
+const GRADE_HORAS = Array.from({ length: (HORA_FIM - HORA_INICIO) * 2 }, (_, i) => `${String(HORA_INICIO + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 const SLOT_PX = 40; // 30 min
 const SLOTS = (HORA_FIM - HORA_INICIO) * 2;
 
@@ -127,7 +128,7 @@ function BlocoReuniao({ r, style, onClick, mostrarGerente = true }: { r: Reuniao
 
 /** Grade de horários: coluna de horas + uma coluna por "coluna" (dia ou gerente). */
 function GradeHorarios({ colunas, onSelect, mostrarGerente }: {
-  colunas: { key: string; titulo: React.ReactNode; destaque?: boolean; dia: Date; reunioes: Reuniao[]; livres?: string[]; onLivre?: (hora: string) => void }[];
+  colunas: { key: string; titulo: React.ReactNode; destaque?: boolean; dia: Date; reunioes: Reuniao[]; livres?: string[]; travados?: string[]; onLivre?: (hora: string) => void }[];
   onSelect: (r: Reuniao) => void; mostrarGerente: boolean;
 }) {
   const agora = useAgora();
@@ -152,6 +153,10 @@ function GradeHorarios({ colunas, onSelect, mostrarGerente }: {
           <div key={c.key} className={cn('relative border-r border-border', c.destaque && 'bg-primary/[0.03]')} style={{ height: SLOTS * SLOT_PX }}>
             {horas.map((h, i) => (
               <div key={h} style={{ top: i * SLOT_PX, height: SLOT_PX }} className={cn('absolute inset-x-0 border-b', i % 2 ? 'border-border/60' : 'border-dashed border-border/40')} />
+            ))}
+            {c.travados?.map((hora) => (
+              <div key={`t-${hora}`} title="Fora dos horários disponíveis do gerente" className="pointer-events-none absolute inset-x-0 flex items-center justify-center bg-muted/60 text-[10px] text-muted-foreground"
+                style={{ top: ((Number(hora.slice(0, 2)) - HORA_INICIO) * 2 + Number(hora.slice(3)) / 30) * SLOT_PX, height: SLOT_PX }}>Indisponível</div>
             ))}
             {c.livres?.map((hora) => (
               <Button key={hora} variant="outline" size="sm" className="absolute inset-x-1 h-8 border-primary/30 bg-primary/10 text-primary text-xs"
@@ -275,10 +280,18 @@ export default function AgendaPosVenda() {
   }, [viewMode, dataSel, inicio]);
 
   const hoje = new Date();
+  // Calendário mostra horários do gerente filtrado; em "Todos", do único gerente com agenda configurada.
+  const configurados = [...new Set(disponibilidade.map((d) => d.gerente_id))];
+  const gerenteCalendario = fGerente !== 'todos' ? fGerente : configurados.length === 1 ? configurados[0] : null;
   const colunasDias = diasVisiveis.map((d) => ({
     key: d.toISOString(), dia: d, destaque: isSameDay(d, hoje),
     titulo: <>{format(d, 'EEE', { locale: ptBR })} <span className="font-bold">{format(d, 'dd/MM')}</span></>,
     reunioes: filtradas.filter((r) => isSameDay(new Date(r.inicio), d)),
+    ...(gerenteCalendario ? {
+      livres: horariosLivresPosVenda(disponibilidade, gerenteCalendario, format(d, 'yyyy-MM-dd'), reunioes, 60, agoraSlots),
+      travados: horariosTravadosPosVenda(disponibilidade, gerenteCalendario, format(d, 'yyyy-MM-dd'), GRADE_HORAS, agoraSlots),
+      onLivre: (hora: string) => abrirSlot(gerenteCalendario, d, hora),
+    } : {}),
   }));
 
   // Por Gerente: no Dia, uma coluna por gerente; na Semana/Mês, colunas por gerente com a lista do período.
@@ -394,6 +407,7 @@ export default function AgendaPosVenda() {
                 key: g.id, dia: startOfDay(dataSel), titulo: <span className="normal-case">{g.full_name ?? g.email}</span>,
                 reunioes: filtradas.filter((r) => r.gerente_id === g.id),
                 livres: horariosLivresPosVenda(disponibilidade, g.id, format(dataSel, 'yyyy-MM-dd'), reunioes, 60, agoraSlots),
+                travados: horariosTravadosPosVenda(disponibilidade, g.id, format(dataSel, 'yyyy-MM-dd'), GRADE_HORAS, agoraSlots),
                 onLivre: (hora: string) => abrirSlot(g.id, dataSel, hora),
               }))} />
           ) : (
