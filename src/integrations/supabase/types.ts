@@ -14014,6 +14014,123 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_capi_config: {
+        Row: {
+          descricao: string | null
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          descricao?: string | null
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          descricao?: string | null
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      meta_capi_events: {
+        Row: {
+          attempts: number
+          contact_id: string | null
+          created_at: string
+          currency: string | null
+          custom_data: Json
+          deal_id: string
+          event_id: string
+          event_name: string
+          event_time: string
+          fbtrace_id: string | null
+          id: number
+          last_error: string | null
+          locked_at: string | null
+          next_retry_at: string
+          response: Json | null
+          sent_at: string | null
+          source_id: string | null
+          source_table: string | null
+          status: string
+          test_mode: boolean
+          value: number | null
+        }
+        Insert: {
+          attempts?: number
+          contact_id?: string | null
+          created_at?: string
+          currency?: string | null
+          custom_data?: Json
+          deal_id: string
+          event_id: string
+          event_name: string
+          event_time: string
+          fbtrace_id?: string | null
+          id?: never
+          last_error?: string | null
+          locked_at?: string | null
+          next_retry_at?: string
+          response?: Json | null
+          sent_at?: string | null
+          source_id?: string | null
+          source_table?: string | null
+          status?: string
+          test_mode?: boolean
+          value?: number | null
+        }
+        Update: {
+          attempts?: number
+          contact_id?: string | null
+          created_at?: string
+          currency?: string | null
+          custom_data?: Json
+          deal_id?: string
+          event_id?: string
+          event_name?: string
+          event_time?: string
+          fbtrace_id?: string | null
+          id?: never
+          last_error?: string | null
+          locked_at?: string | null
+          next_retry_at?: string
+          response?: Json | null
+          sent_at?: string | null
+          source_id?: string | null
+          source_table?: string | null
+          status?: string
+          test_mode?: boolean
+          value?: number | null
+        }
+        Relationships: []
+      }
+      meta_capi_optout: {
+        Row: {
+          contact_root: string
+          created_at: string
+          created_by: string | null
+          motivo: string | null
+          origem: string | null
+        }
+        Insert: {
+          contact_root: string
+          created_at?: string
+          created_by?: string | null
+          motivo?: string | null
+          origem?: string | null
+        }
+        Update: {
+          contact_root?: string
+          created_at?: string
+          created_by?: string | null
+          motivo?: string | null
+          origem?: string | null
+        }
+        Relationships: []
+      }
       metas_componentes: {
         Row: {
           ativo: boolean
@@ -22749,6 +22866,85 @@ export type Database = {
         Returns: {
           fonte: string
           meta_diaria: number
+        }[]
+      }
+      meta_capi_cfg: { Args: { p_key: string }; Returns: string }
+      meta_capi_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          contact_id: string | null
+          created_at: string
+          currency: string | null
+          custom_data: Json
+          deal_id: string
+          event_id: string
+          event_name: string
+          event_time: string
+          fbtrace_id: string | null
+          id: number
+          last_error: string | null
+          locked_at: string | null
+          next_retry_at: string
+          response: Json | null
+          sent_at: string | null
+          source_id: string | null
+          source_table: string | null
+          status: string
+          test_mode: boolean
+          value: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "meta_capi_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      meta_capi_enqueue: {
+        Args: {
+          p_custom: Json
+          p_deal_id: string
+          p_event_id: string
+          p_event_name: string
+          p_event_time: string
+          p_source_id: string
+          p_source_table: string
+          p_value: number
+        }
+        Returns: undefined
+      }
+      meta_capi_mark: {
+        Args: {
+          p_error: string
+          p_fbtrace: string
+          p_id: number
+          p_next_retry: string
+          p_response: Json
+          p_status: string
+        }
+        Returns: undefined
+      }
+      meta_capi_optout_add: {
+        Args: { p_contact: string; p_motivo?: string; p_origem?: string }
+        Returns: undefined
+      }
+      meta_capi_purge: { Args: never; Returns: Json }
+      meta_capi_user_data: {
+        Args: { p_deal_ids: string[] }
+        Returns: {
+          city: string
+          client_ip: string
+          client_ua: string
+          contact_root: string
+          deal_id: string
+          email: string
+          fbclid: string
+          fbclid_at: string
+          fbp: string
+          first_name: string
+          last_name: string
+          phone: string
         }[]
       }
       metas_agendamento_mes: {
