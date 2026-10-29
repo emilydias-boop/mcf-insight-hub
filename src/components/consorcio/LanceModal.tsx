@@ -23,6 +23,7 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
   /** Valor do lance em string mascarada (pt-BR), como o CurrencyInput trabalha. */
   const [valor, setValor] = useState('');
   const [observacao, setObservacao] = useState('');
+  const [tipoLance, setTipoLance] = useState<'embutido' | 'livre' | 'fixo' | ''>('');
   const [simulacao, setSimulacao] = useState<SimulacaoLance | null>(null);
   const [mostrarErros, setMostrarErros] = useState(false);
 
@@ -77,6 +78,7 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
       chanceClassificacao: simulacao.chanceContemplacao,
       posicaoEstimada: simulacao.posicaoEstimada,
       observacao: observacao || undefined,
+      tipoLance: tipoLance || undefined,
       salvo: true,
       registrarContemplacao,
     });
@@ -87,6 +89,7 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
     setPercentual('');
     setValor('');
     setObservacao('');
+    setTipoLance('');
     setSimulacao(null);
     setMostrarErros(false);
     onOpenChange(false);
@@ -135,6 +138,15 @@ export function LanceModal({ open, onOpenChange, card }: Props) {
               required
               showError={mostrarErros}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tipo de lance</Label>
+            <div className="flex gap-2">
+              {(['embutido', 'livre', 'fixo'] as const).map((t) => (
+                <Button key={t} type="button" size="sm" variant={tipoLance === t ? 'default' : 'outline'} onClick={() => setTipoLance(t)} className="capitalize">{t}</Button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">

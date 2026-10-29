@@ -124,6 +124,7 @@ export function useRegistrarLance() {
       chanceClassificacao: string;
       posicaoEstimada?: number;
       observacao?: string;
+      tipoLance?: 'embutido' | 'livre' | 'fixo';
       salvo: boolean;
       registrarContemplacao?: boolean;
     }) => {
@@ -138,6 +139,7 @@ export function useRegistrarLance() {
           chance_classificacao: params.chanceClassificacao,
           posicao_estimada: params.posicaoEstimada || null,
           observacao: params.observacao || null,
+          tipo_lance: params.tipoLance ?? null,
           salvo: params.salvo,
           created_by: user?.id,
         });

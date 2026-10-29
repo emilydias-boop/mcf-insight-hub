@@ -18,3 +18,4 @@
 - CRM timeline, notes, and call history share presentation-only recording and note renderers under timeline/; data fetching and mutations stay in their original hooks so legacy tabs keep their behavior.
 - Deal drawer contact logging goes only through the registrar_contato RPC (src/components/crm/drawer/); next-action reminders come from the DB cron, so the front end never inserts into alertas for them.
 - CRM Overview classifies stage moves via src/lib/crmStageClassification.ts (metadata.to_stage_id > UUID to_stage > name resolved in crm_stages), because trigger rows store stage names.
+- Consórcio "Relatório da Cota" reads only through consorcio_relatorio_cota (shows only recorded data, never recomputes); outbound delivery to HARVEY goes only through the harvey-relatorio-cota edge function, logged one row per card+month in consorcio_harvey_envios to avoid duplicate sends.
