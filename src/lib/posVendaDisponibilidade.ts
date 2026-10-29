@@ -19,3 +19,13 @@ export function horariosLivresPosVenda(
       && +new Date(r.inicio) < fim && +new Date(r.inicio) + r.duracao_min * 60_000 > inicio);
   });
 }
+/** Meias-horas da grade que ficam travadas para um gerente configurado (fora da faixa ou já passadas). */
+export function horariosTravadosPosVenda(
+  disponibilidade: DisponibilidadePosVenda[], gerenteId: string, dia: string,
+  grade: string[], agora = new Date(),
+): string[] {
+  if (!disponibilidade.some((d) => d.gerente_id === gerenteId)) return [];
+  const diaSemana = new Date(`${dia}T12:00:00-03:00`).getUTCDay();
+  const faixa = new Set(disponibilidade.filter((d) => d.gerente_id === gerenteId && d.dia_semana === diaSemana).map((d) => d.horario.slice(0, 5)));
+  return grade.filter((h) => !faixa.has(h) || +inicioSlotSP(dia, h) <= +agora);
+}

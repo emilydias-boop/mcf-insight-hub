@@ -16,3 +16,13 @@ assert.deepEqual(horariosLivresPosVenda(disponibilidade, 'rebeca', '2026-10-30',
 assert.deepEqual(horariosLivresPosVenda(disponibilidade, 'rebeca', '2026-10-30', [{ ...ocupada, status: 'cancelada' }], 60, agora), horas);
 assert.deepEqual(horariosLivresPosVenda(disponibilidade, 'rebeca', '2026-10-29', [], 60, new Date('2026-10-29T15:00:00-03:00')), ['15:30', '16:00', '16:30', '17:00']);
 console.log('Disponibilidade Pós-Venda: dias úteis, seis horários, SP, ocupação e isolamento OK');
+import { horariosTravadosPosVenda as travados } from './posVendaDisponibilidade';
+{
+  const disp = [{ gerente_id: 'r', dia_semana: 4, horario: '14:30:00' }];
+  const grade = ['14:00', '14:30', '15:00'];
+  const antes = new Date('2026-10-29T08:00:00-03:00');
+  const t = travados(disp, 'r', '2026-10-29', grade, antes);
+  if (JSON.stringify(t) !== JSON.stringify(['14:00', '15:00'])) throw new Error('fora da faixa deve travar: ' + t);
+  if (travados(disp, 'outro', '2026-10-29', grade, antes).length !== 0) throw new Error('gerente sem configuração não trava');
+  if (!travados(disp, 'r', '2026-10-29', grade, new Date('2026-10-29T15:00:00-03:00')).includes('14:30')) throw new Error('horário passado trava');
+}
