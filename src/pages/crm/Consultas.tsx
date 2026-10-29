@@ -9,10 +9,11 @@ import { ContemplationTab } from '@/components/consorcio/ContemplationTab';
 import { GruposTab } from '@/components/consorcio/grupos/GruposTab';
 import { PrevisaoComissoesTab } from '@/components/consorcio/PrevisaoComissoesTab';
 import { IndicacoesTab } from '@/components/consorcio/IndicacoesTab';
+import { RelatorioCotaTab } from '@/components/consorcio/RelatorioCotaTab';
 
 const TABS = [
   'sem-sucesso', 'excluidas', 'todas', 'match-socio',
-  'declinadas', 'contemplacao', 'grupos', 'previsao', 'indicacoes',
+  'declinadas', 'contemplacao', 'grupos', 'previsao', 'indicacoes', 'relatorio-cota',
 ] as const;
 
 export default function Consultas() {
@@ -42,6 +43,7 @@ export default function Consultas() {
           <TabsTrigger value="grupos">Grupos</TabsTrigger>
           <TabsTrigger value="previsao">Previsão</TabsTrigger>
           <TabsTrigger value="indicacoes">Indicações</TabsTrigger>
+          <TabsTrigger value="relatorio-cota">Relatório da Cota</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sem-sucesso"><SemSucessoTab /></TabsContent>
@@ -52,6 +54,7 @@ export default function Consultas() {
         <TabsContent value="contemplacao"><ContemplationTab /></TabsContent>
         <TabsContent value="grupos"><GruposTab /></TabsContent>
         <TabsContent value="previsao"><PrevisaoComissoesTab /></TabsContent>
+        <TabsContent value="relatorio-cota"><RelatorioCotaTab /></TabsContent>
         <TabsContent value="indicacoes">
           <div className="[&_[role=tablist]]:bg-transparent [&_[role=tablist]]:border [&_[role=tablist]]:border-border/60">
             <IndicacoesTab />
