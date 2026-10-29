@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Disponibilidade individual Pós-Venda: configurar seis horários da Rebeca de segunda a sexta e oferecer horários livres no agendamento, isolado das agendas comerciais.
+
 - [x] Faturamento Closer/SDR/Canal — carteira separada, ex-SDRs agrupados e P2/Outside conciliados; testes dos três modos e compilação automática OK; navegador com dados simulados confirmou carteira e detalhe. Verificação autenticada indisponível (Supabase externo); sem banco/publicação.
 
 - [x] Abrir documentos da biblioteca em popup no fluxo Pós-venda; 21 testes e compilação automática OK; navegador com dados simulados confirmou popup, recarga e Ir para a tela em computador/celular, sem banco/publicação.
