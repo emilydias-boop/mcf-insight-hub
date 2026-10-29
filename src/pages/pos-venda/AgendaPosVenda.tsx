@@ -9,6 +9,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, ExternalLink, Loa
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { POS_VENDA_ORIGIN_ID } from '@/lib/posVenda';
+import { horariosLivresPosVenda, inicioSlotSP, type DisponibilidadePosVenda } from '@/lib/posVendaDisponibilidade';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -126,7 +127,7 @@ function BlocoReuniao({ r, style, onClick, mostrarGerente = true }: { r: Reuniao
 
 /** Grade de horários: coluna de horas + uma coluna por "coluna" (dia ou gerente). */
 function GradeHorarios({ colunas, onSelect, mostrarGerente }: {
-  colunas: { key: string; titulo: React.ReactNode; destaque?: boolean; dia: Date; reunioes: Reuniao[] }[];
+  colunas: { key: string; titulo: React.ReactNode; destaque?: boolean; dia: Date; reunioes: Reuniao[]; livres?: string[]; onLivre?: (hora: string) => void }[];
   onSelect: (r: Reuniao) => void; mostrarGerente: boolean;
 }) {
   const agora = useAgora();
@@ -151,6 +152,11 @@ function GradeHorarios({ colunas, onSelect, mostrarGerente }: {
           <div key={c.key} className={cn('relative border-r border-border', c.destaque && 'bg-primary/[0.03]')} style={{ height: SLOTS * SLOT_PX }}>
             {horas.map((h, i) => (
               <div key={h} style={{ top: i * SLOT_PX, height: SLOT_PX }} className={cn('absolute inset-x-0 border-b', i % 2 ? 'border-border/60' : 'border-dashed border-border/40')} />
+            ))}
+            {c.livres?.map((hora) => (
+              <Button key={hora} variant="outline" size="sm" className="absolute inset-x-1 h-8 border-primary/30 bg-primary/10 text-primary text-xs"
+                style={{ top: ((Number(hora.slice(0, 2)) - HORA_INICIO) * 2 + Number(hora.slice(3)) / 30) * SLOT_PX + 3 }}
+                onClick={() => c.onLivre?.(hora)}>{hora} · Disponível</Button>
             ))}
             {layoutDia(c.reunioes).map(({ r, col, cols }) => {
               const { top, altura } = posicao(r);
@@ -219,6 +225,13 @@ export default function AgendaPosVenda() {
   const [novaAberta, setNovaAberta] = useState(false);
   const [selecionada, setSelecionada] = useState<Reuniao | null>(null);
   const { data: gerentes = [] } = useGerentes();
+  const { data: disponibilidade = [] } = useDisponibilidade();
+  const [preSelecao, setPreSelecao] = useState<{ gerenteId: string; dia: string; hora: string }>();
+  const agoraSlots = useAgora();
+  const abrirSlot = (gerenteId: string, dia: Date, hora: string) => {
+    setPreSelecao({ gerenteId, dia: format(dia, 'yyyy-MM-dd'), hora });
+    setNovaAberta(true);
+  };
 
   const { inicio, fim } = useMemo(() => {
     if (viewMode === 'day') return { inicio: startOfDay(dataSel), fim: addDays(startOfDay(dataSel), 1) };
@@ -271,13 +284,13 @@ export default function AgendaPosVenda() {
   // Por Gerente: no Dia, uma coluna por gerente; na Semana/Mês, colunas por gerente com a lista do período.
   const gerentesVisiveis = useMemo(() => {
     const ids = new Set(filtradas.map((r) => r.gerente_id));
-    const base = fGerente === 'todos' ? gerentes.filter((g) => ids.has(g.id) || viewMode === 'day') : gerentes.filter((g) => g.id === fGerente);
+    const base = fGerente === 'todos' ? gerentes.filter((g) => ids.has(g.id) || viewMode === 'day' || disponibilidade.some((d) => d.gerente_id === g.id)) : gerentes.filter((g) => g.id === fGerente);
     const extras = [...ids].filter((id) => !base.some((g) => g.id === id)).map((id) => {
       const r = filtradas.find((x) => x.gerente_id === id);
       return { id, full_name: r?.profiles?.full_name ?? null, email: r?.profiles?.email ?? null };
     });
     return [...base, ...extras];
-  }, [gerentes, filtradas, fGerente, viewMode]);
+  }, [gerentes, filtradas, fGerente, viewMode, disponibilidade]);
 
   const ordenadas = useMemo(() => [...filtradas].sort((a, b) => (ordemAsc ? 1 : -1) * (+new Date(a.inicio) - +new Date(b.inicio))), [filtradas, ordemAsc]);
   const invalidar = () => qc.invalidateQueries({ queryKey: ['pos-venda-reunioes'] });
@@ -296,7 +309,7 @@ export default function AgendaPosVenda() {
           <Button variant="outline" size="icon" onClick={() => refetch()} className="h-8 w-8 sm:h-9 sm:w-9" title="Atualizar">
             <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
           </Button>
-          <Button onClick={() => setNovaAberta(true)} size="sm" className="flex-1 sm:flex-none">
+          <Button onClick={() => { setPreSelecao(undefined); setNovaAberta(true); }} size="sm" className="flex-1 sm:flex-none">
             <Plus className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Nova reunião</span>
             <span className="sm:hidden">Nova</span>
@@ -380,6 +393,8 @@ export default function AgendaPosVenda() {
               colunas={gerentesVisiveis.map((g) => ({
                 key: g.id, dia: startOfDay(dataSel), titulo: <span className="normal-case">{g.full_name ?? g.email}</span>,
                 reunioes: filtradas.filter((r) => r.gerente_id === g.id),
+                livres: horariosLivresPosVenda(disponibilidade, g.id, format(dataSel, 'yyyy-MM-dd'), reunioes, 60, agoraSlots),
+                onLivre: (hora: string) => abrirSlot(g.id, dataSel, hora),
               }))} />
           ) : (
             <div className="rounded-lg border border-border bg-card overflow-auto">
@@ -393,6 +408,13 @@ export default function AgendaPosVenda() {
                         {g.full_name ?? g.email} <span className="text-muted-foreground">({dele.length})</span>
                       </div>
                       <div className="space-y-1.5 p-2">
+                        {viewMode === 'week' && diasVisiveis.map((dia) => {
+                          const livres = horariosLivresPosVenda(disponibilidade, g.id, format(dia, 'yyyy-MM-dd'), reunioes, 60, agoraSlots);
+                          return livres.length > 0 ? <div key={dia.toISOString()} className="space-y-1 pb-2">
+                            <p className="text-xs font-medium capitalize">{format(dia, 'EEE dd/MM', { locale: ptBR })}</p>
+                            <div className="flex flex-wrap gap-1">{livres.map((hora) => <Button key={hora} variant="outline" size="sm" className="h-7 px-2 text-xs border-primary/30 text-primary" onClick={() => abrirSlot(g.id, dia, hora)}>{hora}</Button>)}</div>
+                          </div> : null;
+                        })}
                         {dele.length === 0 && <p className="text-xs text-muted-foreground">—</p>}
                         {dele.map((r) => (
                           <button key={r.id} type="button" onClick={() => setSelecionada(r)}
@@ -448,7 +470,7 @@ export default function AgendaPosVenda() {
         </TabsContent>
       </Tabs>
 
-      {novaAberta && <NovaReuniaoDialog onClose={() => setNovaAberta(false)} onSalvo={invalidar} />}
+      {novaAberta && <NovaReuniaoDialog preSelecao={preSelecao} onClose={() => setNovaAberta(false)} onSalvo={invalidar} />}
       {selecionada && <ReuniaoDialog reuniao={selecionada} onClose={() => setSelecionada(null)} onSalvo={invalidar} />}
     </div>
   );
@@ -467,17 +489,49 @@ function useGerentes() {
   });
 }
 
-function NovaReuniaoDialog({ onClose, onSalvo }: { onClose: () => void; onSalvo: () => void }) {
+function useDisponibilidade() {
+  return useQuery({
+    queryKey: ['pos-venda-disponibilidade'],
+    queryFn: async () => {
+      const { data, error } = await db.from('pos_venda_disponibilidade').select('gerente_id, dia_semana, horario');
+      if (error) throw error;
+      return (data ?? []) as DisponibilidadePosVenda[];
+    },
+  });
+}
+
+function NovaReuniaoDialog({ onClose, onSalvo, preSelecao }: { onClose: () => void; onSalvo: () => void; preSelecao?: { gerenteId: string; dia: string; hora: string } }) {
   const { user } = useAuth();
   const { data: gerentes = [] } = useGerentes();
   const [busca, setBusca] = useState('');
   const [dealId, setDealId] = useState('');
-  const [gerenteId, setGerenteId] = useState(user?.id ?? '');
+  const [gerenteId, setGerenteId] = useState(preSelecao?.gerenteId ?? user?.id ?? '');
   const [tipo, setTipo] = useState<'viabilidade_1' | 'viabilidade_2'>('viabilidade_1');
-  const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [hora, setHora] = useState('10:00');
+  const [data, setData] = useState(preSelecao?.dia ?? format(new Date(), 'yyyy-MM-dd'));
+  const [hora, setHora] = useState(preSelecao?.hora ?? '10:00');
   const [duracao, setDuracao] = useState(60);
   const [link, setLink] = useState('');
+  const { data: disponibilidade = [], isLoading: carregandoDisponibilidade, isError: erroDisponibilidade } = useDisponibilidade();
+  const configurado = disponibilidade.some((d) => d.gerente_id === gerenteId);
+  const agora = useAgora();
+  const { data: ocupadas = [], isLoading: carregandoOcupadas, isError: erroOcupadas, refetch: atualizarOcupadas } = useQuery({
+    queryKey: ['pos-venda-ocupacao', gerenteId, data],
+    enabled: configurado && Boolean(data),
+    queryFn: async () => {
+      const inicio = inicioSlotSP(data, '00:00');
+      const { data: reunioes, error } = await db.from('pos_venda_reunioes').select('gerente_id, inicio, duracao_min, status')
+        .eq('gerente_id', gerenteId).neq('status', 'cancelada')
+        .lt('inicio', new Date(+inicio + 86_400_000).toISOString())
+        .gte('inicio', new Date(+inicio - 86_400_000).toISOString());
+      if (error) throw error;
+      return (reunioes ?? []) as Reuniao[];
+    },
+  });
+  const livres = horariosLivresPosVenda(disponibilidade, gerenteId, data, ocupadas, duracao, agora);
+  const aguardandoHorarios = carregandoDisponibilidade || erroDisponibilidade || (configurado && (carregandoOcupadas || erroOcupadas));
+  useEffect(() => {
+    if (configurado && !aguardandoHorarios && !livres.includes(hora)) setHora('');
+  }, [configurado, aguardandoHorarios, livres.join(','), hora]);
 
   const { data: deals = [] } = useQuery({
     queryKey: ['pos-venda-deals-busca', busca],
@@ -504,14 +558,15 @@ function NovaReuniaoDialog({ onClose, onSalvo }: { onClose: () => void; onSalvo:
 
   const salvar = useMutation({
     mutationFn: async () => {
-      const inicio = new Date(`${data}T${hora}:00`).toISOString();
+      if (aguardandoHorarios || (configurado && !livres.includes(hora))) throw new Error('Escolha um horário disponível.');
+      const inicio = inicioSlotSP(data, hora).toISOString();
       const { error } = await db.from('pos_venda_reunioes').insert({
         deal_id: dealId, gerente_id: gerenteId, tipo, inicio, duracao_min: duracao, link_reuniao: link || null,
       });
       if (error) throw error;
     },
     onSuccess: () => { toast.success('Reunião agendada'); onSalvo(); onClose(); },
-    onError: (e: any) => toast.error(e.message ?? 'Erro ao agendar'),
+    onError: (e: any) => { toast.error(e.message ?? 'Erro ao agendar'); atualizarOcupadas(); },
   });
 
   return (
@@ -548,14 +603,19 @@ function NovaReuniaoDialog({ onClose, onSalvo }: { onClose: () => void; onSalvo:
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div><Label>Data</Label><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
-            <div><Label>Hora</Label><Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} /></div>
+            <div><Label>Hora (São Paulo)</Label>{configurado ? <Select value={hora} onValueChange={setHora} disabled={Boolean(aguardandoHorarios)}>
+              <SelectTrigger><SelectValue placeholder={aguardandoHorarios ? 'Carregando...' : 'Escolha'} /></SelectTrigger>
+              <SelectContent>{livres.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+            </Select> : <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} disabled={Boolean(aguardandoHorarios)} />}</div>
             <div><Label>Duração (min)</Label><Input type="number" min={10} max={480} value={duracao} onChange={(e) => setDuracao(Number(e.target.value))} /></div>
           </div>
+          {configurado && !aguardandoHorarios && livres.length === 0 && <p className="text-sm text-muted-foreground">Nenhum horário disponível nesta data para esta duração.</p>}
+          {(erroDisponibilidade || erroOcupadas) && <p className="text-sm text-destructive">Não foi possível consultar os horários disponíveis.</p>}
           <div><Label>Link da reunião (opcional)</Label><Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://meet.google.com/..." /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button disabled={!dealId || !gerenteId || salvar.isPending} onClick={() => salvar.mutate()}>Agendar</Button>
+          <Button disabled={!dealId || !gerenteId || !data || !hora || aguardandoHorarios || (configurado && !livres.includes(hora)) || salvar.isPending} onClick={() => salvar.mutate()}>Agendar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

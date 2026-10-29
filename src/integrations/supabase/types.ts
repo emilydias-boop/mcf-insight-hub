@@ -14993,6 +14993,45 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_venda_disponibilidade: {
+        Row: {
+          created_at: string
+          dia_semana: number
+          gerente_id: string
+          horario: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          dia_semana: number
+          gerente_id: string
+          horario: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          dia_semana?: number
+          gerente_id?: string
+          horario?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_venda_disponibilidade_gerente_id_fkey"
+            columns: ["gerente_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_venda_disponibilidade_gerente_id_fkey"
+            columns: ["gerente_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       pos_venda_distribuicao: {
         Row: {
           ativo: boolean

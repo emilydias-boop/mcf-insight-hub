@@ -1,5 +1,7 @@
 # Architecture rules
 
+- Pós-Venda recurring manager availability lives in pos_venda_disponibilidade and uses São Paulo slot starts; booking validation only applies to configured managers in pos_venda_reunioes, preserving the separate closer agendas and unconfigured managers.
+
 - Revenue summaries classify portfolio payments by period-wide deduplicated gross per existing sale identity before row attribution, so all grouping modes preserve attribution and share the same new-sale boundary.
 
 - Commercial team dashboards share their filter bar and KPI-card renderer; BU-specific data and table columns stay in dedicated page/table adapters to preserve each BU's business rules.- BU Pós Venda is isolated by its single origin id (`POS_VENDA_ORIGIN_ID` in src/lib/posVenda.ts); its stage-deliverable lock is a crm_deals trigger with a WHEN clause on that origin, so other pipelines never run it.
