@@ -16,8 +16,8 @@ const dataBR = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().j
 export function RelatorioCotaTab() {
   const [busca, setBusca] = useState('');
   const [cardId, setCardId] = useState<string | null>(null);
-  const { role } = useAuth() as any;
-  const isAdmin = role === 'admin';
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
   const mesAtual = mesAtualSP();
 
   const { data: cotas = [] } = useQuery({
