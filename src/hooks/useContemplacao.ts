@@ -89,7 +89,6 @@ export function useVerificarSorteio() {
           distancia: params.distancia,
           data_assembleia: params.dataAssembleia,
           observacao: params.observacao || null,
-          tipo_lance: params.tipoLance ?? null,
           created_by: user?.id,
         });
       if (histErr) throw histErr;
@@ -140,6 +139,7 @@ export function useRegistrarLance() {
           chance_classificacao: params.chanceClassificacao,
           posicao_estimada: params.posicaoEstimada || null,
           observacao: params.observacao || null,
+          tipo_lance: params.tipoLance ?? null,
           salvo: params.salvo,
           created_by: user?.id,
         });
