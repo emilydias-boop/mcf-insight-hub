@@ -23358,6 +23358,14 @@ export type Database = {
           transcript: Json
         }[]
       }
+      pos_venda_listar_gerentes: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          id: string
+        }[]
+      }
       pos_venda_registrar_cliente: {
         Args: {
           p_amount: number
