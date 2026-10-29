@@ -9,6 +9,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, ExternalLink, Loa
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { POS_VENDA_ORIGIN_ID } from '@/lib/posVenda';
+import { horariosLivresPosVenda, inicioSlotSP, type DisponibilidadePosVenda } from '@/lib/posVendaDisponibilidade';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
