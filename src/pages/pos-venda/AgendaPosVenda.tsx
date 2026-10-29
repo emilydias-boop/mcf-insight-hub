@@ -458,10 +458,9 @@ function useGerentes() {
   return useQuery({
     queryKey: ['pos-venda-gerentes'],
     queryFn: async () => {
-      const { data: roles } = await db.from('user_roles').select('user_id, role').in('role', ['gerente_relacionamento', 'admin']);
-      const ids = [...new Set((roles ?? []).map((r: any) => r.user_id))];
-      if (!ids.length) return [];
-      const { data } = await db.from('profiles').select('id, full_name, email').in('id', ids).order('full_name');
+      // RPC: gerentes não enxergam cargos/perfis dos colegas pelas regras de acesso.
+      const { data, error } = await db.rpc('pos_venda_listar_gerentes');
+      if (error) throw error;
       return (data ?? []) as { id: string; full_name: string | null; email: string | null }[];
     },
     staleTime: 5 * 60_000,
