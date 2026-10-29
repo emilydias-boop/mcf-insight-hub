@@ -22901,6 +22901,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      meta_capi_cron_auth: { Args: { p_secret: string }; Returns: boolean }
       meta_capi_enqueue: {
         Args: {
           p_custom: Json
