@@ -6666,6 +6666,53 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_harvey_envios: {
+        Row: {
+          card_id: string
+          created_at: string
+          enviado_por: string | null
+          erro: string | null
+          http_status: number | null
+          id: string
+          mes_referencia: string
+          payload: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          enviado_por?: string | null
+          erro?: string | null
+          http_status?: number | null
+          id?: string
+          mes_referencia: string
+          payload?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          enviado_por?: string | null
+          erro?: string | null
+          http_status?: number | null
+          id?: string
+          mes_referencia?: string
+          payload?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_harvey_envios_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_indicacao_parcelas: {
         Row: {
           created_at: string
@@ -6828,6 +6875,7 @@ export type Database = {
           percentual_lance: number
           posicao_estimada: number | null
           salvo: boolean
+          tipo_lance: string | null
           valor_lance: number
         }
         Insert: {
@@ -6840,6 +6888,7 @@ export type Database = {
           percentual_lance: number
           posicao_estimada?: number | null
           salvo?: boolean
+          tipo_lance?: string | null
           valor_lance: number
         }
         Update: {
@@ -6852,6 +6901,7 @@ export type Database = {
           percentual_lance?: number
           posicao_estimada?: number | null
           salvo?: boolean
+          tipo_lance?: string | null
           valor_lance?: number
         }
         Relationships: [
@@ -21681,11 +21731,13 @@ export type Database = {
         Returns: number
       }
       consorcio_name_key: { Args: { p_name: string }; Returns: string }
+      consorcio_periodo_mes: { Args: { p: string }; Returns: string }
       consorcio_pessoa_nome_key: { Args: { p_name: string }; Returns: string }
       consorcio_producao_gerada: {
         Args: { p_bu?: string; p_fim: string; p_ini: string }
         Returns: Json
       }
+      consorcio_relatorio_cota: { Args: { p_card_id: string }; Returns: Json }
       consorcio_reversao_status: {
         Args: { p_registro_ids: string[] }
         Returns: {
