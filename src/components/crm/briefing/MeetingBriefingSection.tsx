@@ -19,7 +19,8 @@ export type BriefingParticipante = {
  * Só é montado com o detalhe aberto, então os cards completos nunca rodam pela grade.
  */
 export function MeetingBriefingSection({ participantes }: { participantes: BriefingParticipante[] }) {
-  const comDeal = participantes.filter((p) => !!p.dealId);
+  // Um card por negócio (sócios compartilham o deal do titular).
+  const comDeal = participantes.filter((p, i, arr) => !!p.dealId && arr.findIndex((o) => o.dealId === p.dealId) === i);
   const [dealAberto, setDealAberto] = useState<string | null>(null);
   const { data: resumoMap } = useBriefingsResumo(comDeal.map((p) => p.dealId!));
   if (comDeal.length === 0) return null;
