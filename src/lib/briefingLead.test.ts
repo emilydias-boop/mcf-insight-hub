@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { rotuloFonte, estiloAtencao, geradoHa, fontesUsadas, type BriefingConteudo } from './briefingLead';
+import { tituloMomento, tituloPerguntas, rotuloFonte, estiloAtencao, geradoHa, fontesUsadas, type BriefingConteudo } from './briefingLead';
 
 assert.equal(rotuloFonte('qualificacao'), 'SDR');
 assert.equal(rotuloFonte('nota_closer'), 'closer');
@@ -26,5 +26,14 @@ const c: BriefingConteudo = {
   perguntas: [],
 };
 assert.deepEqual(fontesUsadas(c), ['anamnese', 'qualificacao', 'pagamento']);
+
+assert.equal(tituloMomento('R1'), 'BRIEFING PARA A R1');
+assert.equal(tituloMomento(null), 'BRIEFING PARA A R1');
+assert.equal(tituloMomento('R2'), 'BRIEFING PARA A R2');
+assert.equal(tituloMomento('POS_R1'), 'DEPOIS DA R1');
+assert.equal(tituloMomento('COMPLETO'), 'RESUMO COMPLETO');
+assert.equal(tituloPerguntas('R2'), 'Para a reunião');
+assert.equal(tituloPerguntas('POS_R1'), 'Próximos passos');
+assert.equal(tituloPerguntas('COMPLETO'), 'Próximos passos');
 
 console.log('briefingLead ok');

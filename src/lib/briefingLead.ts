@@ -54,3 +54,16 @@ export function geradoHa(iso: string | null | undefined, agora: Date = new Date(
   const d = Math.floor(h / 24);
   return d === 1 ? '1 dia' : `${d} dias`;
 }
+
+export type BriefingMomento = 'R1' | 'R2' | 'POS_R1' | 'COMPLETO';
+
+export function tituloMomento(m: string | null | undefined): string {
+  if (m === 'R2') return 'BRIEFING PARA A R2';
+  if (m === 'POS_R1') return 'DEPOIS DA R1';
+  if (m === 'COMPLETO') return 'RESUMO COMPLETO';
+  return 'BRIEFING PARA A R1';
+}
+
+export function tituloPerguntas(m: string | null | undefined): string {
+  return m === 'POS_R1' || m === 'COMPLETO' ? 'Próximos passos' : 'Para a reunião';
+}

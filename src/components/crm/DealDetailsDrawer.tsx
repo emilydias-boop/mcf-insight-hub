@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/button';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { CreditoEsteiraActions } from '@/components/crm/credito/CreditoEsteiraActions';
 import { BriefingLeadCard } from '@/components/crm/briefing/BriefingLeadCard';
+import { ResumoAnamneseCard } from '@/components/crm/briefing/ResumoAnamneseCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBUContext } from '@/contexts/BUContext';
 import { CONSORCIO_ORIGIN_IDS } from '@/hooks/useConsorcioPostMeeting';
@@ -194,6 +195,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
                 <TabsContent value="resumo" className="mt-0 p-4 space-y-3">
               {/* ===== BRIEFING IA (só aparece se existir linha em deal_briefing_ia) ===== */}
               <BriefingLeadCard dealId={deal.id} />
+              <ResumoAnamneseCard dealId={deal.id} contactId={deal.contact_id} />
               {/* ===== ORIGEM HARVEY (custom_fields.stage_harvey) ===== */}
               <HarveyOrigemCard customFields={deal.custom_fields as Record<string, unknown> | null} />
 
@@ -301,7 +303,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
               <SdrSummaryBlock deal={deal} contact={contact} />
               
               {/* ===== 5b. PERFIL DO LEAD (dados do webhook) ===== */}
-              <LeadProfileSection contactId={deal?.contact_id} />
+              <div id="perfil-do-lead"><LeadProfileSection contactId={deal?.contact_id} /></div>
 
               {/* ===== 5c. RELATÓRIO DO LEAD (documento imprimível) — só Consórcio ===== */}
               {isConsorcioDeal && (
