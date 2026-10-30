@@ -58,16 +58,21 @@ export function BriefingLeadCard({ dealId }: { dealId: string }) {
 
   const atualizar = async () => {
     setAtualizando(true);
+    const recarregar = () => {
+      qc.invalidateQueries({ queryKey: ['deal-briefing', dealId] });
+      qc.invalidateQueries({ queryKey: ['deal-briefing-resumo'] });
+    };
     try {
       const { error } = await supabase.rpc('solicitar_briefing', { p_deal_id: dealId });
       if (error) throw error;
-      qc.invalidateQueries({ queryKey: ['deal-briefing', dealId] });
+      recarregar();
       const { error: fErr } = await supabase.functions.invoke('briefing-lead-gerar', { body: { deal_id: dealId } });
       if (fErr) throw fErr;
+      recarregar();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Não foi possível atualizar o briefing');
     } finally {
-      qc.invalidateQueries({ queryKey: ['deal-briefing', dealId] });
+      recarregar();
       setAtualizando(false);
     }
   };

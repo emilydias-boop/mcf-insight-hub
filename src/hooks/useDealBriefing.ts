@@ -27,13 +27,14 @@ export function useBriefingsResumo(dealIds: string[]) {
     staleTime: 60_000,
     queryFn: async () => {
       const map = new Map<string, { resumo: string; alerta: string }>();
-      for (let i = 0; i < ids.length; i += 200) {
+      for (let i = 0; i < ids.length; i += 100) {
         const { data, error } = await supabase
-          .from('deal_briefing_ia').select('deal_id, conteudo').in('deal_id', ids.slice(i, i + 200));
+          .from('deal_briefing_ia')
+          .select('deal_id, resumo:conteudo->>resumo_curto, alerta:conteudo->>alerta_curto')
+          .in('deal_id', ids.slice(i, i + 100));
         if (error) throw error;
-        for (const r of data ?? []) {
-          const c = r.conteudo as { resumo_curto?: string; alerta_curto?: string } | null;
-          if (c?.resumo_curto || c?.alerta_curto) map.set(r.deal_id, { resumo: c.resumo_curto ?? '', alerta: c.alerta_curto ?? '' });
+        for (const r of (data ?? []) as Array<{ deal_id: string; resumo: string | null; alerta: string | null }>) {
+          if (r.resumo || r.alerta) map.set(r.deal_id, { resumo: r.resumo ?? '', alerta: r.alerta ?? '' });
         }
       }
       return map;
