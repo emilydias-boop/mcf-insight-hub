@@ -1,3 +1,5 @@
+import { BriefingAlertaInline } from '@/components/crm/briefing/BriefingAgendaLinhas';
+import { useBriefingsResumo } from '@/hooks/useDealBriefing';
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
@@ -98,6 +100,7 @@ export function R2CloserColumnCalendar({
     return ids;
   }, [meetings]);
   const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(r2DealIds);
+  const { data: briefingMap } = useBriefingsResumo(r2DealIds);
 
   const markingByAttendee = useMemo(() => {
     const map = new Map<string, R2SpecialMarking>();
@@ -361,6 +364,7 @@ export function R2CloserColumnCalendar({
                                         <span className="truncate font-medium">
                                           {att.name || att.deal?.contact?.name || "Lead"}
                                         </span>
+                                        <BriefingAlertaInline info={briefingMap?.get((att as any).deal_id || (att as any).deal?.id || '')} />
                                         <RefundedBadge date={(att as any).refunded_at} />
                                         {markingByAttendee.get(att.id) && (
                                           <span
@@ -434,6 +438,7 @@ export function R2CloserColumnCalendar({
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1">
                                       <span>• {att.name || att.deal?.contact?.name || "Lead"}</span>
+                                      <BriefingAlertaInline info={briefingMap?.get((att as any).deal_id || (att as any).deal?.id || '')} />
                                       <RefundedBadge date={(att as any).refunded_at} />
                                       {(() => {
                                         const seg = String((att.deal as any)?.icp_segment ?? "").trim().toUpperCase();

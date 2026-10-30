@@ -1,4 +1,5 @@
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
+import { MeetingBriefingSection } from '@/components/crm/briefing/MeetingBriefingSection';
 import { useState, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
@@ -938,6 +939,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 Clique em um participante para ver suas informações e notas específicas
               </p>
             </div>
+
+            <MeetingBriefingSection
+              participantes={participants.map((p, i) => ({ key: p.id || String(i), nome: p.name, dealId: p.dealId ?? null, contactId: p.contactId ?? null }))}
+            />
 
             <Separator />
 

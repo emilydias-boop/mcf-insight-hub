@@ -1,3 +1,4 @@
+import { MeetingBriefingSection } from "@/components/crm/briefing/MeetingBriefingSection";
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
@@ -491,6 +492,15 @@ export function R2MeetingDetailDrawer({
                 </div>
               </div>
             )}
+
+            <MeetingBriefingSection
+              participantes={(meeting.attendees || []).map((a: any) => ({
+                key: a.id,
+                nome: a.attendee_name || a.name || a.deal?.contact?.name || 'Lead',
+                dealId: a.deal_id || a.deal?.id || null,
+                contactId: a.deal?.contact_id || a.deal?.contact?.id || null,
+              }))}
+            />
 
             <Separator />
 

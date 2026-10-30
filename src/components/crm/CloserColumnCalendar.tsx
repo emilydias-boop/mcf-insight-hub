@@ -1,3 +1,5 @@
+import { BriefingLinhas } from '@/components/crm/briefing/BriefingAgendaLinhas';
+import { useBriefingsResumo } from '@/hooks/useDealBriefing';
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
@@ -122,6 +124,8 @@ export function CloserColumnCalendar({
       return hasConfiguredSlot || hasMeeting;
     });
   }, [closers, daySlots, meetings]);
+
+  const { data: briefingMap } = useBriefingsResumo(meetings.flatMap(m => (m.attendees || []).map(a => a.deal_id || m.deal_id || '')));
 
   // Coletar todos os attendees para detecção batch de Outside
   const attendeesForOutsideCheck = useMemo(() => {
@@ -475,6 +479,7 @@ export function CloserColumnCalendar({
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1 flex-wrap">
                                       <span>• {att.attendee_name || att.contact?.name || "Lead"}</span>
+                                      <BriefingLinhas info={att.deal_id ? briefingMap?.get(att.deal_id) : undefined} comResumo={false} />
                                       <RefundedBadge date={(att as any).refunded_at} />
                                       <LeadSegmentBadge
                                         segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}

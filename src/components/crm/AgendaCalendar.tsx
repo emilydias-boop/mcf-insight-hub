@@ -1,3 +1,4 @@
+import { BriefingAlertaInline } from '@/components/crm/briefing/BriefingAgendaLinhas';
 import { useBriefingsResumo } from '@/hooks/useDealBriefing';
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
@@ -1362,6 +1363,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                   <span className="truncate flex-1">
                                                     {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                   </span>
+<BriefingAlertaInline info={att.deal_id ? briefingMap?.get(att.deal_id) : undefined} />
                                                   <RefundedBadge date={(att as any).refunded_at} />
                                                   <LeadSegmentBadge
                                                     segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
@@ -1706,6 +1708,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                         <span className="truncate flex-1">
                                                           {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
+<BriefingAlertaInline info={att.deal_id ? briefingMap?.get(att.deal_id) : undefined} />
                                                         <RefundedBadge date={(att as any).refunded_at} />
                                                         <LeadSegmentBadge
                                                           segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
@@ -1768,6 +1771,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                     <span className="truncate flex-1">
                                                       {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                     </span>
+<BriefingAlertaInline info={att.deal_id ? briefingMap?.get(att.deal_id) : undefined} />
                                                     <RefundedBadge date={(att as any).refunded_at} />
                                                     <LeadSegmentBadge
                                                       segment={att.deal?.icp_segment ?? firstMeeting.deal?.icp_segment}
@@ -1830,6 +1834,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                 sdrName: string;
                                                 sdrId: string;
                                                 icpSegment: string | null;
+                                                deal_id?: string | null;
                                               };
                                               
                                               // Flatten all attendees with their SDR info
@@ -1844,7 +1849,8 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       contact: att.contact,
                                                       sdrName: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name || 'N/A',
                                                       sdrId: att.booked_by || m.booked_by || 'unknown',
-                                                      icpSegment: att.deal?.icp_segment ?? m.deal?.icp_segment ?? null
+                                                      icpSegment: att.deal?.icp_segment ?? m.deal?.icp_segment ?? null,
+                                                      deal_id: att.deal_id || null,
                                                     }))
                                                   : [{
                                                       id: m.id,
@@ -1855,7 +1861,8 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       contact: m.deal?.contact,
                                                       sdrName: m.booked_by_profile?.full_name || 'N/A',
                                                       sdrId: m.booked_by || 'unknown',
-                                                      icpSegment: m.deal?.icp_segment ?? null
+                                                      icpSegment: m.deal?.icp_segment ?? null,
+                                                      deal_id: m.deal_id || null,
                                                     }]
                                               );
                                               
@@ -1879,6 +1886,7 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       <div className="flex items-center gap-1.5">
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
                                                         <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
+<BriefingAlertaInline info={att.deal_id ? briefingMap?.get(att.deal_id) : undefined} />
                                                         <RefundedBadge date={(att as any).refunded_at} />
                                                         <LeadSegmentBadge segment={att.icpSegment} size="sm" />
                                                         {att.is_partner && <Badge variant="outline" className="text-[8px] px-1 py-0">Sócio</Badge>}

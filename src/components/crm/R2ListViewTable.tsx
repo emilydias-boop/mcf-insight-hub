@@ -1,3 +1,5 @@
+import { BriefingLinhas } from '@/components/crm/briefing/BriefingAgendaLinhas';
+import { useBriefingsResumo } from '@/hooks/useDealBriefing';
 import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { 
@@ -70,6 +72,7 @@ export function R2ListViewTable({
     [rows]
   );
   const { data: contractPaidClosersByDeal } = useContractPaidClosersByDeal(dealIds);
+  const { data: briefingMap } = useBriefingsResumo(dealIds.filter(Boolean) as string[]);
 
   // Detecção de leads Outside (mesma lógica da Agenda R1)
   const attendeesForOutsideCheck = useMemo(() => rows.map(({ meeting, attendee, key }) => ({
@@ -165,6 +168,7 @@ export function R2ListViewTable({
                         </Badge>
                       )}
                     </div>
+                    <BriefingLinhas info={briefingMap?.get(((attendee as any).deal_id || (attendee as any).deal?.id || '') as string)} />
                     {contactPhone && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Phone className="h-3 w-3" />
