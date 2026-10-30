@@ -133,6 +133,7 @@ const ExamDetail = lazy(() => import("./pages/rh/ExamDetail"));
 const FinanceiroAReceber = lazy(() => import("./pages/financeiro/AReceber"));
 const FinanceiroAReceberDetalhe = lazy(() => import("./pages/financeiro/AReceberDetalhe"));
 const MeuRH = lazy(() => import("./pages/MeuRH"));
+const PresencaDoDia = lazy(() => import("./pages/PresencaDoDia"));
 const MinhasReunioes = lazy(() => import("./pages/sdr/MinhasReunioes"));
 const ReunioesEquipe = lazy(() => import("./pages/crm/ReunioesEquipe"));
 const SdrMeetingsDetailPage = lazy(() => import("./pages/crm/SdrMeetingsDetailPage"));
@@ -405,6 +406,7 @@ const App = () => (
               <Route path="financeiro/a-receber/:id" element={<ArAccessGuard><FinanceiroAReceberDetalhe /></ArAccessGuard>} />
               
               <Route path="meu-rh" element={<MeuRH />} />
+              <Route path="presenca-do-dia" element={<PresencaDoDia />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
               <Route path="patrimonio/meus-equipamentos" element={<MyEquipmentPage />} />
               <Route path="patrimonio/relatorios" element={<ResourceGuard resource="patrimonio"><PatrimonioRelatorios /></ResourceGuard>} />
