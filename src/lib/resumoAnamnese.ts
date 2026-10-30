@@ -8,6 +8,7 @@ export interface ResumoLinha { rotulo: string; valor: string; qualificacao?: str
 export interface ResumoAnamnese {
   preenchidaEm: string;
   perfil: string;
+  texto: string;
   alertas: ResumoAlerta[];
   linhas: ResumoLinha[];
 }
@@ -42,6 +43,58 @@ const OBJETIVOS: Record<string, string> = {
   leilao_imobiliario: 'Leilão de imóveis', intermediar_credito: 'Intermediar crédito', dividendos_imobiliarios: 'Dividendos imobiliários',
 };
 const URGENCIA: Record<string, string> = { imediata: 'Quer começar já', '1_3': 'Em 1 a 3 meses', '3_6': 'Em 3 a 6 meses', sem_pressa: 'Sem pressa' };
+
+// Rótulos usados só no texto corrido do SDR.
+const EXPERIENCIA_TEXTO: Record<string, string> = { nenhuma: 'nenhuma', moradia: 'para moradia', investidor: 'como investidor', profissional: 'profissional' };
+const URGENCIA_TEXTO: Record<string, string> = { imediata: 'quer começar já', '1_3': 'quer começar em 1 a 3 meses', '3_6': 'quer começar em 3 a 6 meses', sem_pressa: 'sem pressa' };
+
+const minuscula = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+const capitalizar = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/** "BA - Capim Grosso" → "Capim Grosso (BA)"; outros formatos passam sem mudança. */
+function cidadeTexto(v: unknown): string {
+  const s = str(v);
+  if (!s) return '';
+  const m = s.match(/^([A-Za-z]{2})\s*[-–]\s*(.+)$/);
+  return m ? `${m[2].trim()} (${m[1].toUpperCase()})` : s;
+}
+
+/** Texto corrido (2 a 4 frases, regra pura): só o que existe no cadastro. */
+function montarTexto(p: Record<string, unknown>, agora: Date): string {
+  const frases: string[] = [];
+
+  const cidade = cidadeTexto(p.estado_cidade);
+  const anos = idade(p.data_nascimento, agora);
+  const quem = [str(p.profissao), anos !== null ? `${anos} anos` : '', cidade ? `de ${cidade}` : ''].filter(Boolean).join(', ');
+  if (quem) frases.push(`${quem}.`);
+
+  const renda = num(p.renda_bruta);
+  if (renda !== null) {
+    const fonte = normalizarFonteRenda(p.fonte_renda);
+    const emp = typeof p.is_empresario === 'boolean' ? (p.is_empresario ? 'é empresário' : 'não é empresário') : '';
+    frases.push([`Renda de ${brl(renda)}${fonte ? ` (${fonte})` : ''}`, emp].filter(Boolean).join(', ') + '.');
+  }
+
+  const jc = str(p.ja_constroi);
+  const ex = str(p.experiencia_imobiliaria);
+  const exp = [jc ? JA_CONSTROI[jc] ?? jc : '', ex ? `experiência ${EXPERIENCIA_TEXTO[ex] ?? ex}` : ''].filter(Boolean).join(', ');
+  if (exp) frases.push(`${exp}.`);
+
+  const objs = listar(p.objetivos_principais).map((o) => minuscula(OBJETIVOS[o] ?? o));
+  const meta = num(p.renda_passiva_meta);
+  const quer = [objs.length ? `Quer ${objs.join(' e ')}` : '', meta !== null ? `com meta de renda passiva de ${brl(meta)}` : ''].filter(Boolean).join(', ');
+  if (quer) frases.push(`${quer}.`);
+
+  const fa = num(p.faixa_aporte);
+  const u = str(p.urgencia_operacao);
+  const aporte = fa !== null ? `Faixa de aporte de ${brl(fa)} mil` : '';
+  const prazo = u ? URGENCIA_TEXTO[u] ?? u : '';
+  if (aporte && prazo) frases.push(`${aporte}, ${prazo}.`);
+  else if (aporte) frases.push(`${aporte}.`);
+  else if (prazo) frases.push(`${capitalizar(prazo)}.`);
+
+  return frases.join(' ');
+}
 
 function dataSP(iso: unknown): string {
   const s = str(iso);
@@ -108,5 +161,5 @@ export function montarResumoAnamnese(profile: AnamneseProfile, qualificacao?: Qu
   const u = str(p.urgencia_operacao);
   add('Urgência', u ? URGENCIA[u] ?? u : '');
 
-  return { preenchidaEm: dataSP(p.data_cadastro) || dataSP(p.created_at), perfil, alertas, linhas };
+  return { preenchidaEm: dataSP(p.data_cadastro) || dataSP(p.created_at), perfil, texto: montarTexto(p, agora), alertas, linhas };
 }
