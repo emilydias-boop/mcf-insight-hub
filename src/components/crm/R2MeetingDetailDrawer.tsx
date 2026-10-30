@@ -1,3 +1,4 @@
+import { MeetingBriefingSection } from "@/components/crm/briefing/MeetingBriefingSection";
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';

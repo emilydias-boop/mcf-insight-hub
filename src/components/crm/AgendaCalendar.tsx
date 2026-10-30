@@ -1861,7 +1861,8 @@ onClick={(e) => { e.stopPropagation(); onSelectMeeting(firstMeeting); }}
                                                       contact: m.deal?.contact,
                                                       sdrName: m.booked_by_profile?.full_name || 'N/A',
                                                       sdrId: m.booked_by || 'unknown',
-                                                      icpSegment: m.deal?.icp_segment ?? null
+                                                      icpSegment: m.deal?.icp_segment ?? null,
+                                                      deal_id: m.deal_id || null,
                                                     }]
                                               );
                                               
