@@ -15397,6 +15397,189 @@ export type Database = {
           },
         ]
       }
+      presenca_config_bu: {
+        Row: {
+          bu: string
+          created_at: string
+          horario_aviso: string
+          horario_corte: string
+          leads_por_reuniao: number
+          lider_profile_id: string | null
+          reunioes_por_closer: number
+          updated_at: string
+        }
+        Insert: {
+          bu: string
+          created_at?: string
+          horario_aviso?: string
+          horario_corte?: string
+          leads_por_reuniao: number
+          lider_profile_id?: string | null
+          reunioes_por_closer: number
+          updated_at?: string
+        }
+        Update: {
+          bu?: string
+          created_at?: string
+          horario_aviso?: string
+          horario_corte?: string
+          leads_por_reuniao?: number
+          lider_profile_id?: string | null
+          reunioes_por_closer?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presenca_config_bu_lider_profile_id_fkey"
+            columns: ["lider_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presenca_config_bu_lider_profile_id_fkey"
+            columns: ["lider_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      presenca_config_pessoas: {
+        Row: {
+          bu: string | null
+          created_at: string
+          id: string
+          observacao: string | null
+          profile_id: string
+          regra: string
+          tipo: string | null
+          updated_at: string
+        }
+        Insert: {
+          bu?: string | null
+          created_at?: string
+          id?: string
+          observacao?: string | null
+          profile_id: string
+          regra: string
+          tipo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bu?: string | null
+          created_at?: string
+          id?: string
+          observacao?: string | null
+          profile_id?: string
+          regra?: string
+          tipo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presenca_config_pessoas_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presenca_config_pessoas_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      presenca_confirmacoes: {
+        Row: {
+          bu: string
+          confirmado_em: string
+          confirmado_por: string | null
+          created_at: string
+          data: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          bu: string
+          confirmado_em?: string
+          confirmado_por?: string | null
+          created_at?: string
+          data: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          bu?: string
+          confirmado_em?: string
+          confirmado_por?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      presenca_correcoes: {
+        Row: {
+          bu: string
+          corrigido_em: string
+          corrigido_por: string | null
+          created_at: string
+          data: string
+          id: string
+          motivo: string
+          presente: boolean
+          profile_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          bu: string
+          corrigido_em?: string
+          corrigido_por?: string | null
+          created_at?: string
+          data: string
+          id?: string
+          motivo: string
+          presente: boolean
+          profile_id: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          bu?: string
+          corrigido_em?: string
+          corrigido_por?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          motivo?: string
+          presente?: boolean
+          profile_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presenca_correcoes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presenca_correcoes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       process_rules: {
         Row: {
           applies_from: string
@@ -21204,6 +21387,27 @@ export type Database = {
         Args: { numero_parcela: number; tipo_produto: string }
         Returns: number
       }
+      _presenca_pessoas: {
+        Args: { p_bu: string; p_data: string }
+        Returns: {
+          conta: boolean
+          corr_em: string
+          corr_motivo: string
+          corr_por: string
+          corr_presente: boolean
+          meta: number
+          nome: string
+          origem: string
+          papel: string
+          pessoa_id: string
+          presente: boolean
+          presente_login: boolean
+          primeiro_acesso: string
+          profile_id: string
+          regra: string
+          tipo: string
+        }[]
+      }
       _rdo_m: {
         Args: {
           p_agregacao: string
@@ -21452,6 +21656,7 @@ export type Database = {
       }
       canal_do_produto: { Args: { p_nome: string }; Returns: string }
       canal_entrada_vendas: { Args: { p_ids: string[] }; Returns: Json }
+      capacidade_dia: { Args: { p_bu: string; p_data: string }; Returns: Json }
       carrinho_acompanhamento_salvar: {
         Args: {
           p_campos: Json
@@ -21911,6 +22116,7 @@ export type Database = {
           tem_importacao: boolean
         }[]
       }
+      equipe_agora: { Args: { p_data?: string }; Returns: Json }
       evaluate_sdr_reschedule: {
         Args: { _bu: string; _deal_id: string; _meeting_type?: string }
         Returns: Json
@@ -23548,6 +23754,12 @@ export type Database = {
         Returns: undefined
       }
       pos_venda_tem_acesso: { Args: never; Returns: boolean }
+      presenca_e_lider: { Args: { p_bu: string }; Returns: boolean }
+      presenca_lista_dia: {
+        Args: { p_bu: string; p_data: string }
+        Returns: Json
+      }
+      presenca_pode_ver: { Args: { p_bu: string }; Returns: boolean }
       propagar_qualificacao: {
         Args: {
           _deal_id: string
