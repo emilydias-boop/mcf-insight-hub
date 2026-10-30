@@ -1,3 +1,4 @@
+import { usePresencaConfig } from '@/hooks/usePresencaDia';
 import mcfLogo from "@/assets/Group_1321316528.png.asset.json";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -416,6 +417,8 @@ interface PersonalMenuItem {
   url: string;
   icon: any;
   requiredRoles?: AppRole[];
+  /** Só para quem a RLS de presenca_config_bu devolve linhas (líder da BU ou admin). */
+  presencaLider?: boolean;
 }
 
 const personalMenuItems: PersonalMenuItem[] = [
@@ -423,6 +426,7 @@ const personalMenuItems: PersonalMenuItem[] = [
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt },
   { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos", icon: Laptop },
+  { title: "Presença do dia", url: "/presenca-do-dia", icon: UserCircle, presencaLider: true },
   
 ];
 
@@ -649,8 +653,11 @@ export function AppSidebar() {
     });
   };
 
+  const { data: presencaConfigs } = usePresencaConfig();
+
   // Filtragem de itens pessoais
   const filteredPersonalItems = personalMenuItems.filter((item) => {
+    if (item.presencaLider) return !!presencaConfigs?.length;
     if (!item.requiredRoles) return true;
     if (isAdmin) return true;
     return role && item.requiredRoles.some(r => (allRoles as string[]).includes(r));

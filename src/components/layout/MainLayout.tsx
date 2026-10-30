@@ -15,6 +15,7 @@ import { AutoDialerInCallBanner } from "@/components/sdr/AutoDialerInCallBanner"
 import { AutoDialerOutcomeBanner } from "@/components/sdr/AutoDialerOutcomeBanner";
 import { AutoDialerDealDrawer } from "@/components/sdr/AutoDialerDealDrawer";
 import { Menu } from "lucide-react";
+import { PresencaAvisoBanner } from "@/components/presenca/PresencaAvisoBanner";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { usePageAccessLog } from "@/hooks/usePageAccessLog";
@@ -64,6 +65,7 @@ export function MainLayout() {
               <div className="flex-1" />
               <RealTimeAlerts />
             </header>
+            <PresencaAvisoBanner />
             <div className="flex-1 overflow-auto p-2 sm:p-4 md:p-5">
               <Outlet />
             </div>
