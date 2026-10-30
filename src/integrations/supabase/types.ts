@@ -10543,6 +10543,68 @@ export type Database = {
         }
         Relationships: []
       }
+      deal_briefing_ia: {
+        Row: {
+          conteudo: Json | null
+          created_at: string
+          deal_id: string
+          erro: string | null
+          fontes_hash: string | null
+          gerado_em: string | null
+          modelo: string | null
+          momento: string | null
+          motivo: string | null
+          processado_em: string | null
+          processando_desde: string | null
+          status: string
+          sujo_em: string | null
+          tentativas: number
+          updated_at: string
+        }
+        Insert: {
+          conteudo?: Json | null
+          created_at?: string
+          deal_id: string
+          erro?: string | null
+          fontes_hash?: string | null
+          gerado_em?: string | null
+          modelo?: string | null
+          momento?: string | null
+          motivo?: string | null
+          processado_em?: string | null
+          processando_desde?: string | null
+          status?: string
+          sujo_em?: string | null
+          tentativas?: number
+          updated_at?: string
+        }
+        Update: {
+          conteudo?: Json | null
+          created_at?: string
+          deal_id?: string
+          erro?: string | null
+          fontes_hash?: string | null
+          gerado_em?: string | null
+          modelo?: string | null
+          momento?: string | null
+          motivo?: string | null
+          processado_em?: string | null
+          processando_desde?: string | null
+          status?: string
+          sujo_em?: string | null
+          tentativas?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_briefing_ia_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: true
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deal_produtos_adquiridos: {
         Row: {
           created_at: string | null
@@ -21342,6 +21404,10 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: Json
       }
+      briefing_marcar_manual: {
+        Args: { p_deal_id: string }
+        Returns: undefined
+      }
       build_consorcio_sale_webhook_payload: {
         Args: {
           card: Database["public"]["Tables"]["consortium_cards"]["Row"]
@@ -23328,6 +23394,7 @@ export type Database = {
         Returns: undefined
       }
       mkt_url_param: { Args: { p_key: string; p_url: string }; Returns: string }
+      montar_contexto_briefing: { Args: { p_deal_id: string }; Returns: Json }
       nome_usuario: { Args: { p_id: string }; Returns: string }
       nomes_compativeis: { Args: { a: string; b: string }; Returns: boolean }
       normalize_document: { Args: { doc: string }; Returns: string }
@@ -23598,6 +23665,58 @@ export type Database = {
         }
         Returns: number
       }
+      reivindicar_briefing: {
+        Args: { p_deal_id: string }
+        Returns: {
+          conteudo: Json | null
+          created_at: string
+          deal_id: string
+          erro: string | null
+          fontes_hash: string | null
+          gerado_em: string | null
+          modelo: string | null
+          momento: string | null
+          motivo: string | null
+          processado_em: string | null
+          processando_desde: string | null
+          status: string
+          sujo_em: string | null
+          tentativas: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "deal_briefing_ia"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reivindicar_briefings: {
+        Args: { _lote?: number }
+        Returns: {
+          conteudo: Json | null
+          created_at: string
+          deal_id: string
+          erro: string | null
+          fontes_hash: string | null
+          gerado_em: string | null
+          modelo: string | null
+          momento: string | null
+          motivo: string | null
+          processado_em: string | null
+          processando_desde: string | null
+          status: string
+          sujo_em: string | null
+          tentativas: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "deal_briefing_ia"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       relatorio_closer_etapas: {
         Args: {
           _ate?: string
@@ -23706,6 +23825,19 @@ export type Database = {
           reunioes_realizadas: number
         }[]
       }
+      salvar_briefing: {
+        Args: {
+          p_conteudo: Json
+          p_deal_id: string
+          p_erro: string
+          p_gerou: boolean
+          p_hash: string
+          p_modelo: string
+          p_momento: string
+          p_status: string
+        }
+        Returns: undefined
+      }
       salvar_metas_agendamento: {
         Args: { p_ano_mes: string; p_itens: Json }
         Returns: number
@@ -23809,6 +23941,7 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      solicitar_briefing: { Args: { p_deal_id: string }; Returns: Json }
       sonax_casar_evento_com_campanha: {
         Args: { _event_id: string }
         Returns: string
