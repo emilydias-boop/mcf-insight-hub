@@ -258,9 +258,9 @@ function CloserList({ rows }: { rows: ComAvatar<TVCloserRankingRow>[] }) {
                 <div className="text-white font-bold text-[1.25rem] truncate">{(r.name ?? "").trim()}</div>
                 <div className="mt-[0.4rem]"><Barra pct={(Number(r.mes ?? 0) / max) * 100} cor={red ? VERMELHO : ACCENT} /></div>
               </div>
-              <div className="text-right shrink-0">
-                <div className="font-black tabular-nums text-[2.4rem] leading-none" style={{ color: red ? VERMELHO : ACCENT }}>{fmt(r.mes)}</div>
-                <div className="text-white/45 text-[0.95rem] font-semibold tabular-nums">hoje {fmt(r.dia)}</div>
+              <div className="shrink-0 whitespace-nowrap flex items-baseline justify-end gap-[0.2rem]">
+                <span className="font-black tabular-nums text-[2.4rem] leading-none" style={{ color: red ? VERMELHO : ACCENT }}>{fmt(r.dia)}</span>
+                <span className="font-bold tabular-nums text-[1.3rem] leading-none" style={{ color: "rgba(255,255,255,0.45)" }}>/{fmt(r.mes)}</span>
               </div>
             </div>
           </div>
@@ -284,9 +284,9 @@ function LigacaoList({ rows }: { rows: ComAvatar<TVLigacaoRankingRow>[] }) {
             <div className="text-white font-bold text-[1.05rem] truncate">{nomeCurto(r.sdr_name)}</div>
             <div className="mt-[0.2rem]"><Barra pct={(Number(r.mes?.total ?? 0) / max) * 100} h="0.35rem" /></div>
           </div>
-          <div className="text-right shrink-0">
-            <div className="font-black tabular-nums text-[1.5rem] leading-none" style={{ color: ACCENT }}>{fmt(r.mes?.total)}</div>
-            <div className="text-white/45 text-[0.85rem] font-semibold tabular-nums">hoje {fmt(r.dia?.total)}</div>
+          <div className="shrink-0 whitespace-nowrap flex items-baseline justify-end gap-[0.2rem]">
+            <span className="font-black tabular-nums text-[1.5rem] leading-none" style={{ color: ACCENT }}>{fmt(r.dia?.total)}</span>
+            <span className="font-bold tabular-nums text-[0.85rem] leading-none" style={{ color: "rgba(255,255,255,0.45)" }}>/{fmt(r.mes?.total)}</span>
           </div>
         </div>
       ))}
@@ -429,7 +429,7 @@ export default function TVIncorporadorEquipe() {
           <Card icon={<BarChart3 size="1.7rem" />} titulo="Desempenho SDR" sub="Agendamentos Lead A · hoje / mês">
             <SdrChart rows={data.sdr_ranking ?? []} />
           </Card>
-          <Card icon={<Trophy size="1.7rem" />} titulo="Ranking Closer" sub="Contratos pagos">
+          <Card icon={<Trophy size="1.7rem" />} titulo="Ranking Closer" sub="Contratos pagos · hoje / mês">
             <CloserList rows={data.closer_ranking ?? []} />
           </Card>
         </div>
@@ -443,7 +443,7 @@ export default function TVIncorporadorEquipe() {
               <Regua r={regua} />
             </Card>
           ) : null}
-          <Card icon={<Phone size="1.7rem" />} titulo="Ranking Ligações"
+          <Card icon={<Phone size="1.7rem" />} titulo="Ranking Ligações" sub="Ligações · hoje / mês"
             style={{ borderColor: "rgba(198,255,0,0.6)", boxShadow: "0 0 1.6rem rgba(198,255,0,0.15)" }}>
             <LigacaoList rows={data.ligacao_ranking ?? []} />
           </Card>
