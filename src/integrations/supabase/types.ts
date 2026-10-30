@@ -23867,6 +23867,7 @@ export type Database = {
           resultado: string
         }[]
       }
+      tv_avatar_por_nome: { Args: { _nome: string }; Returns: string }
       tv_consorcio_agenda: {
         Args: { _ate: string; _de: string }
         Returns: Json
@@ -23900,6 +23901,7 @@ export type Database = {
         Returns: Json
       }
       tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
+      tv_incorporador_com_avatares: { Args: { _p: Json }; Returns: Json }
       tv_incorporador_ligacao_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_payload: { Args: never; Returns: Json }
       tv_incorporador_regua_r1: { Args: { _today?: string }; Returns: Json }
