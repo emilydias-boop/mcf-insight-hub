@@ -17,15 +17,19 @@ export const useUsers = () => {
       // quem nunca acessou o sistema.
       const { data: logins } = await supabase
         .from("profiles")
-        .select("id, last_login_at");
+        .select("id, last_login_at, avatar_url");
 
       const loginMap = new Map(
         (logins || []).map((p: any) => [p.id, p.last_login_at as string | null])
+      );
+      const avatarMap = new Map(
+        (logins || []).map((p: any) => [p.id, (p.avatar_url as string | null) ?? null])
       );
 
       return (data || []).map((u: any) => ({
         ...u,
         last_login_at: loginMap.get(u.user_id) ?? null,
+        avatar_url: avatarMap.get(u.user_id) ?? null,
       })) as UserSummary[];
     },
   });

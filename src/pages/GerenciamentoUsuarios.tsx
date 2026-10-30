@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Eye, Loader2, AlertTriangle } from "lucide-react";
 import { ROLE_LABELS } from "@/types/user-management";
 import { cn } from "@/lib/utils";
@@ -122,6 +122,9 @@ export default function GerenciamentoUsuarios() {
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <Avatar>
+                                {(user as any).avatar_url && (
+                                  <AvatarImage src={(user as any).avatar_url} alt={user.full_name || ""} className="object-cover" />
+                                )}
                                 <AvatarFallback className="bg-primary/10 text-primary">
                                   {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
                                 </AvatarFallback>
