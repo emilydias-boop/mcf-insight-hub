@@ -209,9 +209,10 @@ function SdrChart({ rows }: { rows: ComAvatar<TVSdrRankingRow>[] }) {
           return (
             <div key={r.sdr_name + i} className="flex flex-col justify-end items-center min-w-0 pt-[2rem]">
               <div className="flex items-baseline gap-[0.3rem] whitespace-nowrap">
-                <span className="font-black tabular-nums text-[1.9rem] leading-none" style={{ color: cor }}>{fmt(v)}</span>
+                <span className="font-black tabular-nums text-[1.9rem] leading-none" style={{ color: cor }}>{fmt(r.dia)}</span>
+                <span className="font-bold tabular-nums text-[1.05rem] leading-none" style={{ color: "rgba(255,255,255,0.45)" }}>/{fmt(v)}</span>
               </div>
-              <div className="text-white/45 text-[0.9rem] font-semibold tabular-nums mb-[0.3rem]">hoje {fmt(r.dia)}</div>
+              <div className="mb-[0.3rem]" />
               <div className="w-[70%] rounded-t-lg transition-all duration-700" style={{ height: `calc(${pct}% - 3.6rem)`, minHeight: "0.3rem", background: bg }} />
             </div>
           );
@@ -425,7 +426,7 @@ export default function TVIncorporadorEquipe() {
 
         {/* Linha 2 */}
         <div className="grid gap-[1.2rem] min-h-0" style={{ gridTemplateColumns: "2fr 1fr" }}>
-          <Card icon={<BarChart3 size="1.7rem" />} titulo="Desempenho SDR" sub="Agendamentos Lead A · mês e hoje">
+          <Card icon={<BarChart3 size="1.7rem" />} titulo="Desempenho SDR" sub="Agendamentos Lead A · hoje / mês">
             <SdrChart rows={data.sdr_ranking ?? []} />
           </Card>
           <Card icon={<Trophy size="1.7rem" />} titulo="Ranking Closer" sub="Contratos pagos">
