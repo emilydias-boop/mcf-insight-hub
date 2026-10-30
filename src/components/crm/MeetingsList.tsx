@@ -1,3 +1,5 @@
+import { BriefingLinhas } from '@/components/crm/briefing/BriefingAgendaLinhas';
+import { useBriefingsResumo } from '@/hooks/useDealBriefing';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MoreHorizontal, CheckCircle, XCircle, AlertTriangle, ExternalLink, ArrowRightLeft } from 'lucide-react';
@@ -247,6 +249,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
     }
     return rows;
   }, [meetings, statusFilter, searchTerm, channelFilter, isCredito]);
+  const { data: briefingMap } = useBriefingsResumo(attendeeRows.map(r => r.dealId || ''));
 
   /**
    * Grava o status no ATTENDEE (não no slot) e sincroniza o slot apenas para
@@ -370,6 +373,7 @@ export function MeetingsList({ meetings, isLoading, onViewDeal, statusFilter, se
                         </Badge>
                       )}
                     </div>
+                    <BriefingLinhas info={row.dealId ? briefingMap?.get(row.dealId) : undefined} />
                     {row.attendeePhone && (
                       <span className="text-sm text-muted-foreground">{row.attendeePhone}</span>
                     )}
