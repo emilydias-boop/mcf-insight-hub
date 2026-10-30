@@ -1,41 +1,34 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  AreaChart, BarChart3, CalendarCheck, CalendarDays, Coins, FileCheck, Trophy, Users, Zap,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { TVShell, TVMsg } from "@/components/public/TVTeamShared";
-
+import { TVMsg } from "@/components/public/TVTeamShared";
 
 const TOKEN = "24151d71-1f8e-44b9-9761-b01f1fca7bec";
 
-const ACCENT = "#bfff00";
+const ACCENT = "#c6ff00";
 const ACCENT_SDR = "#ff7a00";
+const CARD_BG = "rgba(255,255,255,0.03)";
+const CARD_BORDER = "rgba(255,255,255,0.08)";
+const TRILHO = "rgba(255,255,255,0.08)";
 
-interface ContratosBloco {
-  cotas: number;
-  clientes: number;
-  credito: number;
-  ticket: number;
-  por_closer?: unknown[];
-}
-interface AgendaBloco {
-  agendadas: number;
-  agendamentos: number;
-  realizadas: number;
-  no_show: number;
-  por_sdr?: unknown[];
-}
-interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number }
-interface RankingSdr { nome: string; agendadas: number; agendamentos: number; realizadas: number }
-
+interface ContratosBloco { cotas: number; clientes: number; credito: number; ticket: number; por_closer?: unknown[] }
+interface AgendaBloco { agendadas: number; agendamentos: number; realizadas: number; no_show: number; por_sdr?: unknown[] }
+interface RankingCloser { nome: string; cotas: number; clientes: number; credito: number; avatar_url?: string | null }
+interface RankingSdr { nome: string; agendadas: number; agendamentos: number; realizadas: number; avatar_url?: string | null }
 
 interface SemanaItem {
-  indice: number;      // 1 a 4
-  inicio: string;      // ISO date
-  fim: string;         // ISO date
-  atual: boolean;      // semana que contém hoje
-  futura: boolean;     // ainda não começou
+  indice: number;
+  inicio: string;
+  fim: string;
+  atual: boolean;
+  futura: boolean;
   credito: number;
   cotas: number;
-  meta: number | null; // meta do mês / 4
+  meta?: number | null;
+  dias_uteis?: number | null;
 }
 
 interface Payload {
@@ -44,11 +37,7 @@ interface Payload {
   snapshot_em?: string;
   snapshot_atrasado?: boolean;
   meta_credito_mes?: number | null;
-  meta_agendamento?: {
-    dia: number | null;
-    mes: number | null;
-    dias_uteis: number;
-  } | null;
+  meta_agendamento?: { dia: number | null; mes: number | null; dias_uteis: number } | null;
   contratos?: { dia?: ContratosBloco; mes?: ContratosBloco };
   agenda?: { dia?: AgendaBloco; mes?: AgendaBloco };
   ranking_closer?: RankingCloser[];
@@ -59,179 +48,183 @@ interface Payload {
     mes: { cotas: number; clientes: number; credito: number };
   } | null;
   semanas?: SemanaItem[] | null;
-  semanas_producao?: Array<{
-    indice: number;
-    inicio: string;
-    fim: string;
-    atual: boolean;
-    futura: boolean;
-    credito: number;
-    cotas: number;
-  }> | null;
+  semanas_producao?: SemanaItem[] | null;
   error?: string;
 }
 
-function abreviarBRL(v: number) {
+/* ---------- formatação ---------- */
+
+function partesBRL(v: number): { num: string; sufixo: string } {
   const n = Number(v || 0);
   if (Math.abs(n) >= 1_000_000)
-    return `R$ ${(n / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}mi`;
+    return { num: (n / 1_000_000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }), sufixo: "mi" };
   if (Math.abs(n) >= 1_000)
-    return `R$ ${(n / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} mil`;
-  return `R$ ${n.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
+    return { num: Math.round(n / 1_000).toLocaleString("pt-BR"), sufixo: "mil" };
+  return { num: "0", sufixo: "" };
+}
+function abreviarBRL(v: number) {
+  const p = partesBRL(v);
+  return p.sufixo ? `R$ ${p.num} ${p.sufixo}` : "R$ 0";
+}
+const num = (v: number) => Number(v || 0).toLocaleString("pt-BR");
+function pct(parte: number, total: number) {
+  if (!total) return 0;
+  return (parte / total) * 100;
+}
+const pctTxt = (p: number) => `${p.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
+function dd(iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  return m ? m[3] : "—";
+}
+function hhmm(iso?: string) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+}
+function dataExtenso(iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!m) return "";
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
+  const txt = d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return txt
+    .split(" ")
+    .map((w) => (w === "de" ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+function nomeCurto(nome: string) {
+  const p = String(nome || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  if (p.length === 0) return "";
+  if (p.length === 1) return cap(p[0]);
+  return `${cap(p[0])} ${cap(p[p.length - 1])}`;
+}
+function iniciais(nome: string) {
+  const p = String(nome || "").trim().split(/\s+/).filter(Boolean);
+  if (p.length === 0) return "?";
+  return ((p[0][0] ?? "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
 }
 
-function num(v: number) {
-  return Number(v || 0).toLocaleString("pt-BR");
+/* ---------- curva monotônica (Fritsch–Carlson) ---------- */
+
+function caminhoMonotonico(pts: { x: number; y: number }[]): string {
+  const n = pts.length;
+  if (n === 0) return "";
+  if (n === 1) return `M${pts[0].x},${pts[0].y}`;
+  const dx: number[] = [], m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(pts[i + 1].x - pts[i].x);
+    m.push((pts[i + 1].y - pts[i].y) / dx[i]);
+  }
+  const t: number[] = [m[0]];
+  for (let i = 1; i < n - 1; i++) t.push(m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2);
+  t.push(m[n - 2]);
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+    const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+  }
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3;
+    d += ` C${pts[i].x + h},${pts[i].y + t[i] * h} ${pts[i + 1].x - h},${pts[i + 1].y - t[i + 1] * h} ${pts[i + 1].x},${pts[i + 1].y}`;
+  }
+  return d;
 }
 
-function pctTexto(parte: number, total: number) {
-  if (!total) return "0%";
-  return `${((parte / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%`;
-}
+/* ---------- peças ---------- */
 
-/** "2026-08-22" → "22/08". */
-function ddmm(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "").trim());
-  if (!m) return "—";
-  return `${m[3]}/${m[2]}`;
-}
-
-/** Primeiro + último nome ("Andre dos Santos Duarte" → "Andre Duarte"). */
-function primeiroEUltimoNome(nome: string) {
-  const partes = String(nome || "").trim().split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return "";
-  if (partes.length === 1) return partes[0];
-  return `${partes[0]} ${partes[partes.length - 1]}`;
-}
-
-/** Fração "realizadas/agendadas" — numerador em destaque, resto discreto. */
-function Fracao({ numerador, denominador, cor }: { numerador: number; denominador: number; cor: string }) {
+function Card({ children, className = "", style }: { children: ReactNode; className?: string; style?: React.CSSProperties }) {
   return (
-    <span className="inline-flex items-baseline">
-      <span style={{ color: cor }}>{num(numerador)}</span>
-      {denominador > 0 ? (
-        <span className="text-white/45 text-xl xl:text-4xl">/{num(denominador)}</span>
-      ) : null}
-    </span>
+    <div
+      className={`rounded-2xl border p-[1.6rem] flex flex-col min-h-0 min-w-0 overflow-hidden ${className}`}
+      style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, ...style }}
+    >
+      {children}
+    </div>
   );
 }
 
-/** Extrai apenas o dia de um ISO date ("2026-08-22" → "22"). */
-function dd(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "").trim());
-  return m ? m[3] : "—";
+function Titulo({ icon, texto, extra, cor = ACCENT, corTexto = "rgba(255,255,255,0.7)" }: {
+  icon: ReactNode; texto: string; extra?: string; cor?: string; corTexto?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-[1rem] shrink-0">
+      <div className="flex items-center gap-[0.8rem]">
+        <span style={{ color: cor }} className="[&>svg]:h-[1.9rem] [&>svg]:w-[1.9rem]">{icon}</span>
+        <span className="uppercase tracking-[0.18em] font-bold text-[1.45rem]" style={{ color: corTexto }}>{texto}</span>
+      </div>
+      {extra ? <span className="uppercase tracking-[0.18em] font-bold text-[1.1rem] text-white/40">{extra}</span> : null}
+    </div>
+  );
 }
 
-/**
- * Cartão de largura total com quatro colunas semanais e barras horizontais retas.
- * Reutilizado por Crédito efetivado e Produção gerada (mesma anatomia).
- */
-function MetaSemanasCard({
-  titulo,
-  accent,
-  corTrilhoSemana,
-  creditoMes,
-  meta,
-  pct,
-  semanas,
-  rodapeValor,
-}: {
-  titulo: string;
-  accent: string;
-  corTrilhoSemana: string;
-  creditoMes: number;
-  meta: number;
-  pct: number;
-  semanas: Array<{ indice: number; inicio: string; fim: string; atual: boolean; futura: boolean; credito: number; cotas: number; meta?: number | null }>;
-  /** Texto discreto extra ao lado do percentual (ex.: "135 cotas · 48 clientes"). */
-  rodapeValor?: ReactNode;
-}) {
-  const ACCENT = accent;
+function GraficoProducao({ semanas }: { semanas: SemanaItem[] }) {
+  const n = semanas.length;
+  const W = 1000, H = 300, TOPO = 40;
+  const xPct = (i: number) => ((i + 0.5) / n) * 100;
+  const comDado = semanas.map((s, i) => ({ s, i })).filter(({ s }) => !s.futura);
+  const max = Math.max(1, ...comDado.map(({ s }) => Number(s.credito || 0)));
+  const pts = comDado.map(({ s, i }) => ({
+    x: (xPct(i) / 100) * W,
+    y: H - (Number(s.credito || 0) / max) * (H - TOPO),
+    i, s,
+  }));
+  const linha = caminhoMonotonico(pts);
+  const area = pts.length > 1 ? `${linha} L${pts[pts.length - 1].x},${H} L${pts[0].x},${H} Z` : "";
+  const maiorIdx = pts.length ? pts.reduce((a, b) => (Number(b.s.credito) > Number(a.s.credito) ? b : a)).i : -1;
+  const maior = pts.find((p) => p.i === maiorIdx);
+
   return (
-    <div
-      className="rounded-2xl border p-1.5 xl:p-2 flex flex-col flex-1 min-h-0 overflow-hidden"
-      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
-    >
-      {/* Cabeçalho — rótulo acima, valor grande + percentual alinhados pela base. */}
-      <div className="text-white/60 uppercase tracking-widest text-sm xl:text-xl font-bold">
-        {titulo}
-      </div>
-      <div className="flex items-baseline gap-2 xl:gap-3 mt-0.5">
-        <span className="text-5xl xl:text-8xl font-black leading-none" style={{ color: ACCENT }}>
-          {abreviarBRL(creditoMes)}
-        </span>
-        {meta > 0 ? (
-          <span className="text-sm xl:text-2xl font-bold text-white/55 leading-none">
-            {pct.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% de {abreviarBRL(meta)}
+    <div className="flex flex-col h-full min-h-0">
+      <div className="relative flex-1 min-h-0 mt-[2.6rem]">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full overflow-visible">
+          <defs>
+            <linearGradient id="tvc-area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity={0.45} />
+              <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          {pts.map((p) => (
+            <line key={p.i} x1={p.x} x2={p.x} y1={p.y} y2={H} stroke="rgba(255,255,255,0.18)"
+              strokeWidth={1} strokeDasharray="4 5" vectorEffect="non-scaling-stroke" />
+          ))}
+          {area ? <path d={area} fill="url(#tvc-area)" className="transition-all duration-700" /> : null}
+          {pts.length > 1 ? (
+            <path d={linha} fill="none" stroke={ACCENT} strokeWidth={3} vectorEffect="non-scaling-stroke"
+              strokeLinecap="round" className="transition-all duration-700" />
+          ) : null}
+        </svg>
+        {pts.map((p) => {
+          const grande = p.s.atual;
+          const tam = grande ? "1.5rem" : "0.95rem";
+          return (
+            <span key={p.i} className="absolute rounded-full transition-all duration-700"
+              style={{
+                left: `${xPct(p.i)}%`, top: `${(p.y / H) * 100}%`, width: tam, height: tam,
+                transform: "translate(-50%,-50%)", backgroundColor: ACCENT,
+                boxShadow: grande ? `0 0 1.4rem ${ACCENT}, 0 0 0 0.35rem rgba(198,255,0,0.2)` : undefined,
+              }} />
+          );
+        })}
+        {maior ? (
+          <span className="absolute text-white font-bold text-[1.35rem] whitespace-nowrap tabular-nums"
+            style={{ left: `${xPct(maior.i)}%`, top: `${(maior.y / H) * 100}%`, transform: "translate(-50%, -170%)" }}>
+            {abreviarBRL(Number(maior.s.credito || 0))}
           </span>
         ) : null}
-        {rodapeValor ? (
-          <span className="text-sm xl:text-2xl font-semibold text-white/40 leading-none">{rodapeValor}</span>
-        ) : null}
       </div>
-
-
-      {/* Barra do mês — largura total, trilho e preenchimento. */}
-      <div
-        className="w-full rounded-full mt-1 xl:mt-1.5 mb-1 xl:mb-1.5 h-2.5 xl:h-4 overflow-hidden"
-        style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
-      >
-        {pct > 0 ? (
-          <div
-            className="h-full rounded-full transition-all duration-700 ease-out"
-            style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: ACCENT }}
-          />
-        ) : null}
-      </div>
-
-      {/* Corpo — 4 colunas, uma por semana. */}
-      <div className="flex-1 min-h-0 grid grid-cols-4 gap-2 xl:gap-4 mt-1">
+      <div className="grid shrink-0 mt-[1rem]" style={{ gridTemplateColumns: `repeat(${n}, minmax(0,1fr))` }}>
         {semanas.map((s) => {
-          const semanaMeta = s.meta ?? 0;
-          const semanaPct = semanaMeta > 0 ? Math.min((Number(s.credito || 0) / semanaMeta) * 100, 100) : 0;
-          const isAtual = s.atual === true;
-          const isFutura = s.futura === true;
-          const corTexto = isAtual ? ACCENT : "rgba(255,255,255,0.85)";
-          const corFill = isAtual ? ACCENT : corTrilhoSemana;
-
-
+          const cor = s.atual ? ACCENT : undefined;
           return (
-            <div
-              key={s.indice}
-              className={`flex flex-col justify-center min-w-0 ${isAtual ? "pl-2 xl:pl-3 border-l" : ""}`}
-              style={{
-                opacity: isFutura ? 0.4 : 1,
-                borderColor: isAtual ? corTrilhoSemana : undefined,
-              }}
-            >
-              {/* 1 — rótulo da semana (discreto). */}
-              <span
-                className="text-sm xl:text-2xl font-black tracking-widest uppercase truncate"
-                style={{ color: isAtual ? ACCENT : "rgba(255,255,255,0.45)" }}
-              >
-                S{s.indice} · {dd(s.inicio)}–{dd(s.fim)}
+            <div key={s.indice} className="flex flex-col items-center leading-tight tabular-nums">
+              <span className="font-bold text-[1.2rem]" style={{ color: cor ?? "rgba(255,255,255,0.7)" }}>S{s.indice}</span>
+              <span className="text-[1.05rem]" style={{ color: cor ?? "rgba(255,255,255,0.45)" }}>{dd(s.inicio)}–{dd(s.fim)}</span>
+              <span className="font-bold text-[1.3rem]"
+                style={{ color: s.futura ? "rgba(255,255,255,0.4)" : cor ?? "#fff" }}>
+                {s.futura ? "—" : abreviarBRL(Number(s.credito || 0))}
               </span>
-
-              {/* 2 — valor em reais, grande e em destaque (número principal do bloco). */}
-              <span
-                className="block mt-2 xl:mt-3 text-4xl xl:text-7xl font-black leading-none truncate"
-                style={{ color: isFutura ? "rgba(255,255,255,0.45)" : corTexto }}
-              >
-                {isFutura ? "—" : abreviarBRL(Number(s.credito || 0))}
-              </span>
-
-              {/* 3 — barra horizontal. */}
-              <div
-                className="w-full rounded-full mt-1.5 h-2 xl:h-4 overflow-hidden"
-                style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
-              >
-                {!isFutura && semanaPct > 0 ? (
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${semanaPct}%`, backgroundColor: corFill }}
-                  />
-                ) : null}
-              </div>
             </div>
           );
         })}
@@ -240,148 +233,107 @@ function MetaSemanasCard({
   );
 }
 
-/** Mesmo cartão de largura total, sem arco, quando não há meta configurada. */
-function CreditoSemMetaCard({ creditoMes, creditoHoje }: { creditoMes: number; creditoHoje: number }) {
+function Anel({ valor, meta }: { valor: number; meta: number }) {
+  const R = 42, C = 2 * Math.PI * R;
+  const frac = meta > 0 ? Math.min(valor / meta, 1) : 0;
   return (
-    <div
-      className="rounded-2xl border p-1.5 xl:p-2 flex flex-col flex-1 min-h-0"
-
-      style={{ backgroundColor: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)" }}
-    >
-      <div className="text-white/60 uppercase tracking-widest text-[10px] xl:text-sm font-bold">
-        Crédito efetivado
-      </div>
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1">
-        <div className="flex items-baseline gap-3 xl:gap-5">
-          <span className="text-[10px] xl:text-sm tracking-widest text-white/40 font-black uppercase">Hoje</span>
-          <span className="text-2xl xl:text-4xl font-black" style={{ color: ACCENT }}>
-            {abreviarBRL(creditoHoje)}
-          </span>
-          <span className="text-white/20">·</span>
-          <span className="text-[10px] xl:text-sm tracking-widest text-white/40 font-black uppercase">Mês</span>
-          <span className="text-2xl xl:text-4xl font-black" style={{ color: ACCENT }}>
-            {abreviarBRL(creditoMes)}
-          </span>
-        </div>
-        <div className="text-[11px] xl:text-sm text-white/35 font-semibold italic">meta não configurada</div>
-      </div>
-    </div>
-  );
-}
-
-const ACCENT_PROD = "#38bdf8";
-
-
-
-
-
-/** Cartão com duas colunas internas: HOJE e MÊS, separadas por divisória vertical. */
-function DiaMesBlocoCard({
-  titulo,
-  accent,
-  alerta,
-  hoje,
-  mes,
-}: {
-  titulo: string;
-  accent: string;
-  alerta?: boolean;
-  hoje: { valor: ReactNode; titleAttr?: string; conteudo?: ReactNode; rodape?: ReactNode };
-  mes: { valor: ReactNode; titleAttr?: string; conteudo?: ReactNode; rodape?: ReactNode };
-}) {
-  const cor = alerta ? "#ef4444" : accent;
-  return (
-    <div
-      className="rounded-2xl border p-1.5 xl:p-2 flex flex-col min-h-0"
-      style={{
-        backgroundColor: alerta ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.04)",
-        borderColor: alerta ? "rgba(239,68,68,0.55)" : "rgba(255,255,255,0.10)",
-      }}
-    >
-      <div className="text-white/60 uppercase tracking-widest text-xs xl:text-base font-bold">{titulo}</div>
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-2 xl:gap-3 mt-1">
-        {([["Hoje", hoje], ["Mês", mes]] as const).map(([label, bloco], i) => (
-          <div
-            key={label}
-            className={`flex flex-col justify-center min-w-0 ${i === 1 ? "pl-2 xl:pl-3 border-l" : ""}`}
-            style={i === 1 ? { borderColor: "rgba(255,255,255,0.12)" } : undefined}
-          >
-            {/* Rótulo, número e legenda agrupados e centrados na coluna. */}
-            <div className="text-sm xl:text-lg font-black tracking-widest text-white/40 uppercase">{label}</div>
-            {bloco.conteudo ? (
-              <div className="mt-2 xl:mt-3">{bloco.conteudo}</div>
-            ) : (
-              <div
-                className="mt-2 xl:mt-3 text-4xl xl:text-7xl font-black leading-none truncate w-full"
-                style={{ color: cor }}
-                title={bloco.titleAttr}
-              >
-                {bloco.valor}
-              </div>
-            )}
-            <div className="mt-1 text-[9px] xl:text-xs text-white/40 font-bold leading-none min-h-[1em]">
-              {bloco.rodape ?? <>&nbsp;</>}
-            </div>
-          </div>
-
-        ))}
-
-      </div>
-    </div>
-  );
-}
-
-
-function RankingShell({
-  titulo,
-  extra,
-  accent,
-  vazio,
-  children,
-}: {
-  titulo: string;
-  extra?: string;
-  accent: string;
-  vazio: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      className="rounded-3xl border p-2 xl:p-3 flex flex-col min-h-0"
-      style={{ borderColor: `${accent}4d`, backgroundColor: `${accent}0a` }}
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm xl:text-xl font-black tracking-widest uppercase" style={{ color: accent }}>
-          {titulo}
-        </h2>
-        {extra ? (
-          <span className="text-[10px] xl:text-xs font-bold tracking-widest text-white/40 uppercase">{extra}</span>
+    <div className="relative h-full aspect-square max-h-full">
+      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90"
+        style={{ filter: frac > 0 ? "drop-shadow(0 0 0.6rem rgba(198,255,0,0.35))" : undefined }}>
+        <circle cx={50} cy={50} r={R} fill="none" stroke={TRILHO} strokeWidth={8} />
+        {meta > 0 && frac > 0 ? (
+          <circle cx={50} cy={50} r={R} fill="none" stroke={ACCENT} strokeWidth={8} strokeLinecap="round"
+            strokeDasharray={C} strokeDashoffset={C * (1 - frac)} className="transition-all duration-700" />
         ) : null}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center tabular-nums">
+        <span className="text-white font-black text-[2.6rem] leading-none whitespace-nowrap">{abreviarBRL(valor)}</span>
+        <span className="text-white/45 text-[1.2rem] mt-[0.4rem]">{meta > 0 ? `de ${abreviarBRL(meta)}` : "sem meta"}</span>
       </div>
-      <div className="flex-1 min-h-0 mt-2 flex flex-col justify-stretch gap-1.5 xl:gap-2 overflow-hidden">
-        {vazio ? <div className="text-white/35 font-semibold italic text-sm mt-2">sem dados no mês</div> : children}
-      </div>
-    </section>
+    </div>
   );
 }
 
-function Posicao({ idx, accent }: { idx: number; accent: string }) {
-  const primeiro = idx === 0;
+function Fracao({ a, b }: { a: number; b: number }) {
   return (
-    <span
-      className="h-9 w-9 xl:h-14 xl:w-14 shrink-0 rounded-lg flex items-center justify-center text-base xl:text-2xl font-black"
-      style={
-        primeiro
-          ? { color: "#050505", backgroundColor: accent }
-          : { color: "rgba(255,255,255,0.7)", backgroundColor: "rgba(255,255,255,0.08)" }
-      }
-    >
-      {idx + 1}
+    <span className="inline-flex items-baseline">
+      <span style={{ color: "inherit" }}>{num(a)}</span>
+      <span className="text-white/45 text-[0.55em]">/{num(b)}</span>
     </span>
   );
 }
 
+function DiaMesCard({ icon, titulo, hoje, mes, legHoje, legMes }: {
+  icon: ReactNode; titulo: string; hoje: ReactNode; mes: ReactNode; legHoje?: ReactNode; legMes?: ReactNode;
+}) {
+  return (
+    <Card>
+      <Titulo icon={icon} texto={titulo} />
+      <div className="flex-1 min-h-0 grid grid-cols-2 mt-[0.8rem]">
+        {([["Hoje", hoje, legHoje, ACCENT], ["Mês", mes, legMes, "#fff"]] as const).map(([rot, v, leg, cor], i) => (
+          <div key={rot} className={`flex flex-col justify-center min-w-0 ${i === 1 ? "pl-[1.6rem] border-l" : ""}`}
+            style={i === 1 ? { borderColor: CARD_BORDER } : undefined}>
+            <span className="uppercase tracking-[0.18em] font-bold text-[1.1rem] text-white/40">{rot}</span>
+            <span className="font-black tabular-nums leading-none text-[4.6rem] mt-[0.4rem] truncate" style={{ color: cor }}>{v}</span>
+            <span className="text-[1.1rem] text-white/45 mt-[0.5rem] min-h-[1.3em] truncate">{leg ?? "\u00a0"}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function LinhaRanking({ pos, nome, avatar, sub, valor, frac, cor, zerado }: {
+  pos: number; nome: string; avatar?: string | null; sub: string; valor: string; frac: number; cor: string; zerado: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-[1.4rem] h-[5.2rem] shrink-0 border-b last:border-b-0"
+      style={{ borderColor: "rgba(255,255,255,0.06)", opacity: zerado ? 0.45 : 1 }}>
+      <div className="relative shrink-0 h-[3.2rem] w-[3.2rem]">
+        {avatar ? (
+          <img src={avatar} alt="" className="h-full w-full rounded-xl object-cover" />
+        ) : (
+          <div className="h-full w-full rounded-xl flex items-center justify-center font-bold text-[1.2rem] text-white/70"
+            style={{ backgroundColor: TRILHO }}>{iniciais(nome)}</div>
+        )}
+        <span className="absolute -top-[0.5rem] -right-[0.5rem] h-[1.5rem] w-[1.5rem] rounded-full flex items-center justify-center text-[0.85rem] font-black text-black"
+          style={{ backgroundColor: cor }}>{pos}</span>
+      </div>
+      <div className="w-[30%] min-w-0">
+        <div className="text-white font-bold text-[1.6rem] leading-tight truncate">{nomeCurto(nome)}</div>
+        <div className="text-white/45 text-[1.05rem] truncate tabular-nums">{sub}</div>
+      </div>
+      <div className="flex-1 h-[0.6rem] rounded-full overflow-hidden" style={{ backgroundColor: TRILHO }}>
+        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(0, Math.min(frac, 1)) * 100}%`, backgroundColor: cor }} />
+      </div>
+      <div className="font-black tabular-nums text-[2.2rem] text-right whitespace-nowrap min-w-[8rem]" style={{ color: cor }}>{valor}</div>
+    </div>
+  );
+}
+
+function RankingCard({ icon, titulo, extra, cor, vazio, children }: {
+  icon: ReactNode; titulo: string; extra: string; cor: string; vazio: boolean; children: ReactNode;
+}) {
+  return (
+    <Card style={{ borderColor: `${cor}59`, backgroundColor: `${cor}0a`, boxShadow: `0 0 2.5rem ${cor}14` }}>
+      <Titulo icon={icon} texto={titulo} extra={extra} cor={cor} />
+      <div className="flex-1 min-h-0 mt-[0.8rem] flex flex-col justify-start overflow-hidden">
+        {vazio ? <div className="text-white/40 italic text-[1.3rem] mt-[0.8rem]">sem dados no mês</div> : children}
+      </div>
+    </Card>
+  );
+}
+
+/* ---------- página ---------- */
+
 export default function TVConsorcioEquipe() {
+  useEffect(() => {
+    const el = document.documentElement;
+    const anterior = el.style.fontSize;
+    el.style.fontSize = "calc(100vh / 104)";
+    return () => { el.style.fontSize = anterior; };
+  }, []);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["tv-consorcio-equipe", TOKEN],
     queryFn: async () => {
@@ -400,202 +352,141 @@ export default function TVConsorcioEquipe() {
   const cMes = data.contratos?.mes ?? { cotas: 0, clientes: 0, credito: 0, ticket: 0 };
   const aDia = data.agenda?.dia ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
   const aMes = data.agenda?.mes ?? { agendadas: 0, agendamentos: 0, realizadas: 0, no_show: 0 };
-  const pDia = data.producao?.dia ?? { cotas: 0, clientes: 0, credito: 0 };
   const pMes = data.producao?.mes ?? { cotas: 0, clientes: 0, credito: 0 };
+  const meta = Number(data.meta_credito_mes ?? 0);
+  const metaAgDia = data.meta_agendamento?.dia ?? null;
+  const metaAgMes = Number(data.meta_agendamento?.mes ?? 0);
+  const semanasProd = data.semanas_producao ?? [];
+  const prodPartes = partesBRL(Number(pMes.credito || 0));
 
-  const meta = data.meta_credito_mes ?? null;
-  const pctMeta = meta && meta > 0 ? Math.min((Number(cMes.credito || 0) / meta) * 100, 100) : 0;
-  const pctProducao = meta && meta > 0 ? Math.min((Number(pMes.credito || 0) / meta) * 100, 100) : 0;
-  const metaSemanaProducao = meta && meta > 0 ? Number(meta) / 4 : null;
-  const semanasProducao = (data.semanas_producao ?? []).map((s) => ({ ...s, meta: metaSemanaProducao }));
-
-
-
-
-  const closers = (data.ranking_closer ?? []).slice(0, 6);
+  const closers = (data.ranking_closer ?? []).slice(0, 5);
   const sdrs = [...(data.ranking_sdr ?? [])]
     .sort((a, b) => Number(b.agendamentos || 0) - Number(a.agendamentos || 0))
-    .slice(0, 6);
-  const sdrDiaMap = new Map((data.ranking_sdr_dia ?? []).map((r) => [r.nome, r]));
-
-  const warning = data.snapshot_atrasado ? (
-    <>
-      Dados podem estar atrasados — última atualização às{" "}
-      {data.snapshot_em ? new Date(data.snapshot_em).toLocaleTimeString("pt-BR") : "—"}
-    </>
-  ) : undefined;
+    .slice(0, 5);
+  const sdrDia = new Map((data.ranking_sdr_dia ?? []).map((r) => [r.nome, r]));
+  const topCloser = Math.max(0, ...closers.map((c) => Number(c.credito || 0)));
+  const topSdr = Math.max(0, ...sdrs.map((s) => Number(s.agendamentos || 0)));
 
   return (
-    <TVShell
-      escalaDivisor={104}
-      title="MCF · Painel de Equipe"
-      subtitle="Consórcio · Equipe"
-      accent={ACCENT}
-      today={data.today}
-      updatedAt={data.updated_at}
-      warning={warning}
-      mainRowsClassName="grid-rows-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,2fr)]"
-    >
-      {/* Linha 1 — produção gerada, largura total (mesma meta do crédito). */}
-      <div className="min-h-0 flex flex-col">
-        <MetaSemanasCard
-          titulo="Produção gerada"
-          accent={ACCENT_PROD}
-          corTrilhoSemana="rgba(56,189,248,0.55)"
-          creditoMes={Number(pMes.credito || 0)}
-          meta={meta && meta > 0 ? Number(meta) : 0}
-          pct={pctProducao}
-          semanas={semanasProducao}
-          rodapeValor={`· ${num(Number(pMes.cotas || 0))} cotas · ${num(Number(pMes.clientes || 0))} clientes`}
-        />
-      </div>
-
-      {/* Linha 2 — crédito efetivado, largura total. */}
-      <div className="min-h-0 flex flex-col">
-        {meta && meta > 0 && data.semanas && data.semanas.length > 0 && data.semanas[0].meta != null ? (
-          <MetaSemanasCard
-            titulo="Crédito efetivado"
-            accent={ACCENT}
-            corTrilhoSemana="rgba(191,255,0,0.55)"
-            creditoMes={Number(cMes.credito || 0)}
-            meta={Number(meta)}
-            pct={pctMeta}
-            semanas={data.semanas}
-          />
-        ) : (
-          <CreditoSemMetaCard
-            creditoMes={Number(cMes.credito || 0)}
-            creditoHoje={Number(cDia.credito || 0)}
-          />
-        )}
-      </div>
-
-
-      {/* Linha 2 */}
-      <div className="grid grid-cols-3 gap-3 xl:gap-5 min-h-0">
-
-        <DiaMesBlocoCard
-          titulo="Agendamento"
-          accent={ACCENT}
-          hoje={{
-            valor: (
-              <Fracao
-                numerador={Number(aDia.agendamentos || 0)}
-                denominador={Number(data.meta_agendamento?.dia ?? 0)}
-                cor={ACCENT}
-              />
-            ),
-            titleAttr: `${num(aDia.agendamentos)} de ${num(data.meta_agendamento?.dia ?? 0)} na meta do dia`,
-          }}
-          mes={{
-            valor: (
-              <Fracao
-                numerador={Number(aMes.agendamentos || 0)}
-                denominador={Number(data.meta_agendamento?.mes ?? 0)}
-                cor={ACCENT}
-              />
-            ),
-            titleAttr: `${num(aMes.agendamentos)} de ${num(data.meta_agendamento?.mes ?? 0)} na meta do mês`,
-            rodape: <span className="text-white/45">{pctTexto(Number(aMes.agendamentos || 0), Number(data.meta_agendamento?.mes ?? 0))} da meta</span>,
-          }}
-        />
-        <DiaMesBlocoCard
-          titulo="R1 realizadas"
-          accent={ACCENT}
-          hoje={{
-            valor: (
-              <Fracao
-                numerador={Number(aDia.realizadas || 0)}
-                denominador={Number(aDia.agendadas || 0)}
-                cor={ACCENT}
-              />
-            ),
-            titleAttr: `${num(aDia.realizadas)} de ${num(aDia.agendadas)} agendadas`,
-          }}
-          mes={{
-            valor: (
-              <Fracao
-                numerador={Number(aMes.realizadas || 0)}
-                denominador={Number(aMes.agendadas || 0)}
-                cor={ACCENT}
-              />
-            ),
-            titleAttr: `${num(aMes.realizadas)} de ${num(aMes.agendadas)} agendadas`,
-            rodape: <span className="text-white/45">{pctTexto(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0))} dos agendados</span>,
-          }}
-        />
-        <DiaMesBlocoCard
-          titulo="Vendas"
-          accent={ACCENT}
-          hoje={{
-            valor: num(cDia.clientes),
-            rodape: <span className="text-white/45">{num(cDia.cotas)} cotas</span>,
-          }}
-          mes={{
-            valor: num(cMes.clientes),
-            rodape: <span className="text-white/45">{num(cMes.cotas)} cotas · ticket {abreviarBRL(cMes.ticket)}</span>,
-          }}
-        />
-      </div>
-
-
-      {/* Linha 3 */}
-      <div className="grid grid-cols-2 gap-3 xl:gap-5 min-h-0">
-        <RankingShell titulo="Closers · produção no mês" accent={ACCENT} vazio={closers.length === 0}>
-          {closers.map((c, idx) => (
-            <div
-              key={`${c.nome}-${idx}`}
-              className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1 xl:py-2"
-              style={{
-                backgroundColor: "rgba(255,255,255,0.04)",
-                borderColor: "rgba(255,255,255,0.10)",
-                opacity: Number(c.credito || 0) === 0 && Number(c.cotas || 0) === 0 ? 0.45 : 1,
-              }}
-            >
-              <Posicao idx={idx} accent={ACCENT} />
-              <div className="min-w-0">
-                <div className="truncate text-xl xl:text-3xl font-bold text-white/90">
-                  {primeiroEUltimoNome(c.nome)}
-                </div>
-                <div className="text-[10px] xl:text-base text-white/40 font-semibold">
-                  {num(c.clientes)} clientes · {num(c.cotas)} cotas
-                </div>
-              </div>
-              <span className="text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT }}>
-                {abreviarBRL(c.credito)}
+    <div className="fixed inset-0 overflow-hidden text-white" style={{ backgroundColor: "#050505" }}>
+      <div className="pointer-events-none absolute inset-0" style={{
+        background: "radial-gradient(circle at 0% 0%, rgba(198,255,0,0.06), transparent 45%), radial-gradient(circle at 100% 100%, rgba(198,255,0,0.06), transparent 45%)",
+      }} />
+      <div className="relative h-full w-full p-[2.4rem] grid gap-[1.6rem]"
+        style={{ gridTemplateRows: "auto minmax(0,1.3fr) minmax(0,0.75fr) minmax(0,0.95fr)" }}>
+        {/* Cabeçalho */}
+        <header className="flex items-center justify-between gap-[2rem]">
+          <div>
+            <div className="flex items-center gap-[1rem]">
+              <h1 className="text-[2.6rem] font-bold text-white leading-none">MCF · Painel de Equipe</h1>
+              <span className="relative flex h-[0.9rem] w-[0.9rem]">
+                <span className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-60" style={{ backgroundColor: "#22c55e" }} />
+                <span className="relative inline-flex h-full w-full rounded-full" style={{ backgroundColor: "#22c55e" }} />
               </span>
+              <span className="text-[1.3rem] font-semibold" style={{ color: "#22c55e" }}>ao vivo</span>
             </div>
-          ))}
-        </RankingShell>
+            <div className="text-[1.5rem] font-semibold mt-[0.4rem]" style={{ color: ACCENT }}>Consórcio · Equipe</div>
+          </div>
+          {data.snapshot_atrasado ? (
+            <div className="rounded-full px-[1.6rem] py-[0.6rem] text-[1.2rem] font-semibold border"
+              style={{ color: "#fbbf24", borderColor: "rgba(251,191,36,0.4)", backgroundColor: "rgba(251,191,36,0.1)" }}>
+              Dados podem estar atrasados — última atualização às {hhmm(data.snapshot_em)}
+            </div>
+          ) : null}
+          <div className="flex items-center gap-[1rem]">
+            <span className="h-[4rem] w-[4rem] rounded-xl flex items-center justify-center border"
+              style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, color: ACCENT }}>
+              <CalendarDays className="h-[2rem] w-[2rem]" />
+            </span>
+            <div>
+              <div className="text-[1.5rem] font-semibold text-white">{dataExtenso(data.today)}</div>
+              <div className="text-[1.15rem] text-white/45 tabular-nums">Atualizado {hhmm(data.updated_at)}</div>
+            </div>
+          </div>
+        </header>
 
-        <RankingShell titulo="SDR · agendamentos" extra="Hoje / Mês" accent={ACCENT_SDR} vazio={sdrs.length === 0}>
-          {sdrs.map((s, idx) => {
-            const hoje = Number(sdrDiaMap.get(s.nome)?.agendamentos ?? 0);
-            return (
-              <div
-                key={`${s.nome}-${idx}`}
-                className="flex-1 min-h-0 grid grid-cols-[auto_1fr_auto_auto] items-center gap-x-2 xl:gap-x-4 rounded-xl border px-2 xl:px-3 py-1 xl:py-2"
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.04)",
-                  borderColor: "rgba(255,255,255,0.10)",
-                  opacity: Number(s.agendamentos || 0) === 0 ? 0.45 : 1,
-                }}
-              >
-                <Posicao idx={idx} accent={ACCENT_SDR} />
-                <span className="truncate text-xl xl:text-3xl font-bold text-white/90 capitalize">
-                  {primeiroEUltimoNome(s.nome)}
-                </span>
-                <span className="text-right w-16 xl:w-24 text-3xl xl:text-6xl font-black leading-none" style={{ color: ACCENT_SDR }}>
-                  {num(hoje)}
-                </span>
-                <span className="text-right w-20 xl:w-32 text-3xl xl:text-6xl font-black leading-none text-white/90">
-                  {num(s.agendamentos)}
-                </span>
+        {/* Linha 1 */}
+        <div className="grid gap-[1.6rem] min-h-0" style={{ gridTemplateColumns: "2fr 1fr" }}>
+          <Card>
+            <Titulo icon={<AreaChart />} texto="Produção gerada" />
+            <div className="flex-1 min-h-0 flex gap-[2rem]">
+              <div className="w-[40%] flex flex-col justify-center min-w-0">
+                <div className="font-black tabular-nums leading-none text-[7rem] whitespace-nowrap">
+                  <span className="text-white">R$ </span>
+                  <span style={{ color: ACCENT }}>{prodPartes.num}{prodPartes.sufixo ? ` ${prodPartes.sufixo}` : ""}</span>
+                </div>
+                <div className="flex items-center gap-[0.6rem] mt-[1.2rem] text-[1.35rem] text-white/80 tabular-nums">
+                  <Users className="h-[1.6rem] w-[1.6rem]" style={{ color: ACCENT }} />
+                  <span>{num(pMes.cotas)} cotas • {num(pMes.clientes)} clientes</span>
+                  {meta > 0 ? <span className="text-white/45">• {pctTxt(pct(Number(pMes.credito || 0), meta))} da meta</span> : null}
+                </div>
               </div>
-            );
-          })}
-        </RankingShell>
+              <div className="w-[60%] min-w-0 min-h-0">
+                {semanasProd.length ? <GraficoProducao semanas={semanasProd} /> : null}
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <Titulo icon={<Coins />} texto="Crédito efetivado" />
+            <div className="flex-1 min-h-0 flex items-center gap-[2rem] mt-[1rem]">
+              <div className="h-full min-h-0 flex items-center"><Anel valor={Number(cMes.credito || 0)} meta={meta} /></div>
+              <div className="flex-1 min-w-0 flex flex-col gap-[1rem] tabular-nums">
+                <div>
+                  <div className="uppercase tracking-[0.18em] font-bold text-[1.1rem] text-white/40">Hoje</div>
+                  <div className="font-black text-[2.8rem] leading-none whitespace-nowrap" style={{ color: ACCENT }}>{abreviarBRL(Number(cDia.credito || 0))}</div>
+                </div>
+                <div>
+                  <div className="uppercase tracking-[0.18em] font-bold text-[1.1rem] text-white/40">Mês</div>
+                  <div className="font-black text-[2.8rem] leading-none text-white whitespace-nowrap">{abreviarBRL(Number(cMes.credito || 0))}</div>
+                </div>
+                <div className="h-px w-full" style={{ backgroundColor: CARD_BORDER }} />
+                <div className="text-[1.2rem] text-white/45">
+                  {meta > 0 ? `${pctTxt(pct(Number(cMes.credito || 0), meta))} da meta` : "meta não configurada"}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Linha 2 */}
+        <div className="grid grid-cols-3 gap-[1.6rem] min-h-0">
+          <DiaMesCard icon={<CalendarCheck />} titulo="Agendamentos"
+            hoje={num(aDia.agendamentos)} mes={num(aMes.agendamentos)}
+            legHoje={metaAgDia ? `meta ${num(metaAgDia)}` : undefined}
+            legMes={metaAgMes > 0 ? `${pctTxt(pct(Number(aMes.agendamentos || 0), metaAgMes))} da meta` : "meta não configurada"} />
+          <DiaMesCard icon={<FileCheck />} titulo="Reuniões realizadas"
+            hoje={<Fracao a={Number(aDia.realizadas || 0)} b={Number(aDia.agendadas || 0)} />}
+            mes={<Fracao a={Number(aMes.realizadas || 0)} b={Number(aMes.agendadas || 0)} />}
+            legMes={`${pctTxt(pct(Number(aMes.realizadas || 0), Number(aMes.agendadas || 0)))} dos agendados`} />
+          <DiaMesCard icon={<BarChart3 />} titulo="Vendas"
+            hoje={num(cDia.clientes)} mes={num(cMes.clientes)}
+            legHoje={`${num(cDia.cotas)} cotas`}
+            legMes={`${num(cMes.cotas)} cotas · Ticket ${abreviarBRL(Number(cMes.ticket || 0))}`} />
+        </div>
+
+        {/* Linha 3 */}
+        <div className="grid grid-cols-2 gap-[1.6rem] min-h-0">
+          <RankingCard icon={<Trophy />} titulo="Top produção do mês" extra="R$ gerado" cor={ACCENT} vazio={closers.length === 0}>
+            {closers.map((c, i) => (
+              <LinhaRanking key={c.nome + i} pos={i + 1} nome={c.nome} avatar={c.avatar_url}
+                sub={`${num(c.clientes)} clientes · ${num(c.cotas)} cotas`}
+                valor={abreviarBRL(Number(c.credito || 0))}
+                frac={topCloser > 0 ? Number(c.credito || 0) / topCloser : 0}
+                cor={ACCENT} zerado={Number(c.credito || 0) === 0} />
+            ))}
+          </RankingCard>
+          <RankingCard icon={<Zap />} titulo="Top agendamentos" extra="Agendamentos" cor={ACCENT_SDR} vazio={sdrs.length === 0}>
+            {sdrs.map((s, i) => (
+              <LinhaRanking key={s.nome + i} pos={i + 1} nome={s.nome} avatar={s.avatar_url}
+                sub={`hoje ${num(sdrDia.get(s.nome)?.agendamentos ?? 0)}`}
+                valor={num(s.agendamentos)}
+                frac={topSdr > 0 ? Number(s.agendamentos || 0) / topSdr : 0}
+                cor={ACCENT_SDR} zerado={Number(s.agendamentos || 0) === 0} />
+            ))}
+          </RankingCard>
+        </div>
       </div>
-    </TVShell>
+    </div>
   );
 }
