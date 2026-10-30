@@ -52,7 +52,7 @@ export function BriefingLeadCard({ dealId }: { dealId: string }) {
 
   if (isLoading || !b) return null;
 
-  const c = (b.conteudo ?? null) as BriefingConteudo | null;
+  const c = (b.conteudo ?? null) as unknown as BriefingConteudo | null;
   const temConteudo = !!c;
   const fontes = fontesUsadas(c);
 
