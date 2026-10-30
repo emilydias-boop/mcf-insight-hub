@@ -19,6 +19,19 @@ export function useDealBriefing(dealId: string | null | undefined) {
 }
 
 /** Resumo/alerta em lote para os participantes visíveis da Agenda (uma query só). */
+type BriefingResumoLinha = { deal_id: string; resumo: string | null; alerta: string | null };
+
+// A leitura dos campos curtos por caminho JSON (conteudo->>...) explode o tipador
+// do Supabase (TS2589), então a consulta é tipada à mão.
+type LeitorBriefingResumo = {
+  select: (cols: string) => {
+    in: (col: string, ids: string[]) => Promise<{
+      data: BriefingResumoLinha[] | null;
+      error: { message: string } | null;
+    }>;
+  };
+};
+
 export function useBriefingsResumo(dealIds: string[]) {
   const ids = [...new Set(dealIds.filter(Boolean))].sort();
   return useQuery({
@@ -27,13 +40,13 @@ export function useBriefingsResumo(dealIds: string[]) {
     staleTime: 60_000,
     queryFn: async () => {
       const map = new Map<string, { resumo: string; alerta: string }>();
-      for (let i = 0; i < ids.length; i += 200) {
-        const { data, error } = await supabase
-          .from('deal_briefing_ia').select('deal_id, conteudo').in('deal_id', ids.slice(i, i + 200));
-        if (error) throw error;
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await (supabase.from('deal_briefing_ia') as unknown as LeitorBriefingResumo)
+          .select('deal_id, resumo:conteudo->>resumo_curto, alerta:conteudo->>alerta_curto')
+          .in('deal_id', ids.slice(i, i + 100));
+        if (error) throw new Error(error.message);
         for (const r of data ?? []) {
-          const c = r.conteudo as { resumo_curto?: string; alerta_curto?: string } | null;
-          if (c?.resumo_curto || c?.alerta_curto) map.set(r.deal_id, { resumo: c.resumo_curto ?? '', alerta: c.alerta_curto ?? '' });
+          if (r.resumo || r.alerta) map.set(r.deal_id, { resumo: r.resumo ?? '', alerta: r.alerta ?? '' });
         }
       }
       return map;
