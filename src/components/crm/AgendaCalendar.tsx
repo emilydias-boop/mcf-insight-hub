@@ -1,4 +1,4 @@
-import { BriefingAlertaInline, BriefingLinhas } from '@/components/crm/briefing/BriefingAgendaLinhas';
+import { BriefingAlertaInline } from '@/components/crm/briefing/BriefingAgendaLinhas';
 import { useBriefingsResumo } from '@/hooks/useDealBriefing';
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
