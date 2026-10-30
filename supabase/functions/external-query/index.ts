@@ -19,6 +19,8 @@ const ALLOWED_ACTIONS = new Set<string>([
   "get_metas_equipe_mensal",
   "get_bu_totals",
   "painel_incorporador_totais",
+  "capacidade_dia",
+  "equipe_agora",
 ]);
 
 
@@ -183,6 +185,7 @@ Deno.serve(async (req) => {
     ano?: number;
     ini?: string;
     fim?: string;
+    data?: string;
     // Campos legados aceitos apenas para poder registrar a tentativa recusada.
     table?: string;
     filters?: Record<string, unknown>;
@@ -407,6 +410,37 @@ Deno.serve(async (req) => {
       return json(data);
     } catch (e) {
       console.error("[external-query] painel_incorporador_totais falhou", e);
+      return json({ error: "Erro interno ao processar a consulta" }, 500);
+    }
+  }
+
+  // ---- Actions: capacidade_dia / equipe_agora (somente leitura) ----
+  if (action === "capacidade_dia" || action === "equipe_agora") {
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const hojeSP = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const data = (body.data ?? hojeSP).toString().trim();
+    if (!DATE_RE.test(data)) return json({ error: "Parâmetro 'data' deve estar no formato YYYY-MM-DD" }, 400);
+    const bu = (body.bu ?? "").toString().trim().toLowerCase();
+    if (action === "capacidade_dia" && bu !== "incorporador" && bu !== "consorcio") {
+      return json({ error: "Parâmetro 'bu' deve ser 'incorporador' ou 'consorcio'" }, 400);
+    }
+    try {
+      const { data: result, error } = action === "capacidade_dia"
+        ? await supabase.rpc("capacidade_dia", { p_data: data, p_bu: bu })
+        : await supabase.rpc("equipe_agora", { p_data: data });
+      if (error) throw error;
+      try {
+        await supabase.from("audit_logs").insert({
+          action: `external_query_${action}`,
+          table_name: "meeting_slot_attendees",
+          new_data: { client: clientName, data, ...(action === "capacidade_dia" ? { bu } : {}) },
+          ip_address: ip,
+          user_agent: req.headers.get("user-agent"),
+        });
+      } catch (e) { console.error("audit_logs insert failed", e); }
+      return json(result);
+    } catch (e) {
+      console.error(`[external-query] ${action} falhou`, e);
       return json({ error: "Erro interno ao processar a consulta" }, 500);
     }
   }
