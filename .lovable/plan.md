@@ -1,59 +1,78 @@
-# Escritório Virtual 3D (/escritorio) — plano para aprovação
+# Presença do dia + capacidade para o FinanceHub
 
-## Visão geral
-Tela nova "Escritório" com cena 3D. Cada BU tem um agente numa mesa. Às 11h (São Paulo) o agente "levanta", anda até a mesa do CEO e entrega o quadro de capacidade R1 do dia. Início: Incorporador e Consórcio (líder Jéssica Bellini). Mesas vazias: Crédito e Pós-venda. Visual: grafite #101010, verde #B3F302, fonte Poppins, seguindo o protótipo HTML que será enviado.
+Substitui o plano do "Escritório". O 3D fica no FinanceHub; o Gestão só fornece a presença confirmada e a capacidade do dia, pela ponte external-query.
 
-## (a) O que será criado
+## (a) O que será criado ou alterado
 
-### Tabelas novas (todas com GRANT + RLS)
-1. `escritorio_agentes` — uma linha por BU: `bu`, `nome_agente`, `lider_user_id`, `ativo`, `capacidade_reunioes_por_closer` (Incorporador 6, Consórcio 7), `leads_por_reuniao` (3 e 1), `hora_entrega` (11:00), `hora_confirmacao` (10:45), `posicao_mesa`.
-2. `escritorio_agente_pessoas` — inclusões/exclusões por BU: `bu`, `tipo` (closer|sdr), `closer_id`/`sdr_id`, `regra` (incluir|excluir), `motivo`. Seed: excluir Jéssica Bellini e Nicola Ricci nas duas BUs; excluir João Pedro Martins Vieira como closer do Consórcio. O cadastro de closers não é alterado.
-3. `escritorio_presenca_correcoes` — `data`, `bu`, `tipo`, `pessoa_id`, `presente` (bool), `motivo`, `corrigido_por`, `corrigido_em`. Chave única (data, bu, tipo, pessoa_id). Só insere/atualiza as próprias linhas dela; nenhum dado existente é alterado.
-4. `escritorio_entregas` — `data`, `bu`, `numeros` (jsonb com o quadro), `texto_leitura`, `entregue_em`, `origem` (automatica|manual). Chave única (data, bu): reprocessar o mesmo dia substitui a entrega.
+### Banco (1 migração, tudo novo, nenhum dado existente é alterado)
 
-### Funções novas no banco
-- `escritorio_pode_ver(bu)` — CEO/admin vê tudo; líder vê só as BUs em que é `lider_user_id`.
-- `escritorio_capacidade_dia(data, bu)` — somente leitura (STABLE, SECURITY DEFINER, verifica `escritorio_pode_ver`). Devolve: closers R1 ativos (`closers.bu`, meeting_type r1) menos exclusões; presença = acesso em `page_access_log` até 11h SP, sobrescrita por `escritorio_presenca_correcoes`; reuniões e leads possíveis = presentes × capacidade × leads; SDRs ativos da BU com meta (`sdr_metas_mes` do mês, senão `sdr.meta_diaria`) e presença; agendamentos possíveis = soma das metas dos presentes; reuniões R1 já na agenda do dia (`meeting_slots`) e agendamentos já feitos hoje (`meeting_slot_attendees` criados no dia).
-- `escritorio_registrar_entrega(data, bu)` — chama a função acima e grava/substitui em `escritorio_entregas` (só tabela nova).
-- Agendamento diário às 11:00 SP (pg_cron, 14:00 UTC, seg–sex) chamando `escritorio_registrar_entrega` para cada agente ativo. Sem rede, sem webhook.
+1. **Tabela `presenca_config_bu`** (uma linha por BU: incorporador, consorcio)
+   - líder (id do perfil), reuniões por closer/dia, leads por reunião, horário de corte (11:00), horário do aviso (10:45).
+   - **`presenca_config_pessoas`** (BU, tipo closer/sdr, id da pessoa, incluir/excluir, observação). É aqui que ficam as exceções do CEO, sem mexer em cadastros:
+     - Jéssica Bellini e Nicola Ricci: excluídos nas duas BUs.
+     - João Pedro Martins Vieira: excluído no Consórcio (conta só no Incorporador).
+     - Thobson: excluído no Consórcio.
+   - Valores iniciais: Incorporador 6 × 3; Consórcio 7 × 1.
+   - Acesso: leitura para admin e líder da BU; gravação só admin.
+2. **Tabela `presenca_correcoes`**: data, BU, tipo (closer/sdr), pessoa, presente (sim/não), motivo (obrigatório), corrigido por, corrigido em. Uma linha por data+BU+pessoa (nova correção substitui a anterior da mesma pessoa no mesmo dia).
+   - **`presenca_confirmacoes`**: data, BU, confirmado por, quando.
+   - Acesso: líder da BU e admin leem e gravam só da própria BU; ninguém mais.
+3. **Função `presenca_lista_dia(data, bu)`** (somente leitura, para a tela): pessoas ativas da BU com "acessou até 11h?" pelo `page_access_log` (horário de São Paulo) e a correção da líder, se houver.
+4. **Função `capacidade_dia(data, bu)`** (somente leitura, segura): devolve um JSON com:
+   - closers R1 ativos (`closers.is_active`, `meeting_type='r1'`, `bu`), menos exclusões; presentes com nome e origem ("pelo login" ou "corrigido pela líder" + motivo);
+   - reuniões possíveis = presentes × reuniões/dia; leads possíveis = reuniões × leads/reunião;
+   - SDRs ativos (`sdr.active`, `role_type='sdr'`, `squad` da BU), menos exclusões; presentes com nome e meta (`sdr_metas_mes` do mês, senão `sdr.meta_diaria`); agendamentos possíveis = soma das metas dos presentes;
+   - reuniões R1 já na agenda do dia (`meeting_slots`, não canceladas, closers da BU);
+   - agendamentos feitos no dia (`meeting_slot_attendees.booked_at` no dia, R1);
+   - se a líder confirmou, quem e quando.
+   - Executável só por admin, líder da BU ou a ponte (service_role).
 
-### Telas e arquivos (frontend)
-- `src/pages/escritorio/Escritorio.tsx` + rota `/escritorio` em `App.tsx` e item no menu (visível só para CEO/admin e líderes).
-- `src/components/escritorio/EscritorioCena.tsx` — cena 3D com **@react-three/fiber 8.18 + drei 9.122** (o projeto usa React 18; R3F encaixa no padrão React do app e facilita clique nos agentes). Lógica da animação (posição, caminho até a mesa do CEO) em `src/lib/escritorio/` sem React, com testes.
-- `src/components/escritorio/FichaBU.tsx` — ao clicar no agente: quadro do dia, nomes de presentes/ausentes e histórico das entregas.
-- `src/pages/escritorio/ConfirmarPresenca.tsx` (`/escritorio/presenca`) — lista pré-preenchida pelo login; líder marca presente/ausente com motivo; grava em `escritorio_presenca_correcoes`. Banner aparece para a líder a partir das 10h45 dentro do próprio app.
-- `src/hooks/useEscritorio.ts`, `src/lib/escritorio/capacidade.ts` + testes (regras: 6×3=18 no Incorporador, 7×1 no Consórcio, exclusões, presença corrigida).
-- `AGENTS.md`: regra de que capacidade vem só de `escritorio_agentes` e entregas só por `escritorio_registrar_entrega`.
-- Pacotes: `three`, `@react-three/fiber@^8.18`, `@react-three/drei@^9.122`, `@types/three`.
+### Edge Function
 
-### Acesso (RLS)
-- Leitura das 4 tabelas: `escritorio_pode_ver(bu)`.
-- Configuração (agentes/pessoas): só admin edita.
-- Correções de presença: líder da BU e admin gravam.
-- Entregas: gravadas só pela função/cron; ninguém edita pela tela.
+5. **`supabase/functions/external-query/index.ts`**: adicionar `capacidade_dia` à lista branca; valida `data` (AAAA-MM-DD, padrão hoje em São Paulo) e `bu` (incorporador|consorcio); chama a função; grava em `audit_logs` igual às outras ações (`external_query_capacidade_dia`). As 3 ações atuais ficam intactas.
+
+### App
+
+6. **`src/pages/PresencaDoDia.tsx`** (nova): escolha de BU, lista pré-preenchida (closers e SDRs), botões Presente/Ausente com motivo, botão "Confirmar presença", resumo da capacidade.
+7. **`src/hooks/usePresencaDia.ts`** (novo): leitura das funções e gravação das correções/confirmação.
+8. **`src/components/presenca/PresencaAvisoBanner.tsx`** (novo): a partir das 10h45 (São Paulo), para a líder/admin, enquanto o dia não estiver confirmado; lê só as tabelas novas.
+9. **`src/App.tsx`**: rota `/presenca-do-dia` protegida; banner no layout principal (aparece só para líder/admin).
+10. Item de menu (arquivo do menu lateral) visível só para líder/admin.
+11. **`src/lib/presencaDia.ts` + teste**: contas de capacidade (6×3, 7×1, meta mensal antes da diária, exclusões).
+12. **`AGENTS.md`**: uma regra sobre presença/capacidade.
 
 ## (b) Riscos
-- Presença por `page_access_log` só registra quem abriu o app; quem trabalha sem abrir até 11h aparece ausente até a líder corrigir. Se a líder não confirmar, a entrega das 11h sai só com o login.
-- "Agendamentos já feitos" usa a data de criação do participante; remarcações podem contar no dia em que foram criadas originalmente.
-- Closers sem `meeting_type` R1 bem preenchido (ex.: Thobson com tipo vazio no Consórcio) ficariam fora; listarei antes de ligar.
-- Cena 3D pesa em computadores fracos; mantenho poucos objetos e versão simples se o aparelho não suportar.
-- Jéssica é líder e excluída das contas ao mesmo tempo: ela vê a BU mas não conta.
+
+- **Duas contas da Jéssica Bellini** (jessica.bellini@ e jessica.bellini.r2@). Proposta: líder = a conta principal (jessica.bellini@). Confirmar.
+- **Login não é presença**: `page_access_log` registra páginas abertas; quem não abrir o sistema até 11h aparece ausente até a líder corrigir.
+- **BU dos SDRs** vem do campo `squad` (`incorporador`, `consorcio`); SDRs com squad diferente ficam fora. Closers duplicados por BU (mesma pessoa em linhas diferentes) são tratados pela linha da BU.
+- **Consórcio sem disponibilidade cadastrada**: a capacidade usará a regra do CEO (7×1), não a agenda `closer_availability`; os números podem divergir da tela de agenda.
+- Nenhum dado existente é alterado; nenhum gatilho existente é mexido.
 
 ## (c) O que dispara junto
-- Nenhum aviso usa `user_notifications`. Conferido: essa tabela não tem gatilhos no banco; ela é só escrita por `hubla-webhook-handler`, `asaas-webhook-handler`, `webhook-make-contrato` e `webhook-make-parceria`. Mesmo assim o aviso das 10h45 será só um banner na tela, lendo as tabelas novas.
-- As tabelas novas não terão gatilhos que chamem WhatsApp, e-mail, FinanceHub, MCF Pay, Asaas ou Meta.
-- Só leitura em `meeting_slots`, `meeting_slot_attendees`, `sdr`, `sdr_metas_mes`, `closers`, `page_access_log` — os gatilhos dessas tabelas (ex.: MCF Pay, Meta CAPI em participantes) só disparam em gravação, então não disparam.
-- **Publicação:** há alterações ainda não publicadas que iriam juntas: horários livres/travados da Agenda Pós-Venda, lista de gerentes restrita, e a aba Relatório da Cota com botão HARVEY. O banco (tabelas, funções, horários) já vale hoje; o que espera publicação é a parte de tela. Recomendo publicar essas antes ou confirmar com Thobson.
 
-## (d) Estimativa
-1. Banco: tabelas, funções, seed das exclusões, cron (1 etapa, com aprovação).
-2. Conferência somente leitura da função para hoje nas duas BUs, com nomes (1 etapa).
-3. Tela de confirmação de presença + ficha/histórico (1–2 etapas).
-4. Cena 3D com base no protótipo (2–3 etapas, depende do HTML enviado).
-5. Testes e ajustes visuais (1 etapa).
-Total: cerca de 6 a 8 mensagens de construção.
+- `audit_logs` e `page_access_log`: consultei e **não têm nenhum gatilho**.
+- As tabelas novas terão só o gatilho de `updated_at` (próprio delas). Nada envia WhatsApp, e-mail, `user_notifications`, FinanceHub, MCF Pay ou Asaas.
+- A função `capacidade_dia` só lê; não grava em `meeting_slots`, `closers` ou `sdr`.
 
-## Pressupostos a confirmar
-- "CEO" = papel admin (Grimaldo). Se for uma pessoa específica, cadastro na configuração.
-- Entrega só seg–sex.
-- Presença conta acesso entre 00:00 e 11:00 SP do dia.
+## (d) Entra em vigor sem publicar x depende de publicar
+
+- **Sem publicar:** tabelas, funções, configuração inicial e a ação `capacidade_dia` na external-query (o FinanceHub já pode chamar logo após a implantação).
+- **Depende de publicar:** a tela "Presença do dia", o banner das 10h45 e o item de menu.
+
+## (e) Alterações de outras pessoas que iriam junto numa publicação
+
+Não consigo ver daqui qual versão está publicada em mcfgestao.com, então não dá para dar uma lista exata. A última informação registrada nesta conversa é que **ainda não foram publicadas**:
+- Agenda Pós-Venda: horários livres/indisponíveis dos gerentes no Calendário e "Por Gerente", lista de gerentes restrita (pedidos do Thobson).
+- Consórcio > Consultas > aba "Relatório da Cota", tipo de lance (Embutido/Livre/Fixo) na janela de lance e botão "Enviar ao HARVEY" (pedido do Thobson).
+Antes de publicar, confirmo com quem pediu essas telas ou checo o histórico de versões no painel de publicação.
+
+## (f) Etapas de construção
+
+Cerca de 4 etapas: (1) migração; (2) ação na external-query + teste da chamada; (3) tela, banner e menu; (4) testes e conferência com dados reais de um dia.
+
+## Pendências para aprovar
+
+1. Qual conta da Jéssica é a líder?
+2. Horário de corte: acessos até 11:00 inclusive?
+3. "Agendamentos feitos no dia" = R1 marcadas no dia (pela data de marcação), mesmo que a reunião seja em outro dia — confirma?
