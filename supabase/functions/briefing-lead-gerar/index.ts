@@ -55,8 +55,15 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
+function abertura(momento: string, nome: string) {
+  if (momento === "R2") return `Você prepara o briefing que o closer da MCF Capital lê antes da R2 com o lead ${nome}. Dê peso ao que foi falado e combinado na R1.`;
+  if (momento === "POS_R1") return `Você prepara o resumo do lead ${nome} depois da R1, para o closer fazer o follow-up até a R2. Foque no que foi falado, no que ficou combinado e no que está pendente.`;
+  if (momento === "COMPLETO") return `Você prepara o resumo completo do lead ${nome} depois da R2, para fechamento e passagem ao pós-venda. Junte R1 e R2 em ordem: perfil, o que foi falado em cada reunião, o que ficou combinado, pendências e riscos.`;
+  return `Você prepara o briefing que o closer da MCF Capital lê antes da R1 com o lead ${nome}.`;
+}
+
 function prompt(momento: string, nome: string, json: string) {
-  return `Você prepara o briefing que o closer da MCF Capital lê antes da ${momento} com o lead ${nome}. A MCF é uma mentoria de incorporação imobiliária; o closer vende a parceria. Use SOMENTE o JSON de CONTEXTO abaixo.
+  return `${abertura(momento, nome)} A MCF é uma mentoria de incorporação imobiliária; o closer vende a parceria. Use SOMENTE o JSON de CONTEXTO abaixo.
 REGRAS
 - Nunca deduza nem complete com o que seria plausível. Só escreva o que está no contexto.
 - Cada item tem "fontes": anamnese (formulário de entrada), qualificacao (qualificação do SDR), agendamento (nota_do_agendamento da reunião), nota_closer (nota_do_closer, observacao_r2, notas_extras, motivo_resultado), nota_equipe (notas_da_equipe), contato (registros_de_contato), ligacao (resumos_de_ligacao), r1 / r2 (gravação da reunião desse tipo), pagamento (compras_e_pagamentos), agenda (datas e status das reuniões).
@@ -69,7 +76,11 @@ REGRAS
   - lacuna: renda, terreno, sócio, experiência ou objetivo que não aparecem em nenhuma fonte; combinado da R1 sem registro de que foi feito.
 - REUNIÃO EM GRUPO: se a reunião tem "outros_participantes_no_horario", o resumo da gravação fala de várias pessoas. Use apenas o que for claramente sobre ${nome}; na dúvida, não use. Se "lead_estava_na_gravacao" for false, ignore a gravação.
 - Status de reunião: invited = agendada, completed = realizada, no_show = faltou, contract_paid = pagou o contrato na reunião, desistencia = desistiu, rescheduled = reagendada.
-- faixa_aporte é a faixa do formulário em milhares (50 = R$ 50 mil). Não interprete códigos que você não entende (ex.: urgencia_operacao "1_3"): omita.
+- faixa_aporte é a faixa do formulário em milhares (50 = R$ 50 mil).
+- urgencia_operacao: imediata = quer começar já; 1_3 = em 1 a 3 meses; 3_6 = em 3 a 6 meses; sem_pressa = sem pressa.
+- situacao_credito: limpo, restricao_leve, negativado ou nao_sei (não sabe). restricao_leve e nao_sei também entram em atencao (risco).
+- ja_falado: comece cada item com a reunião e a data (ex.: 'R1 29/10: ...').
+- Em POS_R1 e COMPLETO, 'perguntas' são os próximos passos ou pendências que o closer deve resolver, não perguntas de reunião.
 - perguntas: 2 a 4 perguntas para o closer fazer, tiradas das lacunas, divergências e riscos.
 - Nunca inclua telefone, e-mail, CPF ou Instagram.
 - Frases curtas (até 20 palavras), datas DD/MM, valores em R$, português do Brasil.

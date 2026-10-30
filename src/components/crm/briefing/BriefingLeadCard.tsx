@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
-  rotuloFonte, estiloAtencao, fontesUsadas, geradoHa,
+  rotuloFonte, estiloAtencao, tituloMomento, tituloPerguntas, fontesUsadas, geradoHa,
   type BriefingConteudo, type BriefingItem,
 } from '@/lib/briefingLead';
 
@@ -84,7 +84,7 @@ export function BriefingLeadCard({ dealId }: { dealId: string }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wide text-lime-600 dark:text-lime-400">
-            Briefing para a {b.momento ?? 'R1'}
+            {tituloMomento(b.momento)}
           </div>
           {temConteudo && (
             <div className="text-[10px] text-muted-foreground">
@@ -159,7 +159,7 @@ export function BriefingLeadCard({ dealId }: { dealId: string }) {
             </Secao>
           )}
           {c.perguntas?.length > 0 && (
-            <Secao titulo="Para a reunião">
+            <Secao titulo={tituloPerguntas(b.momento)}>
               <ol className="list-decimal pl-4 space-y-0.5 text-xs">
                 {c.perguntas.map((p, i) => <li key={i}>{p}</li>)}
               </ol>
