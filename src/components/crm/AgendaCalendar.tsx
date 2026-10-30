@@ -1,3 +1,4 @@
+import { useBriefingsResumo } from '@/hooks/useDealBriefing';
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval, isAfter } from 'date-fns';
@@ -321,6 +322,12 @@ export function AgendaCalendar({
     );
   }, [meetings]);
   const channelMap = useAttendeeChannels(channelInputs);
+  // Briefing IA: resumo/alerta em lote para todos os participantes visíveis.
+  const briefingDealIds = useMemo(
+    () => meetings.flatMap(m => (m.attendees || []).map(a => a.deal_id || '')),
+    [meetings],
+  );
+  const { data: briefingMap } = useBriefingsResumo(briefingDealIds);
 
   // R2 special markings (only relevant when this calendar shows R2 meetings).
   const { data: specialMarkings = [] } = useActiveR2SpecialMarkings();
@@ -936,7 +943,15 @@ export function AgendaCalendar({
                                         <div key={att.id} className="flex items-center justify-between p-2 rounded bg-muted/30">
                                           <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
-                                            <span className="text-sm">{att.attendee_name || att.contact?.name || att.deal?.name || 'Lead'}</span>
+                                            <div className="min-w-0">
+                                              <span className="text-sm">{att.attendee_name || att.contact?.name || att.deal?.name || 'Lead'}</span>
+                                              {att.deal_id && briefingMap?.get(att.deal_id)?.resumo && (
+                                                <div className="text-[11px] text-muted-foreground truncate max-w-[220px]">{briefingMap.get(att.deal_id)!.resumo}</div>
+                                              )}
+                                              {att.deal_id && briefingMap?.get(att.deal_id)?.alerta && (
+                                                <div className="text-[11px] text-amber-600 dark:text-amber-400 truncate max-w-[220px]">{briefingMap.get(att.deal_id)!.alerta}</div>
+                                              )}
+                                            </div>
                                             <RefundedBadge date={(att as any).refunded_at} />
                                             <LeadSegmentBadge
                                               segment={att.deal?.icp_segment ?? meeting.deal?.icp_segment}

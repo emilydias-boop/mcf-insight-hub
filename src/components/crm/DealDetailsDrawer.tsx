@@ -38,6 +38,7 @@ import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DealProdutosAdquiridosTab } from './DealProdutosAdquiridosTab';
 import { CreditoEsteiraActions } from '@/components/crm/credito/CreditoEsteiraActions';
+import { BriefingLeadCard } from '@/components/crm/briefing/BriefingLeadCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBUContext } from '@/contexts/BUContext';
 import { CONSORCIO_ORIGIN_IDS } from '@/hooks/useConsorcioPostMeeting';
@@ -191,6 +192,8 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
                 </div>
 
                 <TabsContent value="resumo" className="mt-0 p-4 space-y-3">
+              {/* ===== BRIEFING IA (só aparece se existir linha em deal_briefing_ia) ===== */}
+              <BriefingLeadCard dealId={deal.id} />
               {/* ===== ORIGEM HARVEY (custom_fields.stage_harvey) ===== */}
               <HarveyOrigemCard customFields={deal.custom_fields as Record<string, unknown> | null} />
 

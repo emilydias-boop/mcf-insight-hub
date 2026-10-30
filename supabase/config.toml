@@ -303,3 +303,6 @@ verify_jwt = false
 
 [functions.gerar-script-piloto]
 verify_jwt = false
+
+[functions.briefing-lead-gerar]
+verify_jwt = false
