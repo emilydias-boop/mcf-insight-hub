@@ -1,5 +1,6 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
+import { AvatarUploader } from "@/components/profile/AvatarUploader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -383,11 +384,6 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         {/* ===== HEADER FIXO ===== */}
         <SheetHeader className="pb-4">
           <div className="flex items-start gap-4">
-            <Avatar className="h-16 w-16 border-2 border-border">
-              <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
-                {userDetails.full_name?.[0]?.toUpperCase() || userDetails.email[0].toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold text-foreground truncate">
                 {userDetails.full_name || "Sem nome"}
@@ -437,6 +433,15 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
               </AlertDialogContent>
             </AlertDialog>
           </div>
+
+          <div className="mt-3">
+            <AvatarUploader
+              userId={userDetails.id}
+              nome={userDetails.full_name || userDetails.email || ""}
+              avatarUrl={(userDetails as any).avatar_url ?? null}
+            />
+          </div>
+
           
           {/* Info dates */}
           <div className="flex items-center gap-4 text-xs text-muted-foreground mt-3 pt-3 border-t border-border">

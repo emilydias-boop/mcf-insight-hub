@@ -1,4 +1,7 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { AvatarUploader } from "@/components/profile/AvatarUploader";
 import { Badge } from "@/components/ui/badge";
 import { EMPLOYEE_STATUS_LABELS } from "@/types/hr";
 import type { Employee } from "@/types/hr";
@@ -20,15 +23,20 @@ export function MeuRHHeader({ employee, gestorName }: MeuRHHeaderProps) {
     .join('')
     .toUpperCase();
 
+  const { user } = useAuth();
+  const { data: avatarUrl } = useQuery({
+    queryKey: ["my-avatar", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("avatar_url").eq("id", user!.id).maybeSingle();
+      return (data?.avatar_url as string | null) ?? null;
+    },
+  });
+
   return (
     <div className="space-y-4">
       {/* Main header */}
       <div className="flex items-start gap-4">
-        <Avatar className="h-16 w-16 border-2 border-primary/20">
-          <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
         
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-3">
@@ -41,6 +49,11 @@ export function MeuRHHeader({ employee, gestorName }: MeuRHHeaderProps) {
           <p className="text-xs text-muted-foreground/70">
             Essas são as informações cadastradas sobre você na MCF
           </p>
+          {user?.id && (
+            <div className="pt-2">
+              <AvatarUploader userId={user.id} nome={employee.nome_completo} avatarUrl={avatarUrl ?? null} />
+            </div>
+          )}
         </div>
       </div>
 

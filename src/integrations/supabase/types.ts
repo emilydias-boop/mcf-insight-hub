@@ -23871,6 +23871,15 @@ export type Database = {
         Args: { _ate: string; _de: string }
         Returns: Json
       }
+      tv_consorcio_blocos_semana: {
+        Args: { _ini: string }
+        Returns: {
+          ate: string
+          de: string
+          du: number
+          idx: number
+        }[]
+      }
       tv_consorcio_contratos: {
         Args: { _ate: string; _de: string }
         Returns: Json
@@ -23887,7 +23896,7 @@ export type Database = {
         Returns: Json
       }
       tv_consorcio_semanas_producao: {
-        Args: { _hoje: string; _ini: string }
+        Args: { _hoje: string; _ini: string; _meta?: number }
         Returns: Json
       }
       tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
