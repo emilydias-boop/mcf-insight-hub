@@ -168,10 +168,12 @@ function KpiCard({ icon, titulo, dia, mes, diaB, mesB }: {
   return (
     <div className="rounded-2xl border p-[1.3rem] flex items-center gap-[1.3rem] min-h-0 overflow-hidden"
       style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER }}>
-      <div className="rounded-xl flex items-center justify-center shrink-0"
-        style={{ width: "4.6rem", height: "4.6rem", backgroundColor: "rgba(198,255,0,0.10)", color: ACCENT }}>{icon}</div>
       <div className="flex-1 min-w-0 flex flex-col h-full">
-        <div className="uppercase tracking-[0.18em] font-black text-white text-[1.25rem]">{titulo}</div>
+        <div className="flex items-center gap-[0.8rem]">
+          <div className="rounded-xl flex items-center justify-center shrink-0"
+            style={{ width: "3.6rem", height: "3.6rem", backgroundColor: "rgba(198,255,0,0.10)", color: ACCENT }}>{icon}</div>
+          <div className="uppercase tracking-[0.18em] font-black text-white text-[1.25rem]">{titulo}</div>
+        </div>
         <div className="flex-1 flex items-stretch gap-[1.2rem] mt-[0.4rem]">
           {col("Hoje", dia, diaB, ACCENT)}
           <div className="w-px" style={{ backgroundColor: CARD_BORDER }} />
@@ -218,7 +220,7 @@ function SdrChart({ rows }: { rows: ComAvatar<TVSdrRankingRow>[] }) {
       <div className="h-px w-full" style={{ backgroundColor: "rgba(255,255,255,0.18)" }} />
       <div className="grid gap-[0.8rem]" style={{ gridTemplateColumns: `repeat(${n}, minmax(0,1fr))` }}>
         {rows.map((r, i) => (
-          <div key={r.sdr_name + i} className="flex flex-col items-center min-w-0 -mt-[1rem]">
+          <div key={r.sdr_name + i} className="flex flex-col items-center min-w-0 -mt-[1rem] relative z-10">
             <Selo idx={i} size="2rem" />
             <div className="mt-[0.4rem]"><Avatar nome={r.sdr_name} url={r.avatar_url} size="3.4rem" /></div>
             <div className="mt-[0.3rem] text-white font-bold text-[1rem] leading-tight text-center line-clamp-2">{nomeCurto(r.sdr_name)}</div>
