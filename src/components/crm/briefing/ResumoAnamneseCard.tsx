@@ -5,6 +5,7 @@ import { useLeadProfile } from '@/hooks/useLeadProfile';
 import { useQualificationNote } from '@/hooks/useQualificationNote';
 import { cn } from '@/lib/utils';
 import { montarResumoAnamnese } from '@/lib/resumoAnamnese';
+import { NotasOriginaisReuniao } from './NotasOriginaisReuniao';
 
 /** Resumo da anamnese para o SDR, enquanto o negócio não tem briefing de IA com conteúdo. */
 export function ResumoAnamneseCard({ dealId, contactId }: { dealId: string; contactId?: string | null }) {
@@ -28,6 +29,8 @@ export function ResumoAnamneseCard({ dealId, contactId }: { dealId: string; cont
       </div>
 
       {r.texto && <p className="text-[13px] leading-relaxed">{r.texto}</p>}
+
+      <NotasOriginaisReuniao dealId={dealId} soSdr />
 
       {r.alertas.length > 0 && (
         <ul className="space-y-1">

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, ListTree } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useDealBriefing } from '@/hooks/useDealBriefing';
+import { NotasOriginaisReuniao } from './NotasOriginaisReuniao';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -61,6 +62,7 @@ export function BriefingLeadCard({ dealId }: { dealId: string }) {
     const recarregar = () => {
       qc.invalidateQueries({ queryKey: ['deal-briefing', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-briefing-resumo'] });
+      qc.invalidateQueries({ queryKey: ['notas-reuniao', dealId] });
     };
     try {
       const { error } = await supabase.rpc('solicitar_briefing', { p_deal_id: dealId });
@@ -104,6 +106,8 @@ export function BriefingLeadCard({ dealId }: { dealId: string }) {
           </Button>
         </div>
       </div>
+
+      <NotasOriginaisReuniao dealId={dealId} />
 
       {verFontes && temConteudo && (
         <div className="rounded border border-border bg-muted/40 p-2 text-[11px]">
