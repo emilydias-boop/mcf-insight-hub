@@ -614,7 +614,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 p-6 [&>[data-radix-scroll-area-viewport]>div]:!block">
           <div className="space-y-6">
             {/* Video Conference Link Section - Primary action */}
             {videoConferenceLink && (
@@ -710,7 +710,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     )}
                     onClick={() => setSelectedParticipantId(p.id)}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div 
                         className={cn(
                           "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold",
@@ -720,7 +720,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       >
                         {p.name.charAt(0)}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{p.name}</span>
                           <RefundedBadge date={p.refundedAt} />
