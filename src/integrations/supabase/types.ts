@@ -14905,6 +14905,305 @@ export type Database = {
           },
         ]
       }
+      pauta_viral_coletas: {
+        Row: {
+          apify_runs: Json
+          atualizada_em: string
+          avisos: string | null
+          erro: string | null
+          gatilho: string
+          id: string
+          iniciada_em: string
+          itens_aceitos: number | null
+          itens_recebidos: number | null
+          referencias_escolhidas: string[] | null
+          roteiros_gerados: number | null
+          solicitado_por: string | null
+          status: string
+          tentativas_ia: number
+        }
+        Insert: {
+          apify_runs?: Json
+          atualizada_em?: string
+          avisos?: string | null
+          erro?: string | null
+          gatilho: string
+          id?: string
+          iniciada_em?: string
+          itens_aceitos?: number | null
+          itens_recebidos?: number | null
+          referencias_escolhidas?: string[] | null
+          roteiros_gerados?: number | null
+          solicitado_por?: string | null
+          status?: string
+          tentativas_ia?: number
+        }
+        Update: {
+          apify_runs?: Json
+          atualizada_em?: string
+          avisos?: string | null
+          erro?: string | null
+          gatilho?: string
+          id?: string
+          iniciada_em?: string
+          itens_aceitos?: number | null
+          itens_recebidos?: number | null
+          referencias_escolhidas?: string[] | null
+          roteiros_gerados?: number | null
+          solicitado_por?: string | null
+          status?: string
+          tentativas_ia?: number
+        }
+        Relationships: []
+      }
+      pauta_viral_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          hashtags: string[]
+          hora_lote: number
+          id: number
+          instagram_ativo: boolean
+          janela_dias: number
+          janela_noticias_dias: number
+          min_noticias_por_lote: number
+          min_views: number
+          noticias_ativo: boolean
+          perfis: string[]
+          posts_por_hashtag: number
+          posts_por_perfil: number
+          roteiros_por_lote: number
+          termos_noticias: string[]
+          transcricao: boolean
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          hashtags?: string[]
+          hora_lote?: number
+          id?: number
+          instagram_ativo?: boolean
+          janela_dias?: number
+          janela_noticias_dias?: number
+          min_noticias_por_lote?: number
+          min_views?: number
+          noticias_ativo?: boolean
+          perfis?: string[]
+          posts_por_hashtag?: number
+          posts_por_perfil?: number
+          roteiros_por_lote?: number
+          termos_noticias?: string[]
+          transcricao?: boolean
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          hashtags?: string[]
+          hora_lote?: number
+          id?: number
+          instagram_ativo?: boolean
+          janela_dias?: number
+          janela_noticias_dias?: number
+          min_noticias_por_lote?: number
+          min_views?: number
+          noticias_ativo?: boolean
+          perfis?: string[]
+          posts_por_hashtag?: number
+          posts_por_perfil?: number
+          roteiros_por_lote?: number
+          termos_noticias?: string[]
+          transcricao?: boolean
+        }
+        Relationships: []
+      }
+      pauta_viral_referencias: {
+        Row: {
+          cobertura: number | null
+          coleta_id: string | null
+          coletado_em: string
+          comentarios: number | null
+          curtidas: number | null
+          descartada: boolean
+          dono: string | null
+          duracao_s: number | null
+          fontes_noticia: Json
+          id: string
+          legenda: string | null
+          motivo_descarte: string | null
+          origens: string[]
+          publicado_em: string | null
+          score: number
+          short_code: string
+          tipo: string
+          titulo: string | null
+          transcricao: string | null
+          url: string
+          usada: boolean
+          views: number | null
+          views_estimadas: boolean
+        }
+        Insert: {
+          cobertura?: number | null
+          coleta_id?: string | null
+          coletado_em?: string
+          comentarios?: number | null
+          curtidas?: number | null
+          descartada?: boolean
+          dono?: string | null
+          duracao_s?: number | null
+          fontes_noticia?: Json
+          id?: string
+          legenda?: string | null
+          motivo_descarte?: string | null
+          origens?: string[]
+          publicado_em?: string | null
+          score?: number
+          short_code: string
+          tipo: string
+          titulo?: string | null
+          transcricao?: string | null
+          url: string
+          usada?: boolean
+          views?: number | null
+          views_estimadas?: boolean
+        }
+        Update: {
+          cobertura?: number | null
+          coleta_id?: string | null
+          coletado_em?: string
+          comentarios?: number | null
+          curtidas?: number | null
+          descartada?: boolean
+          dono?: string | null
+          duracao_s?: number | null
+          fontes_noticia?: Json
+          id?: string
+          legenda?: string | null
+          motivo_descarte?: string | null
+          origens?: string[]
+          publicado_em?: string | null
+          score?: number
+          short_code?: string
+          tipo?: string
+          titulo?: string | null
+          transcricao?: string | null
+          url?: string
+          usada?: boolean
+          views?: number | null
+          views_estimadas?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pauta_viral_referencias_coleta_id_fkey"
+            columns: ["coleta_id"]
+            isOneToOne: false
+            referencedRelation: "pauta_viral_coletas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pauta_viral_roteiros: {
+        Row: {
+          coleta_id: string | null
+          conferir: Json
+          criado_em: string
+          cta: string
+          duracao_estimada_s: number | null
+          fechamento: string
+          gancho_a: string
+          gancho_b: string
+          id: string
+          legenda: string
+          lote: string
+          modelo: string | null
+          o_que_adaptamos: string
+          observacao: string | null
+          palavra_chave: string
+          pilar: string
+          pontos: Json
+          por_que_viralizou: string
+          referencia_id: string | null
+          status: string
+          status_em: string | null
+          status_por: string | null
+          tema: string
+          texto_tela: string
+          url_publicada: string | null
+        }
+        Insert: {
+          coleta_id?: string | null
+          conferir?: Json
+          criado_em?: string
+          cta: string
+          duracao_estimada_s?: number | null
+          fechamento: string
+          gancho_a: string
+          gancho_b: string
+          id?: string
+          legenda: string
+          lote?: string
+          modelo?: string | null
+          o_que_adaptamos: string
+          observacao?: string | null
+          palavra_chave: string
+          pilar: string
+          pontos?: Json
+          por_que_viralizou: string
+          referencia_id?: string | null
+          status?: string
+          status_em?: string | null
+          status_por?: string | null
+          tema: string
+          texto_tela: string
+          url_publicada?: string | null
+        }
+        Update: {
+          coleta_id?: string | null
+          conferir?: Json
+          criado_em?: string
+          cta?: string
+          duracao_estimada_s?: number | null
+          fechamento?: string
+          gancho_a?: string
+          gancho_b?: string
+          id?: string
+          legenda?: string
+          lote?: string
+          modelo?: string | null
+          o_que_adaptamos?: string
+          observacao?: string | null
+          palavra_chave?: string
+          pilar?: string
+          pontos?: Json
+          por_que_viralizou?: string
+          referencia_id?: string | null
+          status?: string
+          status_em?: string | null
+          status_por?: string | null
+          tema?: string
+          texto_tela?: string
+          url_publicada?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pauta_viral_roteiros_coleta_id_fkey"
+            columns: ["coleta_id"]
+            isOneToOne: false
+            referencedRelation: "pauta_viral_coletas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pauta_viral_roteiros_referencia_id_fkey"
+            columns: ["referencia_id"]
+            isOneToOne: false
+            referencedRelation: "pauta_viral_referencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_permissions: {
         Row: {
           can_edit: boolean | null
@@ -23695,6 +23994,31 @@ export type Database = {
       }
       parse_finalidade_obra: { Args: { _resposta: string }; Returns: string }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
+      pauta_viral_gravar_roteiros: {
+        Args: {
+          p_avisos: string
+          p_coleta: string
+          p_descartadas: Json
+          p_lote: string
+          p_modelo: string
+          p_roteiros: Json
+        }
+        Returns: number
+      }
+      pauta_viral_mudar_status: {
+        Args: {
+          p_observacao?: string
+          p_roteiro_id: string
+          p_status: string
+          p_url?: string
+        }
+        Returns: undefined
+      }
+      pauta_viral_pode: { Args: { p_user: string }; Returns: boolean }
+      pauta_viral_upsert_referencias: {
+        Args: { p_coleta: string; p_itens: Json }
+        Returns: number
+      }
       phone_key_br: { Args: { _raw: string }; Returns: string }
       pode_editar_meta_sdr: { Args: { p_sdr_id: string }; Returns: boolean }
       pos_venda_aplicar_anamnese_pendente: {
