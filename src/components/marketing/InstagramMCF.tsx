@@ -14,15 +14,27 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 
-type Midia = Database["public"]["Views"]["vw_ig_midias"]["Row"];
+const COLS_MIDIA = "media_id, publicado_em, publicado_brt, hora_brt, produto, tipo, alcance, views, salvamentos, compartilhamentos, interacoes, curtidas, comentarios, taxa_pulo, tempo_medio_ms, thumbnail_url, legenda, permalink, roteiro_id, roteiro_tema" as const;
+type Midia = Pick<Database["public"]["Views"]["vw_ig_midias"]["Row"], "media_id" | "publicado_em" | "publicado_brt" | "hora_brt" | "produto" | "tipo" | "alcance" | "views" | "salvamentos" | "compartilhamentos" | "interacoes" | "curtidas" | "comentarios" | "taxa_pulo" | "tempo_medio_ms" | "thumbnail_url" | "legenda" | "permalink" | "roteiro_id" | "roteiro_tema">;
+type ErroCorpo = { motivo?: string; erro?: string; error?: string };
+
+/** Lê todas as páginas (PostgREST corta em 1.000 linhas). */
+async function fetchAll<T>(page: (i: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await page(i);
+    if (error) throw error;
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < 1000) return out;
+  }
+}
 type ContaDia = Database["public"]["Tables"]["ig_conta_dia"]["Row"];
 
 const nf = new Intl.NumberFormat("pt-BR");
 const nf1 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const fmt = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : nf.format(Math.round(v)));
 const fmtPct = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : `${nf1.format(v)}%`);
-/** taxa_pulo pode vir como fração (0–1) ou percentual. */
-const pulo = (v: number | null | undefined) => (v == null ? null : v <= 1 ? v * 100 : v);
 
 function median(values: (number | null | undefined)[]): number | null {
   const xs = values.filter((v): v is number => v != null && Number.isFinite(v)).sort((a, b) => a - b);
@@ -41,6 +53,7 @@ const fmtBrt = (iso: string | null) => {
   if (!iso) return "—";
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(",", "");
 };
+const run0Rodando = (s: string | undefined) => s === "rodando";
 const isReels = (m: Midia) => m.produto === "REELS";
 const formato = (m: Midia) => (isReels(m) ? "Reels" : m.tipo === "CAROUSEL_ALBUM" ? "Carrossel" : m.tipo === "IMAGE" ? "Imagem" : m.tipo ?? "—");
 
@@ -59,7 +72,28 @@ function Kpi({ label, value, tip, note }: { label: string; value: string; tip: s
   );
 }
 
+function Thumb({ url }: { url: string | null }) {
+  const [falhou, setFalhou] = useState(false);
+  if (!url || falhou) return <div className="flex h-[40px] w-[40px] items-center justify-center rounded bg-muted"><ImageIcon className="h-[16px] w-[16px] text-muted-foreground" /></div>;
+  return <img src={url} alt="" className="h-[40px] w-[40px] rounded object-cover" loading="lazy" onError={() => setFalhou(true)} />;
+}
+
+function ErroCard({ msg, onRetry }: { msg: string; onRetry: () => void }) {
+  return (
+    <Card><CardContent className="flex flex-col gap-[8px] p-[16px] text-[13px] sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-destructive">Erro ao carregar os números do Instagram: {msg}</span>
+      <Button variant="outline" onClick={onRetry} className="h-[32px] px-[10px] text-[12px]">Tentar de novo</Button>
+    </CardContent></Card>
+  );
+}
+
 type SortKey = "publicado_em" | "views" | "alcance" | "salvamentos" | "compartilhamentos" | "interacoes" | "taxa_pulo" | "tempo_medio_ms";
+
+function Th({ k, sortKey, sortDesc, ordenar, children }: { k: SortKey; sortKey: SortKey; sortDesc: boolean; ordenar: (k: SortKey) => void; children: React.ReactNode }) {
+  return (
+    <TableHead className="whitespace-nowrap text-right text-[12px]" aria-sort={k === sortKey ? (sortDesc ? "descending" : "ascending") : "none"}><button type="button" onClick={() => ordenar(k)} className="inline-flex items-center gap-[4px]">{children}<ArrowUpDown className="h-[11px] w-[11px]" /></button></TableHead>
+  );
+}
 
 export function InstagramMCF({ from, to }: { from: string; to: string }) {
   const { user } = useAuth();
@@ -68,7 +102,7 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
   const [sortKey, setSortKey] = useState<SortKey>("alcance");
   const [sortDesc, setSortDesc] = useState(true);
   const [page, setPage] = useState(0);
-  const [aberto, setAberto] = useState<Midia | null>(null);
+  const [abertoId, setAbertoId] = useState<string | null>(null);
 
   const pode = useQuery({
     queryKey: ["ig-pode", user?.id],
@@ -90,9 +124,15 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
     const { data, error } = await supabase.from("ig_sync_runs").select("*").order("iniciado_em", { ascending: false }).limit(1).maybeSingle();
     if (error) throw error; return data;
   } });
-  const dias = useQuery({ queryKey: ["ig", "dias", from, to], enabled: ok, queryFn: async () => {
-    const { data, error } = await supabase.from("ig_conta_dia").select("*").gte("data", from).lte("data", to).order("data");
-    if (error) throw error; return (data ?? []) as ContaDia[];
+  const ultimaConcluida = useQuery({ queryKey: ["ig", "sync-concluida"], enabled: ok, queryFn: async () => {
+    const { data, error } = await supabase.from("ig_sync_runs").select("terminado_em").not("terminado_em", "is", null).order("terminado_em", { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error; return data;
+  } });
+  const dias = useQuery({ queryKey: ["ig", "dias", from, to], enabled: ok, queryFn: () =>
+    fetchAll<ContaDia>(i => supabase.from("ig_conta_dia").select("*").gte("data", from).lte("data", to).order("data").range(i, i + 999)) });
+  const fim = useQuery({ queryKey: ["ig", "fim", to], enabled: ok, queryFn: async () => {
+    const { data, error } = await supabase.from("ig_conta_dia").select("data, seguidores").not("seguidores", "is", null).lte("data", to).order("data", { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error; return data;
   } });
   const inicio = useQuery({ queryKey: ["ig", "inicio", from], enabled: ok, queryFn: async () => {
     const { data, error } = await supabase.from("ig_conta_dia").select("data, seguidores").not("seguidores", "is", null).lte("data", from).order("data", { ascending: false }).limit(1).maybeSingle();
@@ -102,10 +142,10 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
     const { data, error } = await supabase.from("ig_conta_dia").select("data").not("seguidores", "is", null).order("data").limit(1).maybeSingle();
     if (error) throw error; return data;
   } });
-  const midias = useQuery({ queryKey: ["ig", "midias", from, to], enabled: ok, queryFn: async () => {
-    const { data, error } = await supabase.from("vw_ig_midias").select("*").gte("publicado_brt", `${from}T00:00:00`).lte("publicado_brt", `${to}T23:59:59`).order("publicado_em", { ascending: false });
-    if (error) throw error; return (data ?? []) as Midia[];
-  } });
+  const midias = useQuery({ queryKey: ["ig", "midias", from, to], enabled: ok, queryFn: () =>
+    fetchAll<Midia>(i => supabase.from("vw_ig_midias").select(COLS_MIDIA).gte("publicado_brt", `${from}T00:00:00`).lte("publicado_brt", `${to}T23:59:59`).order("publicado_em", { ascending: false }).order("media_id").range(i, i + 999)) });
+  const posts = midias.data ?? [];
+  const aberto = abertoId ? posts.find(p => p.media_id === abertoId) ?? null : null;
   const curva = useQuery({ queryKey: ["ig", "curva", aberto?.media_id], enabled: ok && !!aberto?.media_id, queryFn: async () => {
     const { data, error } = await supabase.from("ig_midia_dia").select("*").eq("media_id", aberto!.media_id!).order("dias_desde_post");
     if (error) throw error; return data ?? [];
@@ -117,10 +157,14 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
       const { data, error } = await supabase.functions.invoke("ig-sync", { body: {} });
       if (error) {
         let msg = error.message;
-        try { const body = await (error as { context?: { json?: () => Promise<{ motivo?: string; erro?: string }> } }).context?.json?.(); msg = body?.motivo ?? body?.erro ?? msg; } catch { /* sem corpo */ }
+        try { const body = await (error as { context?: { json?: () => Promise<ErroCorpo> } }).context?.json?.(); msg = body?.motivo ?? body?.erro ?? body?.error ?? error.message; } catch { /* sem corpo */ }
         toast.error(msg);
-      } else if (data?.ok) {
+      } else if (data?.ok && data.status === "parcial") {
+        toast.warning(`Carga parcial: ${nf.format(data.dias_lidos ?? 0)} dias e ${nf.format(data.midias_lidas ?? 0)} posts; a próxima rodada continua`, data.erro ? { description: data.erro } : undefined);
+      } else if (data?.ok && data.status === "ok") {
         toast.success(`Atualizado: ${nf.format(data.dias_lidos ?? 0)} dias e ${nf.format(data.midias_lidas ?? 0)} posts`);
+      } else if (data?.ok) {
+        toast.message(`Status da atualização: ${data.status ?? "—"}`);
       } else {
         toast.error(data?.motivo ?? data?.erro ?? "Falha ao atualizar");
       }
@@ -132,12 +176,12 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
     }
   };
 
-  const posts = midias.data ?? [];
   const d = dias.data ?? [];
+  /** Escala da taxa de pulo decidida uma vez para o conjunto. */
+  const puloEmPct = posts.some(p => p.taxa_pulo != null && p.taxa_pulo > 1);
+  const pulo = (v: number | null | undefined) => (v == null ? null : puloEmPct ? v : v * 100);
 
   const calc = useMemo(() => {
-    const comFoto = d.filter(x => x.seguidores != null);
-    const segFim = comFoto.length ? comFoto[comFoto.length - 1].seguidores : null;
     const reels = posts.filter(isReels);
     const grupos = [
       { nome: "Reels", itens: reels, reels: true },
@@ -148,10 +192,12 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
     posts.forEach(p => { if (p.hora_brt != null) horas.set(p.hora_brt, [...(horas.get(p.hora_brt) ?? []), p]); });
     const porHora = [...horas.entries()].filter(([, v]) => v.length >= 3).map(([h, v]) => ({ h, n: v.length, alc: median(v.map(x => x.alcance)), pulo: median(v.filter(isReels).map(x => pulo(x.taxa_pulo))) })).sort((a, b) => a.h - b.h);
     const comAlc = porHora.filter(x => x.alc != null);
-    const melhor = comAlc.length > 1 ? comAlc.reduce((a, b) => (b.alc! > a.alc! ? b : a)).h : null;
-    const pior = comAlc.length > 1 ? comAlc.reduce((a, b) => (b.alc! < a.alc! ? b : a)).h : null;
+    const maxH = comAlc.length ? comAlc.reduce((a, b) => (b.alc! > a.alc! ? b : a)) : null;
+    const minH = comAlc.length ? comAlc.reduce((a, b) => (b.alc! < a.alc! ? b : a)) : null;
+    const distintos = !!maxH && !!minH && maxH.alc! > minH.alc!;
+    const melhor = distintos ? maxH!.h : null;
+    const pior = distintos ? minH!.h : null;
     return {
-      segFim,
       alcance: sum(d.map(x => x.alcance)), views: sum(d.map(x => x.views)), interacoes: sum(d.map(x => x.interacoes)),
       salv: sum(d.map(x => x.salvamentos)), comp: sum(d.map(x => x.compartilhamentos)),
       alcMed: median(posts.map(p => p.alcance)),
@@ -160,33 +206,37 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
       grupos, porHora, melhor, pior,
       chart: d.map(x => ({ dia: ddmm(x.data), alcance: x.alcance, views: x.views, seguidores: x.seguidores })),
     };
-  }, [d, posts]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d, posts, puloEmPct]);
 
   const ordenados = useMemo(() => {
-    const val = (p: Midia) => (sortKey === "publicado_em" ? (p.publicado_em ? Date.parse(p.publicado_em) : null) : (p[sortKey] as number | null));
+    const val = (p: Midia) => (sortKey === "publicado_em" ? (p.publicado_em ? Date.parse(p.publicado_em) : null) : sortKey === "taxa_pulo" ? pulo(p.taxa_pulo) : (p[sortKey] as number | null));
     return [...posts].sort((a, b) => {
       const va = val(a), vb = val(b);
       if (va == null && vb == null) return 0; if (va == null) return 1; if (vb == null) return -1;
       return sortDesc ? vb - va : va - vb;
     });
-  }, [posts, sortKey, sortDesc]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts, sortKey, sortDesc, puloEmPct]);
   const paginas = Math.max(1, Math.ceil(ordenados.length / 25));
   const pagina = Math.min(page, paginas - 1);
   const visiveis = ordenados.slice(pagina * 25, pagina * 25 + 25);
   const ordenar = (k: SortKey) => { if (k === sortKey) setSortDesc(!sortDesc); else { setSortKey(k); setSortDesc(true); } setPage(0); };
 
   if (pode.isLoading || (!user && !pode.data)) return <Skeleton className="h-[200px] w-full" />;
-  if (!ok) return <Card><CardContent className="p-[16px] text-[13px] text-muted-foreground">Sem acesso aos números do Instagram</CardContent></Card>;
+  if (pode.error) return <ErroCard msg={(pode.error as Error).message} onRetry={() => pode.refetch()} />;
+  if (pode.data === false) return <Card><CardContent className="p-[16px] text-[13px] text-muted-foreground">Sem acesso aos números do Instagram</CardContent></Card>;
 
-  const carregando = conta.isLoading || dias.isLoading || midias.isLoading;
+  const falhas = [conta, dias, midias, fim, inicio].filter(q => q.error);
+  if (falhas.length) return <ErroCard msg={(falhas[0].error as Error).message} onRetry={() => falhas.forEach(q => q.refetch())} />;
+  const carregando = conta.isLoading || dias.isLoading || midias.isLoading || fim.isLoading || inicio.isLoading;
+  const rodando = run0Rodando(sync.data?.status);
   const semDados = !carregando && !conta.data && !d.length && !posts.length;
   const run = sync.data;
   const segIni = inicio.data?.seguidores ?? null;
-  const variacao = calc.segFim != null && segIni != null ? calc.segFim - segIni : null;
-
-  const Th = ({ k, children }: { k: SortKey; children: React.ReactNode }) => (
-    <TableHead className="whitespace-nowrap text-right text-[12px]"><button type="button" onClick={() => ordenar(k)} className="inline-flex items-center gap-[4px]">{children}<ArrowUpDown className="h-[11px] w-[11px]" /></button></TableHead>
-  );
+  const segFim = fim.data?.seguidores ?? null;
+  const variacao = segFim != null && segIni != null ? segFim - segIni : null;
+  const thp = { sortKey, sortDesc, ordenar };
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -201,10 +251,11 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
               </div>
             </div>
             <div className="flex flex-col items-start gap-[6px] sm:items-end">
-              <div className="text-[12px] text-muted-foreground">{run?.terminado_em ? `Atualizado em ${fmtBrt(run.terminado_em)}` : "Ainda não sincronizado"}</div>
+              <div className="text-[12px] text-muted-foreground">{ultimaConcluida.data?.terminado_em ? `Atualizado em ${fmtBrt(ultimaConcluida.data.terminado_em)}` : "Ainda não sincronizado"}</div>
+              {rodando && <div className="text-[12px] text-muted-foreground">Atualização em andamento</div>}
               {run?.status === "erro" && run.erro && <div className="max-w-[360px] text-[12px] text-destructive">{run.erro}</div>}
               {run?.status === "parcial" && <div className="text-[12px] text-muted-foreground">Carga em andamento: a próxima rodada continua</div>}
-              <Button onClick={atualizar} disabled={syncing} className="h-[36px] px-[12px] text-[12px]">{syncing ? "Atualizando…" : "Atualizar agora"}</Button>
+              <Button onClick={atualizar} disabled={syncing || rodando} className="h-[36px] px-[12px] text-[12px]">{syncing ? "Atualizando…" : "Atualizar agora"}</Button>
             </div>
           </CardContent>
         </Card>
@@ -213,9 +264,9 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
           <Card><CardContent className="p-[16px] text-[13px] text-muted-foreground">Ainda não há números do Instagram. Clique em Atualizar agora.</CardContent></Card>
         ) : <>
           <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2 lg:grid-cols-5">
-            <Kpi label="Seguidores" value={fmt(calc.segFim)}
+            <Kpi label="Seguidores" value={fmt(segFim)}
               tip="Último total de seguidores registrado até o fim do período, comparado com a última foto até o início."
-              note={variacao != null ? `${variacao >= 0 ? "+" : ""}${nf.format(variacao)} no período` : primeiraFoto.data?.data ? `histórico começa em ${ddmm(primeiraFoto.data.data)}` : undefined} />
+              note={variacao != null ? `${variacao >= 0 ? "+" : ""}${nf.format(variacao)} no período` : !inicio.data && primeiraFoto.data?.data ? `histórico começa em ${ddmm(primeiraFoto.data.data)}` : undefined} />
             <Kpi label="Alcance diário somado" value={fmt(calc.alcance)} tip="Soma do alcance de cada dia: a mesma pessoa em dias diferentes conta mais de uma vez." />
             <Kpi label="Views" value={fmt(calc.views)} tip="Soma das visualizações diárias da conta no período." />
             <Kpi label="Interações" value={fmt(calc.interacoes)} tip="Soma das interações diárias da conta (curtidas, comentários, salvamentos, compartilhamentos)." />
@@ -240,7 +291,7 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line yAxisId="l" dataKey="alcance" name="Alcance" stroke="hsl(var(--primary))" dot={false} />
                   <Line yAxisId="l" dataKey="views" name="Views" stroke="hsl(var(--muted-foreground))" dot={false} />
-                  <Line yAxisId="r" dataKey="seguidores" name="Seguidores" stroke="hsl(var(--destructive))" dot={false} connectNulls />
+                  <Line yAxisId="r" dataKey="seguidores" name="Seguidores" stroke="hsl(var(--destructive))" dot={{ r: 2 }} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -293,12 +344,12 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
                   <TableHead className="whitespace-nowrap text-[12px]"><button type="button" onClick={() => ordenar("publicado_em")} className="inline-flex items-center gap-[4px]">Data<ArrowUpDown className="h-[11px] w-[11px]" /></button></TableHead>
                   <TableHead className="text-[12px]">Formato</TableHead>
                   <TableHead className="text-[12px]">Legenda</TableHead>
-                  <Th k="views">Views</Th><Th k="alcance">Alcance</Th><Th k="salvamentos">Salv.</Th><Th k="compartilhamentos">Comp.</Th><Th k="interacoes">Interações</Th><Th k="taxa_pulo">Pulo</Th><Th k="tempo_medio_ms">Tempo médio (s)</Th>
+                  <Th {...thp} k="views">Views</Th><Th {...thp} k="alcance">Alcance</Th><Th {...thp} k="salvamentos">Salv.</Th><Th {...thp} k="compartilhamentos">Comp.</Th><Th {...thp} k="interacoes">Interações</Th><Th {...thp} k="taxa_pulo">Pulo</Th><Th {...thp} k="tempo_medio_ms">Tempo médio (s)</Th>
                   <TableHead className="text-[12px]" />
                 </TableRow></TableHeader>
                 <TableBody>{visiveis.map(p => (
-                  <TableRow key={p.media_id ?? p.permalink ?? ""} className="cursor-pointer text-[12px]" onClick={() => setAberto(p)}>
-                    <TableCell>{p.thumbnail_url ? <img src={p.thumbnail_url} alt="" className="h-[40px] w-[40px] rounded object-cover" loading="lazy" /> : <div className="flex h-[40px] w-[40px] items-center justify-center rounded bg-muted"><ImageIcon className="h-[16px] w-[16px] text-muted-foreground" /></div>}</TableCell>
+                  <TableRow key={p.media_id ?? p.permalink ?? ""} className="cursor-pointer text-[12px]" onClick={() => setAbertoId(p.media_id)}>
+                    <TableCell><Thumb url={p.thumbnail_url} /></TableCell>
                     <TableCell className="whitespace-nowrap tabular-nums">{ddmmhhmm(p.publicado_brt)}</TableCell>
                     <TableCell className="whitespace-nowrap">{formato(p)}</TableCell>
                     <TableCell className="max-w-[260px]">
@@ -328,7 +379,7 @@ export function InstagramMCF({ from, to }: { from: string; to: string }) {
 
         <p className="text-[11px] text-muted-foreground">A Meta guarda as métricas da conta por 90 dias e as dos posts por 2 anos. O total de seguidores só tem histórico a partir da primeira sincronização. Cliques no link da bio não são mais entregues pela API. Stories não entram.</p>
 
-        <Sheet open={!!aberto} onOpenChange={o => { if (!o) setAberto(null); }}>
+        <Sheet open={!!aberto} onOpenChange={o => { if (!o) setAbertoId(null); }}>
           <SheetContent className="w-full overflow-y-auto sm:max-w-[520px]">
             {aberto && <>
               <SheetHeader><SheetTitle className="text-[15px]">{formato(aberto)} · {ddmmhhmm(aberto.publicado_brt)}</SheetTitle></SheetHeader>
