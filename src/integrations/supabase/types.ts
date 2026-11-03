@@ -12534,6 +12534,298 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_conta_dia: {
+        Row: {
+          alcance: number | null
+          cliques_link: number | null
+          comentarios: number | null
+          compartilhamentos: number | null
+          contas_engajadas: number | null
+          curtidas: number | null
+          data: string
+          ig_user_id: string
+          interacoes: number | null
+          novos_seguidores: number | null
+          raw: Json
+          salvamentos: number | null
+          seguidores: number | null
+          sincronizado_em: string
+          views: number | null
+          visitas_perfil: number | null
+        }
+        Insert: {
+          alcance?: number | null
+          cliques_link?: number | null
+          comentarios?: number | null
+          compartilhamentos?: number | null
+          contas_engajadas?: number | null
+          curtidas?: number | null
+          data: string
+          ig_user_id: string
+          interacoes?: number | null
+          novos_seguidores?: number | null
+          raw?: Json
+          salvamentos?: number | null
+          seguidores?: number | null
+          sincronizado_em?: string
+          views?: number | null
+          visitas_perfil?: number | null
+        }
+        Update: {
+          alcance?: number | null
+          cliques_link?: number | null
+          comentarios?: number | null
+          compartilhamentos?: number | null
+          contas_engajadas?: number | null
+          curtidas?: number | null
+          data?: string
+          ig_user_id?: string
+          interacoes?: number | null
+          novos_seguidores?: number | null
+          raw?: Json
+          salvamentos?: number | null
+          seguidores?: number | null
+          sincronizado_em?: string
+          views?: number | null
+          visitas_perfil?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_conta_dia_ig_user_id_fkey"
+            columns: ["ig_user_id"]
+            isOneToOne: false
+            referencedRelation: "ig_contas"
+            referencedColumns: ["ig_user_id"]
+          },
+        ]
+      }
+      ig_contas: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          backfill_concluido: boolean
+          foto_url: string | null
+          ig_user_id: string
+          nome: string | null
+          page_id: string | null
+          posts: number | null
+          seguidores: number | null
+          seguindo: number | null
+          username: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          backfill_concluido?: boolean
+          foto_url?: string | null
+          ig_user_id: string
+          nome?: string | null
+          page_id?: string | null
+          posts?: number | null
+          seguidores?: number | null
+          seguindo?: number | null
+          username: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          backfill_concluido?: boolean
+          foto_url?: string | null
+          ig_user_id?: string
+          nome?: string | null
+          page_id?: string | null
+          posts?: number | null
+          seguidores?: number | null
+          seguindo?: number | null
+          username?: string
+        }
+        Relationships: []
+      }
+      ig_midia_dia: {
+        Row: {
+          alcance: number | null
+          compartilhamentos: number | null
+          data: string
+          dias_desde_post: number
+          interacoes: number | null
+          media_id: string
+          salvamentos: number | null
+          views: number | null
+        }
+        Insert: {
+          alcance?: number | null
+          compartilhamentos?: number | null
+          data: string
+          dias_desde_post: number
+          interacoes?: number | null
+          media_id: string
+          salvamentos?: number | null
+          views?: number | null
+        }
+        Update: {
+          alcance?: number | null
+          compartilhamentos?: number | null
+          data?: string
+          dias_desde_post?: number
+          interacoes?: number | null
+          media_id?: string
+          salvamentos?: number | null
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_midia_dia_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "ig_midias"
+            referencedColumns: ["media_id"]
+          },
+          {
+            foreignKeyName: "ig_midia_dia_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "vw_ig_midias"
+            referencedColumns: ["media_id"]
+          },
+        ]
+      }
+      ig_midias: {
+        Row: {
+          alcance: number | null
+          comentarios: number | null
+          compartilhamentos: number | null
+          curtidas: number | null
+          ig_user_id: string
+          interacoes: number | null
+          legenda: string | null
+          media_id: string
+          metricas_em: string | null
+          metricas_erro: string | null
+          metricas_erro_em: string | null
+          metricas_falhas: number
+          permalink: string | null
+          produto: string | null
+          publicado_em: string
+          raw: Json
+          salvamentos: number | null
+          seguidores_ganhos: number | null
+          shortcode: string | null
+          sincronizado_em: string
+          taxa_pulo: number | null
+          tempo_medio_ms: number | null
+          tempo_total_ms: number | null
+          thumbnail_url: string | null
+          tipo: string | null
+          views: number | null
+          visitas_perfil: number | null
+        }
+        Insert: {
+          alcance?: number | null
+          comentarios?: number | null
+          compartilhamentos?: number | null
+          curtidas?: number | null
+          ig_user_id: string
+          interacoes?: number | null
+          legenda?: string | null
+          media_id: string
+          metricas_em?: string | null
+          metricas_erro?: string | null
+          metricas_erro_em?: string | null
+          metricas_falhas?: number
+          permalink?: string | null
+          produto?: string | null
+          publicado_em: string
+          raw?: Json
+          salvamentos?: number | null
+          seguidores_ganhos?: number | null
+          shortcode?: string | null
+          sincronizado_em?: string
+          taxa_pulo?: number | null
+          tempo_medio_ms?: number | null
+          tempo_total_ms?: number | null
+          thumbnail_url?: string | null
+          tipo?: string | null
+          views?: number | null
+          visitas_perfil?: number | null
+        }
+        Update: {
+          alcance?: number | null
+          comentarios?: number | null
+          compartilhamentos?: number | null
+          curtidas?: number | null
+          ig_user_id?: string
+          interacoes?: number | null
+          legenda?: string | null
+          media_id?: string
+          metricas_em?: string | null
+          metricas_erro?: string | null
+          metricas_erro_em?: string | null
+          metricas_falhas?: number
+          permalink?: string | null
+          produto?: string | null
+          publicado_em?: string
+          raw?: Json
+          salvamentos?: number | null
+          seguidores_ganhos?: number | null
+          shortcode?: string | null
+          sincronizado_em?: string
+          taxa_pulo?: number | null
+          tempo_medio_ms?: number | null
+          tempo_total_ms?: number | null
+          thumbnail_url?: string | null
+          tipo?: string | null
+          views?: number | null
+          visitas_perfil?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_midias_ig_user_id_fkey"
+            columns: ["ig_user_id"]
+            isOneToOne: false
+            referencedRelation: "ig_contas"
+            referencedColumns: ["ig_user_id"]
+          },
+        ]
+      }
+      ig_sync_runs: {
+        Row: {
+          detalhes: Json
+          dias_lidos: number | null
+          erro: string | null
+          gatilho: string
+          id: string
+          iniciado_em: string
+          midias_lidas: number | null
+          solicitado_por: string | null
+          status: string
+          terminado_em: string | null
+        }
+        Insert: {
+          detalhes?: Json
+          dias_lidos?: number | null
+          erro?: string | null
+          gatilho: string
+          id?: string
+          iniciado_em?: string
+          midias_lidas?: number | null
+          solicitado_por?: string | null
+          status?: string
+          terminado_em?: string | null
+        }
+        Update: {
+          detalhes?: Json
+          dias_lidos?: number | null
+          erro?: string | null
+          gatilho?: string
+          id?: string
+          iniciado_em?: string
+          midias_lidas?: number | null
+          solicitado_por?: string | null
+          status?: string
+          terminado_em?: string | null
+        }
+        Relationships: []
+      }
       incorporador_bi_metas: {
         Row: {
           created_at: string
@@ -21462,6 +21754,56 @@ export type Database = {
           },
         ]
       }
+      vw_ig_midias: {
+        Row: {
+          alcance: number | null
+          comentarios: number | null
+          compartilhamentos: number | null
+          compartilhamentos_pct: number | null
+          curtidas: number | null
+          dia_semana: number | null
+          engajamento_pct: number | null
+          hora_brt: number | null
+          ig_user_id: string | null
+          interacoes: number | null
+          legenda: string | null
+          media_id: string | null
+          metricas_em: string | null
+          metricas_erro: string | null
+          metricas_erro_em: string | null
+          metricas_falhas: number | null
+          permalink: string | null
+          produto: string | null
+          publicado_brt: string | null
+          publicado_em: string | null
+          raw: Json | null
+          roteiro_gancho: string | null
+          roteiro_id: string | null
+          roteiro_pilar: string | null
+          roteiro_tema: string | null
+          salvamentos: number | null
+          salvamentos_pct: number | null
+          seguidores_ganhos: number | null
+          shortcode: string | null
+          sincronizado_em: string | null
+          taxa_pulo: number | null
+          tempo_medio_ms: number | null
+          tempo_total_ms: number | null
+          thumbnail_url: string | null
+          tipo: string | null
+          views: number | null
+          visitas_perfil: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_midias_ig_user_id_fkey"
+            columns: ["ig_user_id"]
+            isOneToOne: false
+            referencedRelation: "ig_contas"
+            referencedColumns: ["ig_user_id"]
+          },
+        ]
+      }
       vw_linhas_marcadas_como_eco: {
         Row: {
           customer_email: string | null
@@ -23293,6 +23635,24 @@ export type Database = {
         }
         Returns: boolean
       }
+      ig_fila_antigas: {
+        Args: {
+          p_corte: string
+          p_dias_retencao: number
+          p_ig_user_id: string
+          p_limite: number
+          p_max_falhas: number
+        }
+        Returns: {
+          media_id: string
+          metricas_em: string
+          metricas_erro_em: string
+          metricas_falhas: number
+          produto: string
+          publicado_em: string
+        }[]
+      }
+      ig_pode: { Args: { p_user: string }; Returns: boolean }
       investigacao_lead: {
         Args: { p_bu?: string; p_termo: string }
         Returns: Json
