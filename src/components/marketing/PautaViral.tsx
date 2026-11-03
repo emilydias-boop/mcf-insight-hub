@@ -31,6 +31,7 @@ const FILTROS_STATUS = [
 const LIMITES = { hashtags: 20, perfis: 30, termos_noticias: 15 } as const;
 
 const ddmm = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : "";
+const ddmmData = (d: string) => { const [, m, dia] = d.split("-"); return `${dia}/${m}`; };
 const hhmm = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) : "";
 const fmtNum = (n?: number | null) => (n ?? 0).toLocaleString("pt-BR");
 const lista = (v: unknown): string[] => Array.isArray(v) ? v.map(x => typeof x === "string" ? x : JSON.stringify(x)) : [];
@@ -220,7 +221,7 @@ function PautaViralConteudo() {
       : roteiros.length === 0 ? <Card><CardContent className="p-[24px] text-[13px] text-muted-foreground">Nenhum roteiro ainda. Clique em Buscar virais e notícias agora.</CardContent></Card>
       : lotes.length === 0 ? <p className="text-[13px] text-muted-foreground">Nenhum roteiro com esses filtros.</p>
       : lotes.map(([lote, itens]) => <section key={lote} className="space-y-[12px]">
-        <h3 className="text-[15px] font-semibold">Lote de {ddmm(lote)}</h3>
+        <h3 className="text-[15px] font-semibold">Lote de {ddmmData(lote)}</h3>
         <div className="grid grid-cols-1 gap-[16px] xl:grid-cols-2">{itens.map(r => <RoteiroCard key={r.id} r={r} onMudou={refazer} />)}</div>
       </section>)}
 
