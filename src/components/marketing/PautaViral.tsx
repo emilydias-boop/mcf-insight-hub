@@ -99,7 +99,11 @@ function RoteiroDoLink({ travado, ocupado, setOcupado, refazer }: { travado: boo
         return;
       }
       const avisos = Array.isArray(data?.avisos) ? data.avisos.join(" · ") : data?.avisos ? String(data.avisos) : "";
-      toast.success(data?.leu?.fala === false ? "Post lido. Gerando o roteiro… (sem a fala do vídeo)" : "Post lido. Gerando o roteiro…", avisos ? { description: avisos } : undefined);
+      const leu = data?.leu as { lido?: boolean; fala?: boolean; sem_video?: boolean; buscando_fala?: boolean } | undefined;
+      const msg = leu?.buscando_fala
+        ? (leu.lido ? "Post lido. Baixando o vídeo para ouvir a fala (1 a 3 min)…" : "Buscando o post pelo Apify (1 a 3 min)…")
+        : (leu?.fala === false ? "Post lido. Gerando o roteiro… (sem a fala do vídeo)" : "Post lido. Gerando o roteiro…");
+      toast.success(msg, avisos ? { description: avisos } : undefined);
       setUrl(""); setAutor(""); setPedido(""); setTexto(""); setPedirAutor(false); setAbrirTexto(false);
       refazer();
     } finally { setEnviando(false); setOcupado(false); }
@@ -115,7 +119,7 @@ function RoteiroDoLink({ travado, ocupado, setOcupado, refazer }: { travado: boo
         </label>
         {mostrarAutor && <label className="flex flex-col gap-[4px] md:w-[200px]">
           <span className="text-[12px] text-muted-foreground">@ do perfil</span>
-          <Input ref={autorRef} value={autor} onChange={e => setAutor(e.target.value)} placeholder="perfil, sem @" className="h-[36px] text-[13px]" />
+          <Input ref={autorRef} value={autor} onChange={e => setAutor(e.target.value)} placeholder="perfil, sem @ (opcional)" className="h-[36px] text-[13px]" />
         </label>}
       </div>
       <label className="flex flex-col gap-[4px]">
@@ -157,6 +161,7 @@ function linhaColeta(c: Coleta) {
   if (c.status === "iniciando") return "Iniciando…";
   if (c.gatilho === "link" && c.status === "importando") return "Lendo o post do link…";
   if (c.gatilho === "link" && (c.status === "importada" || c.status === "gerando")) return "Gerando o roteiro do link…";
+  if (c.gatilho === "link" && c.status === "coletando") return "Lendo o vídeo do link…";
   if (c.status === "coletando" || c.status === "importando") return "Coletando no Instagram e nas notícias…";
   if (c.status === "importada" || c.status === "gerando") return "Gerando roteiros…";
   if (c.status === "concluida") return (c.roteiros_gerados ?? 0) === 0 ? `Nenhuma referência nova · ${hhmm(c.atualizada_em)}` : `Pronta: ${c.roteiros_gerados} roteiros às ${hhmm(c.atualizada_em)}`;
