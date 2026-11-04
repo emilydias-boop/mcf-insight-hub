@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown, Copy, ExternalLink, Newspaper, Printer, X } from "lucide-react";
+import { ChevronDown, Copy, ExternalLink, MessageSquare, Newspaper, Printer, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,8 +19,112 @@ import type { Tables } from "@/integrations/supabase/types";
 type Config = Tables<"pauta_viral_config">;
 type Coleta = Tables<"pauta_viral_coletas">;
 type Noticia = Tables<"pauta_viral_referencias">;
-type Referencia = Pick<Noticia, "url" | "dono" | "tipo" | "titulo" | "cobertura" | "fontes_noticia" | "views" | "views_estimadas" | "curtidas" | "comentarios" | "publicado_em">;
-type Roteiro = Tables<"pauta_viral_roteiros"> & { referencia: Referencia | null; coleta?: { gatilho: string } | null };
+type Referencia = Pick<Noticia, "url" | "dono" | "tipo" | "titulo" | "cobertura" | "fontes_noticia" | "views" | "views_estimadas" | "curtidas" | "comentarios" | "publicado_em"> & { transcricao?: string | null };
+type Roteiro = Tables<"pauta_viral_roteiros"> & { referencia: Referencia | null; coleta?: { gatilho: string } | null; versao?: number | null; ajustado_em?: string | null };
+type Ajuste = { id: string; roteiro_id: string; papel: "time" | "claude"; autor: string | null; texto: string; versao: number | null; modelo: string | null; criado_em: string };
+
+const MARCA_OUVIDA = "[Transcrição automática da fala]\n";
+const MARCA_COLADA = "[Texto colado pelo time]\n";
+export function falaDoVideo(t?: string | null): { texto: string; origem: "ouvida" | "colada" } | null {
+  if (!t) return null;
+  let texto = t, origem: "ouvida" | "colada" = "ouvida";
+  const i = t.indexOf(MARCA_OUVIDA);
+  if (i >= 0) texto = t.slice(i + MARCA_OUVIDA.length);
+  else if (t.startsWith(MARCA_COLADA)) { texto = t.slice(MARCA_COLADA.length); origem = "colada"; }
+  texto = texto.trim();
+  return texto ? { texto, origem } : null;
+}
+
+async function lerErro(error: unknown): Promise<string> {
+  let msg = "Não foi possível falar com a Pauta Viral. Tente de novo.";
+  try {
+    const ctx = (error as { context?: { json?: () => Promise<{ error?: string; motivo?: string }> } }).context;
+    const j = ctx?.json ? await ctx.json() : null;
+    if (j?.error || j?.motivo) msg = String(j.error ?? j.motivo);
+  } catch { /* mensagem genérica */ }
+  return msg;
+}
+
+const ATALHOS = ["Gancho mais forte", "Deixa mais curto (30 s)", "Mais direto, menos técnico", "Outro fechamento"];
+
+function AjustarClaude({ r }: { r: Roteiro }) {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const chave = ["pauta-viral", "ajustes", r.id];
+  const { data: conversa = [], isLoading } = useQuery({
+    queryKey: chave,
+    queryFn: async () => {
+      const { data, error } = await (supabase.from as unknown as (t: string) => ReturnType<typeof supabase.from>)("pauta_viral_ajustes")
+        .select("*").eq("roteiro_id", r.id).order("criado_em", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as Ajuste[];
+    },
+  });
+
+  const enviar = async () => {
+    const mensagem = msg.trim();
+    if (!mensagem || enviando) return;
+    setEnviando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pauta-viral", { body: { acao: "ajustar", roteiro_id: r.id, versao: r.versao, mensagem } });
+      if (error) { toast.error(await lerErro(error)); return; }
+      if (data?.ok === false) {
+        toast.error(data.motivo ?? "O roteiro não foi ajustado.");
+        qc.invalidateQueries({ queryKey: data.recarregar ? ["pauta-viral"] : chave });
+        return;
+      }
+      toast.success("Roteiro ajustado", data?.resposta ? { description: String(data.resposta) } : undefined);
+      setMsg("");
+      qc.invalidateQueries({ queryKey: ["pauta-viral"] });
+    } finally { setEnviando(false); }
+  };
+
+  return <div className="space-y-[8px] rounded-md border border-border p-[10px]">
+    <div className="max-h-[320px] space-y-[6px] overflow-y-auto">
+      {isLoading ? <Skeleton className="h-[40px] w-full" />
+        : conversa.length === 0 ? <p className="text-[12px] text-muted-foreground">Diga o que mudar: o Claude reescreve o roteiro e explica o que mudou.</p>
+        : conversa.map(a => {
+          const time = a.papel === "time";
+          const falhou = !time && a.texto.startsWith("Não ajustei:");
+          return <div key={a.id} className={`flex ${time ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-[85%] rounded-md px-[10px] py-[6px] text-[12px] ${time ? "bg-primary/10" : "bg-muted"}`}>
+              <p className={`whitespace-pre-wrap ${falhou ? "italic text-muted-foreground" : ""}`}>{a.texto}</p>
+              <p className="mt-[2px] text-right text-[10px] text-muted-foreground">{hhmm(a.criado_em)}</p>
+            </div>
+          </div>;
+        })}
+    </div>
+    <div className="flex flex-wrap gap-[6px]">
+      {ATALHOS.map(t => <Button key={t} size="sm" variant="outline" disabled={enviando} onClick={() => setMsg(t)} className="h-[26px] px-[8px] text-[11px]">{t}</Button>)}
+    </div>
+    <Textarea value={msg} maxLength={1000} rows={3} disabled={enviando} placeholder="Ex.: troca o gancho A por algo com número"
+      onChange={e => setMsg(e.target.value.slice(0, 1000))}
+      onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); } }}
+      className="text-[13px]" />
+    <div className="flex items-center gap-[8px]">
+      <span className="text-[11px] text-muted-foreground">{msg.length.toLocaleString("pt-BR")}/1.000</span>
+      <Button size="sm" disabled={enviando || !msg.trim()} onClick={enviar} className="ml-auto h-[32px] text-[12px]">
+        {enviando ? "O Claude está reescrevendo… (até 2 min)" : "Enviar"}
+      </Button>
+    </div>
+  </div>;
+}
+
+function TranscricaoVideo({ fala }: { fala: { texto: string; origem: "ouvida" | "colada" } }) {
+  const [aberto, setAberto] = useState(false);
+  return <Collapsible open={aberto} onOpenChange={setAberto}>
+    <CollapsibleTrigger className="inline-flex items-center gap-[4px] text-[12px] text-primary">
+      <ChevronDown className={`h-[14px] w-[14px] transition-transform ${aberto ? "rotate-180" : ""}`} />{fala.origem === "colada" ? "Fala colada pelo time" : "Transcrição do vídeo"}
+    </CollapsibleTrigger>
+    <CollapsibleContent className="pt-[8px]">
+      <div className="flex items-start gap-[8px] rounded-md bg-muted p-[10px]">
+        <p className="max-h-[240px] min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap text-[12px]">{fala.texto}</p>
+        <Button size="sm" variant="ghost" aria-label="Copiar transcrição" onClick={() => copiar(fala.texto, "Transcrição copiada")} className="h-[28px] px-[8px]"><Copy className="h-[13px] w-[13px]" /></Button>
+      </div>
+    </CollapsibleContent>
+  </Collapsible>;
+}
 
 const ABERTAS = ["iniciando", "coletando", "importando", "importada", "gerando"];
 const PILARES: Record<string, string> = { boletim_credito: "Boletim do Crédito", obra_com_numero: "Obra com número", o_que_eu_nao_faria: "O que eu não faria" };
@@ -118,7 +222,7 @@ function RoteiroDoLink({ travado, ocupado, setOcupado, refazer }: { travado: boo
       const leu = data?.leu as { lido?: boolean; fala?: boolean; sem_video?: boolean; buscando_fala?: boolean } | undefined;
       const msg = leu?.buscando_fala
         ? (leu.lido ? "Post lido. Baixando o vídeo para ouvir a fala (1 a 3 min)…" : "Buscando o post pelo Apify (1 a 3 min)…")
-        : (leu?.fala === false ? "Post lido. Gerando o roteiro… (sem a fala do vídeo)" : "Post lido. Gerando o roteiro…");
+        : (leu?.fala === false ? "Post lido. Gerando o roteiro a partir da fala colada…" : "Post lido. Gerando o roteiro…");
       toast.success(msg, avisos ? { description: avisos } : undefined);
       setUrl(""); setAutor(""); setPedido(""); setTexto(""); setPedirAutor(false); setAbrirTexto(false);
       refazer();
@@ -144,10 +248,10 @@ function RoteiroDoLink({ travado, ocupado, setOcupado, refazer }: { travado: boo
       </label>
       <Collapsible open={abrirTexto} onOpenChange={setAbrirTexto}>
         <CollapsibleTrigger className="inline-flex items-center gap-[4px] text-[12px] text-primary">
-          <ChevronDown className={`h-[14px] w-[14px] transition-transform ${abrirTexto ? "rotate-180" : ""}`} />Colar o texto do vídeo
+          <ChevronDown className={`h-[14px] w-[14px] transition-transform ${abrirTexto ? "rotate-180" : ""}`} />Colar a fala do vídeo
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-[6px] pt-[8px]">
-          <p className="text-[12px] text-muted-foreground">Use se o perfil for pessoal, se a música for licenciada ou se a leitura falhar: cole a legenda e/ou o que a pessoa fala.</p>
+          <p className="text-[12px] text-muted-foreground">Cole o que a pessoa fala no vídeo. Só é usado se a IA não conseguir ouvir o vídeo (perfil pessoal, música licenciada ou falha na leitura). A legenda do post não entra no roteiro.</p>
           <Textarea value={texto} maxLength={6000} onChange={e => setTexto(e.target.value.slice(0, 6000))} rows={5} className="text-[13px]" />
           <p className="text-right text-[11px] text-muted-foreground">{texto.length.toLocaleString("pt-BR")}/6.000</p>
         </CollapsibleContent>
@@ -236,7 +340,7 @@ function PautaViralConteudo() {
     queryFn: async () => {
       const desde = new Date(Date.now() - 60 * 86400000).toISOString();
       const { data, error } = await supabase.from("pauta_viral_roteiros")
-        .select("*, referencia:pauta_viral_referencias(url, dono, tipo, titulo, cobertura, fontes_noticia, views, views_estimadas, curtidas, comentarios, publicado_em), coleta:pauta_viral_coletas(gatilho)")
+        .select("*, referencia:pauta_viral_referencias(url, dono, tipo, titulo, cobertura, fontes_noticia, views, views_estimadas, curtidas, comentarios, publicado_em, transcricao), coleta:pauta_viral_coletas(gatilho)")
         .gte("criado_em", desde)
         .order("lote", { ascending: false }).order("criado_em", { ascending: true });
       if (error) throw error;
@@ -398,7 +502,10 @@ function RoteiroCard({ r, onMudou }: { r: Roteiro; onMudou: () => void }) {
   const [modo, setModo] = useState<null | "publicada" | "descartada">(null);
   const [campo, setCampo] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [ajustando, setAjustando] = useState(false);
   const ref = r.referencia;
+  const fala = ref && ref.tipo !== "noticia" ? falaDoVideo(ref.transcricao) : null;
+  const podeAjustar = r.status === "nova" || r.status === "aprovada";
   const pontos = lista(r.pontos);
   const conferir = lista(r.conferir);
 
@@ -417,6 +524,7 @@ function RoteiroCard({ r, onMudou }: { r: Roteiro; onMudou: () => void }) {
         <Badge variant="secondary" className="text-[11px]">{PILARES[r.pilar] ?? r.pilar}</Badge>
         {r.coleta?.gatilho === "link" && <Badge variant="outline" className="text-[11px]">Do link</Badge>}
         {r.duracao_estimada_s != null && <span className="text-[11px] text-muted-foreground">~{r.duracao_estimada_s} s</span>}
+        {(r.versao ?? 1) > 1 && r.ajustado_em && <span className="text-[11px] text-muted-foreground">Ajustado às {hhmm(r.ajustado_em)}</span>}
         <Badge variant={r.status === "descartada" ? "outline" : "default"} className="ml-auto text-[11px]">{STATUS[r.status] ?? r.status}</Badge>
       </div>
       <CardTitle className="text-[16px] leading-snug">{r.tema}</CardTitle>
@@ -432,6 +540,7 @@ function RoteiroCard({ r, onMudou }: { r: Roteiro; onMudou: () => void }) {
         {r.por_que_viralizou && <p className="text-[12px] text-muted-foreground"><span className="font-medium">Por que viralizou:</span> {r.por_que_viralizou}</p>}
         {r.o_que_adaptamos && <p className="text-[12px] text-muted-foreground"><span className="font-medium">O que adaptamos:</span> {r.o_que_adaptamos}</p>}
       </Bloco>}
+      {fala && <TranscricaoVideo fala={fala} />}
 
       <Bloco titulo="Ele fala">
         <p><span className="text-muted-foreground">Gancho A: </span><strong>{r.gancho_a}</strong></p>
@@ -464,11 +573,14 @@ function RoteiroCard({ r, onMudou }: { r: Roteiro; onMudou: () => void }) {
         </div>
       </div>}
 
+      {podeAjustar && ajustando && <AjustarClaude r={r} />}
+
       <div className="flex flex-wrap gap-[6px] border-t border-border pt-[12px]">
         <Button size="sm" variant="outline" disabled={salvando || r.status === "aprovada"} onClick={() => mudar("aprovada")} className="h-[32px] text-[12px]">Aprovar</Button>
         <Button size="sm" variant="outline" disabled={salvando || r.status === "gravada"} onClick={() => mudar("gravada")} className="h-[32px] text-[12px]">Gravado</Button>
         <Button size="sm" variant="outline" disabled={salvando} onClick={() => { setModo("publicada"); setCampo(r.url_publicada ?? ""); }} className="h-[32px] text-[12px]">Publicado</Button>
         <Button size="sm" variant="outline" disabled={salvando} onClick={() => { setModo("descartada"); setCampo(""); }} className="h-[32px] text-[12px]">Descartar</Button>
+        {podeAjustar && <Button size="sm" variant={ajustando ? "secondary" : "outline"} aria-expanded={ajustando} onClick={() => setAjustando(v => !v)} className="h-[32px] text-[12px]"><MessageSquare className="mr-[6px] h-[13px] w-[13px]" />Ajustar com o Claude</Button>}
         <Button size="sm" variant="ghost" onClick={() => copiar(textoRoteiro(r), "Roteiro copiado")} className="ml-auto h-[32px] text-[12px]"><Copy className="mr-[6px] h-[13px] w-[13px]" />Copiar roteiro</Button>
       </div>
     </CardContent>
