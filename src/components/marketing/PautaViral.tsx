@@ -31,6 +31,22 @@ const FILTROS_STATUS = [
 ];
 const LIMITES = { hashtags: 20, perfis: 30, termos_noticias: 15 } as const;
 
+const RECOLHIDOS_KEY = "pauta-viral:lotes-recolhidos";
+const lerRecolhidos = (): string[] | null => {
+  try {
+    const bruto = localStorage.getItem(RECOLHIDOS_KEY);
+    if (!bruto) return null;
+    const l = JSON.parse(bruto);
+    return Array.isArray(l) ? l.filter((x): x is string => typeof x === "string") : null;
+  } catch { return null; }
+};
+const gravarRecolhidos = (lotes: string[]) => {
+  try { localStorage.setItem(RECOLHIDOS_KEY, JSON.stringify(lotes.slice(0, 30))); } catch { /* sem localStorage */ }
+};
+const resumoStatus = (itens: Roteiro[]) => Object.entries(STATUS)
+  .map(([k, rot]) => { const n = itens.filter(r => r.status === k).length; return n ? `${n} ${rot.toLowerCase()}${n > 1 ? "s" : ""}` : null; })
+  .filter(Boolean).join(" · ");
+
 const ddmm = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : "";
 const ddmmData = (d: string) => { const [, m, dia] = d.split("-"); return `${dia}/${m}`; };
 const hhmm = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) : "";
@@ -191,6 +207,8 @@ function PautaViralConteudo() {
   const [filtroPilar, setFiltroPilar] = useState("todos");
   const [ocupado, setOcupado] = useState(false);
   const [imprimir, setImprimir] = useState(false);
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const [pronto, setPronto] = useState(false);
 
   const configQ = useQuery({
     queryKey: ["pauta-viral", "config"],
@@ -264,6 +282,42 @@ function PautaViralConteudo() {
     filtrados.forEach(r => { const k = r.lote; m.set(k, [...(m.get(k) ?? []), r]); });
     return [...m.entries()];
   }, [filtrados]);
+  const lotesTodos = useMemo(() => {
+    const vistos = new Set<string>(); const ordem: string[] = [];
+    roteiros.forEach(r => { if (!vistos.has(r.lote)) { vistos.add(r.lote); ordem.push(r.lote); } });
+    return ordem;
+  }, [roteiros]);
+
+  useEffect(() => {
+    if (pronto || lotesTodos.length === 0) return;
+    const recolhidos = lerRecolhidos();
+    setAbertos(recolhidos ? new Set(lotesTodos.filter(l => !recolhidos.includes(l))) : new Set(lotesTodos.slice(0, 1)));
+    setPronto(true);
+  }, [lotesTodos, pronto]);
+
+  const topo = lotesTodos[0] ?? "";
+  useEffect(() => {
+    if (!pronto || !topo) return;
+    setAbertos(prev => prev.has(topo) ? prev : new Set(prev).add(topo));
+  }, [topo, pronto]);
+
+  useEffect(() => {
+    if (!pronto) return;
+    gravarRecolhidos(lotesTodos.filter(l => !abertos.has(l)));
+  }, [abertos, lotesTodos, pronto]);
+
+  const alternarLote = (lote: string) => setAbertos(prev => {
+    const s = new Set(prev);
+    if (s.has(lote)) s.delete(lote); else s.add(lote);
+    return s;
+  });
+  const algumAberto = lotes.some(([l]) => abertos.has(l));
+  const alternarTodos = () => setAbertos(prev => {
+    const s = new Set(prev);
+    lotes.forEach(([l]) => { if (algumAberto) s.delete(l); else s.add(l); });
+    return s;
+  });
+
   const aprovados = roteiros.filter(r => r.status === "aprovada");
   const travado = aberta || ocupado;
 
@@ -304,15 +358,30 @@ function PautaViralConteudo() {
         </SelectContent>
       </Select>
       <Button variant="outline" disabled={!aprovados.length} onClick={() => setImprimir(true)} className="h-[36px] px-[12px] text-[12px]"><Printer className="mr-[6px] h-[14px] w-[14px]" />Imprimir aprovados</Button>
+      <Button variant="ghost" onClick={alternarTodos} className="h-[36px] px-[12px] text-[12px]">{algumAberto ? "Recolher todos" : "Abrir todos"}</Button>
     </div>
 
     {roteirosQ.isLoading ? <Skeleton className="h-[200px] w-full" />
       : roteiros.length === 0 ? <Card><CardContent className="p-[24px] text-[13px] text-muted-foreground">Nenhum roteiro ainda. Clique em Buscar virais e notícias agora.</CardContent></Card>
       : lotes.length === 0 ? <p className="text-[13px] text-muted-foreground">Nenhum roteiro com esses filtros.</p>
-      : lotes.map(([lote, itens]) => <section key={lote} className="space-y-[12px]">
-        <h3 className="text-[15px] font-semibold">Lote de {ddmmData(lote)}</h3>
-        <div className="grid grid-cols-1 gap-[16px] xl:grid-cols-2">{itens.map(r => <RoteiroCard key={r.id} r={r} onMudou={refazer} />)}</div>
-      </section>)}
+      : lotes.map(([lote, itens]) => {
+        const aberto = abertos.has(lote);
+        const resumo = resumoStatus(itens);
+        return <Collapsible key={lote} open={aberto} onOpenChange={() => alternarLote(lote)}>
+          <CollapsibleTrigger asChild>
+            <button aria-expanded={aberto} className="flex w-full items-start gap-[8px] text-left">
+              <span className="min-w-0 flex-1">
+                <span className="text-[15px] font-semibold">Lote de {ddmmData(lote)} · {itens.length} roteiro{itens.length > 1 ? "s" : ""}</span>
+                {resumo && <span className="ml-[6px] text-[12px] font-normal text-muted-foreground">{resumo}</span>}
+              </span>
+              <ChevronDown className={`mt-[3px] h-[16px] w-[16px] shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="grid grid-cols-1 gap-[16px] pt-[12px] xl:grid-cols-2">{itens.map(r => <RoteiroCard key={r.id} r={r} onMudou={refazer} />)}</div>
+          </CollapsibleContent>
+        </Collapsible>;
+      })}
 
     <Noticias noticias={noticiasQ.data ?? []} loading={configQ.isLoading || noticiasQ.isLoading} travado={travado}
       onVirar={code => acao({ acao: "gerar", referencias: [code] }, "Gerando roteiro da notícia")} />
