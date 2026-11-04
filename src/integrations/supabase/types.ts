@@ -15208,6 +15208,7 @@ export type Database = {
           iniciada_em: string
           itens_aceitos: number | null
           itens_recebidos: number | null
+          pedido: string | null
           referencias_escolhidas: string[] | null
           roteiros_gerados: number | null
           solicitado_por: string | null
@@ -15224,6 +15225,7 @@ export type Database = {
           iniciada_em?: string
           itens_aceitos?: number | null
           itens_recebidos?: number | null
+          pedido?: string | null
           referencias_escolhidas?: string[] | null
           roteiros_gerados?: number | null
           solicitado_por?: string | null
@@ -15240,6 +15242,7 @@ export type Database = {
           iniciada_em?: string
           itens_aceitos?: number | null
           itens_recebidos?: number | null
+          pedido?: string | null
           referencias_escolhidas?: string[] | null
           roteiros_gerados?: number | null
           solicitado_por?: string | null
