@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronDown, Copy, ExternalLink, Newspaper, Printer, X } from "lucide-react";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +20,7 @@ type Config = Tables<"pauta_viral_config">;
 type Coleta = Tables<"pauta_viral_coletas">;
 type Noticia = Tables<"pauta_viral_referencias">;
 type Referencia = Pick<Noticia, "url" | "dono" | "tipo" | "titulo" | "cobertura" | "fontes_noticia" | "views" | "views_estimadas" | "curtidas" | "comentarios" | "publicado_em">;
-type Roteiro = Tables<"pauta_viral_roteiros"> & { referencia: Referencia | null };
+type Roteiro = Tables<"pauta_viral_roteiros"> & { referencia: Referencia | null; coleta?: { gatilho: string } | null };
 
 const ABERTAS = ["iniciando", "coletando", "importando", "importada", "gerando"];
 const PILARES: Record<string, string> = { boletim_credito: "Boletim do Crédito", obra_com_numero: "Obra com número", o_que_eu_nao_faria: "O que eu não faria" };
@@ -59,6 +60,85 @@ async function chamar(body: Record<string, unknown>): Promise<boolean> {
   return true;
 }
 
+const RE_LINK_COM_PERFIL = /instagram\.com\/[^/?#]+\/(p|reel|reels|tv)\//i;
+
+function RoteiroDoLink({ travado, ocupado, setOcupado, refazer }: { travado: boolean; ocupado: boolean; setOcupado: (v: boolean) => void; refazer: () => void }) {
+  const [url, setUrl] = useState("");
+  const [autor, setAutor] = useState("");
+  const [pedido, setPedido] = useState("");
+  const [texto, setTexto] = useState("");
+  const [abrirTexto, setAbrirTexto] = useState(false);
+  const [pedirAutor, setPedirAutor] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const autorRef = useRef<HTMLInputElement>(null);
+  const linkSemPerfil = url.trim() !== "" && !RE_LINK_COM_PERFIL.test(url.trim());
+  const mostrarAutor = linkSemPerfil || pedirAutor;
+
+  const enviar = async () => {
+    setEnviando(true); setOcupado(true);
+    try {
+      const body: Record<string, unknown> = { acao: "link", url: url.trim() };
+      const a = autor.trim().replace(/^@/, "");
+      if (a) body.autor = a;
+      if (texto.trim()) body.texto = texto.trim();
+      if (pedido.trim()) body.pedido = pedido.trim();
+      const { data, error } = await supabase.functions.invoke("pauta-viral", { body });
+      if (error) {
+        let msg = "Não foi possível falar com a Pauta Viral. Tente de novo.";
+        try {
+          const ctx = (error as { context?: { json?: () => Promise<{ error?: string; motivo?: string }> } }).context;
+          const j = ctx?.json ? await ctx.json() : null;
+          if (j?.error || j?.motivo) msg = String(j.error ?? j.motivo);
+        } catch { /* mensagem genérica */ }
+        toast.error(msg);
+        return;
+      }
+      if (data?.ok === false) {
+        toast.error(data.motivo ?? "Não foi possível ler o link.");
+        if (data.campo === "autor") { setPedirAutor(true); setTimeout(() => autorRef.current?.focus(), 0); }
+        return;
+      }
+      const avisos = Array.isArray(data?.avisos) ? data.avisos.join(" · ") : data?.avisos ? String(data.avisos) : "";
+      toast.success(data?.leu?.fala === false ? "Post lido. Gerando o roteiro… (sem a fala do vídeo)" : "Post lido. Gerando o roteiro…", avisos ? { description: avisos } : undefined);
+      setUrl(""); setAutor(""); setPedido(""); setTexto(""); setPedirAutor(false); setAbrirTexto(false);
+      refazer();
+    } finally { setEnviando(false); setOcupado(false); }
+  };
+
+  return <Card>
+    <CardHeader className="p-[16px] pb-[8px]"><CardTitle className="text-[15px]">Roteiro a partir de link</CardTitle></CardHeader>
+    <CardContent className="space-y-[12px] p-[16px] pt-0 text-[13px]">
+      <div className="flex flex-col gap-[12px] md:flex-row">
+        <label className="flex min-w-0 flex-1 flex-col gap-[4px]">
+          <span className="text-[12px] text-muted-foreground">Link do post ou Reel</span>
+          <Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://www.instagram.com/reel/…" className="h-[36px] text-[13px]" />
+        </label>
+        {mostrarAutor && <label className="flex flex-col gap-[4px] md:w-[200px]">
+          <span className="text-[12px] text-muted-foreground">@ do perfil</span>
+          <Input ref={autorRef} value={autor} onChange={e => setAutor(e.target.value)} placeholder="perfil, sem @" className="h-[36px] text-[13px]" />
+        </label>}
+      </div>
+      <label className="flex flex-col gap-[4px]">
+        <span className="text-[12px] text-muted-foreground">Orientação para a IA (opcional)</span>
+        <Input value={pedido} maxLength={400} onChange={e => setPedido(e.target.value.slice(0, 400))} placeholder="Ex.: foca em crédito para quem constrói" className="h-[36px] text-[13px]" />
+      </label>
+      <Collapsible open={abrirTexto} onOpenChange={setAbrirTexto}>
+        <CollapsibleTrigger className="inline-flex items-center gap-[4px] text-[12px] text-primary">
+          <ChevronDown className={`h-[14px] w-[14px] transition-transform ${abrirTexto ? "rotate-180" : ""}`} />Colar o texto do vídeo
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-[6px] pt-[8px]">
+          <p className="text-[12px] text-muted-foreground">Use se o perfil for pessoal, se a música for licenciada ou se a leitura falhar: cole a legenda e/ou o que a pessoa fala.</p>
+          <Textarea value={texto} maxLength={6000} onChange={e => setTexto(e.target.value.slice(0, 6000))} rows={5} className="text-[13px]" />
+          <p className="text-right text-[11px] text-muted-foreground">{texto.length.toLocaleString("pt-BR")}/6.000</p>
+        </CollapsibleContent>
+      </Collapsible>
+      <Button disabled={!url.trim() || enviando || travado || ocupado} onClick={enviar} className="h-[36px] px-[12px] text-[12px]">
+        {enviando ? "Lendo o post… (até 1 min)" : "Gerar roteiro do link"}
+      </Button>
+    </CardContent>
+  </Card>;
+}
+
 function textoRoteiro(r: Roteiro) {
   const pts = lista(r.pontos).map((p, i) => `${i + 1}. ${p}`).join("\n");
   const conf = lista(r.conferir);
@@ -75,6 +155,8 @@ const copiar = async (texto: string, ok = "Copiado") => {
 
 function linhaColeta(c: Coleta) {
   if (c.status === "iniciando") return "Iniciando…";
+  if (c.gatilho === "link" && c.status === "importando") return "Lendo o post do link…";
+  if (c.gatilho === "link" && (c.status === "importada" || c.status === "gerando")) return "Gerando o roteiro do link…";
   if (c.status === "coletando" || c.status === "importando") return "Coletando no Instagram e nas notícias…";
   if (c.status === "importada" || c.status === "gerando") return "Gerando roteiros…";
   if (c.status === "concluida") return (c.roteiros_gerados ?? 0) === 0 ? `Nenhuma referência nova · ${hhmm(c.atualizada_em)}` : `Pronta: ${c.roteiros_gerados} roteiros às ${hhmm(c.atualizada_em)}`;
@@ -131,7 +213,7 @@ function PautaViralConteudo() {
     queryFn: async () => {
       const desde = new Date(Date.now() - 60 * 86400000).toISOString();
       const { data, error } = await supabase.from("pauta_viral_roteiros")
-        .select("*, referencia:pauta_viral_referencias(url, dono, tipo, titulo, cobertura, fontes_noticia, views, views_estimadas, curtidas, comentarios, publicado_em)")
+        .select("*, referencia:pauta_viral_referencias(url, dono, tipo, titulo, cobertura, fontes_noticia, views, views_estimadas, curtidas, comentarios, publicado_em), coleta:pauta_viral_coletas(gatilho)")
         .gte("criado_em", desde)
         .order("lote", { ascending: false }).order("criado_em", { ascending: true });
       if (error) throw error;
@@ -193,6 +275,8 @@ function PautaViralConteudo() {
         <Button variant="outline" disabled={travado} onClick={() => acao({ acao: "gerar" }, "Gerando roteiros")} className="h-[36px] px-[12px] text-[12px]">Gerar roteiros com o que já tenho</Button>
       </div>
     </header>
+
+    <RoteiroDoLink travado={travado} ocupado={ocupado} setOcupado={setOcupado} refazer={refazer} />
 
     {coleta && <div className="space-y-[4px] text-[12px]">
       {coleta.status === "erro"
@@ -257,6 +341,7 @@ function RoteiroCard({ r, onMudou }: { r: Roteiro; onMudou: () => void }) {
     <CardHeader className="space-y-[8px] p-[16px] pb-[8px]">
       <div className="flex flex-wrap items-center gap-[6px]">
         <Badge variant="secondary" className="text-[11px]">{PILARES[r.pilar] ?? r.pilar}</Badge>
+        {r.coleta?.gatilho === "link" && <Badge variant="outline" className="text-[11px]">Do link</Badge>}
         {r.duracao_estimada_s != null && <span className="text-[11px] text-muted-foreground">~{r.duracao_estimada_s} s</span>}
         <Badge variant={r.status === "descartada" ? "outline" : "default"} className="ml-auto text-[11px]">{STATUS[r.status] ?? r.status}</Badge>
       </div>
@@ -267,7 +352,7 @@ function RoteiroCard({ r, onMudou }: { r: Roteiro; onMudou: () => void }) {
         <a href={ref.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-start gap-[6px] text-primary underline-offset-2 hover:underline">
           {ref.tipo === "noticia"
             ? <><Newspaper className="mt-[3px] h-[14px] w-[14px] shrink-0" /><span>Notícia · {ref.dono} · {ref.cobertura ?? 1} veículos{ref.titulo ? <> — {ref.titulo}</> : null}</span></>
-            : <span>@{ref.dono} · {ref.views_estimadas ? `~${fmtNum(ref.views)} views (estimado)` : `${fmtNum(ref.views)} views`}</span>}
+            : ref.views == null ? <span>@{ref.dono}</span> : <span>@{ref.dono} · {ref.views_estimadas ? `~${fmtNum(ref.views)} views (estimado)` : `${fmtNum(ref.views)} views`}</span>}
           <ExternalLink className="mt-[3px] h-[12px] w-[12px] shrink-0" />
         </a>
         {r.por_que_viralizou && <p className="text-[12px] text-muted-foreground"><span className="font-medium">Por que viralizou:</span> {r.por_que_viralizou}</p>}
