@@ -31,6 +31,22 @@ const FILTROS_STATUS = [
 ];
 const LIMITES = { hashtags: 20, perfis: 30, termos_noticias: 15 } as const;
 
+const RECOLHIDOS_KEY = "pauta-viral:lotes-recolhidos";
+const lerRecolhidos = (): string[] | null => {
+  try {
+    const bruto = localStorage.getItem(RECOLHIDOS_KEY);
+    if (!bruto) return null;
+    const l = JSON.parse(bruto);
+    return Array.isArray(l) ? l.filter((x): x is string => typeof x === "string") : null;
+  } catch { return null; }
+};
+const gravarRecolhidos = (lotes: string[]) => {
+  try { localStorage.setItem(RECOLHIDOS_KEY, JSON.stringify(lotes.slice(0, 30))); } catch { /* sem localStorage */ }
+};
+const resumoStatus = (itens: Roteiro[]) => Object.entries(STATUS)
+  .map(([k, rot]) => { const n = itens.filter(r => r.status === k).length; return n ? `${n} ${rot.toLowerCase()}${n > 1 ? "s" : ""}` : null; })
+  .filter(Boolean).join(" · ");
+
 const ddmm = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : "";
 const ddmmData = (d: string) => { const [, m, dia] = d.split("-"); return `${dia}/${m}`; };
 const hhmm = (iso?: string | null) => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) : "";
@@ -191,6 +207,8 @@ function PautaViralConteudo() {
   const [filtroPilar, setFiltroPilar] = useState("todos");
   const [ocupado, setOcupado] = useState(false);
   const [imprimir, setImprimir] = useState(false);
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const [pronto, setPronto] = useState(false);
 
   const configQ = useQuery({
     queryKey: ["pauta-viral", "config"],
