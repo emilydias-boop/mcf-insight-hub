@@ -364,10 +364,24 @@ function PautaViralConteudo() {
     {roteirosQ.isLoading ? <Skeleton className="h-[200px] w-full" />
       : roteiros.length === 0 ? <Card><CardContent className="p-[24px] text-[13px] text-muted-foreground">Nenhum roteiro ainda. Clique em Buscar virais e notícias agora.</CardContent></Card>
       : lotes.length === 0 ? <p className="text-[13px] text-muted-foreground">Nenhum roteiro com esses filtros.</p>
-      : lotes.map(([lote, itens]) => <section key={lote} className="space-y-[12px]">
-        <h3 className="text-[15px] font-semibold">Lote de {ddmmData(lote)}</h3>
-        <div className="grid grid-cols-1 gap-[16px] xl:grid-cols-2">{itens.map(r => <RoteiroCard key={r.id} r={r} onMudou={refazer} />)}</div>
-      </section>)}
+      : lotes.map(([lote, itens]) => {
+        const aberto = abertos.has(lote);
+        const resumo = resumoStatus(itens);
+        return <Collapsible key={lote} open={aberto} onOpenChange={() => alternarLote(lote)}>
+          <CollapsibleTrigger asChild>
+            <button aria-expanded={aberto} className="flex w-full items-start gap-[8px] text-left">
+              <span className="min-w-0 flex-1">
+                <span className="text-[15px] font-semibold">Lote de {ddmmData(lote)} · {itens.length} roteiro{itens.length > 1 ? "s" : ""}</span>
+                {resumo && <span className="ml-[6px] text-[12px] font-normal text-muted-foreground">{resumo}</span>}
+              </span>
+              <ChevronDown className={`mt-[3px] h-[16px] w-[16px] shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="grid grid-cols-1 gap-[16px] pt-[12px] xl:grid-cols-2">{itens.map(r => <RoteiroCard key={r.id} r={r} onMudou={refazer} />)}</div>
+          </CollapsibleContent>
+        </Collapsible>;
+      })}
 
     <Noticias noticias={noticiasQ.data ?? []} loading={configQ.isLoading || noticiasQ.isLoading} travado={travado}
       onVirar={code => acao({ acao: "gerar", referencias: [code] }, "Gerando roteiro da notícia")} />
