@@ -282,6 +282,42 @@ function PautaViralConteudo() {
     filtrados.forEach(r => { const k = r.lote; m.set(k, [...(m.get(k) ?? []), r]); });
     return [...m.entries()];
   }, [filtrados]);
+  const lotesTodos = useMemo(() => {
+    const vistos = new Set<string>(); const ordem: string[] = [];
+    roteiros.forEach(r => { if (!vistos.has(r.lote)) { vistos.add(r.lote); ordem.push(r.lote); } });
+    return ordem;
+  }, [roteiros]);
+
+  useEffect(() => {
+    if (pronto || lotesTodos.length === 0) return;
+    const recolhidos = lerRecolhidos();
+    setAbertos(recolhidos ? new Set(lotesTodos.filter(l => !recolhidos.includes(l))) : new Set(lotesTodos.slice(0, 1)));
+    setPronto(true);
+  }, [lotesTodos, pronto]);
+
+  const topo = lotesTodos[0] ?? "";
+  useEffect(() => {
+    if (!pronto || !topo) return;
+    setAbertos(prev => prev.has(topo) ? prev : new Set(prev).add(topo));
+  }, [topo, pronto]);
+
+  useEffect(() => {
+    if (!pronto) return;
+    gravarRecolhidos(lotesTodos.filter(l => !abertos.has(l)));
+  }, [abertos, lotesTodos, pronto]);
+
+  const alternarLote = (lote: string) => setAbertos(prev => {
+    const s = new Set(prev);
+    if (s.has(lote)) s.delete(lote); else s.add(lote);
+    return s;
+  });
+  const algumAberto = lotes.some(([l]) => abertos.has(l));
+  const alternarTodos = () => setAbertos(prev => {
+    const s = new Set(prev);
+    lotes.forEach(([l]) => { if (algumAberto) s.delete(l); else s.add(l); });
+    return s;
+  });
+
   const aprovados = roteiros.filter(r => r.status === "aprovada");
   const travado = aberta || ocupado;
 
@@ -322,6 +358,7 @@ function PautaViralConteudo() {
         </SelectContent>
       </Select>
       <Button variant="outline" disabled={!aprovados.length} onClick={() => setImprimir(true)} className="h-[36px] px-[12px] text-[12px]"><Printer className="mr-[6px] h-[14px] w-[14px]" />Imprimir aprovados</Button>
+      <Button variant="ghost" onClick={alternarTodos} className="h-[36px] px-[12px] text-[12px]">{algumAberto ? "Recolher todos" : "Abrir todos"}</Button>
     </div>
 
     {roteirosQ.isLoading ? <Skeleton className="h-[200px] w-full" />
