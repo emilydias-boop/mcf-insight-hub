@@ -55,7 +55,7 @@ function AjustarClaude({ r }: { r: Roteiro }) {
   const { data: conversa = [], isLoading } = useQuery({
     queryKey: chave,
     queryFn: async () => {
-      const { data, error } = await (supabase.from as unknown as (t: string) => ReturnType<typeof supabase.from>)("pauta_viral_ajustes")
+      const { data, error } = await (supabase as unknown as { from: (t: string) => any }).from("pauta_viral_ajustes") // eslint-disable-line @typescript-eslint/no-explicit-any
         .select("*").eq("roteiro_id", r.id).order("criado_em", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as Ajuste[];
