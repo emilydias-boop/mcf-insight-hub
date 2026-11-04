@@ -15197,6 +15197,57 @@ export type Database = {
           },
         ]
       }
+      pauta_viral_ajustes: {
+        Row: {
+          autor: string | null
+          criado_em: string
+          id: string
+          modelo: string | null
+          papel: string
+          roteiro_antes: Json | null
+          roteiro_id: string
+          texto: string
+          versao: number | null
+        }
+        Insert: {
+          autor?: string | null
+          criado_em?: string
+          id?: string
+          modelo?: string | null
+          papel: string
+          roteiro_antes?: Json | null
+          roteiro_id: string
+          texto: string
+          versao?: number | null
+        }
+        Update: {
+          autor?: string | null
+          criado_em?: string
+          id?: string
+          modelo?: string | null
+          papel?: string
+          roteiro_antes?: Json | null
+          roteiro_id?: string
+          texto?: string
+          versao?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pauta_viral_ajustes_roteiro_id_fkey"
+            columns: ["roteiro_id"]
+            isOneToOne: false
+            referencedRelation: "pauta_viral_roteiros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pauta_viral_ajustes_roteiro_id_fkey"
+            columns: ["roteiro_id"]
+            isOneToOne: false
+            referencedRelation: "vw_ig_midias"
+            referencedColumns: ["roteiro_id"]
+          },
+        ]
+      }
       pauta_viral_coletas: {
         Row: {
           apify_runs: Json
@@ -15402,6 +15453,7 @@ export type Database = {
       }
       pauta_viral_roteiros: {
         Row: {
+          ajustado_em: string | null
           coleta_id: string | null
           conferir: Json
           criado_em: string
@@ -15427,8 +15479,10 @@ export type Database = {
           tema: string
           texto_tela: string
           url_publicada: string | null
+          versao: number
         }
         Insert: {
+          ajustado_em?: string | null
           coleta_id?: string | null
           conferir?: Json
           criado_em?: string
@@ -15454,8 +15508,10 @@ export type Database = {
           tema: string
           texto_tela: string
           url_publicada?: string | null
+          versao?: number
         }
         Update: {
+          ajustado_em?: string | null
           coleta_id?: string | null
           conferir?: Json
           criado_em?: string
@@ -15481,6 +15537,7 @@ export type Database = {
           tema?: string
           texto_tela?: string
           url_publicada?: string | null
+          versao?: number
         }
         Relationships: [
           {
@@ -24357,6 +24414,17 @@ export type Database = {
       }
       parse_finalidade_obra: { Args: { _resposta: string }; Returns: string }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
+      pauta_viral_gravar_ajuste: {
+        Args: {
+          p_autor: string
+          p_campos: Json
+          p_modelo: string
+          p_resposta: string
+          p_roteiro: string
+          p_versao: number
+        }
+        Returns: number
+      }
       pauta_viral_gravar_roteiros: {
         Args: {
           p_avisos: string
