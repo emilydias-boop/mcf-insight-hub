@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.gov_is_rh_admin(uuid), public.gov_ocupante_cargo(uuid), public.gov_superior_imediato(uuid),
+  public.gov_responsavel_setor(uuid), public.gov_setor_do_colaborador(uuid), public.gov_cadeia_hierarquica(uuid) FROM PUBLIC, anon;
