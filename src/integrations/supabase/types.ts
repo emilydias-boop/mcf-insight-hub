@@ -4904,14 +4904,18 @@ export type Database = {
           competencias_essenciais: string[] | null
           competencias_tecnicas: string[] | null
           created_at: string
+          departamento_id: string | null
           descricao: string | null
           documentos_padrao: string[] | null
+          faixa_salarial_max: number | null
+          faixa_salarial_min: number | null
           fixo_valor: number
           id: string
           modelo_variavel: string
           nivel: number | null
           nome_exibicao: string
           ote_total: number
+          reporta_a_cargo_id: string | null
           role_sistema: string | null
           trilha_pdi: string | null
           updated_at: string
@@ -4924,14 +4928,18 @@ export type Database = {
           competencias_essenciais?: string[] | null
           competencias_tecnicas?: string[] | null
           created_at?: string
+          departamento_id?: string | null
           descricao?: string | null
           documentos_padrao?: string[] | null
+          faixa_salarial_max?: number | null
+          faixa_salarial_min?: number | null
           fixo_valor?: number
           id?: string
           modelo_variavel?: string
           nivel?: number | null
           nome_exibicao: string
           ote_total?: number
+          reporta_a_cargo_id?: string | null
           role_sistema?: string | null
           trilha_pdi?: string | null
           updated_at?: string
@@ -4944,20 +4952,39 @@ export type Database = {
           competencias_essenciais?: string[] | null
           competencias_tecnicas?: string[] | null
           created_at?: string
+          departamento_id?: string | null
           descricao?: string | null
           documentos_padrao?: string[] | null
+          faixa_salarial_max?: number | null
+          faixa_salarial_min?: number | null
           fixo_valor?: number
           id?: string
           modelo_variavel?: string
           nivel?: number | null
           nome_exibicao?: string
           ote_total?: number
+          reporta_a_cargo_id?: string | null
           role_sistema?: string | null
           trilha_pdi?: string | null
           updated_at?: string
           variavel_valor?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cargos_catalogo_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cargos_catalogo_reporta_a_cargo_id_fkey"
+            columns: ["reporta_a_cargo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       carrinho_acompanhamento: {
         Row: {
@@ -10971,6 +10998,8 @@ export type Database = {
           is_bu: boolean | null
           nome: string
           ordem: number | null
+          parent_id: string | null
+          responsavel_employee_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -10981,6 +11010,8 @@ export type Database = {
           is_bu?: boolean | null
           nome: string
           ordem?: number | null
+          parent_id?: string | null
+          responsavel_employee_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -10991,9 +11022,26 @@ export type Database = {
           is_bu?: boolean | null
           nome?: string
           ordem?: number | null
+          parent_id?: string | null
+          responsavel_employee_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "departamentos_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "departamentos_responsavel_employee_id_fkey"
+            columns: ["responsavel_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_disparos: {
         Row: {
@@ -11470,6 +11518,67 @@ export type Database = {
           valor?: number
         }
         Relationships: []
+      }
+      employee_cargo_historico: {
+        Row: {
+          cargo_catalogo_id: string
+          created_at: string
+          created_by: string | null
+          data_fim: string | null
+          data_inicio: string
+          departamento_id: string | null
+          employee_id: string
+          id: string
+          observacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          cargo_catalogo_id: string
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          departamento_id?: string | null
+          employee_id: string
+          id?: string
+          observacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cargo_catalogo_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          departamento_id?: string | null
+          employee_id?: string
+          id?: string
+          observacao?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_cargo_historico_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_cargo_historico_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_cargo_historico_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       employee_cargo_history: {
         Row: {
@@ -12671,6 +12780,101 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      gov_alcadas: {
+        Row: {
+          aplica_em: string
+          aprovador_cargo_id: string | null
+          aprovador_departamento_id: string | null
+          aprovador_employee_id: string | null
+          aprovador_role: Database["public"]["Enums"]["app_role"] | null
+          aprovador_tipo: string
+          ativo: boolean
+          cond_aumento_quadro: boolean | null
+          cond_departamento_id: string | null
+          cond_salario_acima: number | null
+          cond_tipos_desligamento: string[] | null
+          created_at: string
+          descricao: string | null
+          id: string
+          nome: string
+          ordem: number
+          rotulo_papel: string
+          sla_dias: number
+          updated_at: string
+        }
+        Insert: {
+          aplica_em: string
+          aprovador_cargo_id?: string | null
+          aprovador_departamento_id?: string | null
+          aprovador_employee_id?: string | null
+          aprovador_role?: Database["public"]["Enums"]["app_role"] | null
+          aprovador_tipo: string
+          ativo?: boolean
+          cond_aumento_quadro?: boolean | null
+          cond_departamento_id?: string | null
+          cond_salario_acima?: number | null
+          cond_tipos_desligamento?: string[] | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+          ordem?: number
+          rotulo_papel?: string
+          sla_dias?: number
+          updated_at?: string
+        }
+        Update: {
+          aplica_em?: string
+          aprovador_cargo_id?: string | null
+          aprovador_departamento_id?: string | null
+          aprovador_employee_id?: string | null
+          aprovador_role?: Database["public"]["Enums"]["app_role"] | null
+          aprovador_tipo?: string
+          ativo?: boolean
+          cond_aumento_quadro?: boolean | null
+          cond_departamento_id?: string | null
+          cond_salario_acima?: number | null
+          cond_tipos_desligamento?: string[] | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+          ordem?: number
+          rotulo_papel?: string
+          sla_dias?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gov_alcadas_aprovador_cargo_id_fkey"
+            columns: ["aprovador_cargo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_alcadas_aprovador_departamento_id_fkey"
+            columns: ["aprovador_departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_alcadas_aprovador_employee_id_fkey"
+            columns: ["aprovador_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_alcadas_cond_departamento_id_fkey"
+            columns: ["cond_departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       hubla_transaction_autolink_log: {
         Row: {
@@ -24171,6 +24375,25 @@ export type Database = {
           total_parcelas: number
         }[]
       }
+      gov_cadeia_hierarquica: {
+        Args: { _employee_id: string }
+        Returns: {
+          employee_id: string
+          nivel: number
+          nome: string
+        }[]
+      }
+      gov_is_rh_admin: { Args: { _uid: string }; Returns: boolean }
+      gov_ocupante_cargo: { Args: { _cargo_id: string }; Returns: string }
+      gov_responsavel_setor: {
+        Args: { _departamento_id: string }
+        Returns: string
+      }
+      gov_setor_do_colaborador: {
+        Args: { _employee_id: string }
+        Returns: string
+      }
+      gov_superior_imediato: { Args: { _employee_id: string }; Returns: string }
       gravar_snapshot_relatorio_diario: {
         Args: { p_data: string }
         Returns: number
