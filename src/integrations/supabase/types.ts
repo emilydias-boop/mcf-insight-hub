@@ -9863,8 +9863,10 @@ export type Database = {
           call_attempts: number | null
           clint_id: string
           contact_id: string | null
+          cpf: string | null
           created_at: string | null
           custom_fields: Json | null
+          data_compra: string | null
           data_source: string | null
           duplicate_of_deal_id: string | null
           expected_close_date: string | null
@@ -9872,6 +9874,7 @@ export type Database = {
           id: string
           is_archived: boolean
           is_duplicate: boolean | null
+          jornada_etapa_atual_id: string | null
           last_auto_dialer_call_at: string | null
           last_contact_at: string | null
           last_worked_at: string | null
@@ -9906,8 +9909,10 @@ export type Database = {
           call_attempts?: number | null
           clint_id: string
           contact_id?: string | null
+          cpf?: string | null
           created_at?: string | null
           custom_fields?: Json | null
+          data_compra?: string | null
           data_source?: string | null
           duplicate_of_deal_id?: string | null
           expected_close_date?: string | null
@@ -9915,6 +9920,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_duplicate?: boolean | null
+          jornada_etapa_atual_id?: string | null
           last_auto_dialer_call_at?: string | null
           last_contact_at?: string | null
           last_worked_at?: string | null
@@ -9949,8 +9955,10 @@ export type Database = {
           call_attempts?: number | null
           clint_id?: string
           contact_id?: string | null
+          cpf?: string | null
           created_at?: string | null
           custom_fields?: Json | null
+          data_compra?: string | null
           data_source?: string | null
           duplicate_of_deal_id?: string | null
           expected_close_date?: string | null
@@ -9958,6 +9966,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_duplicate?: boolean | null
+          jornada_etapa_atual_id?: string | null
           last_auto_dialer_call_at?: string | null
           last_contact_at?: string | null
           last_worked_at?: string | null
@@ -9992,6 +10001,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_deals_jornada_etapa_atual_id_fkey"
+            columns: ["jornada_etapa_atual_id"]
+            isOneToOne: false
+            referencedRelation: "jornada_etapas"
             referencedColumns: ["id"]
           },
           {
@@ -13094,6 +13110,95 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      jornada_etapas: {
+        Row: {
+          ativa: boolean
+          created_at: string
+          descricao: string | null
+          icone: string | null
+          id: string
+          ordem: number
+          slug: string
+          titulo: string
+        }
+        Insert: {
+          ativa?: boolean
+          created_at?: string
+          descricao?: string | null
+          icone?: string | null
+          id?: string
+          ordem: number
+          slug: string
+          titulo: string
+        }
+        Update: {
+          ativa?: boolean
+          created_at?: string
+          descricao?: string | null
+          icone?: string | null
+          id?: string
+          ordem?: number
+          slug?: string
+          titulo?: string
+        }
+        Relationships: []
+      }
+      jornada_eventos: {
+        Row: {
+          deal_id: string
+          etapa_id: string
+          id: string
+          observacao: string | null
+          ocorrido_em: string
+          registrado_por: string | null
+        }
+        Insert: {
+          deal_id: string
+          etapa_id: string
+          id?: string
+          observacao?: string | null
+          ocorrido_em?: string
+          registrado_por?: string | null
+        }
+        Update: {
+          deal_id?: string
+          etapa_id?: string
+          id?: string
+          observacao?: string | null
+          ocorrido_em?: string
+          registrado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jornada_eventos_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jornada_eventos_etapa_id_fkey"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "jornada_etapas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jornada_eventos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jornada_eventos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       kb_documents: {
         Row: {
@@ -23906,6 +24011,20 @@ export type Database = {
       is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
+      jornada_definir_etapa: {
+        Args: { p_deal_id: string; p_etapa_id: string; p_observacao?: string }
+        Returns: undefined
+      }
+      jornada_etapa_alvo: {
+        Args: {
+          p_atual: string
+          p_cf: Json
+          p_deal: string
+          p_owner: string
+          p_stage: string
+        }
+        Returns: string
+      }
       kanban_busca_outras_pipelines: {
         Args: {
           p_excluir_origin_ids: string[]
