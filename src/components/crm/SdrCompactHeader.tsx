@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { diasCalendarioDesde, rotuloContato } from '@/lib/diasCalendario';
+import { estadoContato } from '@/lib/contatoPosVenda';
+import { isPosVendaDeal } from '@/lib/posVenda';
 import { ChevronDown, Copy, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTotalCliente } from '@/hooks/useTotaisPorCliente';
@@ -96,11 +98,11 @@ export const SdrCompactHeader = ({ deal, contact, onChanged }: SdrCompactHeaderP
 
   // ===== Sem contato (mesma regra do card) =====
   const resumo = info?.resumo;
-  const ultimoToque = resumo?.lastTouchAt ?? resumo?.lastContactAttempt ?? null;
+  const { ultimoToque, nuncaContatado } = estadoContato(resumo, isPosVendaDeal(deal));
   let semContato: { text: string; cls: string; title?: string } | null = null;
   if (!resumo) {
     semContato = null;
-  } else if (!ultimoToque && (resumo.totalActivities || 0) === 0) {
+  } else if (nuncaContatado) {
     const dias = deal.created_at ? diasCalendarioDesde(deal.created_at) : 0;
     semContato = dias < 1
       ? { text: 'Nunca contatado · novo', cls: 'text-amber-400' }

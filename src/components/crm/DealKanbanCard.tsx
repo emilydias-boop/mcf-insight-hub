@@ -39,6 +39,7 @@ import { LeadTemperatureDot, type LeadTemperature } from "./LeadTemperatureSelec
 import { AnamneseExternaButton, getAnamneseV2 } from "./AnamneseExternaButton";
 import { isPosVendaDeal, precisaVerificarHarvey } from "@/lib/posVenda";
 import { diasCalendarioDesde, rotuloContato } from "@/lib/diasCalendario";
+import { estadoContato } from '@/lib/contatoPosVenda';
 import { LeadTotalCompradoBadge } from "./LeadTotalCompradoBadge";
 import type { TotaisCliente } from "@/hooks/useTotaisPorCliente";
 import { isSemInteresseStageName } from '@/lib/lossReasons';
@@ -393,11 +394,11 @@ export const DealKanbanCard = ({
     !!outsideInfo?.isOutside || !!proximaAcao;
 
   // Sem contato (dias de calendário em São Paulo, mesma regra do banco)
-  const ultimoToque = activitySummary?.lastTouchAt ?? activitySummary?.lastContactAttempt ?? null;
+  const { ultimoToque, nuncaContatado } = estadoContato(activitySummary, isPosVendaDeal(deal));
   let semContato: { text: string; cls: string } | null = null;
   if (!activitySummary) {
     semContato = null;
-  } else if (!ultimoToque && (activitySummary?.totalActivities || 0) === 0) {
+  } else if (nuncaContatado) {
     const dias = deal.created_at ? diasCalendarioDesde(deal.created_at) : 0;
     semContato = dias < 1
       ? { text: 'Nunca contatado · novo', cls: 'text-amber-400' }
