@@ -1,4 +1,10 @@
 # Roadmap
+- [x] Governança RH — Fase 1: hierarquia (setor pai/responsável, cargo reporta a/faixa), histórico de cargos (34 carregados), funções de hierarquia, regras de alçada e aba Governança
+- [ ] Governança RH — Fase 2: requisição de contratação
+- [ ] Governança RH — Fase 3: dossiê do colaborador
+- [ ] Governança RH — Fase 4: desligamento
+- [ ] Governança RH — Fase 5: assinatura digital interna
+- [ ] Governança RH — Fase 6: auditoria e indicadores
 - [x] Contato Pós-Venda — nota específica + mudança de estágio exigidas na leitura e etiqueta; 6 verificações locais e 4 casos SQL passaram, build OK; consulta real negada por permissão e tela autenticada indisponível (Supabase externo); sem publicar o site.
 - [x] Automação — automation-processor publicado; diff entregue e regressões simuladas passaram sem envios reais; build OK, typecheck separado não disponível.
 - [x] Jornada Pós-Venda — CPF automático e backfill de 1.182, fases f3–f8/mapa e ficha somente leitura; consulta pública Nívia 200/f4 e inexistente 404; relatório completo entregue; site não publicado, telas com login real não verificadas (Supabase externo).
