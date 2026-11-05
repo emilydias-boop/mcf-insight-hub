@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useState } from "react";
+import { EmailDestinatarios } from "./EmailDestinatarios";
 
 type Grao = "day" | "week" | "month";
 
@@ -29,6 +31,7 @@ interface SaudeRow {
 }
 
 interface EnvioRow {
+  chave: string;
   origem: string; nome: string | null; primeiro_evento: string | null; ultimo_evento: string | null;
   envios: number; entregues: number; hard_bounce: number; spam: number; descadastros: number;
   aberturas: number; cliques: number;
@@ -67,6 +70,7 @@ function Loading() {
 const Empty = () => <p className="py-[32px] text-center text-[14px] text-muted-foreground">Sem e-mails no período</p>;
 
 export function EmailMarketing({ from, to, grao }: { from: string; to: string; grao: Grao }) {
+  const [envioSel, setEnvioSel] = useState<EnvioRow | null>(null);
   const resumo = useQuery({
     queryKey: ["mkt-email-resumo"],
     queryFn: async () => { const d = await call<Resumo[] | Resumo>("mkt_email_resumo"); return (Array.isArray(d) ? d[0] : d) ?? null; },
@@ -181,7 +185,8 @@ export function EmailMarketing({ from, to, grao }: { from: string; to: string; g
               <TableHead scope="col" className={head}>Primeiro evento</TableHead>
               {["Envios", "Entregues", "Hard bounce", "% hard bounce", "Spam", "% spam", "Descadastros", "% abertura", "% clique"].map(l => <TableHead key={l} scope="col" className={`${numericCell} text-[12px]`}>{l}</TableHead>)}
             </TableRow></TableHeader>
-            <TableBody>{(envios.data ?? []).map((e, i) => <TableRow key={`${e.origem}-${e.nome}-${i}`}>
+            <TableBody>{(envios.data ?? []).map((e, i) => <TableRow key={`${e.origem}-${e.nome}-${i}`} role="button" tabIndex={0} className="cursor-pointer hover:bg-muted/50"
+              onClick={() => setEnvioSel(e)} onKeyDown={ev => { if (ev.key === "Enter") setEnvioSel(e); }}>
               <TableCell className="whitespace-nowrap px-[12px] py-[12px]">{ORIGEM[e.origem] ?? e.origem}</TableCell>
               <TableCell className="min-w-[220px] px-[12px] py-[12px]">{e.nome ?? "—"}</TableCell>
               <TableCell className="whitespace-nowrap px-[12px] py-[12px]">{fmtDateTime(e.primeiro_evento)}</TableCell>
@@ -199,6 +204,8 @@ export function EmailMarketing({ from, to, grao }: { from: string; to: string; g
         </div>}
       </CardContent>
     </Card>
+
+    <EmailDestinatarios from={from} to={to} envio={envioSel} onClose={() => setEnvioSel(null)} />
 
     {/* e. Supressões */}
     {r && !resumo.error && <p className="text-[12px] text-muted-foreground">

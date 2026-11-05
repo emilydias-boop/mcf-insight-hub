@@ -24250,10 +24250,50 @@ export type Database = {
         Returns: string
       }
       mkt_email_can_view: { Args: never; Returns: boolean }
+      mkt_email_conteudo: {
+        Args: { p_mk: string }
+        Returns: {
+          assunto: string
+          destinatario: string
+          enviado_em: string
+          html: string
+          remetente: string
+        }[]
+      }
+      mkt_email_destinatarios: {
+        Args: {
+          p_busca?: string
+          p_chave: string
+          p_from: string
+          p_limit?: number
+          p_offset?: number
+          p_to: string
+        }
+        Returns: {
+          aberto: boolean
+          bloqueado: boolean
+          clicado: boolean
+          contact_id: string
+          deal_id: string
+          descadastro: boolean
+          email: string
+          entregue: boolean
+          enviado_em: string
+          hard_bounce: boolean
+          lead_nome: string
+          mk: string
+          soft_bounce: boolean
+          spam: boolean
+          tem_conteudo: boolean
+          total: number
+          ultimo_evento: string
+        }[]
+      }
       mkt_email_por_envio: {
         Args: { p_from: string; p_to: string }
         Returns: {
           aberturas: number
+          chave: string
           cliques: number
           descadastros: number
           entregues: number
