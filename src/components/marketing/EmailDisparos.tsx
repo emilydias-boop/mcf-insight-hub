@@ -16,12 +16,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { EmailBlocosEditor, blocosPadrao, temaPadrao, validarEmailBlocos, type EmailBloco, type EmailTema } from "./EmailBlocosEditor";
 
 type Status = "rascunho" | "preparando" | "pronto" | "agendando" | "agendado" | "enviado" | "cancelado" | "erro";
 type Publico = { dias: number; dias_min: number; estagios: string[] | null };
 type Formulario = {
   titulo: string; assunto: string; preheader: string; corpo: string; botao_texto: string;
   texto_whatsapp: string; remetente_nome: string; publico: Publico;
+  blocos: EmailBloco[]; tema: EmailTema;
 };
 type Disparo = Formulario & {
   id: string; status: Status; enviados_previstos: number | null; brevo_campanha_id: number | null;
@@ -39,9 +41,9 @@ class ErroDisparo extends Error {
   constructor(message: string, public resposta: Resposta = {}, public codigo?: number) { super(message); }
 }
 const LISTA = ["email-disparos"];
-const COLUNAS = "id,titulo,assunto,preheader,corpo,botao_texto,texto_whatsapp,remetente_nome,publico,status,enviados_previstos,brevo_campanha_id,agendado_para,erro,criado_em,atualizado_em,preparado_em";
+const COLUNAS = "id,titulo,assunto,preheader,corpo,botao_texto,texto_whatsapp,remetente_nome,publico,status,enviados_previstos,brevo_campanha_id,agendado_para,erro,criado_em,atualizado_em,preparado_em,blocos,tema";
 const REMETENTE = "marketing@minhacasafinanciada.com";
-const novoFormulario = (): Formulario => ({ titulo: "", assunto: "", preheader: "", corpo: "", botao_texto: "", texto_whatsapp: "", remetente_nome: "MCF Capital", publico: { dias: 90, dias_min: 0, estagios: null } });
+const novoFormulario = (): Formulario => ({ titulo: "", assunto: "", preheader: "", corpo: "", botao_texto: "", texto_whatsapp: "", remetente_nome: "MCF Capital", publico: { dias: 90, dias_min: 0, estagios: null }, blocos: blocosPadrao(), tema: temaPadrao() });
 const numero = (n: number | null | undefined) => n == null ? "—" : Number(n).toLocaleString("pt-BR");
 const dataSP = (d: string | null) => d ? new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 const mensagemErro = (e: unknown) => e instanceof Error ? e.message : String((e as { message?: string })?.message ?? "Não foi possível concluir a ação.");
@@ -93,6 +95,7 @@ function DisparosConteudo() {
   const [selecionado, setSelecionado] = useState<Disparo | null>(null);
   const [form, setForm] = useState<Formulario>(novoFormulario);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editorBusy, setEditorBusy] = useState(false);
   const trava = useRef(false);
   const [agenda, setAgenda] = useState(padraoAgenda);
   const [agendarAberto, setAgendarAberto] = useState(false);
@@ -114,24 +117,25 @@ function DisparosConteudo() {
   });
   const atual = lista.data?.find(r => r.id === selecionado?.id) ?? selecionado;
   const status = atual?.status ?? "rascunho";
-  const editavel = status === "rascunho" || status === "erro";
+  const editavel = status === "rascunho" || (status === "erro" && atual?.brevo_campanha_id == null);
   const estagios = useQuery({ queryKey: ["mkt-email-estagios"], queryFn: () => rpc<{ ordem: number; estagio: string }[]>("mkt_email_estagios"), enabled: aberto, staleTime: 60_000 });
   const publico = useDebounce(form.publico, 600);
   const resumo = useQuery({ queryKey: ["mkt-email-publico-resumo", publico], queryFn: () => rpc<ResumoPublico>("mkt_email_publico_resumo", { p_dias: publico.dias, p_dias_min: publico.dias_min, p_estagios: publico.estagios }), enabled: aberto && publico.dias_min >= 0, staleTime: 60_000, retry: false });
-  const textos = JSON.stringify({ assunto: form.assunto, preheader: form.preheader, corpo: form.corpo, botao_texto: form.botao_texto, texto_whatsapp: form.texto_whatsapp });
+  const textos = JSON.stringify({ assunto: form.assunto, preheader: form.preheader, texto_whatsapp: form.texto_whatsapp, blocos: form.blocos, tema: form.tema });
   const textoPrevia = useDebounce(textos, 1000);
-  const previa = useQuery({ queryKey: ["email-disparos-previa", textoPrevia], queryFn: () => chamar({ modo: "render", ...JSON.parse(textoPrevia) }), enabled: aberto && !busy, retry: false, staleTime: 60_000 });
-  const bloqueado = !!busy || previa.isFetching;
+  const previa = useQuery({ queryKey: ["email-disparos-previa", textoPrevia], queryFn: () => chamar({ modo: "render", ...JSON.parse(textoPrevia) }), enabled: aberto && !busy && !editorBusy, retry: false, staleTime: 60_000 });
+  const bloqueado = !!busy || editorBusy || previa.isFetching;
   useEffect(() => { if (previa.error) toast.error(mensagemErro(previa.error)); }, [previa.error]);
 
   function abrir(r: Disparo | null) {
     setSelecionado(r);
-    setForm(r ? { titulo: r.titulo ?? "", assunto: r.assunto ?? "", preheader: r.preheader ?? "", corpo: r.corpo ?? "", botao_texto: r.botao_texto ?? "", texto_whatsapp: r.texto_whatsapp ?? "", remetente_nome: r.remetente_nome ?? "MCF Capital", publico: r.publico ?? novoFormulario().publico } : novoFormulario());
+    setForm(r ? { titulo: r.titulo ?? "", assunto: r.assunto ?? "", preheader: r.preheader ?? "", corpo: r.corpo ?? "", botao_texto: r.botao_texto ?? "", texto_whatsapp: r.texto_whatsapp ?? "", remetente_nome: r.remetente_nome ?? "MCF Capital", publico: r.publico ?? novoFormulario().publico, blocos: r.blocos ?? blocosPadrao(r.corpo ?? "", r.botao_texto ?? ""), tema: r.tema ?? temaPadrao() } : novoFormulario());
     setAberto(true);
   }
   function campo<K extends keyof Formulario>(key: K, value: Formulario[K]) { setForm(f => ({ ...f, [key]: value })); }
   function validar() {
-    if (!form.assunto.trim() || !form.corpo.trim() || !form.texto_whatsapp.trim()) throw new Error("Preencha assunto, corpo e mensagem do WhatsApp.");
+    if (!form.assunto.trim() || !form.texto_whatsapp.trim()) throw new Error("Preencha assunto e mensagem do WhatsApp.");
+    validarEmailBlocos(form.blocos, form.tema);
     if ([form.assunto, form.preheader, form.remetente_nome].some(t => /[{}]/.test(t))) throw new Error("Assunto, pré-cabeçalho e nome do remetente não podem conter { ou }.");
     if (!Number.isInteger(form.publico.dias_min) || form.publico.dias_min < 0) throw new Error("Informe um número inteiro de dias, maior ou igual a zero.");
   }
@@ -139,14 +143,16 @@ function DisparosConteudo() {
     if (!editavel) throw new Error("Para editar, clique em Reabrir para editar.");
     validar();
     const tabela = (supabase as any).from("email_disparos");
-    const query = atual ? tabela.update(form).eq("id", atual.id).in("status", ["rascunho", "erro"]) : tabela.insert({ ...form, status: "rascunho" });
+    const payload = { ...form, corpo: form.blocos.filter((b): b is Extract<EmailBloco, { tipo: "texto" }> => b.tipo === "texto").map(b => b.texto).join("\n\n"), botao_texto: form.blocos.find((b): b is Extract<EmailBloco, { tipo: "botao" }> => b.tipo === "botao")?.texto ?? "" };
+    let query = atual ? tabela.update(payload).eq("id", atual.id).eq("status", status) : tabela.insert({ ...payload, status: "rascunho" });
+    if (atual && status === "erro") query = query.is("brevo_campanha_id", null);
     const { data, error } = await query.select(COLUNAS).single();
     if (error) throw error;
     setSelecionado(data as Disparo);
     return data as Disparo;
   }
   async function acao(nome: string, tarefa: () => Promise<void>) {
-    if (trava.current || previa.isFetching) return;
+    if (trava.current || editorBusy || previa.isFetching) return;
     trava.current = true;
     setBusy(nome);
     try { await tarefa(); } catch (e) { toast.error(mensagemErro(e)); }
@@ -191,7 +197,7 @@ function DisparosConteudo() {
             </TableRow>)}</TableBody></Table>}
       </CardContent>
     </Card>
-    <Sheet open={aberto} onOpenChange={v => { if (!busy) setAberto(v); }}>
+    <Sheet open={aberto} onOpenChange={v => { if (!busy && !editorBusy) setAberto(v); }}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-[1100px]">
         <SheetHeader><SheetTitle>{atual?.titulo || "Novo disparo"}</SheetTitle><SheetDescription>{REMETENTE}</SheetDescription></SheetHeader>
         <div className="mt-[20px] grid min-w-0 grid-cols-1 gap-[24px] lg:grid-cols-2">
@@ -200,8 +206,7 @@ function DisparosConteudo() {
             {status === "erro" && <Alert variant="destructive"><AlertDescription>{atual?.erro || "O disparo apresentou um erro."}</AlertDescription></Alert>}
             <fieldset disabled={!editavel || bloqueado} className="space-y-[12px]">
               {([ ["titulo", "Título"], ["assunto", "Assunto"], ["preheader", "Pré-cabeçalho"] ] as const).map(([key, label]) => <div key={key} className="space-y-[6px]"><Label htmlFor={`disparo-${key}`}>{label}</Label><Input id={`disparo-${key}`} value={form[key]} onChange={e => campo(key, e.target.value)} /></div>)}
-              <div className="space-y-[6px]"><Label htmlFor="disparo-corpo">Corpo</Label><Textarea id="disparo-corpo" rows={14} value={form.corpo} onChange={e => campo("corpo", e.target.value)} /><p className="text-[11px] text-muted-foreground">Parágrafos separados por uma linha em branco. A saudação 'Oi, Nome.' entra sozinha.</p></div>
-              <div className="space-y-[6px]"><Label htmlFor="disparo-botao">Texto do botão</Label><Input id="disparo-botao" value={form.botao_texto} onChange={e => campo("botao_texto", e.target.value)} /></div>
+              <EmailBlocosEditor blocos={form.blocos} tema={form.tema} disabled={!editavel || bloqueado} editavel={editavel} onBusyChange={setEditorBusy} onChange={(blocos, tema) => setForm(f => ({ ...f, blocos, tema }))} />
               <div className="space-y-[6px]"><Label htmlFor="disparo-whatsapp">Mensagem que já vem escrita no WhatsApp do SDR</Label><Textarea id="disparo-whatsapp" rows={3} value={form.texto_whatsapp} onChange={e => campo("texto_whatsapp", e.target.value)} /></div>
               <div className="space-y-[6px]"><Label htmlFor="disparo-remetente">Nome do remetente</Label><Input id="disparo-remetente" value={form.remetente_nome} onChange={e => campo("remetente_nome", e.target.value)} /><p className="break-all text-[11px] text-muted-foreground">{REMETENTE}</p></div>
               <h3 className="pt-[8px] text-[14px] font-semibold">Público</h3>
@@ -244,7 +249,7 @@ function DisparosConteudo() {
               <Button variant="outline" disabled={bloqueado} onClick={() => void acao("teste", async () => { const r = await executar("teste"); toast.success(`Teste enviado para ${(r.enviado_para ?? []).join(", ")}. O botão do teste abre o WhatsApp de ${r.botao_abre_whatsapp_de ?? "—"}.`); })}>Enviar teste para mim</Button>
               <Button disabled={bloqueado} onClick={() => { setAgenda(padraoAgenda()); setAgora(false); setAgendarAberto(true); }}>Agendar envio</Button>
             </>}
-            {(status === "pronto" || status === "cancelado") && <Button variant="outline" disabled={bloqueado} onClick={() => void acao("reabrir", async () => { await executar("reabrir"); toast.success("Disparo reaberto para editar."); })}>Reabrir para editar</Button>}
+            {(status === "pronto" || status === "cancelado" || status === "erro" && atual?.brevo_campanha_id != null) && <Button variant="outline" disabled={bloqueado} onClick={() => void acao("reabrir", async () => { await executar("reabrir"); toast.success("Disparo reaberto para editar."); })}>Reabrir para editar</Button>}
             {status === "agendado" && <><Button variant="destructive" disabled={bloqueado} onClick={() => setConfirmacao("cancelar")}>Cancelar agendamento</Button><Button variant="outline" disabled={bloqueado} onClick={() => void acao("status", async () => { const r = await executar("status"); toast.success(`Status atualizado: ${r.status ?? status}. Enviados: ${numero(r.enviados)}.`); })}>Atualizar status</Button></>}
           </div>
         </div>
