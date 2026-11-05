@@ -1,0 +1,3 @@
+CREATE FUNCTION public.gov_dossie_ciencia_bloquear() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$ BEGIN PERFORM 1 FROM public.gov_dossie_registros WHERE id=NEW.registro_id FOR UPDATE; RETURN NEW; END $$;
+REVOKE ALL ON FUNCTION public.gov_dossie_ciencia_bloquear() FROM PUBLIC,anon;
+CREATE TRIGGER gov_dossie_ciencia_00_lock BEFORE INSERT ON public.gov_dossie_ciencias FOR EACH ROW EXECUTE FUNCTION public.gov_dossie_ciencia_bloquear();

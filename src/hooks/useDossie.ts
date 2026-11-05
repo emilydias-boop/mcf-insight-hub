@@ -2,15 +2,19 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TipoDossie } from '@/lib/dossie';
 export interface RegistroDossie { id: string; employee_id: string; tipo: TipoDossie; titulo: string; conteudo: string; ocorrido_em: string; status: string; confidencial: boolean; original_id: string | null; created_by: string; created_at: string; anexos: { path: string; nome: string }[] }
+async function todas<T>(fetch: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
+  const rows: T[] = [];
+  for (let from = 0; ; from += 1000) { const r = await fetch(from, from + 999); if (r.error) throw new Error(r.error.message); rows.push(...(r.data ?? [])); if ((r.data?.length ?? 0) < 1000) return rows; }
+}
 export function useDossie(employeeId: string) {
   return useQuery({ queryKey: ['dossie', employeeId], queryFn: async () => {
     const [registros, ciencias, gestor, me] = await Promise.all([
-      supabase.from('gov_dossie_registros').select('*').eq('employee_id', employeeId).order('ocorrido_em', { ascending: false }),
-      supabase.from('gov_dossie_ciencias').select('*, gov_dossie_registros!inner(employee_id)').eq('gov_dossie_registros.employee_id', employeeId),
+      todas((from,to) => supabase.from('gov_dossie_registros').select('*').eq('employee_id', employeeId).order('ocorrido_em', { ascending: false }).order('id').range(from,to)),
+      todas((from,to) => supabase.from('gov_dossie_ciencias').select('*, gov_dossie_registros!inner(employee_id)').eq('gov_dossie_registros.employee_id', employeeId).order('id').range(from,to)),
       supabase.rpc('gov_dossie_gestor', { p_employee: employeeId }), supabase.rpc('gov_meu_employee'),
     ]);
-    for (const result of [registros, ciencias, gestor, me]) if (result.error) throw result.error;
-    return { registros: (registros.data ?? []) as unknown as RegistroDossie[], ciencias: ciencias.data ?? [], gestor: !!gestor.data, proprio: me.data === employeeId };
+    for (const result of [gestor, me]) if (result.error) throw result.error;
+    return { registros: registros as unknown as RegistroDossie[], ciencias, gestor: !!gestor.data, proprio: me.data === employeeId };
   } });
 }
 export function useDossieLegado(employeeId: string, userId: string | null, enabled: boolean) {
