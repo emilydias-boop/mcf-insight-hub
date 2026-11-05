@@ -24233,6 +24233,7 @@ export type Database = {
       is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
+      jornada_calcular: { Args: { p_deal_id: string }; Returns: Json }
       jornada_cpf_candidatos: {
         Args: never
         Returns: {
