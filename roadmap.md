@@ -1,6 +1,6 @@
 # Roadmap
 - [x] Governança RH — Fase 1: hierarquia (setor pai/responsável, cargo reporta a/faixa), histórico de cargos (34 carregados), funções de hierarquia, regras de alçada e aba Governança
-- [ ] Governança RH — Fase 2: requisição de contratação
+- [ ] Governança RH — Fase 2: requisição de contratação implementada; validar regras e tela (assinaturas reservadas à Fase 5)
 - [ ] Governança RH — Fase 3: dossiê do colaborador
 - [ ] Governança RH — Fase 4: desligamento
 - [ ] Governança RH — Fase 5: assinatura digital interna
