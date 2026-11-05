@@ -47,6 +47,7 @@ serve(async (req) => {
           id,
           channel,
           template_id,
+          conditions,
           automation_templates:template_id (
             id,
             name,
@@ -61,7 +62,8 @@ serve(async (req) => {
         automation_flows:flow_id (
           id,
           name,
-          stage_id
+          stage_id,
+          trigger_event
         )
       `)
       .eq('status', 'pending')
@@ -138,7 +140,8 @@ serve(async (req) => {
           .maybeSingle();
         const stageNameRaw = (stageMeta?.stage_name || '')
           .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-        const isMeetingAnchored =
+        const reuniaoAlvo = (step?.conditions?.reuniao ?? null) as string | null;
+        const isMeetingAnchored = reuniaoAlvo === 'r2' ||
           /\b(reuniao|consultoria)\s+(agendad|realizad)/.test(stageNameRaw) ||
           /\br[12]\s+(agendad|realizad)/.test(stageNameRaw) ||
           /\b(1a|2a|1°|2°|1\.|2\.)\s*reuniao\s+(agendad|realizad)/.test(stageNameRaw) ||
@@ -150,7 +153,7 @@ serve(async (req) => {
         let meetingCloser: any = null;
         let meetingSlotSource = 'none';
         if (isMeetingAnchored) {
-          const resolvedSlot = await resolveMeetingSlotForAutomation(supabase, item.deal_id, item.contact_id || deal.contact_id);
+          const resolvedSlot = await resolveMeetingSlotForAutomation(supabase, item.deal_id, item.contact_id || deal.contact_id, reuniaoAlvo);
           meetingSlotActive = resolvedSlot.slot;
           meetingSlotSource = resolvedSlot.source;
 
@@ -197,6 +200,23 @@ serve(async (req) => {
           await markAsSkipped(supabase, item.id, 'Contact blacklisted');
           results.skipped++;
           continue;
+        }
+
+        const dedupeDias = Number(step?.conditions?.dedupe_dias ?? 0);
+        if (dedupeDias > 0) {
+          const { data: enviado } = await supabase
+            .from('automation_logs')
+            .select('id')
+            .eq('template_id', template.id)
+            .eq('contact_id', contact.id)
+            .eq('status', 'sent')
+            .gte('created_at', new Date(Date.now() - dedupeDias * 86400000).toISOString())
+            .limit(1);
+          if (enviado?.length) {
+            await markAsSkipped(supabase, item.id, `Dedupe: já enviado nos últimos ${dedupeDias} dias`);
+            results.skipped++;
+            continue;
+          }
         }
 
         // 6. Resolver dono dinâmico (SDR/Closer conforme estágio)
@@ -569,18 +589,18 @@ async function claimQueueItem(supabase: any, itemId: string) {
   return Boolean(data?.id);
 }
 
-async function resolveMeetingSlotForAutomation(supabase: any, dealId: string, contactId?: string | null) {
+async function resolveMeetingSlotForAutomation(supabase: any, dealId: string, contactId?: string | null, tipo?: string | null) {
   const attendeeSlots = await fetchSlotsFromAttendees(supabase, dealId);
-  const attendeeSlot = pickBestSlot(attendeeSlots);
+  const attendeeSlot = pickBestSlot(tipo ? attendeeSlots.filter((slot: any) => slot.meeting_type === tipo) : attendeeSlots);
   if (attendeeSlot) return { slot: attendeeSlot, source: 'meeting_slot_attendees.deal_id' };
 
   const directDealSlots = await fetchMeetingSlots(supabase, 'deal_id', dealId);
-  const directDealSlot = pickBestSlot(directDealSlots);
+  const directDealSlot = pickBestSlot(tipo ? directDealSlots.filter((slot: any) => slot.meeting_type === tipo) : directDealSlots);
   if (directDealSlot) return { slot: directDealSlot, source: 'meeting_slots.deal_id' };
 
   if (contactId) {
     const contactSlots = await fetchMeetingSlots(supabase, 'contact_id', contactId);
-    const contactSlot = pickBestSlot(contactSlots);
+    const contactSlot = pickBestSlot(tipo ? contactSlots.filter((slot: any) => slot.meeting_type === tipo) : contactSlots);
     if (contactSlot) return { slot: contactSlot, source: 'meeting_slots.contact_id' };
   }
 
