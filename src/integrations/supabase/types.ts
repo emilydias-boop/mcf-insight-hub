@@ -11165,6 +11165,51 @@ export type Database = {
           },
         ]
       }
+      email_sync_runs: {
+        Row: {
+          campanha_id: number | null
+          criado_em: string
+          enviados: number | null
+          erro: string | null
+          id: number
+          lista_id: number | null
+          modo: string
+          params: Json | null
+          process_id: number | null
+          publico: string
+          resultado: Json | null
+          sem_telefone: number | null
+        }
+        Insert: {
+          campanha_id?: number | null
+          criado_em?: string
+          enviados?: number | null
+          erro?: string | null
+          id?: never
+          lista_id?: number | null
+          modo: string
+          params?: Json | null
+          process_id?: number | null
+          publico: string
+          resultado?: Json | null
+          sem_telefone?: number | null
+        }
+        Update: {
+          campanha_id?: number | null
+          criado_em?: string
+          enviados?: number | null
+          erro?: string | null
+          id?: never
+          lista_id?: number | null
+          modo?: string
+          params?: Json | null
+          process_id?: number | null
+          publico?: string
+          resultado?: Json | null
+          sem_telefone?: number | null
+        }
+        Relationships: []
+      }
       embracon_class_config: {
         Row: {
           atualizado_em: string
@@ -23074,6 +23119,20 @@ export type Database = {
         Returns: Json
       }
       email_events_purge_payload: { Args: never; Returns: number }
+      email_publico_incorporador: {
+        Args: { p_dias?: number; p_dias_min?: number }
+        Returns: {
+          deal_id: string
+          email: string
+          estagio: string
+          nome: string
+          primeiro_nome: string
+          sdr_ativo: boolean
+          sdr_nome: string
+          sdr_tel: string
+          ultimo_movimento: string
+        }[]
+      }
       embracon_indices_class: {
         Args: { p_fonte?: string; p_mes: string }
         Returns: {
