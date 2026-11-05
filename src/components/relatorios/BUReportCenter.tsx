@@ -26,7 +26,7 @@ const BU_NAMES: Record<BusinessUnit, string> = {
   projetos: 'BU - Projetos',
   leilao: 'BU - Leilão',
   marketing: 'BU - Marketing',
-  solar: 'BU - MCF Solar',
+  solar: 'BU - War Room',
   pos_venda: 'BU - Pós Venda',
 };
 

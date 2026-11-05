@@ -12,7 +12,7 @@ export const BU_OPTIONS: { value: BusinessUnit | ""; label: string }[] = [
   { value: "projetos", label: "BU - Projetos" },
   { value: "leilao", label: "BU - Leilão" },
   { value: "marketing", label: "BU - Marketing" },
-  { value: "solar", label: "BU - MCF Solar" },
+  { value: "solar", label: "BU - War Room" },
   { value: "pos_venda", label: "BU - Pós Venda" },
 ];
 

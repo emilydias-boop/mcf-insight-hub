@@ -43,6 +43,7 @@ const BU_LABELS: Record<string, string> = {
   credito: 'Crédito',
   projetos: 'Projetos',
   leilao: 'Leilão',
+  solar: 'War Room',
 };
 
 export default function ConfigurarClosers() {

@@ -117,7 +117,7 @@ export function SolarSdrSummaryTable({ data, isLoading, metaAgendamentoDia }: So
         </Table>
       </div>
       <p className="px-4 py-2 text-xs text-muted-foreground">
-        Vendas Realizadas conta a entrada do negócio na etapa “Venda realizada” do funil Solar, pela data registrada no histórico da movimentação.
+        Vendas Realizadas conta a entrada do negócio na etapa “Venda realizada” do funil War Room, pela data registrada no histórico da movimentação.
       </p>
     </div>
   );

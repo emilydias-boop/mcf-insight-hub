@@ -150,7 +150,7 @@ export default function PainelComercialSolar() {
     const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `painel-solar-${pFrom}_${pTo}.csv`;
+    anchor.download = `painel-war-room-${pFrom}_${pTo}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -270,7 +270,7 @@ function MetaDialog({ open, onOpenChange, monthRef, meta, closers, onSaved }: {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { onOpenChange(nextOpen); if (!nextOpen) setLoadedMonth(null); }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Metas Solar — {format(parseISO(monthRef), "MMMM/yyyy", { locale: ptBR })}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Metas War Room — {format(parseISO(monthRef), "MMMM/yyyy", { locale: ptBR })}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div><Label>Meta de valor (R$)</Label><Input type="number" value={valor} onChange={(event) => setValor(event.target.value)} /></div>
           <div><Label>Meta de agendamento por dia</Label><Input type="number" value={agendamentoDia} onChange={(event) => setAgendamentoDia(event.target.value)} /></div>

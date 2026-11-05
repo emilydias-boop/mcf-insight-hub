@@ -551,7 +551,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                       { value: 'projetos', label: 'BU - Projetos' },
                       { value: 'leilao', label: 'BU - Leilão' },
                       { value: 'marketing', label: 'BU - Marketing' },
-                      { value: 'solar', label: 'BU - MCF Solar' },
+                      { value: 'solar', label: 'BU - War Room' },
                       { value: 'pos_venda', label: 'BU - Pós Venda' },
                     ].map((bu) => (
                       <label key={bu.value} className="flex items-center gap-2 cursor-pointer">
@@ -703,7 +703,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                       {[
                         { bu: 'incorporador', label: 'Incorporador' },
                         { bu: 'consorcio', label: 'Consórcio' },
-                        { bu: 'solar', label: 'Solar' },
+                        { bu: 'solar', label: 'War Room' },
                         { bu: 'credito', label: 'Crédito' },
                       ].map(({ bu, label }) => (
                         <label key={bu} className="flex items-center gap-2 text-sm">

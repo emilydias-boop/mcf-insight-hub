@@ -23,7 +23,7 @@ const BUS = [
   { value: 'incorporador', label: 'Incorporador' },
   { value: 'consorcio', label: 'Consórcio' },
   { value: 'credito', label: 'Crédito' },
-  { value: 'solar', label: 'Solar' },
+  { value: 'solar', label: 'War Room' },
 ];
 
 const TIPOS_DATA = [

@@ -54,7 +54,7 @@ const SQUAD_OPTIONS = [
   { value: "credito", label: "Crédito" },
   { value: "leilao", label: "Leilão" },
   { value: "projetos", label: "Projetos" },
-  { value: "solar", label: "MCF Solar" },
+  { value: "solar", label: "War Room" },
 ];
 
 type Step = "form" | "review" | "created";

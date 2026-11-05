@@ -86,7 +86,7 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     projetos: 'Projetos',
     leilao: 'Leilão',
     marketing: 'Marketing',
-    solar: 'MCF Solar',
+    solar: 'War Room',
     pos_venda: 'Pós Venda',
   };
   
