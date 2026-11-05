@@ -250,7 +250,7 @@ function Tela() {
 
   // Indicadores
   const kpis = m ? {
-    setores: m.setores.size, cargos: m.cargos.size, pessoas: [...m.pessoas.values()].filter((p) => m.cargoDaPessoa.has(p.id) || m.superior.get(p.id) || true).length,
+    setores: m.setores.size, cargos: m.cargos.size, pessoas: m.pessoas.size,
     vagos: [...m.cargos.keys()].filter((id) => !m.ocupantes.get(id)?.length).length, reqs: reqs.length,
   } : null;
   const niveis = m ? [...new Set([...m.cargos.values()].map((c) => c.nivel).filter((n) => n != null))].sort((a, b) => a! - b!) : [];

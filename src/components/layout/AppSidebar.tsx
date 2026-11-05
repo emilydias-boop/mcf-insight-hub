@@ -306,6 +306,7 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "rh"],
     items: [
       { title: "Colaboradores", url: "/rh/colaboradores" },
+      { title: "Estrutura Organizacional", url: "/rh/estrutura" },
       { title: "Requisições de contratação", url: "/rh/requisicoes" },
       { title: "Prova Equipe", url: "/rh/prova-equipe" },
       { title: "Configurações", url: "/rh/configuracoes" },
@@ -317,6 +318,7 @@ const menuItems: MenuItem[] = [
     icon: Users,
     requiredRoles: ["manager", "coordenador"],
     items: [
+      { title: "Estrutura Organizacional", url: "/rh/estrutura" },
       { title: "Requisições de contratação", url: "/rh/requisicoes" },
       { title: "Metas de agendamento", url: "/rh/configuracoes" },
     ],
