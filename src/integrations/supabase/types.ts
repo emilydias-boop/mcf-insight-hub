@@ -13279,6 +13279,7 @@ export type Database = {
       jornada_etapas: {
         Row: {
           ativa: boolean
+          codigo_trilha: string | null
           created_at: string
           descricao: string | null
           icone: string | null
@@ -13289,6 +13290,7 @@ export type Database = {
         }
         Insert: {
           ativa?: boolean
+          codigo_trilha?: string | null
           created_at?: string
           descricao?: string | null
           icone?: string | null
@@ -13299,6 +13301,7 @@ export type Database = {
         }
         Update: {
           ativa?: boolean
+          codigo_trilha?: string | null
           created_at?: string
           descricao?: string | null
           icone?: string | null
@@ -13362,6 +13365,42 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_performance_summary"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      jornada_mapa_estagios: {
+        Row: {
+          created_at: string
+          etapa_id: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          etapa_id: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          etapa_id?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jornada_mapa_estagios_etapa_id_fkey"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "jornada_etapas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jornada_mapa_estagios_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: true
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -24194,6 +24233,17 @@ export type Database = {
       is_own_closer: { Args: { _closer_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       is_r1_force_approver: { Args: { _uid: string }; Returns: boolean }
+      jornada_cpf_candidatos: {
+        Args: never
+        Returns: {
+          comprador_nome: string
+          contato_id: string
+          contato_nome: string
+          cpf: string
+          deal_id: string
+          metodo: string
+        }[]
+      }
       jornada_definir_etapa: {
         Args: { p_deal_id: string; p_etapa_id: string; p_observacao?: string }
         Returns: undefined
@@ -24207,6 +24257,12 @@ export type Database = {
           p_stage: string
         }
         Returns: string
+      }
+      jornada_resolver_cpf: {
+        Args: { p_cpf: string }
+        Returns: {
+          deal_id: string
+        }[]
       }
       kanban_busca_outras_pipelines: {
         Args: {
