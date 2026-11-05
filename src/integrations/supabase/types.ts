@@ -11002,6 +11002,7 @@ export type Database = {
           agendado_por: string | null
           assunto: string
           atualizado_em: string
+          blocos: Json | null
           botao_texto: string
           brevo_campanha_id: number | null
           brevo_lista_id: number | null
@@ -11020,6 +11021,7 @@ export type Database = {
           referencia_id: string | null
           remetente_nome: string
           status: string
+          tema: Json
           texto_whatsapp: string
           titulo: string
         }
@@ -11029,33 +11031,7 @@ export type Database = {
           agendado_por?: string | null
           assunto: string
           atualizado_em?: string
-          botao_texto?: string
-          brevo_campanha_id?: number | null
-          brevo_lista_id?: number | null
-          brevo_process_id?: number | null
-          corpo: string
-          criado_em?: string
-          criado_por?: string | null
-          enviados_previstos?: number | null
-          erro?: string | null
-          fonte?: string
-          id?: string
-          preheader?: string | null
-          preparado_em?: string | null
-          preparado_por?: string | null
-          publico?: Json
-          referencia_id?: string | null
-          remetente_nome?: string
-          status?: string
-          texto_whatsapp: string
-          titulo: string
-        }
-        Update: {
-          agendado_em?: string | null
-          agendado_para?: string | null
-          agendado_por?: string | null
-          assunto?: string
-          atualizado_em?: string
+          blocos?: Json | null
           botao_texto?: string
           brevo_campanha_id?: number | null
           brevo_lista_id?: number | null
@@ -11074,6 +11050,36 @@ export type Database = {
           referencia_id?: string | null
           remetente_nome?: string
           status?: string
+          tema?: Json
+          texto_whatsapp: string
+          titulo: string
+        }
+        Update: {
+          agendado_em?: string | null
+          agendado_para?: string | null
+          agendado_por?: string | null
+          assunto?: string
+          atualizado_em?: string
+          blocos?: Json | null
+          botao_texto?: string
+          brevo_campanha_id?: number | null
+          brevo_lista_id?: number | null
+          brevo_process_id?: number | null
+          corpo?: string
+          criado_em?: string
+          criado_por?: string | null
+          enviados_previstos?: number | null
+          erro?: string | null
+          fonte?: string
+          id?: string
+          preheader?: string | null
+          preparado_em?: string | null
+          preparado_por?: string | null
+          publico?: Json
+          referencia_id?: string | null
+          remetente_nome?: string
+          status?: string
+          tema?: Json
           texto_whatsapp?: string
           titulo?: string
         }
@@ -11211,6 +11217,36 @@ export type Database = {
           soft_bounce?: boolean
           source?: string
           spam?: boolean
+        }
+        Relationships: []
+      }
+      email_modelos: {
+        Row: {
+          blocos: Json
+          criado_em: string
+          criado_por: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          tema: Json
+        }
+        Insert: {
+          blocos: Json
+          criado_em?: string
+          criado_por?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          tema?: Json
+        }
+        Update: {
+          blocos?: Json
+          criado_em?: string
+          criado_por?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          tema?: Json
         }
         Relationships: []
       }
