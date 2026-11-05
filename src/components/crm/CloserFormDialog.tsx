@@ -55,7 +55,7 @@ const BU_OPTIONS = [
   { value: 'credito', label: 'BU - Crédito' },
   { value: 'projetos', label: 'BU - Projetos' },
   { value: 'leilao', label: 'BU - Leilão' },
-  { value: 'solar', label: 'BU - MCF Solar' },
+  { value: 'solar', label: 'BU - War Room' },
 ];
 
 const COLOR_OPTIONS = [

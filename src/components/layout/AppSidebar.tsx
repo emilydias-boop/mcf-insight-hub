@@ -215,7 +215,7 @@ const menuItems: MenuItem[] = [
   // BU - MARKETING (seção inteira removida do menu — rotas mantidas comentadas em App.tsx para rollback)
   // BU - MCF SOLAR
   {
-    title: "BU - MCF SOLAR",
+    title: "BU - WAR ROOM",
     icon: Building2,
     requiredRoles: ["admin", "manager", "coordenador"],
     items: [
@@ -494,7 +494,7 @@ export function AppSidebar() {
   const BU_CRM_LABEL: Partial<Record<BusinessUnit, string>> = {
     incorporador: 'Inside',
     consorcio: 'Consórcio',
-    solar: 'Solar',
+    solar: 'War Room',
     credito: 'Crédito',
   };
   const crmBUs = (['incorporador', 'consorcio', 'solar', 'credito'] as BusinessUnit[]).filter(bu => myBUs.includes(bu));

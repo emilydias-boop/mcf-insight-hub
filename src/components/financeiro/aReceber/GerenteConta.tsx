@@ -13,7 +13,7 @@ export interface GerenteConta {
 }
 
 const AREA_LABEL: Record<string, string> = {
-  solar: 'MCF Solar',
+  solar: 'War Room',
   consorcio: 'Consórcio',
   incorporador: 'Incorporador',
 };
