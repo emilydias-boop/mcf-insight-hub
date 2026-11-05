@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState } from "react";
 import { EmailDestinatarios } from "./EmailDestinatarios";
+import { EmailDisparos } from "./EmailDisparos";
 
 type Grao = "day" | "week" | "month";
 
@@ -111,6 +112,7 @@ export function EmailMarketing({ from, to, grao }: { from: string; to: string; g
   ];
 
   return <div className="space-y-[16px]">
+    <EmailDisparos />
     {/* a. Status do webhook */}
     <Card className="min-w-0">
       <CardContent className="space-y-[12px] p-[20px]">
