@@ -10979,6 +10979,176 @@ export type Database = {
         }
         Relationships: []
       }
+      email_events: {
+        Row: {
+          campaign_id: string | null
+          campaign_name: string | null
+          dedupe_key: string
+          email: string | null
+          event: string
+          event_raw: string
+          id: number
+          link: string | null
+          message_id: string | null
+          occurred_at: string
+          payload: Json | null
+          provider: string
+          reason: string | null
+          received_at: string
+          source: string
+          subject: string | null
+          tags: string[] | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          via: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          campaign_name?: string | null
+          dedupe_key: string
+          email?: string | null
+          event: string
+          event_raw: string
+          id?: never
+          link?: string | null
+          message_id?: string | null
+          occurred_at: string
+          payload?: Json | null
+          provider?: string
+          reason?: string | null
+          received_at?: string
+          source: string
+          subject?: string | null
+          tags?: string[] | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          via?: string
+        }
+        Update: {
+          campaign_id?: string | null
+          campaign_name?: string | null
+          dedupe_key?: string
+          email?: string | null
+          event?: string
+          event_raw?: string
+          id?: never
+          link?: string | null
+          message_id?: string | null
+          occurred_at?: string
+          payload?: Json | null
+          provider?: string
+          reason?: string | null
+          received_at?: string
+          source?: string
+          subject?: string | null
+          tags?: string[] | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          via?: string
+        }
+        Relationships: []
+      }
+      email_messages: {
+        Row: {
+          aberto: boolean
+          anchor_at: string
+          bloqueado: boolean
+          campaign_id: string | null
+          clicado: boolean
+          descadastro: boolean
+          email: string | null
+          entregue: boolean
+          enviado: boolean
+          hard_bounce: boolean
+          last_event_at: string
+          message_id: string | null
+          mk: string
+          nome: string | null
+          soft_bounce: boolean
+          source: string
+          spam: boolean
+        }
+        Insert: {
+          aberto?: boolean
+          anchor_at: string
+          bloqueado?: boolean
+          campaign_id?: string | null
+          clicado?: boolean
+          descadastro?: boolean
+          email?: string | null
+          entregue?: boolean
+          enviado?: boolean
+          hard_bounce?: boolean
+          last_event_at: string
+          message_id?: string | null
+          mk: string
+          nome?: string | null
+          soft_bounce?: boolean
+          source: string
+          spam?: boolean
+        }
+        Update: {
+          aberto?: boolean
+          anchor_at?: string
+          bloqueado?: boolean
+          campaign_id?: string | null
+          clicado?: boolean
+          descadastro?: boolean
+          email?: string | null
+          entregue?: boolean
+          enviado?: boolean
+          hard_bounce?: boolean
+          last_event_at?: string
+          message_id?: string | null
+          mk?: string
+          nome?: string | null
+          soft_bounce?: boolean
+          source?: string
+          spam?: boolean
+        }
+        Relationships: []
+      }
+      email_suppressions: {
+        Row: {
+          email: string
+          first_at: string
+          last_at: string
+          last_event_id: number | null
+          reason: string
+          source: string
+        }
+        Insert: {
+          email: string
+          first_at: string
+          last_at: string
+          last_event_id?: number | null
+          reason: string
+          source: string
+        }
+        Update: {
+          email?: string
+          first_at?: string
+          last_at?: string
+          last_event_id?: number | null
+          reason?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_suppressions_last_event_id_fkey"
+            columns: ["last_event_id"]
+            isOneToOne: false
+            referencedRelation: "email_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       embracon_class_config: {
         Row: {
           atualizado_em: string
@@ -22793,6 +22963,12 @@ export type Database = {
       donos_das_vendas: { Args: { p_ids: string[] }; Returns: Json }
       e_produto_parceria: { Args: { p: string }; Returns: boolean }
       eh_produto_parceria: { Args: { p_nome: string }; Returns: boolean }
+      email_event_norm: { Args: { p_raw: string }; Returns: string }
+      email_events_ingest: {
+        Args: { p_items: Json; p_via?: string }
+        Returns: Json
+      }
+      email_events_purge_payload: { Args: never; Returns: number }
       embracon_indices_class: {
         Args: { p_fonte?: string; p_mes: string }
         Returns: {
@@ -24072,6 +24248,63 @@ export type Database = {
       mkt_channel: {
         Args: { p_ad_id: string; p_origem: string; p_source: string }
         Returns: string
+      }
+      mkt_email_can_view: { Args: never; Returns: boolean }
+      mkt_email_por_envio: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          aberturas: number
+          cliques: number
+          descadastros: number
+          entregues: number
+          envios: number
+          hard_bounce: number
+          nome: string
+          origem: string
+          pct_abertura: number
+          pct_clique: number
+          pct_hard_bounce: number
+          pct_spam: number
+          primeiro_evento: string
+          spam: number
+          ultimo_evento: string
+        }[]
+      }
+      mkt_email_resumo: {
+        Args: never
+        Returns: {
+          eventos_24h: number
+          suprimidos_descadastro: number
+          suprimidos_hard_bounce: number
+          suprimidos_invalido: number
+          suprimidos_spam: number
+          suprimidos_total: number
+          ultimo_evento: string
+          ultimo_recebido: string
+        }[]
+      }
+      mkt_email_saude: {
+        Args: { p_from: string; p_grao?: string; p_to: string }
+        Returns: {
+          aberturas: number
+          alerta_bounce: boolean
+          alerta_spam: boolean
+          cliques: number
+          descadastros: number
+          entregues: number
+          envios: number
+          hard_bounce: number
+          origem: string
+          pct_abertura: number
+          pct_clique: number
+          pct_descadastro: number
+          pct_entrega: number
+          pct_hard_bounce: number
+          pct_spam: number
+          periodo: string
+          soft_bounce: number
+          spam: number
+        }[]
       }
       mkt_fator_investimento: { Args: never; Returns: number }
       mkt_funil_anuncios: {

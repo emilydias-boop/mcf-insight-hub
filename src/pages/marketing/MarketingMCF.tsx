@@ -3,6 +3,7 @@ import { FunilSafras } from "@/components/marketing/FunilSafras";
 import { CriativosTable } from "@/components/marketing/CriativosTable";
 import { PautaViral } from "@/components/marketing/PautaViral";
 import { InstagramMCF } from "@/components/marketing/InstagramMCF";
+import { EmailMarketing } from "@/components/marketing/EmailMarketing";
 import { useCanaisPeriodo, CANAL_LABELS, formatInt, type Grao, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -154,7 +155,7 @@ export default function MarketingMCF() {
         </div>
         <div className="flex items-center gap-[8px]">
           <span id="marketing-agrupamento" className="text-[12px] text-muted-foreground">Agrupamento</span>
-          <Select value={effectiveGrao} onValueChange={value => { if (value === "month" || value === "week" || value === "day") setGrao(value); }} disabled={tab !== "funil" || singleDay}>
+          <Select value={effectiveGrao} onValueChange={value => { if (value === "month" || value === "week" || value === "day") setGrao(value); }} disabled={(tab !== "funil" && tab !== "email") || singleDay}>
             <SelectTrigger aria-labelledby="marketing-agrupamento" title={singleDay ? "Período de um dia: agrupado por dia" : undefined} className="h-[36px] w-[120px] px-[10px] text-[12px]"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="month" className="py-[8px] text-[12px]">Mês</SelectItem><SelectItem value="week" className="py-[8px] text-[12px]">Semana</SelectItem><SelectItem value="day" className="py-[8px] text-[12px]">Dia</SelectItem></SelectContent>
           </Select>
@@ -165,12 +166,12 @@ export default function MarketingMCF() {
           <div role="group" aria-label="Contar pela" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Contar pela</span>
             <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre a data de contagem" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">Data da venda: a parceria de hoje aparece hoje, no criativo que trouxe a pessoa. Data do 1º clique: a venda volta para o período em que a pessoa clicou no anúncio — serve para medir o retorno do dinheiro gasto naquele período.</TooltipContent></Tooltip>
-            {([{ value: "venda", label: "Data da venda" }, { value: "safra", label: "Data do 1º clique" }] as const).map(item => <Button key={item.value} variant={data === item.value ? "secondary" : "ghost"} aria-pressed={data === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral"} onClick={() => { setData(item.value); if (item.value === "safra") setOrigem("anuncio"); }} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+            {([{ value: "venda", label: "Data da venda" }, { value: "safra", label: "Data do 1º clique" }] as const).map(item => <Button key={item.value} variant={data === item.value ? "secondary" : "ghost"} aria-pressed={data === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral" || tab === "email"} onClick={() => { setData(item.value); if (item.value === "safra") setOrigem("anuncio"); }} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
           </div>
           <div role="group" aria-label="Crédito para" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Crédito para</span>
             <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre o crédito do anúncio" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">1º anúncio: quem trouxe a pessoa. Último anúncio: o último anúncio com que ela interagiu antes daquela compra.</TooltipContent></Tooltip>
-            {([{ value: "primeiro", label: "1º anúncio" }, { value: "ultimo", label: "Último anúncio" }] as const).map(item => <Button key={item.value} variant={toque === item.value ? "secondary" : "ghost"} aria-pressed={toque === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral"} onClick={() => setToque(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+            {([{ value: "primeiro", label: "1º anúncio" }, { value: "ultimo", label: "Último anúncio" }] as const).map(item => <Button key={item.value} variant={toque === item.value ? "secondary" : "ghost"} aria-pressed={toque === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral" || tab === "email"} onClick={() => setToque(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
           </div>
           <div role="group" aria-label="Origem" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Origem</span>
@@ -191,6 +192,7 @@ export default function MarketingMCF() {
         <TabsTrigger value="funil" className="h-[36px] px-[12px] text-[12px]">Funil</TabsTrigger>
         <TabsTrigger value="criativos" className="h-[36px] px-[12px] text-[12px]">Anúncios e criativos</TabsTrigger>
         <TabsTrigger value="canais" className="h-[36px] px-[12px] text-[12px]">Canais</TabsTrigger>
+        <TabsTrigger value="email" className="h-[36px] px-[12px] text-[12px]">E-mail</TabsTrigger>
         <TabsTrigger value="instagram" className="h-[36px] px-[12px] text-[12px]">Instagram</TabsTrigger>
         <TabsTrigger value="pauta-viral" className="h-[36px] px-[12px] text-[12px]">Pauta Viral</TabsTrigger>
       </TabsList>
@@ -198,6 +200,7 @@ export default function MarketingMCF() {
         <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} data={data} toque={toque} origem={origem} /></TabsContent>
         <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} data={data} toque={toque} /></TabsContent>
         <TabsContent value="canais" className="m-0"><CanaisPeriodo from={from} to={to} /></TabsContent>
+        <TabsContent value="email" className="m-0"><EmailMarketing from={from} to={to} grao={effectiveGrao} /></TabsContent>
         <TabsContent value="instagram" className="m-0"><InstagramMCF from={from} to={to} /></TabsContent>
       </>)}
       <TabsContent value="pauta-viral" className="m-0"><PautaViral /></TabsContent>
