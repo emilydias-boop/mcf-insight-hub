@@ -10995,6 +10995,90 @@ export type Database = {
         }
         Relationships: []
       }
+      email_disparos: {
+        Row: {
+          agendado_em: string | null
+          agendado_para: string | null
+          agendado_por: string | null
+          assunto: string
+          atualizado_em: string
+          botao_texto: string
+          brevo_campanha_id: number | null
+          brevo_lista_id: number | null
+          brevo_process_id: number | null
+          corpo: string
+          criado_em: string
+          criado_por: string | null
+          enviados_previstos: number | null
+          erro: string | null
+          fonte: string
+          id: string
+          preheader: string | null
+          preparado_em: string | null
+          preparado_por: string | null
+          publico: Json
+          referencia_id: string | null
+          remetente_nome: string
+          status: string
+          texto_whatsapp: string
+          titulo: string
+        }
+        Insert: {
+          agendado_em?: string | null
+          agendado_para?: string | null
+          agendado_por?: string | null
+          assunto: string
+          atualizado_em?: string
+          botao_texto?: string
+          brevo_campanha_id?: number | null
+          brevo_lista_id?: number | null
+          brevo_process_id?: number | null
+          corpo: string
+          criado_em?: string
+          criado_por?: string | null
+          enviados_previstos?: number | null
+          erro?: string | null
+          fonte?: string
+          id?: string
+          preheader?: string | null
+          preparado_em?: string | null
+          preparado_por?: string | null
+          publico?: Json
+          referencia_id?: string | null
+          remetente_nome?: string
+          status?: string
+          texto_whatsapp: string
+          titulo: string
+        }
+        Update: {
+          agendado_em?: string | null
+          agendado_para?: string | null
+          agendado_por?: string | null
+          assunto?: string
+          atualizado_em?: string
+          botao_texto?: string
+          brevo_campanha_id?: number | null
+          brevo_lista_id?: number | null
+          brevo_process_id?: number | null
+          corpo?: string
+          criado_em?: string
+          criado_por?: string | null
+          enviados_previstos?: number | null
+          erro?: string | null
+          fonte?: string
+          id?: string
+          preheader?: string | null
+          preparado_em?: string | null
+          preparado_por?: string | null
+          publico?: Json
+          referencia_id?: string | null
+          remetente_nome?: string
+          status?: string
+          texto_whatsapp?: string
+          titulo?: string
+        }
+        Relationships: []
+      }
       email_events: {
         Row: {
           campaign_id: string | null
@@ -23120,7 +23204,7 @@ export type Database = {
       }
       email_events_purge_payload: { Args: never; Returns: number }
       email_publico_incorporador: {
-        Args: { p_dias?: number; p_dias_min?: number }
+        Args: { p_dias?: number; p_dias_min?: number; p_estagios?: string[] }
         Returns: {
           deal_id: string
           email: string
@@ -23132,6 +23216,10 @@ export type Database = {
           sdr_tel: string
           ultimo_movimento: string
         }[]
+      }
+      email_publico_incorporador_json: {
+        Args: { p_dias?: number; p_dias_min?: number; p_estagios?: string[] }
+        Returns: Json
       }
       embracon_indices_class: {
         Args: { p_fonte?: string; p_mes: string }
@@ -24427,6 +24515,7 @@ export type Database = {
         Args: { p_ad_id: string; p_origem: string; p_source: string }
         Returns: string
       }
+      mkt_email_can_send: { Args: never; Returns: boolean }
       mkt_email_can_view: { Args: never; Returns: boolean }
       mkt_email_conteudo: {
         Args: { p_mk: string }
@@ -24467,6 +24556,13 @@ export type Database = {
           ultimo_evento: string
         }[]
       }
+      mkt_email_estagios: {
+        Args: never
+        Returns: {
+          estagio: string
+          ordem: number
+        }[]
+      }
       mkt_email_por_envio: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -24487,6 +24583,10 @@ export type Database = {
           spam: number
           ultimo_evento: string
         }[]
+      }
+      mkt_email_publico_resumo: {
+        Args: { p_dias?: number; p_dias_min?: number; p_estagios?: string[] }
+        Returns: Json
       }
       mkt_email_resumo: {
         Args: never
