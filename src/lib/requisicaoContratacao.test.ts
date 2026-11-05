@@ -1,0 +1,13 @@
+import { strict as assert } from 'node:assert';
+import { exigeJustificativa, transicaoPermitida } from './requisicaoContratacao';
+assert.equal(exigeJustificativa('aumento_quadro', 3000, null, null, false), true);
+assert.equal(exigeJustificativa('substituicao', 1999, 2000, 4000, false), true);
+assert.equal(exigeJustificativa('substituicao', 4001, 2000, 4000, false), true);
+assert.equal(exigeJustificativa('substituicao', 3000, 2000, 4000, true), true);
+assert.equal(exigeJustificativa('substituicao', 2000, 2000, 4000, false), false);
+assert.equal(transicaoPermitida('rascunho', 'em_aprovacao'), true);
+assert.equal(transicaoPermitida('rascunho', 'concluida'), false);
+assert.equal(transicaoPermitida('em_aprovacao', 'aprovada'), false);
+assert.equal(transicaoPermitida('aprovada', 'em_recrutamento'), true);
+assert.equal(transicaoPermitida('em_recrutamento', 'concluida'), true);
+console.log('Requisições: 10 regras verificadas');
