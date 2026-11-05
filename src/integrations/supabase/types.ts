@@ -12796,6 +12796,7 @@ export type Database = {
           cond_tipos_desligamento: string[] | null
           created_at: string
           descricao: string | null
+          exige_justificativa: boolean
           id: string
           nome: string
           ordem: number
@@ -12817,6 +12818,7 @@ export type Database = {
           cond_tipos_desligamento?: string[] | null
           created_at?: string
           descricao?: string | null
+          exige_justificativa?: boolean
           id?: string
           nome: string
           ordem?: number
@@ -12838,6 +12840,7 @@ export type Database = {
           cond_tipos_desligamento?: string[] | null
           created_at?: string
           descricao?: string | null
+          exige_justificativa?: boolean
           id?: string
           nome?: string
           ordem?: number
@@ -12872,6 +12875,141 @@ export type Database = {
             columns: ["cond_departamento_id"]
             isOneToOne: false
             referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gov_requisicoes_contratacao: {
+        Row: {
+          atores_previstos: Json
+          beneficios: string
+          cargo_catalogo_id: string | null
+          centro_custo: string
+          competencias: string
+          contratado_employee_id: string | null
+          created_at: string
+          data_inicio: string | null
+          departamento_id: string | null
+          enviado_em: string | null
+          id: string
+          indicadores: string
+          justificativa: string
+          local: string
+          missao: string
+          modelo_trabalho: string
+          quantidade: number
+          regime: string
+          requisitos_desejaveis: string
+          requisitos_obrigatorios: string
+          responsabilidades: string
+          salario_base: number
+          solicitante_employee_id: string | null
+          solicitante_user_id: string
+          status: string
+          substituido_employee_id: string | null
+          tipo: string
+          titulo: string
+          updated_at: string
+          variavel: string
+        }
+        Insert: {
+          atores_previstos?: Json
+          beneficios?: string
+          cargo_catalogo_id?: string | null
+          centro_custo?: string
+          competencias?: string
+          contratado_employee_id?: string | null
+          created_at?: string
+          data_inicio?: string | null
+          departamento_id?: string | null
+          enviado_em?: string | null
+          id?: string
+          indicadores?: string
+          justificativa?: string
+          local?: string
+          missao?: string
+          modelo_trabalho?: string
+          quantidade?: number
+          regime?: string
+          requisitos_desejaveis?: string
+          requisitos_obrigatorios?: string
+          responsabilidades?: string
+          salario_base?: number
+          solicitante_employee_id?: string | null
+          solicitante_user_id?: string
+          status?: string
+          substituido_employee_id?: string | null
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+          variavel?: string
+        }
+        Update: {
+          atores_previstos?: Json
+          beneficios?: string
+          cargo_catalogo_id?: string | null
+          centro_custo?: string
+          competencias?: string
+          contratado_employee_id?: string | null
+          created_at?: string
+          data_inicio?: string | null
+          departamento_id?: string | null
+          enviado_em?: string | null
+          id?: string
+          indicadores?: string
+          justificativa?: string
+          local?: string
+          missao?: string
+          modelo_trabalho?: string
+          quantidade?: number
+          regime?: string
+          requisitos_desejaveis?: string
+          requisitos_obrigatorios?: string
+          responsabilidades?: string
+          salario_base?: number
+          solicitante_employee_id?: string | null
+          solicitante_user_id?: string
+          status?: string
+          substituido_employee_id?: string | null
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+          variavel?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gov_requisicoes_contratacao_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_requisicoes_contratacao_contratado_employee_id_fkey"
+            columns: ["contratado_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_requisicoes_contratacao_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_requisicoes_contratacao_solicitante_employee_id_fkey"
+            columns: ["solicitante_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_requisicoes_contratacao_substituido_employee_id_fkey"
+            columns: ["substituido_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -24384,7 +24522,9 @@ export type Database = {
         }[]
       }
       gov_is_rh_admin: { Args: { _uid: string }; Returns: boolean }
+      gov_meu_employee: { Args: never; Returns: string }
       gov_ocupante_cargo: { Args: { _cargo_id: string }; Returns: string }
+      gov_requisicao_opcoes: { Args: never; Returns: Json }
       gov_responsavel_setor: {
         Args: { _departamento_id: string }
         Returns: string
