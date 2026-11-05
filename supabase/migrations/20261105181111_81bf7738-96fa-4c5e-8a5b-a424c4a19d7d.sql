@@ -1,0 +1,3 @@
+CREATE FUNCTION public.jornada_compra_cpf(p_cpf text) RETURNS TABLE(comprador_nome text,data_compra timestamptz) LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$ SELECT (SELECT customer_name FROM public.hubla_transactions WHERE regexp_replace(customer_document,'[^0-9]','','g')=p_cpf AND nullif(trim(customer_name),'') IS NOT NULL ORDER BY (sale_status='completed') DESC,sale_date ASC NULLS LAST,id LIMIT 1), (SELECT min(sale_date) FROM public.hubla_transactions WHERE regexp_replace(customer_document,'[^0-9]','','g')=p_cpf AND sale_status='completed') $$;
+REVOKE ALL ON FUNCTION public.jornada_compra_cpf(text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.jornada_compra_cpf(text) TO service_role;
