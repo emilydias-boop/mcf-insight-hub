@@ -35,7 +35,6 @@ interface EnvioRow {
   pct_hard_bounce: number | null; pct_spam: number | null; pct_abertura: number | null; pct_clique: number | null;
 }
 
-const rpc = supabase.rpc as any;
 const n = (v: unknown) => Number(v ?? 0) || 0;
 const fmtInt = (v: unknown) => n(v).toLocaleString("pt-BR");
 const fmtPct = (v: number | string | null | undefined) =>
@@ -53,7 +52,7 @@ function isPermError(e: unknown) {
   return err?.code === "42501" || /permission denied|42501/i.test(err?.message ?? "");
 }
 async function call<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
-  const { data, error } = await rpc(fn, args);
+  const { data, error } = await (supabase as any).rpc(fn, args);
   if (error) throw error;
   return data as T;
 }
