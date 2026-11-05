@@ -36,6 +36,35 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Auth: service role (internal edges) or logged-in app user. Token is never logged.
+  {
+    const token = (req.headers.get('Authorization') || '').replace(/^bearer\s+/i, '').trim();
+    let allowed = false;
+    if (token && SUPABASE_SERVICE_ROLE_KEY) {
+      const enc = new TextEncoder();
+      const a = enc.encode(token);
+      const b = enc.encode(SUPABASE_SERVICE_ROLE_KEY);
+      const len = Math.max(a.length, b.length);
+      let diff = a.length ^ b.length;
+      for (let i = 0; i < len; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+      allowed = diff === 0;
+    }
+    if (!allowed && token && supabaseAdmin) {
+      try {
+        const { data, error } = await supabaseAdmin.auth.getUser(token);
+        allowed = !error && !!data?.user;
+      } catch {
+        allowed = false;
+      }
+    }
+    if (!allowed) {
+      return new Response(JSON.stringify({ success: false, error: 'unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
   let logId: string | null = null;
 
   try {
