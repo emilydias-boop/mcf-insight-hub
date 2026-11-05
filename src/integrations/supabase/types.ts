@@ -11529,6 +11529,7 @@ export type Database = {
           departamento_id: string | null
           employee_id: string
           id: string
+          interino: boolean
           observacao: string | null
           updated_at: string
         }
@@ -11541,6 +11542,7 @@ export type Database = {
           departamento_id?: string | null
           employee_id: string
           id?: string
+          interino?: boolean
           observacao?: string | null
           updated_at?: string
         }
@@ -11553,6 +11555,7 @@ export type Database = {
           departamento_id?: string | null
           employee_id?: string
           id?: string
+          interino?: boolean
           observacao?: string | null
           updated_at?: string
         }
@@ -24622,11 +24625,29 @@ export type Database = {
           nome: string
         }[]
       }
+      gov_cargo_salvar: {
+        Args: {
+          p_departamento_id: string
+          p_descricao: string
+          p_faixa_max: number
+          p_faixa_min: number
+          p_id: string
+          p_nivel: number
+          p_nome: string
+          p_reporta_a: string
+        }
+        Returns: string
+      }
       gov_dossie_anexo_permitido: {
         Args: { p_escrita?: boolean; p_nome: string }
         Returns: boolean
       }
       gov_dossie_gestor: { Args: { p_employee: string }; Returns: boolean }
+      gov_estrutura_em: { Args: { p_data?: string }; Returns: Json }
+      gov_estrutura_mover: {
+        Args: { p_id: string; p_novo_pai: string; p_tipo: string }
+        Returns: undefined
+      }
       gov_is_rh_admin: { Args: { _uid: string }; Returns: boolean }
       gov_meu_employee: { Args: never; Returns: string }
       gov_ocupante_cargo: { Args: { _cargo_id: string }; Returns: string }
@@ -24639,7 +24660,30 @@ export type Database = {
         Args: { _employee_id: string }
         Returns: string
       }
+      gov_setor_salvar: {
+        Args: {
+          p_id: string
+          p_nome: string
+          p_parent_id: string
+          p_responsavel: string
+        }
+        Returns: string
+      }
       gov_superior_imediato: { Args: { _employee_id: string }; Returns: string }
+      gov_vinculo_atribuir: {
+        Args: {
+          p_cargo_id: string
+          p_data_inicio: string
+          p_employee_id: string
+          p_interino?: boolean
+          p_observacao?: string
+        }
+        Returns: string
+      }
+      gov_vinculo_encerrar: {
+        Args: { p_data_fim: string; p_vinculo_id: string }
+        Returns: undefined
+      }
       gravar_snapshot_relatorio_diario: {
         Args: { p_data: string }
         Returns: number
