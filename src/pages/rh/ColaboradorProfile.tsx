@@ -22,6 +22,7 @@ import EmployeeTimeTab from '@/components/hr/tabs/EmployeeTimeTab';
 import EmployeeComplianceTab from '@/components/hr/tabs/EmployeeComplianceTab';
 import EmployeeOperationalTab from '@/components/hr/tabs/EmployeeOperationalTab';
 import { useEmployeeOperational } from '@/hooks/useEmployeeOperational';
+import EmployeeDossieTab from '@/components/hr/tabs/EmployeeDossieTab';
 
 export default function ColaboradorProfile() {
   const { id } = useParams<{ id: string }>();
@@ -124,6 +125,7 @@ export default function ColaboradorProfile() {
       {/* Tabs */}
       <Tabs defaultValue="geral">
         <TabsList className="w-full justify-start">
+          <TabsTrigger value="dossie" className="flex items-center gap-1.5"><History className="h-3.5 w-3.5" /> Dossiê</TabsTrigger>
           <TabsTrigger value="geral" className="flex items-center gap-1.5">
             <User className="h-3.5 w-3.5" /> Geral
           </TabsTrigger>
@@ -168,6 +170,7 @@ export default function ColaboradorProfile() {
         <TabsContent value="geral" className="mt-6">
           <EmployeeGeneralTab employee={employee} />
         </TabsContent>
+        <TabsContent value="dossie" className="mt-6"><EmployeeDossieTab employeeId={employee.id} userId={employee.user_id ?? employee.profile_id} /></TabsContent>
         <TabsContent value="remuneracao" className="mt-6">
           <EmployeeRemunerationTab employee={employee} />
         </TabsContent>

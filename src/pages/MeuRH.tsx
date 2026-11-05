@@ -18,6 +18,7 @@ import { MeuRHFaleComRHSection } from "@/components/meu-rh/MeuRHFaleComRHSection
 import { MeuRHPdiSection } from "@/components/meu-rh/MeuRHPdiSection";
 import { MeuRHPoliticasSection } from "@/components/meu-rh/MeuRHPoliticasSection";
 import { MeuRHComunicadosSection } from "@/components/meu-rh/MeuRHComunicadosSection";
+import EmployeeDossieTab from '@/components/hr/tabs/EmployeeDossieTab';
 
 function PlaceholderTab({ title, description }: { title: string; description: string }) {
   return (
@@ -98,6 +99,7 @@ export default function MeuRH() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">
+          <TabsTrigger value="dossie" className="gap-1.5"><History className="h-3.5 w-3.5" /> Dossiê</TabsTrigger>
           <TabsTrigger value="perfil" className="gap-1.5">
             <User className="h-3.5 w-3.5" />
             Meu Perfil
@@ -143,6 +145,7 @@ export default function MeuRH() {
         <TabsContent value="documentos">
           <MeuRHDocumentosSection employee={employee} />
         </TabsContent>
+        <TabsContent value="dossie"><EmployeeDossieTab employeeId={employee.id} userId={employee.user_id ?? employee.profile_id} /></TabsContent>
 
         <TabsContent value="politicas">
           <MeuRHPoliticasSection />

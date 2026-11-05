@@ -12879,6 +12879,107 @@ export type Database = {
           },
         ]
       }
+      gov_dossie_ciencias: {
+        Row: {
+          comentario: string
+          created_at: string
+          decisao: string
+          id: string
+          registro_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comentario?: string
+          created_at?: string
+          decisao: string
+          id?: string
+          registro_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          comentario?: string
+          created_at?: string
+          decisao?: string
+          id?: string
+          registro_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gov_dossie_ciencias_registro_id_fkey"
+            columns: ["registro_id"]
+            isOneToOne: true
+            referencedRelation: "gov_dossie_registros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gov_dossie_registros: {
+        Row: {
+          anexos: Json
+          confidencial: boolean
+          conteudo: string
+          created_at: string
+          created_by: string
+          employee_id: string
+          id: string
+          ocorrido_em: string
+          original_id: string | null
+          status: string
+          tipo: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          anexos?: Json
+          confidencial?: boolean
+          conteudo: string
+          created_at?: string
+          created_by?: string
+          employee_id: string
+          id?: string
+          ocorrido_em?: string
+          original_id?: string | null
+          status?: string
+          tipo: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          anexos?: Json
+          confidencial?: boolean
+          conteudo?: string
+          created_at?: string
+          created_by?: string
+          employee_id?: string
+          id?: string
+          ocorrido_em?: string
+          original_id?: string | null
+          status?: string
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gov_dossie_registros_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_dossie_registros_original_id_fkey"
+            columns: ["original_id"]
+            isOneToOne: false
+            referencedRelation: "gov_dossie_registros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gov_requisicoes_contratacao: {
         Row: {
           atores_previstos: Json
@@ -24521,6 +24622,11 @@ export type Database = {
           nome: string
         }[]
       }
+      gov_dossie_anexo_permitido: {
+        Args: { p_escrita?: boolean; p_nome: string }
+        Returns: boolean
+      }
+      gov_dossie_gestor: { Args: { p_employee: string }; Returns: boolean }
       gov_is_rh_admin: { Args: { _uid: string }; Returns: boolean }
       gov_meu_employee: { Args: never; Returns: string }
       gov_ocupante_cargo: { Args: { _cargo_id: string }; Returns: string }
