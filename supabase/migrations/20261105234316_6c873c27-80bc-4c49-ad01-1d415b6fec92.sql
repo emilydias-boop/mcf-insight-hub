@@ -1,0 +1,3 @@
+CREATE OR REPLACE FUNCTION public.gov_dossie_ciencia_bloquear() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN IF NOT EXISTS(SELECT 1 FROM public.gov_dossie_registros r WHERE r.id=NEW.registro_id AND r.employee_id=public.gov_meu_employee() AND NOT r.confidencial) THEN RAISE EXCEPTION 'Sem acesso para ciência'; END IF; PERFORM 1 FROM public.gov_dossie_registros WHERE id=NEW.registro_id FOR UPDATE;RETURN NEW; END $$;
+ALTER FUNCTION public.gov_dossie_ciencia_bloquear() SET SCHEMA gov_private;
+REVOKE ALL ON FUNCTION gov_private.gov_dossie_ciencia_bloquear() FROM PUBLIC,anon,authenticated;
