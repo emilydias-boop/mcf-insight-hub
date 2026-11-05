@@ -27,35 +27,43 @@ Deno.serve(async (req) => {
   try { cpf = String((await req.json())?.cpf ?? "").replace(/\D/g, ""); } catch { /* corpo inválido */ }
   if (cpf.length !== 11) return json(NAO_ACHOU, 404);
 
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const sel = "id, name, jornada_etapa_atual_id, crm_contacts(name)";
-  let { data: deal } = await sb.from("crm_deals").select(sel).eq("origin_id", ORIGIN_POS_VENDA)
-    .eq("cpf", cpf).eq("is_archived", false).order("created_at").limit(1).maybeSingle();
-  if (!deal) {
-    ({ data: deal } = await sb.from("crm_deals").select(sel).eq("origin_id", ORIGIN_POS_VENDA)
-      .eq("custom_fields->>cpf", cpf).eq("is_archived", false).order("created_at").limit(1).maybeSingle());
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) throw new Error("Configuração indisponível");
+    const sb = createClient(url, key);
+    const sel = "id, contact_id";
+    const direto = await sb.from("crm_deals").select(sel).eq("origin_id", ORIGIN_POS_VENDA)
+      .eq("cpf", cpf).eq("is_archived", false).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle();
+    if (direto.error) throw direto.error;
+    let deal = direto.data;
+    if (!deal) {
+      const vinculo = await sb.rpc("jornada_resolver_cpf", { p_cpf: cpf });
+      if (vinculo.error) throw vinculo.error;
+      const id = vinculo.data?.[0]?.deal_id;
+      if (id) {
+        const r = await sb.from("crm_deals").select(sel).eq("id", id).eq("origin_id", ORIGIN_POS_VENDA).eq("is_archived", false).maybeSingle();
+        if (r.error) throw r.error;
+        deal = r.data;
+      }
+    }
+    if (!deal) return json(NAO_ACHOU, 404);
+    const compras = await sb.rpc("jornada_compra_cpf", { p_cpf: cpf });
+    if (compras.error) throw compras.error;
+    const compra = compras.data?.[0];
+    let nomeCompleto = String(compra?.comprador_nome ?? "").trim();
+    if (!nomeCompleto && deal.contact_id) {
+      const c = await sb.from("crm_contacts").select("name").eq("id", deal.contact_id).maybeSingle();
+      if (c.error) throw c.error;
+      nomeCompleto = c.data?.name ?? "";
+    }
+    const calculo = await sb.rpc("jornada_calcular", { p_deal_id: deal.id });
+    if (calculo.error) throw calculo.error;
+    if (!calculo.data) return json(NAO_ACHOU, 404);
+    const nome = nomeCompleto.trim().split(/\s+/)[0] ?? "";
+    return json({ primeiro_nome: nome ? nome.charAt(0).toUpperCase() + nome.slice(1).toLowerCase() : "",
+      data_compra: compra?.data_compra ?? null, etapa_atual: calculo.data.etapa_atual, historico: calculo.data.historico });
+  } catch {
+    return json({ erro: "Não foi possível consultar a jornada agora. Tente novamente." }, 500);
   }
-  if (!deal) return json(NAO_ACHOU, 404);
-
-  const [{ data: etapas }, { data: eventos }] = await Promise.all([
-    sb.from("jornada_etapas").select("id, ordem, titulo, descricao, icone").eq("ativa", true).order("ordem"),
-    sb.from("jornada_eventos").select("etapa_id, ocorrido_em").eq("deal_id", deal.id).order("ocorrido_em", { ascending: false }),
-  ]);
-  const { data: atual } = deal.jornada_etapa_atual_id
-    ? await sb.from("jornada_etapas").select("ordem").eq("id", deal.jornada_etapa_atual_id).maybeSingle()
-    : { data: null };
-  const ordAtual = atual?.ordem ?? null;
-  const dataDe = new Map<string, string>();
-  for (const e of eventos ?? []) if (!dataDe.has(e.etapa_id)) dataDe.set(e.etapa_id, e.ocorrido_em);
-
-  // deno-lint-ignore no-explicit-any
-  const nome = String((deal as any).crm_contacts?.name || deal.name || "").trim().split(/\s+/)[0] ?? "";
-  return json({
-    primeiro_nome: nome ? nome[0].toUpperCase() + nome.slice(1).toLowerCase() : "",
-    etapas: (etapas ?? []).map((e) => ({
-      ordem: e.ordem, titulo: e.titulo, descricao: e.descricao, icone: e.icone,
-      status: ordAtual === null ? "futura" : e.ordem < ordAtual ? "concluida" : e.ordem === ordAtual ? "atual" : "futura",
-      data: dataDe.get(e.id) ?? null,
-    })),
-  });
 });
