@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Briefcase, Building2, Users, Layers, Target } from "lucide-react";
+import { Briefcase, Building2, Users, Layers, Target, ShieldCheck } from "lucide-react";
+import GovernancaTab from "@/components/hr/config/GovernancaTab";
 import CargosTab from "@/components/hr/config/CargosTab";
 import DepartamentosTab from "@/components/hr/config/DepartamentosTab";
 import SquadsTab from "@/components/hr/config/SquadsTab";
@@ -11,6 +12,7 @@ export default function ConfiguracoesRH() {
   const { allRoles } = useAuth();
   const roles = (allRoles as string[] | undefined) ?? [];
   const isGestao = roles.includes("admin") || roles.includes("manager");
+  const isRhAdmin = roles.includes("admin") || roles.includes("rh");
 
   return (
     <div className="space-y-6">
@@ -49,6 +51,12 @@ export default function ConfiguracoesRH() {
             <Target className="h-4 w-4" />
             Metas de agendamento
           </TabsTrigger>
+          {isRhAdmin && (
+            <TabsTrigger value="governanca" className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Governança
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {isGestao && (
@@ -74,6 +82,12 @@ export default function ConfiguracoesRH() {
         <TabsContent value="metas">
           <MetasAgendamentoTab />
         </TabsContent>
+
+        {isRhAdmin && (
+          <TabsContent value="governanca">
+            <GovernancaTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
