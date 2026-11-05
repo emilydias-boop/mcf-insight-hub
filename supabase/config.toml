@@ -306,3 +306,6 @@ verify_jwt = false
 
 [functions.briefing-lead-gerar]
 verify_jwt = false
+
+[functions.consultar-jornada]
+verify_jwt = false
