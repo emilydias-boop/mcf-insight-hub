@@ -1,0 +1,12 @@
+import { strict as assert } from 'node:assert';
+import { registroEditavel, resumoDossie } from './dossie';
+const criado = '2026-11-05T12:00:00Z';
+assert.equal(registroEditavel(criado, Date.parse('2026-11-06T11:59:59Z')), true);
+assert.equal(registroEditavel(criado, Date.parse('2026-11-06T12:00:00Z')), false);
+const r = [{ tipo: 'one_on_one', ocorrido_em: '2026-10-01T12:00:00Z', status: 'registrado' }, { tipo: 'feedback', ocorrido_em: '2026-06-01T12:00:00Z', status: 'registrado' }, { tipo: 'yellow_flag', ocorrido_em: '2026-01-01T12:00:00Z', status: 'aberta' }];
+assert.equal(resumoDossie(r, 3, new Date(criado)).feedback, 0);
+assert.equal(resumoDossie(r, 6, new Date(criado)).feedback, 1);
+assert.equal(resumoDossie(r, 12, new Date(criado)).yellow_flag, 1);
+assert.equal(resumoDossie(r, 3, new Date(criado)).flags_abertas, 1);
+assert.equal(resumoDossie(r, 3, new Date(criado)).ultima_one_on_one, '2026-10-01T12:00:00Z');
+console.log('Dossiê: 7 regras verificadas');
