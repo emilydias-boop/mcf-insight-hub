@@ -1,6 +1,6 @@
 # Roadmap
-- [ ] Automação — alterar somente automation-processor: condições de dedupe e reunião R2 opcionais; verificar diff, testes e publicação sem executar envios reais.
-- [ ] Jornada Pós-Venda — planejar vínculo CPF pelas compras, preenchimento auditado, fases calculadas f3–f8 e mapa estágio→fase; executar após aprovação do plano.
+- [x] Automação — automation-processor publicado; diff entregue e regressões simuladas passaram sem envios reais; build OK, typecheck separado não disponível.
+- [x] Jornada Pós-Venda — CPF automático e backfill de 1.182, fases f3–f8/mapa e ficha somente leitura; consulta pública Nívia 200/f4 e inexistente 404; relatório completo entregue; site não publicado, telas com login real não verificadas (Supabase externo).
 
 - [x] Disponibilidade individual Pós-Venda: seis horários da Rebeca de segunda a sexta confirmados no banco; horários livres no agendamento e visão individual; testes e compilação OK; sem publicação e sem teste com login real (Supabase externo).
 
