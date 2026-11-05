@@ -244,6 +244,7 @@ const menuItems: MenuItem[] = [
       { title: "CRM", url: "/pos-venda/crm" },
       { title: "Materiais do processo", url: "/pos-venda/materiais" },
       { title: "Distribuição de novos licenciados", url: "/pos-venda/distribuicao" },
+      { title: "Etapas da Jornada", url: "/pos-venda/etapas-jornada" },
     ],
   },
 
