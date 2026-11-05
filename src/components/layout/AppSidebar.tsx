@@ -244,7 +244,8 @@ const menuItems: MenuItem[] = [
       { title: "CRM", url: "/pos-venda/crm" },
       { title: "Materiais do processo", url: "/pos-venda/materiais" },
       { title: "Distribuição de novos licenciados", url: "/pos-venda/distribuicao" },
-      { title: "Etapas da Jornada", url: "/pos-venda/etapas-jornada" },
+      { title: "Etapas da Jornada", url: "/pos-venda/etapas-jornada", requiredRoles: ["admin"] },
+      { title: "Mapa de estágios da Jornada", url: "/pos-venda/mapa-jornada", requiredRoles: ["admin"] },
     ],
   },
 

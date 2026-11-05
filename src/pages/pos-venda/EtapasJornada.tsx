@@ -10,8 +10,8 @@ import { toast } from 'sonner';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as unknown as { from: (t: string) => any };
-type Etapa = { id: string; ordem: number; slug: string; titulo: string; descricao: string | null; icone: string | null; ativa: boolean };
-const vazio = { slug: '', titulo: '', descricao: '', icone: '' };
+type Etapa = { id: string; ordem: number; slug: string; codigo_trilha: string | null; titulo: string; descricao: string | null; icone: string | null; ativa: boolean };
+const vazio = { slug: '', titulo: '', descricao: '', icone: '', codigo_trilha: '' };
 
 export default function EtapasJornada() {
   const qc = useQueryClient();
@@ -19,7 +19,7 @@ export default function EtapasJornada() {
   const [edit, setEdit] = useState<Record<string, Partial<Etapa>>>({});
   const { data: etapas = [] } = useQuery({
     queryKey: ['jornada-etapas'],
-    queryFn: async () => ((await db.from('jornada_etapas').select('*').order('ordem')).data ?? []) as Etapa[],
+    queryFn: async () => { const r = await db.from('jornada_etapas').select('*').order('ordem'); if (r.error) throw r.error; return (r.data ?? []) as Etapa[]; },
   });
   const recarregar = () => qc.invalidateQueries({ queryKey: ['jornada-etapas'] });
   const ok = (error: { message: string } | null, msg: string) => {
@@ -30,7 +30,7 @@ export default function EtapasJornada() {
   const criar = async () => {
     if (!nova.slug.trim() || !nova.titulo.trim()) return toast.error('Informe código e título');
     const ordem = (etapas.at(-1)?.ordem ?? 0) + 10;
-    const { error } = await db.from('jornada_etapas').insert({ ...nova, slug: nova.slug.trim().toLowerCase(), ordem });
+    const { error } = await db.from('jornada_etapas').insert({ ...nova, codigo_trilha: nova.codigo_trilha || null, slug: nova.slug.trim().toLowerCase(), ordem });
     if (ok(error, 'Etapa criada')) setNova(vazio);
   };
   const salvar = async (e: Etapa) => {
@@ -57,8 +57,9 @@ export default function EtapasJornada() {
             const v = { ...e, ...edit[e.id] };
             const set = (k: keyof Etapa, val: unknown) => setEdit((s) => ({ ...s, [e.id]: { ...s[e.id], [k]: val } }));
             return (
-              <div key={e.id} className="grid grid-cols-[50px_1fr_2fr_120px_auto] gap-2 items-center">
+              <div key={e.id} className="grid grid-cols-1 gap-2 items-center border-b pb-3 md:grid-cols-[40px_70px_1fr_1fr_90px_auto]">
                 <span className="text-sm text-muted-foreground">{e.ordem}</span>
+                <Input aria-label={`Código da trilha para ${e.titulo}`} placeholder="f3–f8" value={v.codigo_trilha ?? ''} onChange={(x) => set('codigo_trilha', x.target.value || null)} />
                 <Input value={v.titulo} onChange={(x) => set('titulo', x.target.value)} />
                 <Input value={v.descricao ?? ''} onChange={(x) => set('descricao', x.target.value)} />
                 <Input value={v.icone ?? ''} placeholder="ícone" onChange={(x) => set('icone', x.target.value)} />
@@ -75,8 +76,9 @@ export default function EtapasJornada() {
       </Card>
       <Card>
         <CardHeader><CardTitle className="text-base">Nova etapa</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-[1fr_1fr_2fr_120px_auto] gap-2">
+        <CardContent className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <Input placeholder="código" value={nova.slug} onChange={(x) => setNova({ ...nova, slug: x.target.value })} />
+          <Input placeholder="código da trilha (f3–f8)" value={nova.codigo_trilha} onChange={(x) => setNova({ ...nova, codigo_trilha: x.target.value })} />
           <Input placeholder="título" value={nova.titulo} onChange={(x) => setNova({ ...nova, titulo: x.target.value })} />
           <Input placeholder="descrição" value={nova.descricao} onChange={(x) => setNova({ ...nova, descricao: x.target.value })} />
           <Input placeholder="ícone" value={nova.icone} onChange={(x) => setNova({ ...nova, icone: x.target.value })} />
