@@ -1,4 +1,5 @@
 # Roadmap
+- [ ] Contato Pós-Venda — exigir nota específica e mudança de estágio para remover Nunca contatado; validar regra e preservar outras BUs.
 - [x] Automação — automation-processor publicado; diff entregue e regressões simuladas passaram sem envios reais; build OK, typecheck separado não disponível.
 - [x] Jornada Pós-Venda — CPF automático e backfill de 1.182, fases f3–f8/mapa e ficha somente leitura; consulta pública Nívia 200/f4 e inexistente 404; relatório completo entregue; site não publicado, telas com login real não verificadas (Supabase externo).
 

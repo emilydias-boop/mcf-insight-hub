@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { POS_VENDA_ORIGIN_ID } from '@/lib/posVenda';
 
 export interface ActivitySummary {
   totalCalls: number;
@@ -13,6 +14,7 @@ export interface ActivitySummary {
   notesCount: number;
   /** Último toque (mesma regra do filtro "Sem atividade"), vindo do kanban_resumo. */
   lastTouchAt?: string | null;
+  posVendaContatoConfirmado?: boolean | null;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 5;
@@ -28,6 +30,27 @@ const defaultSummary: ActivitySummary = {
   totalActivities: 0,
   notesCount: 0,
 };
+
+/** Reutiliza a regra do servidor só para negócios Pós-Venda, sem mudar as demais BUs. */
+async function resumosContatoPosVenda(dealIds: string[]) {
+  const resumos = new Map<string, Partial<ActivitySummary>>();
+  for (let i = 0; i < dealIds.length; i += 200) {
+    const { data: deals, error: dealsError } = await supabase.from('crm_deals')
+      .select('id').in('id', dealIds.slice(i, i + 200)).eq('origin_id', POS_VENDA_ORIGIN_ID);
+    if (dealsError) throw dealsError;
+    if (!deals?.length) continue;
+    const { data, error } = await supabase.rpc('kanban_resumo_lote', { p_ids: deals.map(d => d.id) });
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const resumo = row.resumo as unknown as ActivitySummary;
+      resumos.set(row.deal_id.toLowerCase(), {
+        lastTouchAt: resumo.lastTouchAt,
+        posVendaContatoConfirmado: resumo.posVendaContatoConfirmado,
+      });
+    }
+  }
+  return resumos;
+}
 
 export function useDealActivitySummary(dealId: string | undefined, stageId?: string) {
   return useQuery({
@@ -82,6 +105,7 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
 
       const notesCount = noteActivities?.length || 0;
       const totalActivities = totalCalls + whatsappSent + notesCount;
+      const contatoPosVenda = (await resumosContatoPosVenda([dealId])).get(dealId.toLowerCase());
 
       return {
         totalCalls,
@@ -93,6 +117,7 @@ export function useDealActivitySummary(dealId: string | undefined, stageId?: str
         maxAttempts,
         totalActivities,
         notesCount,
+        ...contatoPosVenda,
       };
     },
     enabled: !!dealId,
@@ -260,6 +285,12 @@ export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<st
       summaryMap.forEach((summary) => {
         summary.attemptsExhausted = summary.totalCalls >= summary.maxAttempts && summary.answeredCalls === 0;
         summary.totalActivities = summary.totalCalls + summary.whatsappSent + summary.notesCount;
+      });
+
+      const contatosPosVenda = await resumosContatoPosVenda(normalizedDealIds);
+      contatosPosVenda.forEach((contato, id) => {
+        const summary = summaryMap.get(id);
+        if (summary) Object.assign(summary, contato);
       });
 
       return summaryMap;

@@ -13,7 +13,7 @@ export interface DealHeaderInfo {
   canalCor: string | null;
   ownerName: string | null;
   closerR1Name: string | null;
-  resumo: { lastTouchAt?: string | null; lastContactAttempt?: string | null; totalActivities?: number } | null;
+  resumo: { lastTouchAt?: string | null; lastContactAttempt?: string | null; totalActivities?: number; posVendaContatoConfirmado?: boolean | null } | null;
 }
 
 /** Leitura somente: canal de entrada, dono, closer R1 e resumo de toques do negócio. */
