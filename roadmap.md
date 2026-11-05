@@ -1,4 +1,5 @@
 # Roadmap
+- [ ] Jornada Pós-Venda — planejar vínculo CPF pelas compras, preenchimento auditado, fases calculadas f3–f8 e mapa estágio→fase; executar após aprovação do plano.
 
 - [x] Disponibilidade individual Pós-Venda: seis horários da Rebeca de segunda a sexta confirmados no banco; horários livres no agendamento e visão individual; testes e compilação OK; sem publicação e sem teste com login real (Supabase externo).
 
