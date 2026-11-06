@@ -1,6 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip as DicaTooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, LineChart, Cell, Legend,
 } from "recharts";
@@ -29,6 +35,40 @@ const pior = (a: Nivel, b: Nivel) => (ORDEM.indexOf(a) >= ORDEM.indexOf(b) ? a :
 const curto = (r: string) => (r.length > 22 ? "…" + r.slice(-21) : r);
 
 const diaSP = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+
+function Calculo({ titulo, conteudo, children, className = "" }: {
+  titulo: string;
+  conteudo: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <DicaTooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className={`cursor-help rounded-sm underline decoration-muted-foreground/50 decoration-dotted underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
+        >
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" collisionPadding={12} className="w-80 max-w-[calc(100vw-2rem)] whitespace-normal text-left">
+        <p className="mb-1 font-semibold">{titulo}</p>
+        <div className="space-y-1 text-xs leading-relaxed">{conteudo}</div>
+      </TooltipContent>
+    </DicaTooltip>
+  );
+}
+
+function explicacaoMediana(tempos: number[]) {
+  const n = tempos.length;
+  if (!n) return "Nenhum evento page_load com duração foi registrado nesta tela no período; por isso o valor fica sem dados.";
+  const meio = Math.floor(n / 2);
+  if (n % 2 === 1) {
+    return `${n} medições ordenadas da menor para a maior. A mediana está na posição ${meio + 1}: ${fmtMs(tempos[meio])}.`;
+  }
+  return `${n} medições ordenadas. Os valores centrais estão nas posições ${meio} e ${meio + 1}: ${fmtMs(tempos[meio - 1])} e ${fmtMs(tempos[meio])}. Esta tela usa o maior dos dois: ${fmtMs(tempos[meio])}.`;
+}
 
 function Gauge({ ms, nivel }: { ms: number | null; nivel: Nivel }) {
   // escala 0–5 s; faixas: 0–1 verde, 1–3 amarelo, 3–5 vermelho
@@ -82,11 +122,12 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
       .sort((a, b) => b[1].ab - a[1].ab)
       .slice(0, 5)
       .map(([route, x]) => {
-        const tempo = mediana(x.tempos);
+        const tempos = [...x.tempos].sort((a, b) => a - b);
+        const tempo = mediana(tempos);
         const taxa = x.ab > 0 ? (x.erros / x.ab) * 100 : null;
         const nt = nivelTempo(tempo), ne = nivelErro(taxa);
         return {
-          route, nome: curto(route), aberturas: x.ab, pessoas: x.users.size, tempo, erros: x.erros, taxa,
+          route, nome: curto(route), aberturas: x.ab, pessoas: x.users.size, tempo, tempos, erros: x.erros, taxa,
           nt, ne, geral: pior(nt, ne),
           serie: [...x.dias.entries()].sort().map(([d, v]) => ({ d, v })),
         };
@@ -96,12 +137,14 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
   if (!telas.length) return null;
 
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">As 5 telas mais usadas</h2>
         <p className="text-sm text-muted-foreground">
           Tempo típico = metade das aberturas foi mais rápida que isso. Verde até 1 s, amarelo 1–3 s, vermelho acima de 3 s.
           Erros: verde sem erro, amarelo até 2 a cada 100 aberturas, vermelho acima.
+          Passe o mouse ou use Tab sobre os indicadores para ver o cálculo.
         </p>
       </div>
 
@@ -111,26 +154,81 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between gap-2">
                 <CardTitle className="text-sm font-mono break-all" title={t.route}>{t.route}</CardTitle>
-                <Badge variant="outline" style={{ color: COR[t.geral], borderColor: COR[t.geral] }}>{ROTULO[t.geral]}</Badge>
+                <Calculo
+                  titulo={`Situação geral: ${ROTULO[t.geral]}`}
+                  conteudo={
+                    <>
+                      <p>A situação geral é o pior resultado entre tempo e erros.</p>
+                      <p>Tempo: {ROTULO[t.nt]} ({fmtMs(t.tempo)}). Erros: {ROTULO[t.ne]} ({t.taxa?.toFixed(1) ?? "—"} a cada 100 aberturas).</p>
+                    </>
+                  }
+                >
+                  <Badge variant="outline" style={{ color: COR[t.geral], borderColor: COR[t.geral] }}>{ROTULO[t.geral]}</Badge>
+                </Calculo>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-center"><Gauge ms={t.tempo} nivel={t.nt} /></div>
+              <div className="flex justify-center">
+                <Calculo
+                  titulo="Tempo típico (mediana)"
+                  className="block w-full max-w-[220px]"
+                  conteudo={
+                    <>
+                      <p>{explicacaoMediana(t.tempos)}</p>
+                      <p>Cor: até 1 s = Bom; acima de 1 s e até 3 s = Atenção; acima de 3 s = Crítico.</p>
+                    </>
+                  }
+                >
+                  <Gauge ms={t.tempo} nivel={t.nt} />
+                </Calculo>
+              </div>
               <div className="grid grid-cols-3 text-center text-xs">
-                <div><div className="text-lg font-semibold">{t.aberturas}</div><div className="text-muted-foreground">aberturas</div></div>
-                <div><div className="text-lg font-semibold">{t.pessoas}</div><div className="text-muted-foreground">pessoas</div></div>
-                <div>
-                  <div className="text-lg font-semibold" style={{ color: COR[t.ne] }}>{t.erros}</div>
-                  <div className="text-muted-foreground">erros{t.taxa != null && ` · ${t.taxa.toFixed(1)}/100`}</div>
-                </div>
+                <Calculo
+                  titulo="Aberturas"
+                  conteudo={<p>Contagem dos eventos page_view desta tela no período: <strong>{t.aberturas} aberturas</strong>.</p>}
+                >
+                  <span className="block"><span className="block text-lg font-semibold">{t.aberturas}</span><span className="text-muted-foreground">aberturas</span></span>
+                </Calculo>
+                <Calculo
+                  titulo="Pessoas"
+                  conteudo={<p>Contagem de user_id diferentes nas {t.aberturas} aberturas. Cada pessoa entra uma só vez: <strong>{t.pessoas} pessoas</strong>.</p>}
+                >
+                  <span className="block"><span className="block text-lg font-semibold">{t.pessoas}</span><span className="text-muted-foreground">pessoas</span></span>
+                </Calculo>
+                <Calculo
+                  titulo="Erros e taxa por 100 aberturas"
+                  conteudo={
+                    <>
+                      <p>Erros = contagem dos eventos error = <strong>{t.erros}</strong>.</p>
+                      <p>Taxa = ({t.erros} ÷ {t.aberturas}) × 100 = <strong>{t.taxa?.toFixed(1) ?? "—"} a cada 100 aberturas</strong>.</p>
+                      <p>Cor: zero = Bom; acima de zero e até 2 = Atenção; acima de 2 = Crítico.</p>
+                    </>
+                  }
+                >
+                  <span className="block">
+                    <span className="block text-lg font-semibold" style={{ color: COR[t.ne] }}>{t.erros}</span>
+                    <span className="text-muted-foreground">erros{t.taxa != null && ` · ${t.taxa.toFixed(1)}/100`}</span>
+                  </span>
+                </Calculo>
               </div>
-              <div className="h-10">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={t.serie}>
-                    <Line type="monotone" dataKey="v" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <Calculo
+                titulo="Aberturas por dia"
+                className="block h-10"
+                conteudo={
+                  <>
+                    <p>Cada ponto soma os eventos page_view da tela naquele dia, no horário de São Paulo.</p>
+                    <p>Total: {t.serie.map((p) => p.v).join(" + ") || "0"} = <strong>{t.aberturas} aberturas</strong>.</p>
+                  </>
+                }
+              >
+                <span className="block h-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={t.serie}>
+                      <Line type="monotone" dataKey="v" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </span>
+              </Calculo>
             </CardContent>
           </Card>
         ))}
@@ -176,5 +274,6 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
         </Card>
       </div>
     </div>
+    </TooltipProvider>
   );
 }
