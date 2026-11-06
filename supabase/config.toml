@@ -309,3 +309,6 @@ verify_jwt = false
 
 [functions.consultar-jornada]
 verify_jwt = false
+
+[functions.pos-venda-calendar-sync]
+verify_jwt = false
