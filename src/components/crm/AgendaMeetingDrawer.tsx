@@ -1256,7 +1256,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     )}
 
                     {/* War Room: vincular venda (conta como venda realizada, NÃO contrato pago) */}
-                    {canLinkContract && activeBU === 'solar' && !selectedParticipant.isPartner && selectedParticipant.status !== 'canceled' && (
+                    {canLinkContract && activeBU === 'solar' && !selectedParticipant.isPartner && selectedParticipant.status !== 'canceled' && selectedParticipant.status !== 'cancelled' && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1971,7 +1971,7 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
   );
 }
 
-/** Venda direta (A003 / A001) vinculada ao participante. NÃO é contrato pago. */
+/** War Room (R1): vendas vinculadas ao participante. Contam como venda realizada, NÃO contrato pago. */
 function VendaVinculadaR1Block({ attendeeId, canUnlink }: { attendeeId: string; canUnlink: boolean }) {
   const { data: vendas = [] } = useVendasDoParticipante(attendeeId);
   const desvincular = useDesvincularVenda();
@@ -2018,6 +2018,7 @@ function VendaVinculadaR1Block({ attendeeId, canUnlink }: { attendeeId: string; 
   );
 }
 
+/** Venda direta (A003 / A001) vinculada ao participante. NÃO é contrato pago. */
 function VendaDiretaVinculadaBlock({ attendeeId, canUnlink }: { attendeeId: string; canUnlink: boolean }) {
   const { data: vendas = [] } = useVendasDiretasDoParticipante(attendeeId);
   const desvincular = useDesvincularVendaDireta();
