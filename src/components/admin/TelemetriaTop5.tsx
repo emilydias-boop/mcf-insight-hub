@@ -47,6 +47,7 @@ function Calculo({ titulo, conteudo, children, className = "" }: {
       <TooltipTrigger asChild>
         <button
           type="button"
+          data-calculo={titulo}
           className={`cursor-help rounded-sm bg-transparent p-0 text-inherit underline decoration-muted-foreground/50 decoration-dotted underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
         >
           {children}
