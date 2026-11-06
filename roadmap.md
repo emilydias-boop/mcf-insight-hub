@@ -2,7 +2,7 @@
 - [x] Governança RH — Fase 1: hierarquia (setor pai/responsável, cargo reporta a/faixa), histórico de cargos (34 carregados), funções de hierarquia, regras de alçada e aba Governança
 - [x] Governança RH — Fase 2: ficha/lista/filtros, validação no servidor, atores previstos e vínculo de admissão; 10 regras locais e navegador com dados simulados passaram, compilação automática OK. Login real indisponível (Supabase externo); assinaturas reservadas à Fase 5; site não publicado.
 - [x] Governança RH — Fase 3: dossiê no perfil e Meu RH, registros/ciência/adendos, imutabilidade de 24h no servidor, confidenciais e anexos privados, resumo 3/6/12 meses, legado sem alterações. 7 regras locais e fluxo simulado desktop/mobile passaram; login real e upload real não verificáveis (Supabase externo); sem publicar o site. 626 alertas de segurança preexistentes fora do escopo.
-- [ ] Governança RH — Fase 4: desligamento
+- [ ] Governança RH — Fase 4: desligamento — retomada solicitada; implementar ficha, evidências, signatários e sigilo, sem decisões antes da Fase 5.
 - [ ] Governança RH — Fase 5: assinatura digital interna
 - [ ] Governança RH — Fase 6: auditoria e indicadores
 - [x] Contato Pós-Venda — nota específica + mudança de estágio exigidas na leitura e etiqueta; 6 verificações locais e 4 casos SQL passaram, build OK; consulta real negada por permissão e tela autenticada indisponível (Supabase externo); sem publicar o site.
