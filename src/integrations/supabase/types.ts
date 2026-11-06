@@ -12892,6 +12892,7 @@ export type Database = {
           enviado_em: string | null
           evidencias: string[]
           extras: string[]
+          feedbacks_construtivos: string[]
           id: string
           justificativa: string
           justificativa_reforcada: string
@@ -12914,6 +12915,7 @@ export type Database = {
           enviado_em?: string | null
           evidencias?: string[]
           extras?: string[]
+          feedbacks_construtivos?: string[]
           id?: string
           justificativa?: string
           justificativa_reforcada?: string
@@ -12936,6 +12938,7 @@ export type Database = {
           enviado_em?: string | null
           evidencias?: string[]
           extras?: string[]
+          feedbacks_construtivos?: string[]
           id?: string
           justificativa?: string
           justificativa_reforcada?: string
@@ -24733,6 +24736,7 @@ export type Database = {
         Args: { p_employee?: string; p_tipo?: string }
         Returns: Json
       }
+      gov_desligamento_detalhe: { Args: { p_id: string }; Returns: Json }
       gov_desligamento_proprio: {
         Args: { p_employee: string }
         Returns: boolean
@@ -24748,6 +24752,7 @@ export type Database = {
           enviado_em: string | null
           evidencias: string[]
           extras: string[]
+          feedbacks_construtivos: string[]
           id: string
           justificativa: string
           justificativa_reforcada: string
