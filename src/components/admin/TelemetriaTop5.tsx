@@ -168,7 +168,6 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
                   contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))" }}
                 />
                 <Bar dataKey="erros" radius={[0, 4, 4, 0]}>
-                  {telas.map((t) => null)}
                   {[...telas].sort((a, b) => b.erros - a.erros).map((t) => <Cell key={t.route} fill={COR[t.ne]} />)}
                 </Bar>
               </BarChart>
