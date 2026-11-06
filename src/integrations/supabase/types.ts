@@ -16879,11 +16879,13 @@ export type Database = {
       }
       pos_venda_reunioes: {
         Row: {
+          convite_enviado_em: string | null
           created_at: string
           created_by: string | null
           deal_id: string
           duracao_min: number
           gerente_id: string
+          google_event_id: string | null
           id: string
           inicio: string
           link_reuniao: string | null
@@ -16893,11 +16895,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          convite_enviado_em?: string | null
           created_at?: string
           created_by?: string | null
           deal_id: string
           duracao_min?: number
           gerente_id: string
+          google_event_id?: string | null
           id?: string
           inicio: string
           link_reuniao?: string | null
@@ -16907,11 +16911,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          convite_enviado_em?: string | null
           created_at?: string
           created_by?: string | null
           deal_id?: string
           duracao_min?: number
           gerente_id?: string
+          google_event_id?: string | null
           id?: string
           inicio?: string
           link_reuniao?: string | null
@@ -23775,6 +23781,7 @@ export type Database = {
         Returns: Json
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      deal_eh_pos_venda: { Args: { _deal_id: string }; Returns: boolean }
       deal_situacao_contrato: { Args: { p_deal_id: string }; Returns: Json }
       decisao_recompra_a010: {
         Args: { p_compra_em?: string; p_deal_id: string }
