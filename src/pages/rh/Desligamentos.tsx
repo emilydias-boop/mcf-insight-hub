@@ -54,7 +54,7 @@ export default function Desligamentos() {
     const r = await supabase.rpc('gov_desligamento_contexto', { p_employee: edit?.employee_id, p_tipo: edit?.tipo }); if (r.error) throw r.error; return r.data as unknown as Contexto;
   } });
   const editable = !!edit && edit.status === 'rascunho' && (rh || !edit.id || edit.solicitante_user_id === user?.id);
-  const detalhe = useQuery({ queryKey: ['gov-desligamento-detalhe', edit?.id, edit?.tipo, edit?.updated_at], enabled: !!edit?.id, queryFn: async () => {
+  const detalhe = useQuery({ queryKey: ['gov-desligamento-detalhe', edit?.id, edit?.tipo], enabled: !!edit?.id, queryFn: async () => {
     if (!edit?.id) return null;
     const r = await supabase.rpc('gov_desligamento_detalhe', { p_id: edit.id }); if (r.error) throw r.error;
     return r.data as unknown as { nome: string; registros: RegistroDossie[]; signatarios: Signatario[] };
