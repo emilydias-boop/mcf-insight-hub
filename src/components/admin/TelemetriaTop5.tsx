@@ -138,7 +138,7 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
   if (!telas.length) return null;
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delayDuration={150} skipDelayDuration={0} disableHoverableContent>
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">As 5 telas mais usadas</h2>
