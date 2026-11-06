@@ -308,6 +308,7 @@ const menuItems: MenuItem[] = [
       { title: "Colaboradores", url: "/rh/colaboradores" },
       { title: "Estrutura Organizacional", url: "/rh/estrutura" },
       { title: "Requisições de contratação", url: "/rh/requisicoes" },
+      { title: "Desligamentos", url: "/rh/desligamentos" },
       { title: "Prova Equipe", url: "/rh/prova-equipe" },
       { title: "Configurações", url: "/rh/configuracoes" },
     ],
@@ -320,6 +321,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Estrutura Organizacional", url: "/rh/estrutura" },
       { title: "Requisições de contratação", url: "/rh/requisicoes" },
+      { title: "Desligamentos", url: "/rh/desligamentos" },
       { title: "Metas de agendamento", url: "/rh/configuracoes" },
     ],
   },
