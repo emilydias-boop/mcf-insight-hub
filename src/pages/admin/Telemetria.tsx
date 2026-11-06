@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import TelemetriaTop5 from "@/components/admin/TelemetriaTop5";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -79,6 +80,8 @@ export default function Telemetria() {
       </div>
       {isLoading && <p className="text-muted-foreground">Carregando…</p>}
       {error && <p className="text-destructive">Não foi possível carregar os registros.</p>}
+
+      <TelemetriaTop5 data={data} />
 
       <Card>
         <CardHeader><CardTitle>Telas mais usadas</CardTitle></CardHeader>
