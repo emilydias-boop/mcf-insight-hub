@@ -14,8 +14,9 @@ import { validateCreditoAnswers } from '@/components/crm/qualification/CreditoQu
  * BU Crédito Imobiliário tem qualificação obrigatória PRÓPRIA (perguntas por
  * modalidade: Construção / Home Equity / Comprar imóvel) e por isso NÃO está
  * nesta lista. Demais BUs listadas aqui podem agendar R1 sem qualificação prévia.
+ * BU Pós-venda: cliente já comprou, lead já qualificado (06/11/2026)
  */
-export const BU_SEM_QUALIFICACAO_OBRIGATORIA = ['consorcio', 'solar'] as const;
+export const BU_SEM_QUALIFICACAO_OBRIGATORIA = ['consorcio', 'solar', 'pos_venda'] as const;
 
 export type QualificationSource = 'ai_call_summary' | 'whatsapp' | 'call' | null;
 
