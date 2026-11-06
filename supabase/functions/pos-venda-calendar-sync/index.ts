@@ -100,7 +100,71 @@ function reply(payload: Record<string, unknown>, status = 200) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-Deno if (action === 'cancel') {
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) return reply({ success: false, error: 'Unauthorized' }, 401);
+
+    const url = Deno.env.get('SUPABASE_URL')!;
+    // Cliente com o JWT do usuário: a leitura da reunião passa pela RLS
+    // (pos_venda_tem_acesso()). Quem não acessa o pós-venda não enxerga a reunião.
+    const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(authHeader.replace('Bearer ', ''));
+    if (claimsError || !claimsData?.claims) return reply({ success: false, error: 'Unauthorized' }, 401);
+
+    const body = await req.json().catch(() => ({}));
+    const action: string = body?.action;
+    const reuniaoId: string = body?.reuniao_id;
+    if (!['create', 'cancel'].includes(action) || !reuniaoId) {
+      return reply({ success: false, error: 'action (create|cancel) e reuniao_id são obrigatórios' }, 400);
+    }
+
+    const { data: visivel, error: visErr } = await userClient
+      .from('pos_venda_reunioes')
+      .select('id')
+      .eq('id', reuniaoId)
+      .maybeSingle();
+    if (visErr || !visivel) return reply({ success: false, error: 'reunião não encontrada ou sem acesso' }, 404);
+
+    const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+    const { data: r, error: rErr } = await admin
+      .from('pos_venda_reunioes')
+      .select('id, deal_id, gerente_id, tipo, inicio, duracao_min, link_reuniao, status, google_event_id')
+      .eq('id', reuniaoId)
+      .maybeSingle();
+    if (rErr || !r) {
+      console.error('[pv-gcal] reunião não encontrada', rErr);
+      return reply({ success: false, error: 'reunião não encontrada' });
+    }
+
+    const { data: gerente } = await admin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', r.gerente_id)
+      .maybeSingle();
+    if (!gerente?.email || !/@minhacasafinanciada\.com$/i.test(gerente.email)) {
+      console.warn('[pv-gcal] gerente sem e-mail do Workspace', r.gerente_id);
+      return reply({ success: false, skipped: true, error: 'gerente sem e-mail @minhacasafinanciada.com' });
+    }
+
+    let accessToken: string;
+    try {
+      accessToken = await getImpersonatedAccessToken(gerente.email);
+    } catch (authErr) {
+      console.error('[pv-gcal] falha ao obter token impersonado:', authErr);
+      return reply({ success: false, error: authErr instanceof Error ? authErr.message : 'auth error' });
+    }
+
+    const base = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+    const gHeaders = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+
+    // ---- CANCEL ----
+    if (action === 'cancel') {
       if (!r.google_event_id) return reply({ success: true, skipped: true, reason: 'sem google_event_id' });
       const res = await fetch(`${base}/${encodeURIComponent(r.google_event_id)}?sendUpdates=all`, {
         method: 'DELETE',
