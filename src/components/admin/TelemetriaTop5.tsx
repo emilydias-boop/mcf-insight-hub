@@ -45,12 +45,12 @@ function Calculo({ titulo, conteudo, children, className = "" }: {
   return (
     <DicaTooltip>
       <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          className={`cursor-help rounded-sm underline decoration-muted-foreground/50 decoration-dotted underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
+        <button
+          type="button"
+          className={`cursor-help rounded-sm bg-transparent p-0 text-inherit underline decoration-muted-foreground/50 decoration-dotted underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
         >
           {children}
-        </span>
+        </button>
       </TooltipTrigger>
       <TooltipContent side="top" collisionPadding={12} className="w-80 max-w-[calc(100vw-2rem)] whitespace-normal text-left">
         <p className="mb-1 font-semibold">{titulo}</p>
