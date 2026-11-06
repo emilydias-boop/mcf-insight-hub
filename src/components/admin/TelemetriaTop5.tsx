@@ -186,18 +186,21 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
               <div className="grid grid-cols-3 text-center text-xs">
                 <Calculo
                   titulo="Aberturas"
+                  className="block h-auto w-full align-top"
                   conteudo={<p>Contagem dos eventos page_view desta tela no período: <strong>{t.aberturas} aberturas</strong>.</p>}
                 >
                   <span className="block"><span className="block text-lg font-semibold">{t.aberturas}</span><span className="text-muted-foreground">aberturas</span></span>
                 </Calculo>
                 <Calculo
                   titulo="Pessoas"
+                  className="block h-auto w-full align-top"
                   conteudo={<p>Contagem de user_id diferentes nas {t.aberturas} aberturas. Cada pessoa entra uma só vez: <strong>{t.pessoas} pessoas</strong>.</p>}
                 >
                   <span className="block"><span className="block text-lg font-semibold">{t.pessoas}</span><span className="text-muted-foreground">pessoas</span></span>
                 </Calculo>
                 <Calculo
                   titulo="Erros e taxa por 100 aberturas"
+                  className="block h-auto w-full align-top"
                   conteudo={
                     <>
                       <p>Erros = contagem dos eventos error = <strong>{t.erros}</strong>.</p>
@@ -214,7 +217,7 @@ export default function TelemetriaTop5({ data }: { data: Row[] }) {
               </div>
               <Calculo
                 titulo="Aberturas por dia"
-                className="block h-10"
+                className="block h-10 w-full"
                 conteudo={
                   <>
                     <p>Cada ponto soma os eventos page_view da tela naquele dia, no horário de São Paulo.</p>
