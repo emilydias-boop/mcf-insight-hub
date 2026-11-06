@@ -1,0 +1,12 @@
+import { strict as assert } from 'node:assert';
+import { validarEnvioDesligamento, podeRemoverSignatario } from './desligamento';
+const d = { motivo: 'Acordo', descricao: 'Descrição', data_prevista: '2026-11-10', justificativa: 'Justificativa', justificativa_reforcada: '', sem_evidencia_recente: true, remocoes: [] };
+assert.equal(validarEnvioDesligamento(d), 'Inclua a justificativa reforçada');
+assert.equal(validarEnvioDesligamento({ ...d, justificativa_reforcada: 'Contexto documentado' }), null);
+assert.equal(validarEnvioDesligamento({ ...d, sem_evidencia_recente: false }), null);
+assert.equal(validarEnvioDesligamento({ ...d, sem_evidencia_recente: false, remocoes: [{ chave: 'gestor', justificativa: 'Ausente' }] }), 'Aguarde a validação do RH para as remoções');
+assert.equal(validarEnvioDesligamento({ ...d, sem_evidencia_recente: false, remocoes: [{ chave: 'gestor', justificativa: 'Ausente', validada_por: 'rh-user' }] }), null);
+assert.equal(podeRemoverSignatario({ chave: 'rh', obrigatorio: true }), false);
+assert.equal(podeRemoverSignatario({ chave: 'gestor' }), true);
+assert.equal(validarEnvioDesligamento({ ...d, motivo: '', sem_evidencia_recente: false }), 'Preencha motivo, descrição, data prevista e justificativa');
+console.log('Desligamento: 8 regras verificadas');
