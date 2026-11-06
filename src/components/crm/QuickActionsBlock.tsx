@@ -83,6 +83,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [showLossReasonDialog, setShowLossReasonDialog] = useState(false);
 
+  const isPosVenda = isPosVendaDeal(deal);
   const { data: qualStatus } = useQualificationStatus(isPosVenda ? undefined : deal?.id);
   const isQualified = qualStatus?.isQualified ?? false;
   
