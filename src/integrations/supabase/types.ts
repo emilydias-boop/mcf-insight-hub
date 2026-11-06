@@ -12882,6 +12882,97 @@ export type Database = {
           },
         ]
       }
+      gov_desligamentos: {
+        Row: {
+          created_at: string
+          data_prevista: string | null
+          departamento_id: string | null
+          descricao: string
+          employee_id: string
+          enviado_em: string | null
+          evidencias: string[]
+          extras: string[]
+          id: string
+          justificativa: string
+          justificativa_reforcada: string
+          motivo: string
+          remocoes: Json
+          sem_evidencia_recente: boolean
+          signatarios: Json
+          solicitante_employee_id: string | null
+          solicitante_user_id: string
+          status: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data_prevista?: string | null
+          departamento_id?: string | null
+          descricao?: string
+          employee_id: string
+          enviado_em?: string | null
+          evidencias?: string[]
+          extras?: string[]
+          id?: string
+          justificativa?: string
+          justificativa_reforcada?: string
+          motivo?: string
+          remocoes?: Json
+          sem_evidencia_recente?: boolean
+          signatarios?: Json
+          solicitante_employee_id?: string | null
+          solicitante_user_id?: string
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data_prevista?: string | null
+          departamento_id?: string | null
+          descricao?: string
+          employee_id?: string
+          enviado_em?: string | null
+          evidencias?: string[]
+          extras?: string[]
+          id?: string
+          justificativa?: string
+          justificativa_reforcada?: string
+          motivo?: string
+          remocoes?: Json
+          sem_evidencia_recente?: boolean
+          signatarios?: Json
+          solicitante_employee_id?: string | null
+          solicitante_user_id?: string
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gov_desligamentos_departamento_id_fkey"
+            columns: ["departamento_id"]
+            isOneToOne: false
+            referencedRelation: "departamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_desligamentos_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gov_desligamentos_solicitante_employee_id_fkey"
+            columns: ["solicitante_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gov_dossie_ciencias: {
         Row: {
           comentario: string
@@ -24637,6 +24728,49 @@ export type Database = {
           p_reporta_a: string
         }
         Returns: string
+      }
+      gov_desligamento_contexto: {
+        Args: { p_employee?: string; p_tipo?: string }
+        Returns: Json
+      }
+      gov_desligamento_proprio: {
+        Args: { p_employee: string }
+        Returns: boolean
+      }
+      gov_desligamento_salvar: {
+        Args: { p_dados: Json }
+        Returns: {
+          created_at: string
+          data_prevista: string | null
+          departamento_id: string | null
+          descricao: string
+          employee_id: string
+          enviado_em: string | null
+          evidencias: string[]
+          extras: string[]
+          id: string
+          justificativa: string
+          justificativa_reforcada: string
+          motivo: string
+          remocoes: Json
+          sem_evidencia_recente: boolean
+          signatarios: Json
+          solicitante_employee_id: string | null
+          solicitante_user_id: string
+          status: string
+          tipo: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "gov_desligamentos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      gov_desligamento_validar_remocao: {
+        Args: { p_chave: string; p_id: string }
+        Returns: undefined
       }
       gov_dossie_anexo_permitido: {
         Args: { p_escrita?: boolean; p_nome: string }

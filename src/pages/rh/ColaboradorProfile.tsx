@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EMPLOYEE_STATUS_LABELS } from '@/types/hr';
-import { ArrowLeft, Pencil, User, Calendar, Users, DollarSign, FileText, History, StickyNote, Shield, ClipboardList, Clock, ShieldAlert, Briefcase } from 'lucide-react';
+import { ArrowLeft, Pencil, User, Calendar, Users, DollarSign, FileText, History, StickyNote, Shield, ClipboardList, Clock, ShieldAlert, Briefcase, UserMinus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeFormDialog from '@/components/hr/EmployeeFormDialog';
@@ -28,7 +28,7 @@ export default function ColaboradorProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: employees, isLoading } = useEmployees();
-  const { session } = useAuth();
+  const { session, user, allRoles } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
 
   const employee = employees?.find(e => e.id === id);
@@ -117,9 +117,12 @@ export default function ColaboradorProfile() {
             </div>
           </div>
         </div>
+        <div className="flex flex-wrap gap-2">
+        {allRoles.some(r => ['admin','rh','manager','coordenador'].includes(r)) && employee.user_id !== user?.id && employee.profile_id !== user?.id && employee.email_pessoal?.toLowerCase() !== user?.email?.toLowerCase() && <Button variant="outline" onClick={() => navigate(`/rh/desligamentos?employee=${employee.id}`)}><UserMinus className="mr-2 h-4 w-4" />Solicitar desligamento</Button>}
         <Button onClick={() => setFormOpen(true)}>
           <Pencil className="h-4 w-4 mr-2" /> Editar
         </Button>
+        </div>
       </div>
 
       {/* Tabs */}
