@@ -10,7 +10,8 @@ No topo da página de Telemetria (acima das tabelas, que continuam iguais), um b
    - mini-linha diária de aberturas no período.
 2. **Gráfico comparativo "Aberturas x Tempo de abertura"**: barras com as aberturas de cada tela e linha com o tempo típico, no mesmo gráfico (dois eixos).
 3. **Gráfico "Ocorrências de erro"**: barras horizontais com erros por tela, ordenadas, com a taxa por 100 aberturas ao lado.
-4. Legenda curta explicando "tempo típico" e as cores.
+4. **Medidores (gauges) de performance**, um por tela: meio-círculo com faixas verde (até 1 s), amarelo (1–3 s) e vermelho (acima de 3 s), ponteiro no tempo típico e, abaixo, o número de erros a cada 100 aberturas. A cor final de cada tela considera o pior entre tempo e erros (erros: verde 0, amarelo até 2 a cada 100, vermelho acima disso).
+5. Legenda curta explicando "tempo típico" e as cores.
 
 Telas sem medição de tempo ou sem erros mostram "—" / "0" (nunca inventam valor). Em celular, cartões em coluna.
 
