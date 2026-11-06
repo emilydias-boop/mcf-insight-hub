@@ -71,6 +71,8 @@ import { LinkContractDialog } from './LinkContractDialog';
 import { LinkedContractCard } from './LinkedContractCard';
 import { VincularVendaDiretaDialog } from './VincularVendaDiretaDialog';
 import { useVendasDiretasDoParticipante, useDesvincularVendaDireta } from '@/hooks/useVendaDiretaR1';
+import { VincularVendaR2Dialog } from './VincularVendaR2Dialog';
+import { useVendasDoParticipante, useDesvincularVenda } from '@/hooks/useVincularVendaR2';
 import { formatCurrency } from '@/lib/formatters';
 import { OutcomeRequiredModal } from '@/components/consorcio/OutcomeRequiredModal';
 import { NoShowEvidenceDialog } from './NoShowEvidenceDialog';
@@ -166,6 +168,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [partnerPhone, setPartnerPhone] = useState('');
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [showVincularVendaR1Dialog, setShowVincularVendaR1Dialog] = useState(false);
   const [showNoShowConfirm, setShowNoShowConfirm] = useState(false);
   // Motivo do no-show escolhido no popover, aplicado após evidência/confirmação
   const [pendingNoShowReason, setPendingNoShowReason] = useState<{ reason: string; note?: string } | null>(null);
@@ -1252,6 +1255,19 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </Button>
                     )}
 
+                    {/* War Room: vincular venda (conta como venda realizada, NÃO contrato pago) */}
+                    {canLinkContract && activeBU === 'solar' && !selectedParticipant.isPartner && selectedParticipant.status !== 'canceled' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-col h-14 gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                        onClick={() => setShowVincularVendaR1Dialog(true)}
+                      >
+                        <Link2 className="h-4 w-4" />
+                        <span className="text-xs">Vincular venda</span>
+                      </Button>
+                    )}
+
                   </div>
                 </div>
                 )}
@@ -1280,6 +1296,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   <VendaDiretaVinculadaBlock
                     attendeeId={selectedParticipant.id}
                     canUnlink={!somenteLeitura && (canLinkContract || !isSdr)}
+                  />
+                )}
+
+                {activeBU === 'solar' && (
+                  <VendaVinculadaR1Block
+                    attendeeId={selectedParticipant.id}
+                    canUnlink={!somenteLeitura && canLinkContract}
                   />
                 )}
 
@@ -1551,6 +1574,16 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selectedParticipant && !somenteLeitura && activeBU === 'solar' && (
+        <VincularVendaR2Dialog
+          open={showVincularVendaR1Dialog}
+          onOpenChange={setShowVincularVendaR1Dialog}
+          attendeeId={selectedParticipant.id}
+          attendeeName={selectedParticipant.name}
+          meetingLabel="R1"
+        />
+      )}
 
       {selectedParticipant && !somenteLeitura && (
         <VincularVendaDiretaDialog
@@ -1939,6 +1972,52 @@ function MeetingRecordingSection({ meetingSlotId }: { meetingSlotId: string | nu
 }
 
 /** Venda direta (A003 / A001) vinculada ao participante. NÃO é contrato pago. */
+function VendaVinculadaR1Block({ attendeeId, canUnlink }: { attendeeId: string; canUnlink: boolean }) {
+  const { data: vendas = [] } = useVendasDoParticipante(attendeeId);
+  const desvincular = useDesvincularVenda();
+  if (vendas.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Link2 className="h-4 w-4 text-emerald-600" />
+        <h4 className="font-medium text-sm">Vendas vinculadas ({vendas.length})</h4>
+      </div>
+      {vendas.map((v) => (
+        <div key={v.id} className="rounded-lg border bg-muted/20 p-3 text-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="font-medium truncate">{v.produto}</div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="font-bold">{formatCurrency(v.liquido)}</span>
+                <span className="text-[10px] text-muted-foreground">líquido</span>
+                <span className="text-[11px] text-muted-foreground">· bruto {formatCurrency(v.bruto)}</span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                {v.gateway} · {format(parseISO(v.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                {v.comprador_nome ? ` · pago por ${v.comprador_nome}` : ''}
+              </div>
+              {v.vinculada_por && (
+                <div className="text-[10px] text-muted-foreground">vinculado por {v.vinculada_por}</div>
+              )}
+            </div>
+            {canUnlink && (
+              <Button variant="ghost" size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                title="Desvincular"
+                disabled={desvincular.isPending}
+                onClick={() => {
+                  if (confirm('Desvincular esta venda do participante? A etapa do Kanban NÃO volta sozinha.')) desvincular.mutate(v.id);
+                }}>
+                <Unlink className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function VendaDiretaVinculadaBlock({ attendeeId, canUnlink }: { attendeeId: string; canUnlink: boolean }) {
   const { data: vendas = [] } = useVendasDiretasDoParticipante(attendeeId);
   const desvincular = useDesvincularVendaDireta();

@@ -17,9 +17,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   attendeeId: string;
   attendeeName: string;
+  meetingLabel?: 'R1' | 'R2';
 }
 
-export function VincularVendaR2Dialog({ open, onOpenChange, attendeeId, attendeeName }: Props) {
+export function VincularVendaR2Dialog({ open, onOpenChange, attendeeId, attendeeName, meetingLabel = 'R2' }: Props) {
   const [busca, setBusca] = useState('');
   const { data: vendas = [], isLoading } = useVendasSemVinculo(open ? attendeeId : null, busca);
   const vincular = useVincularVenda();
@@ -77,7 +78,7 @@ export function VincularVendaR2Dialog({ open, onOpenChange, attendeeId, attendee
               <div className="text-center py-10 text-muted-foreground text-sm">
                 {busca
                   ? 'Nenhuma venda sem dono com essa busca.'
-                  : 'Nenhuma venda sem dono nos 60 dias anteriores a esta R2. Use a busca para procurar em todo o histórico.'}
+                  : `Nenhuma venda sem dono nos 60 dias anteriores a esta ${meetingLabel}. Use a busca para procurar em todo o histórico.`}
               </div>
             ) : (
               vendas.map((v) => {
