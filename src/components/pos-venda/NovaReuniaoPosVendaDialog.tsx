@@ -143,7 +143,8 @@ export function NovaReuniaoPosVendaDialog({ onClose, onSalvo, preSelecao, dealId
       syncConvitePosVenda('create', id);
       qc.invalidateQueries({ queryKey: ['pos-venda-reunioes'] });
       qc.invalidateQueries({ queryKey: ['pos-venda-ocupacao'] });
-      toast.success('Reunião agendada. Convite enviado ao cliente por e-mail.');
+      const futura = inicioSlotSP(data, hora).getTime() > Date.now();
+      toast.success(futura ? 'Reunião agendada. O convite vai por e-mail para o cliente.' : 'Reunião registrada.');
       onSalvo?.();
       onClose();
     },

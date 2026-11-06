@@ -7,9 +7,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, ExternalLink, Loader2, RefreshCw, Columns3, Search, ArrowUpDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { POS_VENDA_ORIGIN_ID } from '@/lib/posVenda';
-import { horariosLivresPosVenda, horariosTravadosPosVenda, inicioSlotSP, type DisponibilidadePosVenda } from '@/lib/posVendaDisponibilidade';
+import { horariosLivresPosVenda, horariosTravadosPosVenda } from '@/lib/posVendaDisponibilidade';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -231,10 +229,11 @@ export default function AgendaPosVenda() {
   const [preSelecao, setPreSelecao] = useState<{ gerenteId: string; dia: string; hora: string }>();
   const agoraSlots = useAgora();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [dealIdUrl] = useState(() => searchParams.get('dealId') ?? undefined);
+  const [dealIdUrl, setDealIdUrl] = useState(() => searchParams.get('dealId') ?? undefined);
   useEffect(() => { if (dealIdUrl) setNovaAberta(true); }, [dealIdUrl]);
   const fecharNova = () => {
     setNovaAberta(false);
+    setDealIdUrl(undefined);
     if (searchParams.has('dealId')) {
       const p = new URLSearchParams(searchParams);
       p.delete('dealId');

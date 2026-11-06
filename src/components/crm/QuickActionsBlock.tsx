@@ -37,6 +37,8 @@ import { MarkAsLostModal } from './MarkAsLostModal';
 import { InlineCallControls } from './InlineCallControls';
 import { LeadCallButton } from './LeadCallButton';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
+import { isPosVendaDeal } from '@/lib/posVenda';
+import { NovaReuniaoPosVendaDialog } from '@/components/pos-venda/NovaReuniaoPosVendaDialog';
 import { MoveToPipelineModal } from './MoveToPipelineModal';
 import { RefundModal } from './RefundModal';
 import { useQualificationStatus } from '@/hooks/useQualificationStatus';
@@ -81,7 +83,8 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [showLossReasonDialog, setShowLossReasonDialog] = useState(false);
 
-  const { data: qualStatus } = useQualificationStatus(deal?.id);
+  const isPosVenda = isPosVendaDeal(deal);
+  const { data: qualStatus } = useQualificationStatus(isPosVenda ? undefined : deal?.id);
   const isQualified = qualStatus?.isQualified ?? false;
   
   const alreadyRefunded = deal?.custom_fields?.reembolso_solicitado === true;
@@ -302,14 +305,14 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
                   variant="outline"
                   className={`h-9 ${isNoShowStage ? 'border-amber-500/50 text-amber-600 hover:bg-amber-50' : 'border-blue-500/50 text-blue-600 hover:bg-blue-50'}`}
                   onClick={() => setShowScheduleDialog(true)}
-                  disabled={!isQualified && !isNoShowStage}
+                  disabled={!isPosVenda && !isQualified && !isNoShowStage}
                 >
                   {isNoShowStage ? <CalendarClock className="h-3.5 w-3.5 mr-1.5" /> : <Calendar className="h-3.5 w-3.5 mr-1.5" />}
-                  {isNoShowStage ? 'Reagendar' : 'Agendar'}
+                  {isNoShowStage && !isPosVenda ? 'Reagendar' : 'Agendar'}
                 </Button>
               </span>
             </TooltipTrigger>
-            {!isQualified && !isNoShowStage && (
+            {!isPosVenda && !isQualified && !isNoShowStage && (
               <TooltipContent side="bottom" className="max-w-xs">
                 {qualStatus?.reason || 'Qualifique o lead antes de agendar R1 (ligação com resumo IA ou WhatsApp com print).'}
               </TooltipContent>
@@ -318,7 +321,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
         </TooltipProvider>
 
         {/* Qualificar */}
-        {onQualify && (
+        {onQualify && !isPosVenda && (
           <Button
             size="sm"
             variant="outline"
@@ -383,16 +386,27 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
       )}
 
       
-      {/* Modal de Agendamento */}
-      {scheduleMontado && (
-        <SdrScheduleDialog
-          open={showScheduleDialog}
-          onOpenChange={setShowScheduleDialog}
-          dealId={deal?.id}
-          contactName={contact?.name || deal?.name}
-          isReschedule={isNoShowStage}
-          onScheduled={onStageChange}
-        />
+      {/* Modal de Agendamento — Pós-venda usa a agenda própria (pos_venda_reunioes) */}
+      {isPosVenda ? (
+        showScheduleDialog && (
+          <NovaReuniaoPosVendaDialog
+            dealId={deal.id}
+            dealNome={contact?.name || deal?.name}
+            onClose={() => setShowScheduleDialog(false)}
+            onSalvo={onStageChange}
+          />
+        )
+      ) : (
+        scheduleMontado && (
+          <SdrScheduleDialog
+            open={showScheduleDialog}
+            onOpenChange={setShowScheduleDialog}
+            dealId={deal?.id}
+            contactName={contact?.name || deal?.name}
+            isReschedule={isNoShowStage}
+            onScheduled={onStageChange}
+          />
+        )
       )}
 
       

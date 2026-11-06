@@ -177,7 +177,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
               deal={deal} 
               contact={contact}
               onStageChange={() => refetchDeal()}
-              onQualify={() => setShowQualification(true)}
+              onQualify={isPosVendaDeal(deal) ? undefined : () => setShowQualification(true)}
               onDeleted={() => onOpenChange(false)}
             />
             
