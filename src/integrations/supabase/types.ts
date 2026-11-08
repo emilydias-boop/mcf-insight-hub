@@ -15652,6 +15652,72 @@ export type Database = {
           },
         ]
       }
+      mkt_gastos: {
+        Row: {
+          atualizado_em: string | null
+          atualizado_por: string | null
+          categoria: string
+          comprovante_bytes: number | null
+          comprovante_mime: string
+          comprovante_nome: string
+          comprovante_path: string
+          data_pagamento: string
+          descricao: string | null
+          excluido_em: string | null
+          excluido_por: string | null
+          forma_pagamento: string
+          fornecedor: string
+          id: string
+          lancado_em: string
+          lancado_por: string | null
+          lancado_por_nome: string | null
+          motivo_exclusao: string | null
+          valor: number
+        }
+        Insert: {
+          atualizado_em?: string | null
+          atualizado_por?: string | null
+          categoria: string
+          comprovante_bytes?: number | null
+          comprovante_mime: string
+          comprovante_nome: string
+          comprovante_path: string
+          data_pagamento: string
+          descricao?: string | null
+          excluido_em?: string | null
+          excluido_por?: string | null
+          forma_pagamento: string
+          fornecedor: string
+          id?: string
+          lancado_em?: string
+          lancado_por?: string | null
+          lancado_por_nome?: string | null
+          motivo_exclusao?: string | null
+          valor: number
+        }
+        Update: {
+          atualizado_em?: string | null
+          atualizado_por?: string | null
+          categoria?: string
+          comprovante_bytes?: number | null
+          comprovante_mime?: string
+          comprovante_nome?: string
+          comprovante_path?: string
+          data_pagamento?: string
+          descricao?: string | null
+          excluido_em?: string | null
+          excluido_por?: string | null
+          forma_pagamento?: string
+          fornecedor?: string
+          id?: string
+          lancado_em?: string
+          lancado_por?: string | null
+          lancado_por_nome?: string | null
+          motivo_exclusao?: string | null
+          valor?: number
+        }
+        Relationships: []
+      }
       mkt_parametros: {
         Row: {
           atualizado_em: string
@@ -25322,6 +25388,13 @@ export type Database = {
           ordem: number
         }[]
       }
+      mkt_email_grupo: {
+        Args: { p_campaign_id: string; p_message_id: string; p_nome: string }
+        Returns: {
+          chave: string
+          nome: string
+        }[]
+      }
       mkt_email_por_envio: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -25615,6 +25688,48 @@ export type Database = {
           r1_realizadas: number
           r2_realizadas: number
         }[]
+      }
+      mkt_gasto_editar: {
+        Args: {
+          p_categoria: string
+          p_data: string
+          p_descricao: string
+          p_forma_pagamento: string
+          p_fornecedor: string
+          p_id: string
+          p_valor: number
+        }
+        Returns: undefined
+      }
+      mkt_gasto_excluir: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
+      mkt_gasto_lancar: {
+        Args: {
+          p_categoria: string
+          p_comprovante_nome: string
+          p_comprovante_path: string
+          p_data: string
+          p_descricao: string
+          p_forma_pagamento: string
+          p_fornecedor: string
+          p_valor: number
+        }
+        Returns: string
+      }
+      mkt_gastos_lider: { Args: { p_user: string }; Returns: boolean }
+      mkt_gastos_pode: { Args: { p_user: string }; Returns: boolean }
+      mkt_gastos_valida: {
+        Args: {
+          p_categoria: string
+          p_data: string
+          p_descricao: string
+          p_forma_pagamento: string
+          p_fornecedor: string
+          p_valor: number
+        }
+        Returns: undefined
       }
       mkt_meta_id: { Args: { p: string }; Returns: string }
       mkt_norm_phone: { Args: { p: string }; Returns: string }
