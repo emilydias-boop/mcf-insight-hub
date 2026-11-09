@@ -238,7 +238,7 @@ function buildEmailHTML(d: ReportData): string {
                 <tr>
                   ${kpiCard('Receita Total', `R$ ${(d.receitaTotal / 1000).toFixed(1)}k`, '#16a34a')}
                   ${kpiCard('Lucro Operac.', `R$ ${fmtBRL(d.kpis.lucroOperacional)}`, lucroColor)}
-                  ${kpiCard('ROI', `${d.kpis.roi.toFixed(1)}%`)}
+                  ${kpiCard('ROI (lucro ÷ custo)', `${d.kpis.roi.toFixed(1)}%`)}
                   ${kpiCard('ROAS', `${d.kpis.roas.toFixed(2)}x`)}
                 </tr>
               </table>
@@ -259,11 +259,11 @@ function buildEmailHTML(d: ReportData): string {
                   ${metricRow('OB Construir', d.incorp.obConstruir, '—')}
                   ${metricRow('OB Vitalício', d.incorp.obVitalicio, '—')}
                   ${metricRow('OB Evento', d.incorp.obEvento, '—')}
-                  ${metricRow('Incorporador 50K', d.incorp.incorporador50k, '—')}
+                  ${metricRow('Incorporador 50K', d.incorp.incorporador50k, fmtBRL(d.incorp.receitaIncorporador50k))}
                   ${metricRow('Clint (Ultrameta)', '—', fmtBRL(d.incorp.clintRevenue))}
                   <tr style="background:#f0fdf4;">
                     <td style="padding:10px 14px;font-weight:700;color:#1a1a2e;">Total Incorporador</td>
-                    <td style="padding:10px 14px;text-align:center;font-weight:700;">${d.incorp.vendasA010 + d.incorp.contratos}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:700;">${d.incorp.vendasA010 + d.incorp.contratos + d.incorp.incorporador50k}</td>
                     <td style="padding:10px 14px;text-align:right;font-weight:700;color:#16a34a;">R$ ${fmtBRL(d.incorp.faturamentoTotal)}</td>
                   </tr>
                 </tbody>
@@ -273,7 +273,10 @@ function buildEmailHTML(d: ReportData): string {
               <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid #f59e0b;">🤝 Consórcio</h2>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;font-size:13px;">
                 <tbody>
-                  ${metricRow('Cartas Vendidas', d.consorcioVendas, fmtBRL(d.consorcioCredito))}
+                  ${metricRow('Cartas vendidas', d.consorcioVendas, fmtBRL(d.consorcioCredito))}
+                  <tr>
+                    <td colspan="3" style="padding:4px 14px 8px;font-size:11px;color:#6c757d;">A coluna Receita mostra o volume de crédito das cartas, não receita.</td>
+                  </tr>
                 </tbody>
               </table>
 
@@ -281,7 +284,10 @@ function buildEmailHTML(d: ReportData): string {
               <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid #3b82f6;">💳 Crédito</h2>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;font-size:13px;">
                 <tbody>
-                  ${metricRow('Vendas Crédito', d.creditoVendas, fmtBRL(d.creditoReceita))}
+                  ${metricRow('Contratos assinados', d.creditoVendas, fmtBRL(d.creditoVolume))}
+                  <tr>
+                    <td colspan="3" style="padding:4px 14px 8px;font-size:11px;color:#6c757d;">A coluna Receita mostra o volume de crédito contratado, não receita.</td>
+                  </tr>
                 </tbody>
               </table>
 
@@ -319,6 +325,9 @@ function buildEmailHTML(d: ReportData): string {
           <!-- Footer -->
           <tr>
             <td style="background:#f1f3f5;padding:14px 28px;border-radius:0 0 10px 10px;border:1px solid #e5e7eb;border-top:none;">
+              <p style="margin:0 0 6px;color:#94a3b8;font-size:11px;text-align:center;">
+                Semana de sábado a sexta. Incorporador: líquido das vendas pagas (sem estornos). Ads Meta sem imposto. Equipe/escritório = custo mensal ÷ 4 (último lançado em ${d.custosFixosMesRef || '—'}).
+              </p>
               <p style="margin:0;color:#adb5bd;font-size:11px;text-align:center;">
                 Relatório gerado automaticamente por MCF Gestão em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
               </p>
