@@ -44,6 +44,9 @@ import {
   AgendaCobrancas, PendenciasMes, InadimplenciaHistorica, ResultadosCobrador, FiltrosGlobais,
   FILTROS_VAZIOS, ContatoRapido, SaldoValor, type FiltrosCobranca,
 } from '@/components/financeiro/aReceber/GestaoCobranca';
+import { CobrancaJuridica, RelatoriosNotas, useReembolsosProximos } from '@/components/financeiro/aReceber/AReceberExtras';
+import { saldoDevedor } from '@/lib/arCobrancaCalc';
+import { Gavel, NotebookPen } from 'lucide-react';
 import { ClientePainelLateral } from '@/components/financeiro/aReceber/ClientePainelLateral';
 import { CalendarDays, AlarmClock, History, Trophy, Download } from 'lucide-react';
 
@@ -116,7 +119,9 @@ export default function AReceber() {
     product_code: product === 'todos' ? undefined : product,
     cobranca_stage: cobrancaStage === 'todos' ? undefined : (cobrancaStage as ArCobrancaStage),
     cobranca_responsavel_id: cobrancaResp === 'todos' ? undefined : cobrancaResp,
+    excluir_judicial: true,
   });
+  const reembolsosProximos = useReembolsosProximos();
 
   const { data: users } = useFinanceiroUsers();
   const updateTitulo = useUpdateArTitulo();
@@ -136,13 +141,14 @@ export default function AReceber() {
 
   const exportarCsv = () => {
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const head = ['Nº', 'Cliente', 'E-mail', 'Telefone', 'Documento', 'Produto', 'Tipo', 'Forma pagamento', 'Data venda', 'Valor total', 'Recebido', 'Saldo', 'Parcelas', 'Próxima cobrança', 'Dias de atraso', 'Status'];
+    const head = ['Nº', 'Cliente', 'E-mail', 'Telefone', 'Documento', 'Produto', 'Tipo', 'Forma pagamento', 'Data venda', 'Valor total', 'Entrada', 'Pago via cobranças', 'Saldo', 'Parcelas', 'Próxima cobrança', 'Dias de atraso', 'Status', 'Negociação', 'Cobrador', 'Gerente de contas'];
     const rows = titulosFiltrados.map(t => [
       ticketNumber(t.id), t.customer_name, t.customer_email, t.customer_phone, t.customer_document, t.product_code,
       AR_TITULO_TIPO_LABEL[t.tipo], t.payment_method, t.sale_date ? fmtDate(new Date(t.sale_date), 'dd/MM/yyyy') : '',
-      Number(t.valor_total || 0).toFixed(2).replace('.', ','), Number(t.valor_pago || 0).toFixed(2).replace('.', ','),
+      Number(t.valor_total || 0).toFixed(2).replace('.', ','), Number(t.valor_entrada || 0).toFixed(2).replace('.', ','), Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0).toFixed(2).replace('.', ','),
       Number(t.valor_pendente || 0).toFixed(2).replace('.', ','), `${t.parcelas_pagas ?? 0}/${t.parcelas_total ?? 0}`,
-      t.proxima_parcela ? t.proxima_parcela.split('-').reverse().join('/') : '', t.dias_atraso || '', AR_TITULO_STATUS_LABEL[t.status],
+      t.proxima_parcela ? t.proxima_parcela.split('-').reverse().join('/') : '', t.dias_atraso || '', AR_TITULO_STATUS_LABEL[t.status], t.negociacao ? 'Sim' : '',
+      (users ?? []).find(u => u.id === t.cobranca_responsavel_id)?.full_name ?? '', gerentesConta?.get(t.id)?.gerente_nome ?? '',
     ]);
     const csv = '\uFEFF' + [head, ...rows].map(r => r.map(esc).join(';')).join('\n');
     const a = document.createElement('a');
@@ -233,7 +239,7 @@ export default function AReceber() {
             className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all"
           >
             <List className="w-5 h-5" />
-            <span className="text-sm font-semibold">Listagem</span>
+            <span className="text-sm font-semibold">Cobranças Regulares</span>
           </TabsTrigger>
           <TabsTrigger
             value="kanban"
@@ -265,6 +271,14 @@ export default function AReceber() {
             <Trophy className="w-5 h-5" />
             <span className="text-sm font-semibold">Resultados</span>
           </TabsTrigger>
+          <TabsTrigger value="juridica" className={TAB_CLS}>
+            <Gavel className="w-5 h-5" />
+            <span className="text-sm font-semibold">Cobrança Jurídica</span>
+          </TabsTrigger>
+          <TabsTrigger value="relatorios" className={TAB_CLS}>
+            <NotebookPen className="w-5 h-5" />
+            <span className="text-sm font-semibold">Relatórios e Notas</span>
+          </TabsTrigger>
           <button
             type="button"
             onClick={() => setOpenReembolsos(true)}
@@ -272,6 +286,9 @@ export default function AReceber() {
           >
             <Undo2 className="w-5 h-5" />
             <span className="text-sm font-semibold">Reembolsos</span>
+            {reembolsosProximos.length > 0 && (
+              <span className="text-[10px] font-bold rounded-full bg-destructive text-destructive-foreground px-1.5">{reembolsosProximos.length} perto do prazo</span>
+            )}
           </button>
           <button
             type="button"
@@ -291,6 +308,12 @@ export default function AReceber() {
           </button>
         </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
+      {reembolsosProximos.length > 0 && (
+        <button type="button" onClick={() => setOpenReembolsos(true)}
+          className="w-full text-left text-sm rounded-md border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2">
+          {reembolsosProximos.length} reembolso(s) a pagar vencem em até 7 dias (prazo limite ou data prevista). Clique para ver.
+        </button>
+      )}
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Card>
@@ -384,7 +407,6 @@ export default function AReceber() {
               <SelectItem value="todos">Todos os stages</SelectItem>
               <SelectItem value="mes">Cobrança do mês</SelectItem>
               <SelectItem value="atraso">Cobrança em atraso</SelectItem>
-              <SelectItem value="judicial">Cobrança judicial</SelectItem>
             </SelectContent>
           </Select>
           <CobrancaResponsavelFilter value={cobrancaResp} onChange={setCobrancaResp} />
@@ -440,7 +462,8 @@ export default function AReceber() {
                   <TableHead>Contato</TableHead>
                   <TableHead>Data venda</TableHead>
                   <TableHead className="text-right">Valor total</TableHead>
-                  <TableHead className="text-right">Recebido</TableHead>
+                  <TableHead className="text-right">Entrada</TableHead>
+                  <TableHead className="text-right">Pago via cobranças</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
                   <TableHead>Parcelas</TableHead>
                   <TableHead>Próxima cobrança</TableHead>
@@ -506,8 +529,9 @@ export default function AReceber() {
                         {t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                       </TableCell>
                       <TableCell className="text-right font-medium">{brl(Number(t.valor_total))}</TableCell>
-                      <TableCell className="text-right text-emerald-600">{brl(t.valor_pago || 0)}</TableCell>
-                      <TableCell className="text-right"><SaldoValor valor={t.valor_pendente || 0} /></TableCell>
+                      <TableCell className="text-right">{brl(t.valor_entrada || 0)}</TableCell>
+                      <TableCell className="text-right text-emerald-600">{brl(Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0))}</TableCell>
+                      <TableCell className="text-right"><SaldoValor valor={t.status === 'aberto' ? saldoDevedor(Number(t.valor_total), t.valor_entrada || 0, Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0)) : 0} /></TableCell>
                       <TableCell className="text-xs">
                         {precisaLancar
                           ? <span className="text-orange-600 font-medium">Lançar</span>
@@ -519,7 +543,10 @@ export default function AReceber() {
                           <div className="font-semibold text-red-600">{t.dias_atraso} dias de atraso</div>
                         )}
                       </TableCell>
-                      <TableCell><StatusBadge status={t.status} /></TableCell>
+                      <TableCell>
+                        <StatusBadge status={t.status} />
+                        {t.negociacao && t.status === 'aberto' && <Badge variant="outline" className="mt-1 bg-amber-500/15 text-amber-600 border-amber-500/30">Negociação</Badge>}
+                      </TableCell>
                       <TableCell>
                         {t.status === 'aberto' && t.stage_effective ? (
                           <CobrancaStageBadge stage={t.stage_effective} />
@@ -637,6 +664,14 @@ export default function AReceber() {
                     <span className="font-medium text-amber-600">{brl(Number(t.valor_pendente ?? t.valor_total ?? 0))}</span>
                   </div>
                 ))}
+        <TabsContent value="juridica" className="mt-4 space-y-4">
+          <FiltrosGlobais value={filtrosGestao} onChange={setFiltrosGestao} produtos={produtosGestao} />
+          <CobrancaJuridica filtros={filtrosGestao} onAbrir={(id) => navigate(`/financeiro/a-receber/${id}`)} />
+        </TabsContent>
+        <TabsContent value="relatorios" className="mt-4 space-y-4">
+          <FiltrosGlobais value={filtrosGestao} onChange={setFiltrosGestao} produtos={produtosGestao} />
+          <RelatoriosNotas filtros={filtrosGestao} />
+        </TabsContent>
               </div>
             </div>
           </div>

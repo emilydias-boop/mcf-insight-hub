@@ -365,8 +365,8 @@ export function useReembolsosProximos() {
   return useMemo(() => {
     const hoje = hojeSP();
     return (data ?? []).filter((r) => {
-      const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method, r.data_pedido);
-      const prazoPerto = w.allowed !== null && w.daysLeft !== null && w.daysLeft! <= AVISO_REEMBOLSO_DIAS;
+      const w = getRefundWindow(r.titulo?.sale_date, r.titulo?.payment_method);
+      const prazoPerto = w.daysLeft !== null && w.daysLeft >= 0 && w.daysLeft <= AVISO_REEMBOLSO_DIAS;
       const prev = r.data_prevista_pagamento ? diasEntre(hoje, r.data_prevista_pagamento.slice(0, 10)) : null;
       return prazoPerto || (prev !== null && prev <= AVISO_REEMBOLSO_DIAS);
     });
