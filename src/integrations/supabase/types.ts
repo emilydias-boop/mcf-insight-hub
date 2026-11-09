@@ -26262,6 +26262,10 @@ export type Database = {
         }[]
       }
       relatorio_diario_operacoes: { Args: { p_data: string }; Returns: Json }
+      relatorio_semanal_mcf: {
+        Args: { p_fim: string; p_ini: string }
+        Returns: Json
+      }
       reset_distribution_counters: {
         Args: { p_origin_id: string }
         Returns: undefined
