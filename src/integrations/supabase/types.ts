@@ -26284,12 +26284,15 @@ export type Database = {
         Args: { _fim: string; _inicio: string }
         Returns: {
           bu: string
+          cartas: number
           closer_id: string
           closer_nome: string
           contratos_pagos: number
           conversao_pct: number
+          credito: number
           participantes_atendidos: number
           reunioes_realizadas: number
+          vendas_consorcio: number
         }[]
       }
       salvar_briefing: {
