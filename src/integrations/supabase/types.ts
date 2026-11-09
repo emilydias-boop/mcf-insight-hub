@@ -23836,6 +23836,7 @@ export type Database = {
         Args: { p_acao: string; p_deal_id: string; p_motivo?: string }
         Returns: Json
       }
+      credito_comprovantes_pode: { Args: { p_user: string }; Returns: boolean }
       credito_e_do_time: { Args: { p_uid: string }; Returns: boolean }
       credito_extrair_dados_pessoais: {
         Args: { p_answers: Json; p_deal_id: string }
@@ -25839,6 +25840,7 @@ export type Database = {
       }
       parse_finalidade_obra: { Args: { _resposta: string }; Returns: string }
       parse_renda_estimada: { Args: { p_text: string }; Returns: number }
+      patrimonio_pode: { Args: { p_user: string }; Returns: boolean }
       pauta_viral_gravar_ajuste: {
         Args: {
           p_autor: string

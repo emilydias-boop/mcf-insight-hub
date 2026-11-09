@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -29,6 +30,7 @@ import {
   ASSET_TYPE_LABELS,
   CreateAssetInput 
 } from '@/types/patrimonio';
+import { toast } from 'sonner';
 import { Loader2, Upload } from 'lucide-react';
 
 const assetSchema = z.object({
@@ -56,6 +58,7 @@ interface AssetFormDialogProps {
 
 export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogProps) => {
   const { createAsset, updateAsset } = useAssetMutations();
+  const queryClient = useQueryClient();
   const [notaFiscalFile, setNotaFiscalFile] = useState<File | null>(null);
   const isEdit = !!asset;
 
@@ -114,21 +117,33 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
 
       // Upload nota fiscal if selected
       if (notaFiscalFile && result?.id) {
-        const filePath = `${result.id}/${notaFiscalFile.name}`;
+        const ext = (notaFiscalFile.name.split('.').pop() || 'pdf').toLowerCase();
+        const base = notaFiscalFile.name
+          .replace(/\.[^.]+$/, '')
+          .normalize('NFD').replace(/\p{M}/gu, '')
+          .replace(/[^a-zA-Z0-9_-]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 60) || 'nota-fiscal';
+        const filePath = `${result.id}/${Date.now()}-${base}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from('asset-invoices')
-          .upload(filePath, notaFiscalFile, { upsert: true });
-        
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
-            .from('asset-invoices')
-            .getPublicUrl(filePath);
-          
-          await supabase.from('assets').update({
-            nota_fiscal_path: filePath,
-            nota_fiscal_url: urlData.publicUrl,
-          }).eq('id', result.id);
+          .upload(filePath, notaFiscalFile, { upsert: false, contentType: notaFiscalFile.type || undefined });
+
+        if (uploadError) {
+          toast.error(`Equipamento salvo, mas a nota fiscal não foi enviada: ${uploadError.message}`);
+          return;
         }
+
+        const { error: updError } = await supabase.from('assets')
+          .update({ nota_fiscal_path: filePath, nota_fiscal_url: null })
+          .eq('id', result.id);
+        if (updError) {
+          toast.error(`Nota enviada, mas não foi ligada ao equipamento: ${updError.message}`);
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ['asset'] });
+        queryClient.invalidateQueries({ queryKey: ['assets'] });
+        toast.success('Nota fiscal anexada.');
       }
 
       reset();
@@ -242,7 +257,7 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
             <div className="flex items-center gap-2">
               <Input
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
                 onChange={e => setNotaFiscalFile(e.target.files?.[0] || null)}
                 className="file:mr-2 file:rounded file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:text-primary"
               />
@@ -250,9 +265,27 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
                 <Upload className="h-4 w-4 text-primary" />
               )}
             </div>
-            {asset?.nota_fiscal_url && !notaFiscalFile && (
+            {asset?.nota_fiscal_path && !notaFiscalFile && (
               <p className="text-xs text-muted-foreground">
-                Arquivo atual: <a href={asset.nota_fiscal_url} target="_blank" rel="noopener noreferrer" className="underline">Ver nota fiscal</a>
+                Arquivo atual:{' '}
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={async () => {
+                    const win = window.open('', '_blank');
+                    const { data, error } = await supabase.storage
+                      .from('asset-invoices')
+                      .createSignedUrl(asset.nota_fiscal_path, 300);
+                    if (error || !data?.signedUrl) {
+                      win?.close();
+                      toast.error(`Não foi possível abrir a nota fiscal: ${error?.message ?? 'sem URL'}`);
+                      return;
+                    }
+                    if (win) win.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+                  }}
+                >
+                  Ver nota fiscal
+                </button>
               </p>
             )}
           </div>
