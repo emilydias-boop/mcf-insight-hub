@@ -31,6 +31,8 @@ const cost = (investment: number, count: number) => {
   return value === null ? "—" : formatBRL(value);
 };
 const formatRoas = (value: number | null) => value === null ? "—" : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x`;
+const roasGeral = (row: { liq_total: number; investimento: number; investimento_awareness: number }) =>
+  ratio(row.liq_total, row.investimento + row.investimento_awareness);
 const passage = (count: number, previous: number, label: string) => {
   const value = ratio(count, previous);
   return value === null ? "—" : `${(value * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% ${label}`;
@@ -83,6 +85,7 @@ function MetricCells({ row, origem }: { row: Totals; origem: ModeloOrigem }) {
   return (
     <>
       <TableCell className={numericCell}>{formatBRL(row.investimento)}</TableCell>
+      {origem === "todas" && <TableCell className={numericCell}>{formatBRL(row.investimento_awareness)}</TableCell>}
       <TableCell className={numericCell}>{formatInt(row.lpv)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.checkout_iniciado)}</TableCell>
       <TableCell className={numericCell}>{formatInt(row.entradas)}</TableCell>
@@ -98,6 +101,7 @@ function MetricCells({ row, origem }: { row: Totals; origem: ModeloOrigem }) {
       {origem === "anuncio" && <TableCell className={numericCell}>{cost(row.investimento, row.parcerias)}</TableCell>}
       <TableCell className={numericCell}>{formatBRL(row.liq_total)}</TableCell>
       {origem === "anuncio" && <TableCell className={numericCell}><Roas investment={row.investimento} liquid={row.liq_total} /></TableCell>}
+      {origem === "todas" && <TableCell className={numericCell}><span className="font-semibold tabular-nums">{formatRoas(roasGeral(row))}</span></TableCell>}
     </>
   );
 }
@@ -141,6 +145,8 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
     const share = ratio(adCount, totals[field]);
     return share === null ? "— de anúncio" : `${(share * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de anúncio`;
   };
+  const anuncioLiq = (anuncios.data ?? []).reduce((sum, row) => sum + row.liq_total, 0);
+  const anuncioInv = (anuncios.data ?? []).reduce((sum, row) => sum + row.investimento, 0);
   const kpis = [
     { label: "Investimento", value: formatBRL(totals.investimento), detail: <Hint text="Conta Distribuição de Conteúdo. Não gera clique para checkout, por isso não entra no custo por venda."><span>+ {formatBRL(totals.investimento_awareness)} em divulgação</span></Hint>, hint: "Gasto da Meta × 1,125 (impostos sobre a fatura). Por isso fica 12,5% acima do valor do Gerenciador de Anúncios. O mesmo fator vale para a divulgação, os custos por etapa e o ROAS." },
     { label: "Entradas", value: formatInt(totals.entradas), detail: <><div>A010 {formatInt(totals.entradas_a010)} · Anamnese {formatInt(totals.entradas_anamnese)} · Outras {formatInt(totals.entradas_outras)}</div><div>{stageDetail("entradas", "custo")}</div></> },
@@ -155,7 +161,16 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
       </>
     ), hint: "Contrato novo = 1º contrato pago da pessoa (A000, Contrato MCF ou Caução). Parcelas mensais do A000 e recompras não contam de novo. Conta o bruto, sem descontar reembolso — mesma régua do Painel Comercial. O dinheiro (líquido e ROAS) continua descontando os estornos." },
     { label: "Parcerias", value: formatInt(totals.parcerias), detail: stageDetail("parcerias", "custo por parceria") },
-    { label: "ROAS líquido", value: origem === "todas" ? "—" : formatRoas(ratio(totals.liq_total, totals.investimento)), detail: origem === "todas" ? "ROAS só em Só anúncio" : `${formatBRL(totals.liq_total)} recebidos`, hint: "Dinheiro líquido que entrou no período (vendas de quem veio de anúncio, já descontados os estornos) ÷ investimento do período." },
+    {
+      label: origem === "todas" ? "ROAS geral da BU" : "ROAS líquido",
+      value: origem === "todas" ? formatRoas(roasGeral(totals)) : formatRoas(ratio(totals.liq_total, totals.investimento)),
+      detail: origem === "todas"
+        ? <><div>{formatBRL(totals.liq_total)} de receita líquida ÷ {formatBRL(totals.investimento + totals.investimento_awareness)} na Meta com imposto (inclui {formatBRL(totals.investimento_awareness)} de divulgação)</div><div>Só anúncio: {formatRoas(ratio(anuncioLiq, anuncioInv))}</div></>
+        : `${formatBRL(totals.liq_total)} recebidos`,
+      hint: origem === "todas"
+        ? "Receita líquida (de taxa e dos estornos registrados) de todas as origens da BU ÷ gasto na Meta com imposto (conversão + divulgação, × 1,125). Visão caixa: inclui parcelas e saldos de vendas de meses anteriores, então mês com menos verba tende a parecer melhor. Mede a eficiência geral da BU, não os anúncios: para verba e criativo, use Só anúncio. Não é lucro."
+        : "Dinheiro líquido que entrou no período (vendas de quem veio de anúncio, já descontados os estornos) ÷ investimento do período.",
+    },
   ];
   const stages = [
     { label: "Entradas", count: totals.entradas, rate: null },
@@ -166,14 +181,17 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
   ];
   const maximum = Math.max(1, ...stages.map(stage => stage.count));
   const headers = [
-    { label: "Investimento", hint: "Gasto da Meta × 1,125 (impostos)" }, { label: "LPV", hint: "Dado da Meta (pixel)" },
+    { label: "Investimento", hint: "Gasto da Meta × 1,125 (impostos)" }, { label: "Divulgação", hint: "Conta Distribuição de Conteúdo, gasto Meta × 1,125. Entra no ROAS geral." }, { label: "LPV", hint: "Dado da Meta (pixel)" },
     { label: "Checkout iniciado", hint: "Dado da Meta (pixel)" },
     { label: "Entradas", hint: "Pessoas que entraram no período: compra de A010, formulário de anamnese (sem A010) ou outro produto de entrada (Guia, Planilha, A011, Lucrômetro…). Cada pessoa conta 1 vez por período." },
     { label: "A010" }, { label: "Anamnese", hint: "Negócio com tag ANAMNESE criado no período, sem A010 (mesma régua da Visão Diária)" }, { label: "Outras" },
     { label: "Custo/entrada" }, { label: "R1 agendadas", hint: "Pessoas que tiveram uma R1 marcada no período (pela data em que foi marcada)" }, { label: "R1 realizadas", hint: "Pessoas com R1 feita no período (completed, contrato pago ou reembolsado)" }, { label: "Contratos", hint: "Contratos novos do período (bruto, sem descontar reembolso)" },
     { label: "Custo/contrato" }, { label: "Parcerias" }, { label: "Custo/parceria" },
     { label: "Líquido recebido" }, { label: "ROAS" },
-  ].filter(header => origem === "anuncio" || !["Custo/entrada", "Custo/contrato", "Custo/parceria", "ROAS"].includes(header.label));
+    { label: "ROAS geral", hint: "Líquido recebido ÷ (Investimento + Divulgação)" },
+  ].filter(header => origem === "anuncio"
+    ? !["Divulgação", "ROAS geral"].includes(header.label)
+    : !["Custo/entrada", "Custo/contrato", "Custo/parceria", "ROAS"].includes(header.label));
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -195,7 +213,7 @@ export function FunilSafras({ from, to, grao, data: modeloData, toque, origem }:
             <CardTitle className="text-[18px] tracking-normal">{modeloData === "venda" ? "Funil por data da venda" : "Funil por safra (data do 1º clique)"}</CardTitle>
             <CardDescription className="text-[12px] leading-[1.6]">{modeloData === "venda"
               ? `Cada etapa conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes daquela etapa"}.${origem === "anuncio" ? " Só entram pessoas que vieram de anúncio." : ""}`
-              : "Pessoas agrupadas pelo período do 1º anúncio que clicaram; tudo o que fizeram depois (A010, R1, contrato, parceria) conta nesse período, mesmo meses depois. Safras recentes ainda vão crescer."}{origem === "todas" && " Mostrando a BU inteira (todas as origens); custos e ROAS só aparecem em Só anúncio."}</CardDescription>
+              : "Pessoas agrupadas pelo período do 1º anúncio que clicaram; tudo o que fizeram depois (A010, R1, contrato, parceria) conta nesse período, mesmo meses depois. Safras recentes ainda vão crescer."}{origem === "todas" && " Mostrando a BU inteira (todas as origens). Custos por etapa só aparecem em Só anúncio; o ROAS aqui é o geral da BU (receita ÷ gasto na Meta com divulgação)."}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-[24px] p-[20px] pt-0">
             <div className="space-y-[16px]">
