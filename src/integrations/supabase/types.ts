@@ -25720,6 +25720,16 @@ export type Database = {
         Returns: string
       }
       mkt_gastos_lider: { Args: { p_user: string }; Returns: boolean }
+      mkt_gastos_meta_periodo: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          bu: string
+          gasto: number
+          gasto_com_imposto: number
+          tipo: string
+          ultimo_dia: string
+        }[]
+      }
       mkt_gastos_pode: { Args: { p_user: string }; Returns: boolean }
       mkt_gastos_valida: {
         Args: {
