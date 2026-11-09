@@ -275,7 +275,7 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
                     const win = window.open('', '_blank');
                     const { data, error } = await supabase.storage
                       .from('asset-invoices')
-                      .createSignedUrl(asset.nota_fiscal_path as string, 300);
+                      .createSignedUrl(asset.nota_fiscal_path, 300);
                     if (error || !data?.signedUrl) {
                       win?.close();
                       toast.error(`Não foi possível abrir a nota fiscal: ${error?.message ?? 'sem URL'}`);
