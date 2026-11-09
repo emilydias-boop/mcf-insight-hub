@@ -38,6 +38,7 @@ import { InlineCallControls } from './InlineCallControls';
 import { LeadCallButton } from './LeadCallButton';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { isPosVendaDeal } from '@/lib/posVenda';
+import { EncaminharBuDialog } from '@/components/pos-venda/EncaminharBuDialog';
 import { NovaReuniaoPosVendaDialog } from '@/components/pos-venda/NovaReuniaoPosVendaDialog';
 import { MoveToPipelineModal } from './MoveToPipelineModal';
 import { RefundModal } from './RefundModal';
@@ -60,7 +61,7 @@ interface QuickActionsBlockProps {
 }
 
 export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onDeleted }: QuickActionsBlockProps) => {
-  const { role } = useAuth();
+  const { role, hasAnyRole } = useAuth();
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice, callStatus, currentCallDealId } = useTwilio();
   const navigate = useNavigate();
   const { hasAccess } = useMcfAtendimentoAccess();
@@ -79,6 +80,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
   const [scheduleMontado, setScheduleMontado] = useState(false);
   useEffect(() => { if (showScheduleDialog) setScheduleMontado(true); }, [showScheduleDialog]);
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showEncaminhar, setShowEncaminhar] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [showLossReasonDialog, setShowLossReasonDialog] = useState(false);
@@ -342,6 +344,12 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {isPosVenda && hasAnyRole('gerente_relacionamento', 'admin') && (
+              <DropdownMenuItem onSelect={() => setShowEncaminhar(true)}>
+                <Calendar className="h-3.5 w-3.5 mr-2" />
+                Agendar em outra BU
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => setShowMoveModal(true)}>
               <FolderInput className="h-3.5 w-3.5 mr-2" />
               Mover para outra pipeline
@@ -410,6 +418,10 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange, onQualify, onD
       )}
 
       
+      {showEncaminhar && deal?.id && (
+        <EncaminharBuDialog dealId={deal.id} clienteNome={contact?.name || deal?.name} onClose={() => setShowEncaminhar(false)} onConcluido={onStageChange} />
+      )}
+
       {/* Modal Mover Pipeline */}
       {showMoveModal && (
         <MoveToPipelineModal
