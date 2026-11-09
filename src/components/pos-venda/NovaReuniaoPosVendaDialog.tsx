@@ -190,7 +190,7 @@ export function NovaReuniaoPosVendaDialog({ onClose, onSalvo, preSelecao, dealId
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <div><Label>Data</Label><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
+            <div><Label>Data</Label><Input type="date" min={new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })} value={data} onChange={(e) => setData(e.target.value)} /></div>
             <div><Label>Hora (São Paulo)</Label>{configurado ? <Select value={hora} onValueChange={setHora} disabled={Boolean(aguardandoHorarios)}>
               <SelectTrigger><SelectValue placeholder={aguardandoHorarios ? 'Carregando...' : 'Escolha'} /></SelectTrigger>
               <SelectContent>{livres.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
