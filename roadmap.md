@@ -42,3 +42,5 @@
 
 - [x] Painel do Negócio — etapa 2A: itens 1–10 implementados, players/notas compartilhados; 46 assertions passaram e navegador com dados simulados conferiu filtros, gravação sob demanda, qualificação e resumo IA em desktop/mobile. Compilação automática OK; fluxo autenticado real indisponível (Supabase externo); sem remover abas, banco ou publicação.
 - [x] Visão geral CRM: perdas/ganhos por id da etapa; timelines escondem cópia UUID de movimento automático (só visual)
+- [x] Pós-venda: agendar reunião em outra BU (Consórcio, War Room, Crédito); typecheck OK, fluxo com login real não testado
+- [x] CriativosTable: Subtotal sem anúncio e custo médio no TOTAL BU

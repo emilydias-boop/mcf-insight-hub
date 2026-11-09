@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { syncConvitePosVenda } from '@/lib/posVendaConvite';
+import { useAuth } from '@/contexts/AuthContext';
+import { EncaminharBuDialog } from '@/components/pos-venda/EncaminharBuDialog';
 import { NovaReuniaoPosVendaDialog, usePosVendaGerentes, usePosVendaDisponibilidade, useAgora } from '@/components/pos-venda/NovaReuniaoPosVendaDialog';
 
 // Agenda própria do Pós Venda — separada de closers/meeting_slots para não afetar métricas de outras BUs.
@@ -506,6 +508,8 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
   const agoraR = useAgora();
   const podeReagendar = reuniao.status === 'agendada' && new Date(reuniao.inicio).getTime() > agoraR.getTime();
   const [reagendando, setReagendando] = useState(false);
+  const { hasAnyRole } = useAuth();
+  const [encaminhando, setEncaminhando] = useState(false);
   const [novaData, setNovaData] = useState(() => format(new Date(reuniao.inicio), 'yyyy-MM-dd'));
   const [novaHora, setNovaHora] = useState('');
   const { data: dispR = [], isLoading: carregandoDispR } = usePosVendaDisponibilidade();
@@ -577,6 +581,8 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
     window.open(data.link, '_blank', 'noopener');
   };
 
+  if (encaminhando) return <EncaminharBuDialog dealId={reuniao.deal_id} clienteNome={reuniao.crm_deals?.name} onClose={() => { setEncaminhando(false); onClose(); }} onConcluido={onSalvo} />;
+
   const resumo = (s: any) => typeof s === 'string' ? s : s?.summary ?? null;
 
   return (
@@ -591,6 +597,11 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
             <a href={reuniao.link_reuniao} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary underline">
               <ExternalLink className="h-3 w-3" />Entrar na reunião
             </a>
+          )}
+          {hasAnyRole('gerente_relacionamento', 'admin') && (
+            <Button variant="outline" size="sm" onClick={() => setEncaminhando(true)}>
+              <CalendarDays className="mr-1 h-4 w-4" />Agendar em outra BU
+            </Button>
           )}
           {podeReagendar && (
             <div className="rounded-md border border-border p-3 space-y-2">

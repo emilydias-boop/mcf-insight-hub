@@ -126,12 +126,15 @@ function Thumbnail({ src }: { src: string | null }) {
   </div>;
 }
 
-function Metrics({ row, total = false, roasGeral = false }: { row: FunilAnuncioRow; total?: boolean; roasGeral?: boolean }) {
+function Metrics({ row, total = false, roasGeral = false, custoMedio = false }: { row: FunilAnuncioRow; total?: boolean; roasGeral?: boolean; custoMedio?: boolean }) {
   return <>{columns.map(column => {
     const value = row[column.key];
     const uncertain = !total && !foraDeAnuncio(row) && smallSample(row) && (column.cost || column.format === "roas");
     if (roasGeral && column.format === "roas") return <TableCell key={column.key} className={numericCell}>
       <Hint text="ROAS geral da BU: líquido de todas as origens ÷ todo o gasto na Meta (inclui divulgação). Mede a BU, não os anúncios: para avaliar anúncio, use o Subtotal anúncios ou Só anúncio."><span className="font-semibold">{metricText(value, column.format)}</span></Hint>
+    </TableCell>;
+    if (custoMedio && ["custo_entrada", "custo_contrato", "custo_parceria"].includes(column.key) && value !== null) return <TableCell key={column.key} className={numericCell}>
+      <Hint text="Custo médio da BU: gasto na Meta (com divulgação) ÷ tudo o que entrou no período, inclusive orgânico. Não é o custo do anúncio: para isso, veja o Subtotal anúncios.">{metricText(value, column.format)}</Hint>
     </TableCell>;
     const color = uncertain ? "text-muted-foreground" : column.format === "roas" ? roasColor(value) : value === null ? "text-muted-foreground" : "";
     const text = <span className={color}>{metricText(value, column.format)}</span>;
@@ -201,11 +204,10 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
   const extras = useMemo(() => filtered.filter(foraDeAnuncio), [filtered]);
   // Subtotal dos anúncios (inclui "Anúncio Meta não identificado"): custos e ROAS de anúncio.
   const subtotalAnuncios = useMemo(() => sumRows(filtered.filter(row => !semClique(row))), [filtered]);
-  // Em BU inteira o total mistura quem veio e quem não veio de anúncio: custo por etapa daria um CAC falso.
-  const totals = useMemo(() => {
-    const soma = sumRows(filtered);
-    return origem === "todas" ? { ...soma, custo_entrada: null, custo_r1_realizada: null, custo_contrato: null, custo_parceria: null } : soma;
-  }, [filtered, origem]);
+  // Linhas fora dos anúncios (sem clique e antes do 1º clique): só contagens e líquido, sem gasto.
+  const subtotalSemAnuncio = useMemo(() => sumRows(filtered.filter(semClique)), [filtered]);
+  // Em BU inteira os custos do total são médios da BU: gasto na Meta ÷ tudo o que entrou, inclusive orgânico.
+  const totals = useMemo(() => sumRows(filtered), [filtered]);
   // Highlights describe the entire current level, independently of name search and pagination.
   const bestCost = useMemo(() => (data ?? []).filter(r => r.contratos >= 10 && r.custo_contrato !== null)
     .sort((a, b) => (a.custo_contrato ?? Infinity) - (b.custo_contrato ?? Infinity))[0], [data]);
@@ -236,7 +238,7 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
         <CardTitle className="text-[18px] tracking-normal">Anúncios e criativos</CardTitle>
         <CardDescription className="text-[12px] leading-[1.6]">{modeloData === "venda"
           ? `Cada venda conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes da compra"}. Por isso um criativo pausado ainda pode ter parceria hoje.`
-          : `Vendas das pessoas que clicaram pela 1ª vez no período, creditadas ao ${toque === "primeiro" ? "1º" : "último"} anúncio. Bom para medir o retorno do que foi gasto no período.`}{origem === "todas" && " BU inteira: no fim da lista ficam as linhas fora dos anúncios (sem clique em anúncio e antes do 1º clique), sem investimento, custo nem ROAS. O Subtotal anúncios é o retorno dos anúncios. O TOTAL BU soma tudo, e o ROAS dele é o ROAS geral da BU (receita ÷ todo o gasto na Meta, com divulgação). O TOTAL bate com o Funil quando o Funil mostra uma linha só, por exemplo Mês passado com agrupamento Mês. Com vários meses, o Funil conta de novo quem aparece em mais de um mês."}{extras.some(row => row.nivel_id === "anuncio_sem_id") && " \"Anúncio Meta não identificado\" junta as conversões de anúncio em que a Meta não informou qual anúncio foi."}</CardDescription>
+          : `Vendas das pessoas que clicaram pela 1ª vez no período, creditadas ao ${toque === "primeiro" ? "1º" : "último"} anúncio. Bom para medir o retorno do que foi gasto no período.`}{origem === "todas" && " BU inteira: no fim da lista ficam as linhas fora dos anúncios (sem clique em anúncio e antes do 1º clique), sem investimento, custo nem ROAS. O Subtotal anúncios é o retorno dos anúncios. O Subtotal sem anúncio soma as linhas sem clique em anúncio e antes do 1º clique (orgânico e sem rastro); o \"Anúncio Meta não identificado\" fica no Subtotal anúncios. O TOTAL BU soma tudo: os custos dele são médios da BU (gasto na Meta, com divulgação, ÷ tudo o que entrou, inclusive orgânico) e o ROAS dele é o ROAS geral da BU (líquido ÷ todo o gasto na Meta, com divulgação). O TOTAL bate com o Funil quando o Funil mostra uma linha só, por exemplo Mês passado com agrupamento Mês. Com vários meses, o Funil conta de novo quem aparece em mais de um mês."}{extras.some(row => row.nivel_id === "anuncio_sem_id") && " \"Anúncio Meta não identificado\" junta as conversões de anúncio em que a Meta não informou qual anúncio foi."}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-[20px] p-[20px] pt-0">
         <div className="flex flex-wrap items-center gap-[12px]">
@@ -319,10 +321,15 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
                     <TableCell className="px-[12px] py-[12px] font-semibold">Subtotal anúncios</TableCell><TableCell />
                     <Metrics row={subtotalAnuncios} total />
                   </TableRow>
+                  {extras.some(semClique) && <TableRow>
+                    {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-muted" />}
+                    <TableCell className="px-[12px] py-[12px] font-semibold">Subtotal sem anúncio</TableCell><TableCell />
+                    <Metrics row={subtotalSemAnuncio} total />
+                  </TableRow>}
                   <TableRow>
                     {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-muted" />}
                     <TableCell className="px-[12px] py-[12px] font-semibold">TOTAL BU</TableCell><TableCell />
-                    <Metrics row={totals} total roasGeral />
+                    <Metrics row={totals} total roasGeral custoMedio />
                   </TableRow>
                 </> : <TableRow>
                   {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-muted" />}

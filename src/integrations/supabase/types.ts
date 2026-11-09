@@ -25958,10 +25958,12 @@ export type Database = {
         Args: { p_deal_id: string; p_destino: string }
         Returns: Json
       }
-      pos_venda_encaminhar_bu: {
-        Args: { p_bu: string; p_deal_id: string; p_nota: string }
-        Returns: string
-      }
+      pos_venda_encaminhar_bu:
+        | { Args: { p_bu: string; p_deal_id: string }; Returns: string }
+        | {
+            Args: { p_bu: string; p_deal_id: string; p_nota: string }
+            Returns: string
+          }
       pos_venda_escolher_gerente: { Args: never; Returns: string }
       pos_venda_gravacoes_da_reuniao: {
         Args: { p_reuniao_id: string }
