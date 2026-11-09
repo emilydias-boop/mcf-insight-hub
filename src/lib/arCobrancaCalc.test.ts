@@ -43,3 +43,11 @@ const p = (o: Partial<ParcelaCalc>): ParcelaCalc => ({
     assert.equal(telefoneDigitos('(11) 98888-7777'), '5511988887777');
   })(); }
 console.log('arCobrancaCalc: ok');
+{
+  const { saldoDevedor, visivelNaCobrancaRegular } = await import('./arCobrancaCalc');
+  assert.equal(saldoDevedor(2000, 500, 1000), 500);
+  assert.equal(saldoDevedor(2000, 2000, 500), 0);
+  assert.equal(visivelNaCobrancaRegular({ id: 't', status: 'aberto', cobranca_stage: 'judicial' }), false);
+  assert.equal(visivelNaCobrancaRegular({ id: 't', status: 'aberto', cobranca_stage: 'atraso' }), true);
+  console.log('arCobrancaCalc saldo/jurídico: ok');
+}

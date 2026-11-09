@@ -31,6 +31,8 @@ export interface ArTitulo {
   updated_at: string;
   // enriched
   valor_pago?: number;
+  valor_entrada?: number;
+  negociacao?: boolean;
   valor_pendente?: number;
   parcelas_pagas?: number;
   parcelas_total?: number;

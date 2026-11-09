@@ -11,6 +11,8 @@ export interface ArTitulosFilters {
   responsavel_id?: string;
   cobranca_responsavel_id?: string;
   cobranca_stage?: ArCobrancaStage | 'todos';
+  /** Esconde títulos em cobrança jurídica (exclusivos da aba Cobrança Jurídica). */
+  excluir_judicial?: boolean;
 }
 
 export function useArTitulos(filters: ArTitulosFilters = {}) {
