@@ -475,6 +475,7 @@ async function buildIncorporadorReport(supabase: any) {
   const txUsada = new Set<string>();
   const ordenados = [...r2NonPartner].sort((a: any, b: any) => a.meeting_slot.scheduled_at.localeCompare(b.meeting_slot.scheduled_at));
   for (const att of ordenados) {
+    if (att.status === 'cancelled' || att.status === 'rescheduled') continue;
     const r2At = new Date(att.meeting_slot.scheduled_at).getTime();
     const em = dealContactMap[att.deal_id]?.email?.trim().toLowerCase() || null;
     const ph = tail9(att.attendee_phone || dealContactMap[att.deal_id]?.phone);
@@ -1132,7 +1133,8 @@ async function buildConsorcioReport(supabase: any) {
     ...(sem && Number(sem.cartas) > 0 ? [{ name: 'Sem atribuição', count: Number(sem.cartas), credito: Number(sem.credito), vendas: Number(sem.vendas) }] : []),
   ];
   // Por dia: visao_diaria_bus (bate com a RPC)
-  const { data: vdb } = await supabase.rpc('visao_diaria_bus', { p_from: startStr, p_to: endStr });
+  const { data: vdb, error: vdbErr } = await supabase.rpc('visao_diaria_bus', { p_from: startStr, p_to: endStr });
+  if (vdbErr) console.error('[WEEKLY-MANAGER-REPORT] visao_diaria_bus error:', vdbErr.message);
   const diasCons = (vdb?.bus ?? []).find((b: any) => b.bu === 'consorcio')?.dias ?? [];
   const sortedDays: [string, { count: number; credito: number }][] = diasCons.filter((d: any) => Number(d.cartas) > 0).map((d: any) => [d.data, { count: Number(d.cartas), credito: Number(d.valor) }]);
   // Operacional (não é venda)
@@ -1181,6 +1183,7 @@ async function buildConsorcioReport(supabase: any) {
       ${dayRows || '<tr><td colspan="3" style="text-align:center;color:#999">Sem vendas no período</td></tr>'}
       <tr class="totals"><td>TOTAL</td><td style="text-align:center">${totalCards}</td><td style="text-align:right">${fmtBRL(totalCredito)}</td></tr>
     </table>
+    <div class="legend-note">Por dia: só propostas aceitas no dia. O total do topo inclui também cadastros e cotas sem proposta.</div>
 
     <div class="section-title">Performance por Vendedor</div>
     <table>
