@@ -53,6 +53,7 @@ import type { R1ForcePayload } from '@/hooks/useCreateR1ForceRequest';
 import { useQualificationStatus } from '@/hooks/useQualificationStatus';
 import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { LeadSegmentBadge } from '@/components/crm/LeadSegmentBadge';
+import { filtrarClosersConsorcio, filtrarSdrsConsorcio } from '@/lib/consorcioAgendaEquipe';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -183,6 +184,18 @@ export function QuickScheduleModal({
   
   // Fetch SDRs filtered by BU
   const { data: buSdrs = [] } = useSdrsByBU(activeBU);
+
+  // Consórcio: closer da Agenda R1 só pode ser Cleiton ou Bruno e o SDR
+  // Responsável só pode ser Ithaline ou Mylena. A lista completa continua
+  // alimentando busca de leads, nomes de closer e indicadores.
+  const closersSelecionaveis = useMemo(
+    () => filtrarClosersConsorcio(activeBU, closers),
+    [activeBU, closers],
+  );
+  const sdrsSelecionaveis = useMemo(
+    () => filtrarSdrsConsorcio(activeBU, buSdrs),
+    [activeBU, buSdrs],
+  );
   
   // Get closer IDs for BU filtering (weekly leads)
   const closerIdsForBU = useMemo(() => closers.map(c => c.id), [closers]);
@@ -240,6 +253,15 @@ export function QuickScheduleModal({
       }
     }
   }, [open, preselectedCloserId, preselectedDate, prefilledNotes]);
+
+  // Closer pré-selecionado fora da equipe permitida do Consórcio é descartado,
+  // senão o formulário agendaria com alguém que não aparece na lista.
+  useEffect(() => {
+    if (!selectedCloser) return;
+    if (!closersSelecionaveis.some((c) => c.id === selectedCloser)) {
+      setSelectedCloser('');
+    }
+  }, [closersSelecionaveis, selectedCloser]);
   
   // Fetch prefilled deal if provided
   const { data: prefilledDealData } = useQuery({
@@ -1030,7 +1052,7 @@ export function QuickScheduleModal({
                 <SelectValue placeholder="Atribuir ao usuário logado" />
               </SelectTrigger>
               <SelectContent>
-                {buSdrs.map(sdr => (
+                {sdrsSelecionaveis.map(sdr => (
                   <SelectItem key={sdr.email} value={sdr.email}>
                     {sdr.name}
                   </SelectItem>
@@ -1086,7 +1108,7 @@ export function QuickScheduleModal({
                 <SelectValue placeholder="Selecione o closer" />
               </SelectTrigger>
               <SelectContent>
-                {closers.map(closer => (
+                {closersSelecionaveis.map(closer => (
                   <SelectItem key={closer.id} value={closer.id}>
                     <div className="flex items-center gap-2">
                       <div 
