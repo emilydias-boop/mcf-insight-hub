@@ -136,7 +136,7 @@ serve(async (req) => {
       body: {
         to: DIRECTOR_EMAIL,
         name: 'Grimaldo Neto',
-        subject: `📊 Relatório Semanal MCF — ${fmtDate(start)} a ${fmtDate(end)}`,
+        subject: `📊 Relatório Semanal MCF — ${fmtDate(startStr)} a ${fmtDate(endStr)}`,
         htmlContent,
         tags: ['relatorio_semanal', 'bu_performance'],
       },
@@ -150,7 +150,7 @@ serve(async (req) => {
     console.log('[WEEKLY-BU-REPORT] Report sent successfully');
 
     return new Response(
-      JSON.stringify({ success: true, period: `${fmtDate(start)} - ${fmtDate(end)}`, hasData: !!wm }),
+      JSON.stringify({ success: true, period: `${fmtDate(startStr)} - ${fmtDate(endStr)}`, hasData: !!rel }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -166,7 +166,6 @@ serve(async (req) => {
 // --- HTML builder ---
 interface ReportData {
   periodLabel: string;
-  weekLabel: string;
   incorp: {
     vendasA010: number;
     receitaA010: number;
@@ -176,16 +175,18 @@ interface ReportData {
     obVitalicio: number;
     obEvento: number;
     incorporador50k: number;
+    receitaIncorporador50k: number;
     clintRevenue: number;
     faturamentoTotal: number;
   };
   consorcioVendas: number;
   consorcioCredito: number;
   creditoVendas: number;
-  creditoReceita: number;
+  creditoVolume: number;
   custos: { ads: number; equipe: number; escritorio: number; total: number };
   kpis: { lucroOperacional: number; roi: number; roas: number; cpl: number };
   receitaTotal: number;
+  custosFixosMesRef: string;
 }
 
 function buildEmailHTML(d: ReportData): string {
