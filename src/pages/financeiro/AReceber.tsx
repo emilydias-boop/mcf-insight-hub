@@ -481,7 +481,7 @@ export default function AReceber() {
                         <div className="text-xs font-medium">{t.product_code}</div>
                         <div className="text-xs text-muted-foreground line-clamp-1 max-w-[180px]">{t.product_name}</div>
                       </TableCell>
-                      <TableCell onDoubleClick={(e) => e.stopPropagation()}>
+                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
                         {canManage ? (
                           <Select
                             value={t.tipo}
@@ -527,7 +527,7 @@ export default function AReceber() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell onDoubleClick={(e) => e.stopPropagation()}>
+                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
                         <div className="space-y-1">
                           <CobrancaResponsavelInfo titulo={t} compact />
                           <GerenteContaInfo gerente={gerentesConta?.get(t.id)} compact />
@@ -541,7 +541,7 @@ export default function AReceber() {
                           </Button>
                         </div>
                       </TableCell>
-                      <TableCell onDoubleClick={(e) => e.stopPropagation()}>
+                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
                         <Select
                           value={t.responsavel_id ?? 'none'}
                           onValueChange={(v) => handleAssign(t.id, v)}
