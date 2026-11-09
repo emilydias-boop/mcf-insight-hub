@@ -1090,6 +1090,7 @@ async function buildIncorporadorReport(supabase: any) {
         <td style="text-align:right">${r2CloserTotals.vendas > 0 ? fmtBRL(r2CloserTotals.receita / r2CloserTotals.vendas) : '-'}</td>
       </tr>
     </table>
+    <div class="legend-note">Vendas Parc. = compras de parceria dos R2 desta semana (casadas por attendee, e-mail ou telefone) até o fechamento; difere do Resumo Financeiro, que conta vendas feitas na semana.</div>
     <div class="legend-note">% Conv. R2 = Aprovados / R2 Realizada. Detalhamento por produto na seção 4.</div>
 
     <!-- SEÇÃO 4: RESUMO FINANCEIRO -->
@@ -1120,38 +1121,27 @@ async function buildConsorcioReport(supabase: any) {
   const startStr = fmtDate(start);
   const endStr = fmtDate(end);
 
-  const { data: cards } = await supabase
-    .from('consortium_cards')
-    .select('id, data_contratacao, valor_credito, valor_comissao, vendedor_name, vendedor_id')
-    .gte('data_contratacao', startStr)
-    .lte('data_contratacao', endStr);
-
-  const allCards = cards || [];
-  const totalCards = allCards.length;
-  const totalCredito = allCards.reduce((s: number, c: any) => s + (Number(c.valor_credito) || 0), 0);
-  const totalComissao = allCards.reduce((s: number, c: any) => s + (Number(c.valor_comissao) || 0), 0);
-
-  const byDay = new Map<string, { count: number; credito: number }>();
-  for (const c of allCards) {
-    const day = c.data_contratacao;
-    if (!byDay.has(day)) byDay.set(day, { count: 0, credito: 0 });
-    const d = byDay.get(day)!;
-    d.count++;
-    d.credito += Number(c.valor_credito) || 0;
-  }
-  const sortedDays = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-
-  const byVendedor = new Map<string, { name: string; count: number; credito: number; comissao: number }>();
-  for (const c of allCards) {
-    const name = c.vendedor_name || 'Sem vendedor';
-    const key = c.vendedor_id || name;
-    if (!byVendedor.has(key)) byVendedor.set(key, { name, count: 0, credito: 0, comissao: 0 });
-    const v = byVendedor.get(key)!;
-    v.count++;
-    v.credito += Number(c.valor_credito) || 0;
-    v.comissao += Number(c.valor_comissao) || 0;
-  }
-  const sortedVendedores = [...byVendedor.values()].sort((a, b) => b.count - a.count);
+  const { data: prod, error: prodErr } = await supabase.rpc('consorcio_producao_gerada', { p_ini: startStr, p_fim: endStr, p_bu: 'consorcio' });
+  if (prodErr) throw prodErr; // nunca mandar 0 silencioso
+  const totalCards   = Number(prod?.total?.cartas  ?? 0);
+  const totalCredito = Number(prod?.total?.credito ?? 0);
+  const totalVendas  = Number(prod?.total?.vendas  ?? 0);
+  const sem = prod?.sem_atribuicao ?? null; // pode vir null
+  const sortedVendedores = [
+    ...(prod?.por_closer ?? []).map((c: any) => ({ name: c.nome || 'Sem vendedor', count: Number(c.cartas), credito: Number(c.credito), vendas: Number(c.vendas) })),
+    ...(sem && Number(sem.cartas) > 0 ? [{ name: 'Sem atribuição', count: Number(sem.cartas), credito: Number(sem.credito), vendas: Number(sem.vendas) }] : []),
+  ];
+  // Por dia: visao_diaria_bus (bate com a RPC)
+  const { data: vdb } = await supabase.rpc('visao_diaria_bus', { p_from: startStr, p_to: endStr });
+  const diasCons = (vdb?.bus ?? []).find((b: any) => b.bu === 'consorcio')?.dias ?? [];
+  const sortedDays: [string, { count: number; credito: number }][] = diasCons.filter((d: any) => Number(d.cartas) > 0).map((d: any) => [d.data, { count: Number(d.cartas), credito: Number(d.valor) }]);
+  // Operacional (não é venda)
+  const { data: cards } = await supabase.from('consortium_cards').select('valor_comissao')
+    .gte('data_contratacao', startStr).lte('data_contratacao', endStr);
+  const cotasAbertas = cards?.length ?? 0;
+  const totalComissao = (cards ?? []).reduce((s: number, c: any) => s + (Number(c.valor_comissao) || 0), 0);
+  const { count: aguardandoAbertura } = await supabase.from('consorcio_pending_registrations')
+    .select('id', { count: 'exact', head: true }).eq('status', 'aguardando_abertura');
 
   const periodLabel = `${startStr.split('-').reverse().join('/')} a ${endStr.split('-').reverse().join('/')}`;
 
@@ -1160,7 +1150,7 @@ async function buildConsorcioReport(supabase: any) {
   ).join('');
 
   const vendedorRows = sortedVendedores.map(v =>
-    `<tr><td>${v.name}</td><td style="text-align:center">${v.count}</td><td style="text-align:right">${fmtBRL(v.credito)}</td><td style="text-align:right">${fmtBRL(v.comissao)}</td></tr>`
+    `<tr><td>${v.name}</td><td style="text-align:center">${v.vendas}</td><td style="text-align:center">${v.count}</td><td style="text-align:right">${fmtBRL(v.credito)}</td></tr>`
   ).join('');
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${STYLES}
@@ -1173,9 +1163,16 @@ async function buildConsorcioReport(supabase: any) {
   </div>
   <div class="content">
     <div class="kpi-row">
-      <div class="kpi"><div class="value">${totalCards}</div><div class="label">Cartas Vendidas</div></div>
-      <div class="kpi"><div class="value">${fmtBRL(totalCredito)}</div><div class="label">Valor de Crédito</div></div>
-      <div class="kpi"><div class="value">${fmtBRL(totalComissao)}</div><div class="label">Comissão Total</div></div>
+      <div class="kpi"><div class="value">${totalCards}</div><div class="label">Cartas vendidas</div></div>
+      <div class="kpi"><div class="value">${fmtBRL(totalCredito)}</div><div class="label">Valor de crédito</div></div>
+      <div class="kpi"><div class="value">${totalVendas}</div><div class="label">Vendas (clientes)</div></div>
+    </div>
+
+    <div class="section-title">Backoffice</div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="value">${cotasAbertas}</div><div class="label">Cotas abertas no período</div></div>
+      <div class="kpi"><div class="value">${fmtBRL(totalComissao)}</div><div class="label">Comissão das cotas abertas</div></div>
+      <div class="kpi"><div class="value">${aguardandoAbertura ?? 0}</div><div class="label">Cadastros aguardando abertura de cota</div></div>
     </div>
 
     <div class="section-title">Vendas por Dia</div>
@@ -1187,9 +1184,10 @@ async function buildConsorcioReport(supabase: any) {
 
     <div class="section-title">Performance por Vendedor</div>
     <table>
-      <tr><th>Vendedor</th><th style="text-align:center">Cartas</th><th style="text-align:right">Crédito</th><th style="text-align:right">Comissão</th></tr>
+      <tr><th>Vendedor</th><th style="text-align:center">Vendas</th><th style="text-align:center">Cartas</th><th style="text-align:right">Crédito</th></tr>
       ${vendedorRows || '<tr><td colspan="4" style="text-align:center;color:#999">Sem dados</td></tr>'}
     </table>
+    <div class="legend-note">Vendas pela régua oficial do consórcio (proposta aceita), a mesma do painel.</div>
   </div>
   <div class="footer">MCF Gestão — Relatório gerado automaticamente em ${new Date().toLocaleDateString('pt-BR')}</div>
 </div>
