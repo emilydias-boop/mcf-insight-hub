@@ -9,28 +9,33 @@ const corsHeaders = {
 const DIRECTOR_EMAIL = 'grimaldo.neto@minhacasafinanciada.com';
 
 function getLastCompletedWeek() {
-  // Custom week: Saturday to Friday
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun ... 6=Sat
-  // Days since last Saturday
-  const daysSinceSat = day === 6 ? 0 : day + 1;
-  // Last Friday = most recent Friday
-  const lastFriday = new Date(now);
-  lastFriday.setDate(now.getDate() - (daysSinceSat === 0 ? 1 : daysSinceSat));
-  lastFriday.setHours(23, 59, 59, 999);
-
+  // Semana de sábado a sexta, calculada no fuso America/Sao_Paulo
+  const agora = new Date();
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  }).formatToParts(agora);
+  const p: Record<string, string> = {};
+  for (const x of partes) p[x.type] = x.value;
+  const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const day = dowMap[p.weekday] ?? 0;
+  const hoje = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)));
+  const daysSinceFri = ((day + 2) % 7) || 7; // seg=3, sáb=1, dom=2, sex=7
+  const lastFriday = new Date(hoje);
+  lastFriday.setUTCDate(hoje.getUTCDate() - daysSinceFri);
   const lastSaturday = new Date(lastFriday);
-  lastSaturday.setDate(lastFriday.getDate() - 6);
-  lastSaturday.setHours(0, 0, 0, 0);
-
-  return { start: lastSaturday, end: lastFriday };
+  lastSaturday.setUTCDate(lastFriday.getUTCDate() - 6);
+  const iso = (d: Date) => d.toISOString().split('T')[0];
+  return { start: iso(lastSaturday), end: iso(lastFriday) };
 }
 
-function fmtDate(d: Date) {
-  return d.toLocaleDateString('pt-BR');
-}
-function isoDate(d: Date) {
-  return d.toISOString().split('T')[0];
+function fmtDate(s: string) {
+  // 'YYYY-MM-DD' -> 'DD/MM/YYYY' sem new Date() (evita voltar um dia no fuso)
+  const [y, m, d] = s.split('-');
+  return `${d}/${m}/${y}`;
 }
 function fmtBRL(v: number) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,92 +54,81 @@ serve(async (req) => {
   try {
     console.log('[WEEKLY-BU-REPORT] Starting weekly report generation...');
 
-    const { start, end } = getLastCompletedWeek();
-    const startStr = isoDate(start);
-    const endStr = isoDate(end);
+    const { start: startStr, end: endStr } = getLastCompletedWeek();
 
-    console.log(`[WEEKLY-BU-REPORT] Period: ${fmtDate(start)} - ${fmtDate(end)} (${startStr} to ${endStr})`);
+    console.log(`[WEEKLY-BU-REPORT] Period: ${fmtDate(startStr)} - ${fmtDate(endStr)} (${startStr} to ${endStr})`);
 
-    // 1. Fetch weekly_metrics for the period (sat-fri)
-    const { data: weeklyMetrics, error: wmErr } = await supabase
-      .from('weekly_metrics')
-      .select('start_date, end_date, a010_sales, a010_revenue, ob_construir_sales, ob_construir_revenue, ob_vitalicio_sales, ob_vitalicio_revenue, ob_evento_sales, ob_evento_revenue, contract_sales, contract_revenue, clint_revenue, incorporador_50k, faturamento_total, total_revenue, ads_cost, team_cost, office_cost, total_cost, operating_cost, real_cost, operating_profit, roi, roas, cpl, week_label')
-      .gte('start_date', startStr)
-      .lte('start_date', endStr)
-      .limit(1);
+    // 1. Incorporador + custos + KPIs: RPC relatorio_semanal_mcf
+    const { data: rel, error: relErr } = await supabase.rpc('relatorio_semanal_mcf', { p_ini: startStr, p_fim: endStr });
+    if (relErr) throw relErr; // nunca mandar 0 silencioso
 
-    if (wmErr) console.error('[WEEKLY-BU-REPORT] weekly_metrics error:', wmErr.message);
+    // 2. Consórcio: régua oficial (proposta aceita), mesma do painel
+    const { data: prod, error: prodErr } = await supabase.rpc('consorcio_producao_gerada', { p_ini: startStr, p_fim: endStr, p_bu: 'consorcio' });
+    if (prodErr) console.error('[WEEKLY-BU-REPORT] consorcio_producao_gerada:', prodErr.message);
 
-    const wm = weeklyMetrics?.[0] || null;
+    const consorcioVendas = Number(prod?.total?.cartas ?? 0);
+    const consorcioCredito = Number(prod?.total?.credito ?? 0);
 
-    // 2. Consórcio: cards sold in period
-    const { data: consortiumCards, error: ccErr } = await supabase
-      .from('consortium_cards')
-      .select('valor_credito, status')
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString())
-      .eq('status', 'ativa');
-
-    if (ccErr) console.error('[WEEKLY-BU-REPORT] consortium_cards error:', ccErr.message);
-
-    const consorcioVendas = consortiumCards?.length || 0;
-    const consorcioCredito = consortiumCards?.reduce((s, c) => s + (c.valor_credito || 0), 0) || 0;
-
-    // 3. Crédito: transactions in period
+    // 3. Crédito: contratos assinados no período
     const { data: creditTx, error: ctErr } = await supabase
-      .from('hubla_transactions')
-      .select('net_value, product_category')
-      .gte('sale_date', startStr)
-      .lte('sale_date', endStr)
-      .eq('product_category', 'credito');
+      .from('credito_vendas')
+      .select('valor_credito')
+      .eq('status', 'contratado')
+      .gte('data_assinatura', startStr)
+      .lte('data_assinatura', endStr);
 
-    if (ctErr) console.error('[WEEKLY-BU-REPORT] hubla_transactions error:', ctErr.message);
+    if (ctErr) console.error('[WEEKLY-BU-REPORT] credito_vendas error:', ctErr.message);
 
     const creditoVendas = creditTx?.length || 0;
-    const creditoReceita = creditTx?.reduce((s, t) => s + (t.net_value || 0), 0) || 0;
+    const creditoVolume = creditTx?.reduce((s, t) => s + Number(t.valor_credito || 0), 0) || 0;
 
     // --- Build metrics ---
+    const inc = rel?.incorporador || {};
     const incorp = {
-      vendasA010: wm?.a010_sales || 0,
-      receitaA010: wm?.a010_revenue || 0,
-      contratos: wm?.contract_sales || 0,
-      receitaContratos: wm?.contract_revenue || 0,
-      obConstruir: wm?.ob_construir_sales || 0,
-      obVitalicio: wm?.ob_vitalicio_sales || 0,
-      obEvento: wm?.ob_evento_sales || 0,
-      incorporador50k: wm?.incorporador_50k || 0,
-      clintRevenue: wm?.clint_revenue || 0,
-      faturamentoTotal: wm?.faturamento_total || wm?.total_revenue || 0,
+      vendasA010: Number(inc?.a010?.vendas ?? 0),
+      receitaA010: Number(inc?.a010?.receita ?? 0),
+      contratos: Number(inc?.contratos?.vendas ?? 0),
+      receitaContratos: Number(inc?.contratos?.receita ?? 0),
+      obConstruir: Number(inc?.ob_construir?.vendas ?? 0),
+      obVitalicio: Number(inc?.ob_vitalicio?.vendas ?? 0),
+      obEvento: Number(inc?.ob_evento?.vendas ?? 0),
+      incorporador50k: Number(inc?.incorporador_50k?.vendas ?? 0),
+      receitaIncorporador50k: Number(inc?.incorporador_50k?.receita ?? 0),
+      clintRevenue: Number(inc?.clint?.receita ?? 0),
+      faturamentoTotal: Number(inc?.faturamento_total ?? 0),
     };
 
     const custos = {
-      ads: wm?.ads_cost || 0,
-      equipe: wm?.team_cost || 0,
-      escritorio: wm?.office_cost || 0,
-      total: wm?.total_cost || wm?.real_cost || 0,
+      ads: Number(rel?.custos?.ads ?? 0),
+      equipe: Number(rel?.custos?.equipe ?? 0),
+      escritorio: Number(rel?.custos?.escritorio ?? 0),
+      total: Number(rel?.custos?.total ?? 0),
     };
 
     const kpis = {
-      lucroOperacional: wm?.operating_profit || 0,
-      roi: wm?.roi || 0,
-      roas: wm?.roas || 0,
-      cpl: wm?.cpl || 0,
+      lucroOperacional: Number(rel?.kpis?.lucro_operacional ?? 0),
+      roi: Number(rel?.kpis?.roi_lucro ?? 0),
+      roas: Number(rel?.kpis?.roas ?? 0),
+      cpl: Number(rel?.kpis?.cpl ?? 0),
     };
 
-    const receitaTotal = incorp.faturamentoTotal + consorcioCredito + creditoReceita;
+    const custosFixosMesRef = rel?.fonte?.custos_fixos_mes_ref?.equipe || '';
+
+    // Receita Total = SÓ o faturamento do Incorporador (crédito de carta não é receita)
+    const receitaTotal = incorp.faturamentoTotal;
 
     // --- Build HTML ---
     const htmlContent = buildEmailHTML({
-      periodLabel: `${fmtDate(start)} a ${fmtDate(end)}`,
-      weekLabel: wm?.week_label || `${fmtDate(start)} - ${fmtDate(end)}`,
+      periodLabel: `${fmtDate(startStr)} a ${fmtDate(endStr)}`,
       incorp,
       consorcioVendas,
       consorcioCredito,
       creditoVendas,
-      creditoReceita,
+      creditoVolume,
       custos,
       kpis,
       receitaTotal,
+      custosFixosMesRef,
     });
 
     // Send via brevo-send
@@ -142,7 +136,7 @@ serve(async (req) => {
       body: {
         to: DIRECTOR_EMAIL,
         name: 'Grimaldo Neto',
-        subject: `📊 Relatório Semanal MCF — ${fmtDate(start)} a ${fmtDate(end)}`,
+        subject: `📊 Relatório Semanal MCF — ${fmtDate(startStr)} a ${fmtDate(endStr)}`,
         htmlContent,
         tags: ['relatorio_semanal', 'bu_performance'],
       },
@@ -156,7 +150,7 @@ serve(async (req) => {
     console.log('[WEEKLY-BU-REPORT] Report sent successfully');
 
     return new Response(
-      JSON.stringify({ success: true, period: `${fmtDate(start)} - ${fmtDate(end)}`, hasData: !!wm }),
+      JSON.stringify({ success: true, period: `${fmtDate(startStr)} - ${fmtDate(endStr)}`, hasData: !!rel }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -172,7 +166,6 @@ serve(async (req) => {
 // --- HTML builder ---
 interface ReportData {
   periodLabel: string;
-  weekLabel: string;
   incorp: {
     vendasA010: number;
     receitaA010: number;
@@ -182,16 +175,18 @@ interface ReportData {
     obVitalicio: number;
     obEvento: number;
     incorporador50k: number;
+    receitaIncorporador50k: number;
     clintRevenue: number;
     faturamentoTotal: number;
   };
   consorcioVendas: number;
   consorcioCredito: number;
   creditoVendas: number;
-  creditoReceita: number;
+  creditoVolume: number;
   custos: { ads: number; equipe: number; escritorio: number; total: number };
   kpis: { lucroOperacional: number; roi: number; roas: number; cpl: number };
   receitaTotal: number;
+  custosFixosMesRef: string;
 }
 
 function buildEmailHTML(d: ReportData): string {
@@ -243,7 +238,7 @@ function buildEmailHTML(d: ReportData): string {
                 <tr>
                   ${kpiCard('Receita Total', `R$ ${(d.receitaTotal / 1000).toFixed(1)}k`, '#16a34a')}
                   ${kpiCard('Lucro Operac.', `R$ ${fmtBRL(d.kpis.lucroOperacional)}`, lucroColor)}
-                  ${kpiCard('ROI', `${d.kpis.roi.toFixed(1)}%`)}
+                  ${kpiCard('ROI (lucro ÷ custo)', `${d.kpis.roi.toFixed(1)}%`)}
                   ${kpiCard('ROAS', `${d.kpis.roas.toFixed(2)}x`)}
                 </tr>
               </table>
@@ -264,11 +259,11 @@ function buildEmailHTML(d: ReportData): string {
                   ${metricRow('OB Construir', d.incorp.obConstruir, '—')}
                   ${metricRow('OB Vitalício', d.incorp.obVitalicio, '—')}
                   ${metricRow('OB Evento', d.incorp.obEvento, '—')}
-                  ${metricRow('Incorporador 50K', d.incorp.incorporador50k, '—')}
+                  ${metricRow('Incorporador 50K', d.incorp.incorporador50k, fmtBRL(d.incorp.receitaIncorporador50k))}
                   ${metricRow('Clint (Ultrameta)', '—', fmtBRL(d.incorp.clintRevenue))}
                   <tr style="background:#f0fdf4;">
                     <td style="padding:10px 14px;font-weight:700;color:#1a1a2e;">Total Incorporador</td>
-                    <td style="padding:10px 14px;text-align:center;font-weight:700;">${d.incorp.vendasA010 + d.incorp.contratos}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:700;">${d.incorp.vendasA010 + d.incorp.contratos + d.incorp.incorporador50k}</td>
                     <td style="padding:10px 14px;text-align:right;font-weight:700;color:#16a34a;">R$ ${fmtBRL(d.incorp.faturamentoTotal)}</td>
                   </tr>
                 </tbody>
@@ -278,7 +273,10 @@ function buildEmailHTML(d: ReportData): string {
               <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid #f59e0b;">🤝 Consórcio</h2>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;font-size:13px;">
                 <tbody>
-                  ${metricRow('Cartas Vendidas', d.consorcioVendas, fmtBRL(d.consorcioCredito))}
+                  ${metricRow('Cartas vendidas', d.consorcioVendas, fmtBRL(d.consorcioCredito))}
+                  <tr>
+                    <td colspan="3" style="padding:4px 14px 8px;font-size:11px;color:#6c757d;">A coluna Receita mostra o volume de crédito das cartas, não receita.</td>
+                  </tr>
                 </tbody>
               </table>
 
@@ -286,7 +284,10 @@ function buildEmailHTML(d: ReportData): string {
               <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid #3b82f6;">💳 Crédito</h2>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;font-size:13px;">
                 <tbody>
-                  ${metricRow('Vendas Crédito', d.creditoVendas, fmtBRL(d.creditoReceita))}
+                  ${metricRow('Contratos assinados', d.creditoVendas, fmtBRL(d.creditoVolume))}
+                  <tr>
+                    <td colspan="3" style="padding:4px 14px 8px;font-size:11px;color:#6c757d;">A coluna Receita mostra o volume de crédito contratado, não receita.</td>
+                  </tr>
                 </tbody>
               </table>
 
@@ -324,6 +325,9 @@ function buildEmailHTML(d: ReportData): string {
           <!-- Footer -->
           <tr>
             <td style="background:#f1f3f5;padding:14px 28px;border-radius:0 0 10px 10px;border:1px solid #e5e7eb;border-top:none;">
+              <p style="margin:0 0 6px;color:#94a3b8;font-size:11px;text-align:center;">
+                Semana de sábado a sexta. Incorporador: líquido das vendas pagas (sem estornos). Ads Meta sem imposto. Equipe/escritório = custo mensal ÷ 4 (último lançado em ${d.custosFixosMesRef || '—'}).
+              </p>
               <p style="margin:0;color:#adb5bd;font-size:11px;text-align:center;">
                 Relatório gerado automaticamente por MCF Gestão em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
               </p>
