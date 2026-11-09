@@ -15,6 +15,9 @@ export interface ParcelaCalc {
   status: string; // pendente | pago | atrasado | cancelado
   data_vencimento: string;
   data_pagamento: string | null;
+  evento?: string | null;
+  cobrador_id?: string | null;
+  forma_pagamento?: string | null;
 }
 
 export interface TituloCalc {
