@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -29,6 +30,7 @@ import {
   ASSET_TYPE_LABELS,
   CreateAssetInput 
 } from '@/types/patrimonio';
+import { toast } from 'sonner';
 import { Loader2, Upload } from 'lucide-react';
 
 const assetSchema = z.object({
@@ -56,6 +58,7 @@ interface AssetFormDialogProps {
 
 export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogProps) => {
   const { createAsset, updateAsset } = useAssetMutations();
+  const queryClient = useQueryClient();
   const [notaFiscalFile, setNotaFiscalFile] = useState<File | null>(null);
   const isEdit = !!asset;
 
@@ -242,7 +245,7 @@ export const AssetFormDialog = ({ open, onOpenChange, asset }: AssetFormDialogPr
             <div className="flex items-center gap-2">
               <Input
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
                 onChange={e => setNotaFiscalFile(e.target.files?.[0] || null)}
                 className="file:mr-2 file:rounded file:border-0 file:bg-primary/10 file:px-3 file:py-1 file:text-sm file:text-primary"
               />
