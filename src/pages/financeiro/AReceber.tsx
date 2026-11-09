@@ -729,7 +729,7 @@ export default function AReceber() {
         />
       )}
       <CadastroManualDialog open={openCadastroManual} onOpenChange={setOpenCadastroManual} />
-      <ClientePainelLateral titulo={painelTitulo} onClose={() => setPainelTitulo(null)} />
+      <ClientePainelLateral key={painelTitulo?.id ?? "none"} titulo={painelTitulo} onClose={() => setPainelTitulo(null)} />
     </div>
   );
 }
