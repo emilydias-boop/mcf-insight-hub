@@ -1352,6 +1352,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ar_eventos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+        }
+        Relationships: []
+      }
       ar_gestores: {
         Row: {
           created_at: string
@@ -1421,11 +1445,37 @@ export type Database = {
           },
         ]
       }
+      ar_notas_gerais: {
+        Row: {
+          autor_id: string
+          created_at: string
+          id: string
+          texto: string
+          updated_at: string
+        }
+        Insert: {
+          autor_id?: string
+          created_at?: string
+          id?: string
+          texto: string
+          updated_at?: string
+        }
+        Update: {
+          autor_id?: string
+          created_at?: string
+          id?: string
+          texto?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ar_parcelas: {
         Row: {
+          cobrador_id: string | null
           created_at: string
           data_pagamento: string | null
           data_vencimento: string
+          evento: string | null
           forma_pagamento: string | null
           id: string
           numero: number
@@ -1438,9 +1488,11 @@ export type Database = {
           valor_pago: number | null
         }
         Insert: {
+          cobrador_id?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento: string
+          evento?: string | null
           forma_pagamento?: string | null
           id?: string
           numero: number
@@ -1453,9 +1505,11 @@ export type Database = {
           valor_pago?: number | null
         }
         Update: {
+          cobrador_id?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento?: string
+          evento?: string | null
           forma_pagamento?: string | null
           id?: string
           numero?: number
@@ -1544,6 +1598,7 @@ export type Database = {
           customer_phone: string | null
           hubla_transaction_id: string | null
           id: string
+          negociacao: boolean
           observacoes: string | null
           payment_method: string | null
           product_code: string | null
@@ -1573,6 +1628,7 @@ export type Database = {
           customer_phone?: string | null
           hubla_transaction_id?: string | null
           id?: string
+          negociacao?: boolean
           observacoes?: string | null
           payment_method?: string | null
           product_code?: string | null
@@ -1602,6 +1658,7 @@ export type Database = {
           customer_phone?: string | null
           hubla_transaction_id?: string | null
           id?: string
+          negociacao?: boolean
           observacoes?: string | null
           payment_method?: string | null
           product_code?: string | null
