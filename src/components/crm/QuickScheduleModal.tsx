@@ -1220,6 +1220,9 @@ export function QuickScheduleModal({
                       
                       // Não pode agendar no passado
                       if (targetDate < today) return true;
+
+                      // Encaminhamento do Pós-venda: qualquer dia futuro; horários validados pela agenda do closer
+                      if (exclusiveSlots) return false;
                       
                       // Check if date is in released dates list
                       const targetDateStr = format(targetDate, 'yyyy-MM-dd');
