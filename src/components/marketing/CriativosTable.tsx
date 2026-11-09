@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, ImageOff, Play } from "lucide-react";
-import { useFunilAnuncios, useAdPreview, useAdVideo, formatBRL, formatInt, type AdPreviewFormato, type AdVideoInfo, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque } from "@/hooks/useMarketingFunil";
+import { useFunilAnuncios, useAdPreview, useAdVideo, formatBRL, formatInt, type AdPreviewFormato, type AdVideoInfo, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface CriativosTableProps { from: string; to: string; data: ModeloData; toque: ModeloToque }
+interface CriativosTableProps { from: string; to: string; data: ModeloData; toque: ModeloToque; origem: ModeloOrigem }
 type NumericKey = { [K in keyof FunilAnuncioRow]: FunilAnuncioRow[K] extends number | null ? K : never }[keyof FunilAnuncioRow];
 type SortKey = NumericKey | "nome" | "status";
 type MetricFormat = "money" | "integer" | "percent" | "roas";
@@ -47,6 +47,10 @@ const metricText = (value: number | null, kind: MetricFormat): string => {
   return `${decimal(value)}${kind === "percent" ? "%" : "x"}`;
 };
 const smallSample = (row: FunilAnuncioRow) => row.investimento < 5000 || row.entradas < 20;
+// Linhas fora dos anúncios vindas da mkt_funil_criativos_v3: não têm investimento, custo nem ROAS.
+const foraDeAnuncio = (row: FunilAnuncioRow) => row.nivel_id === "anuncio_sem_id" || row.nivel_id === "antes_do_clique" || row.nivel_id.startsWith("sem_anuncio:");
+const semClique = (row: FunilAnuncioRow) => row.nivel_id === "antes_do_clique" || row.nivel_id.startsWith("sem_anuncio:");
+const rotuloExtra = (row: FunilAnuncioRow) => row.nivel_id === "anuncio_sem_id" ? "anúncio não identificado" : row.nivel_id === "antes_do_clique" ? "antes do clique" : "sem clique em anúncio";
 const roasColor = (value: number | null) => value === null ? "text-muted-foreground"
   : value >= 1.5 ? "text-emerald-400" : value >= 1 ? "text-amber-400" : "text-red-400";
 const statusText = (status: string | null) => status === "ACTIVE" ? "Ativo"
@@ -122,10 +126,13 @@ function Thumbnail({ src }: { src: string | null }) {
   </div>;
 }
 
-function Metrics({ row, total = false }: { row: FunilAnuncioRow; total?: boolean }) {
+function Metrics({ row, total = false, roasGeral = false }: { row: FunilAnuncioRow; total?: boolean; roasGeral?: boolean }) {
   return <>{columns.map(column => {
     const value = row[column.key];
-    const uncertain = !total && smallSample(row) && (column.cost || column.format === "roas");
+    const uncertain = !total && !foraDeAnuncio(row) && smallSample(row) && (column.cost || column.format === "roas");
+    if (roasGeral && column.format === "roas") return <TableCell key={column.key} className={numericCell}>
+      <Hint text="ROAS geral da BU: líquido de todas as origens ÷ todo o gasto na Meta (inclui divulgação). Mede a BU, não os anúncios: para avaliar anúncio, use o Subtotal anúncios ou Só anúncio."><span className="font-semibold">{metricText(value, column.format)}</span></Hint>
+    </TableCell>;
     const color = uncertain ? "text-muted-foreground" : column.format === "roas" ? roasColor(value) : value === null ? "text-muted-foreground" : "";
     const text = <span className={color}>{metricText(value, column.format)}</span>;
     return <TableCell key={column.key} className={numericCell}>
@@ -154,7 +161,7 @@ function sumRows(rows: FunilAnuncioRow[]): FunilAnuncioRow {
 
 // Quote every cell and neutralize spreadsheet formulas in text supplied by ad names.
 const csvCell = (value: string) => `"${(/^[\s]*[=+@-]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
-function exportCsv(rows: FunilAnuncioRow[], nivel: Nivel, data: ModeloData, toque: ModeloToque, from: string, to: string) {
+function exportCsv(rows: FunilAnuncioRow[], nivel: Nivel, data: ModeloData, toque: ModeloToque, origem: ModeloOrigem, from: string, to: string) {
   const thumbnails = nivel === "criativo" || nivel === "ad";
   const header = [...(thumbnails ? ["Miniatura"] : []), "Nome", "Campanha", "Conjunto", "Conta", "Status", ...columns.map(c => c.label)];
   const lines = rows.map(row => [
@@ -165,21 +172,21 @@ function exportCsv(rows: FunilAnuncioRow[], nivel: Nivel, data: ModeloData, toqu
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `marketing-${nivel}-${data}-${toque}-${from}_a_${to}.csv`;
+  anchor.download = `marketing-${nivel}-${data}-${toque}-${origem}-${from}_a_${to}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-export function CriativosTable({ from, to, data: modeloData, toque }: CriativosTableProps) {
+export function CriativosTable({ from, to, data: modeloData, toque, origem }: CriativosTableProps) {
   const [nivel, setNivel] = useState<Nivel>("criativo");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; direction: "desc" | "asc" }>({ key: "investimento", direction: "desc" });
   const [limit, setLimit] = useState(30);
-  const { data, isLoading, error } = useFunilAnuncios({ from, to, nivel, data: modeloData, toque });
+  const { data, isLoading, error } = useFunilAnuncios({ from, to, nivel, data: modeloData, toque, origem });
   const [previewRow, setPreviewRow] = useState<FunilAnuncioRow | null>(null);
-  useEffect(() => setLimit(30), [from, to, nivel, search, sort]);
+  useEffect(() => setLimit(30), [from, to, nivel, search, sort, origem]);
   const filtered = useMemo(() => {
     const needle = normalize(search.trim());
     return (data ?? []).filter(row => normalize(row.nome ?? "").includes(needle)).sort((a, b) => {
@@ -190,7 +197,15 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
       return sort.direction === "desc" ? -comparison : comparison;
     });
   }, [data, search, sort]);
-  const totals = useMemo(() => sumRows(filtered), [filtered]);
+  const anuncios = useMemo(() => filtered.filter(row => !foraDeAnuncio(row)), [filtered]);
+  const extras = useMemo(() => filtered.filter(foraDeAnuncio), [filtered]);
+  // Subtotal dos anúncios (inclui "Anúncio Meta não identificado"): custos e ROAS de anúncio.
+  const subtotalAnuncios = useMemo(() => sumRows(filtered.filter(row => !semClique(row))), [filtered]);
+  // Em BU inteira o total mistura quem veio e quem não veio de anúncio: custo por etapa daria um CAC falso.
+  const totals = useMemo(() => {
+    const soma = sumRows(filtered);
+    return origem === "todas" ? { ...soma, custo_entrada: null, custo_r1_realizada: null, custo_contrato: null, custo_parceria: null } : soma;
+  }, [filtered, origem]);
   // Highlights describe the entire current level, independently of name search and pagination.
   const bestCost = useMemo(() => (data ?? []).filter(r => r.contratos >= 10 && r.custo_contrato !== null)
     .sort((a, b) => (a.custo_contrato ?? Infinity) - (b.custo_contrato ?? Infinity))[0], [data]);
@@ -221,7 +236,7 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
         <CardTitle className="text-[18px] tracking-normal">Anúncios e criativos</CardTitle>
         <CardDescription className="text-[12px] leading-[1.6]">{modeloData === "venda"
           ? `Cada venda conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes da compra"}. Por isso um criativo pausado ainda pode ter parceria hoje.`
-          : `Vendas das pessoas que clicaram pela 1ª vez no período, creditadas ao ${toque === "primeiro" ? "1º" : "último"} anúncio. Bom para medir o retorno do que foi gasto no período.`}</CardDescription>
+          : `Vendas das pessoas que clicaram pela 1ª vez no período, creditadas ao ${toque === "primeiro" ? "1º" : "último"} anúncio. Bom para medir o retorno do que foi gasto no período.`}{origem === "todas" && " BU inteira: no fim da lista ficam as linhas fora dos anúncios (sem clique em anúncio e antes do 1º clique), sem investimento, custo nem ROAS. O Subtotal anúncios é o retorno dos anúncios. O TOTAL BU soma tudo, e o ROAS dele é o ROAS geral da BU (receita ÷ todo o gasto na Meta, com divulgação). O TOTAL bate com o Funil quando o Funil mostra uma linha só, por exemplo Mês passado com agrupamento Mês. Com vários meses, o Funil conta de novo quem aparece em mais de um mês."}{extras.some(row => row.nivel_id === "anuncio_sem_id") && " \"Anúncio Meta não identificado\" junta as conversões de anúncio em que a Meta não informou qual anúncio foi."}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-[20px] p-[20px] pt-0">
         <div className="flex flex-wrap items-center gap-[12px]">
@@ -234,7 +249,7 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
             </TabsList>
           </Tabs>
           <Input aria-label="Buscar por nome" placeholder="Buscar por nome" value={search} onChange={event => setSearch(event.target.value)} className="h-[40px] min-w-[160px] flex-1 text-[12px] md:max-w-[320px]" />
-          <Button variant="outline" onClick={() => exportCsv(filtered, nivel, modeloData, toque, from, to)} disabled={isLoading || !!error || !filtered.length} className="h-[40px] gap-[8px] px-[12px] text-[12px]">
+          <Button variant="outline" onClick={() => exportCsv([...anuncios, ...extras], nivel, modeloData, toque, origem, from, to)} disabled={isLoading || !!error || !filtered.length} className="h-[40px] gap-[8px] px-[12px] text-[12px]">
             <Download className="h-[14px] w-[14px]" />Exportar CSV
           </Button>
         </div>
@@ -261,7 +276,7 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
                 </TableRow></TableHeader>
                 <TableBody>
                   {!filtered.length && <TableRow><TableCell colSpan={columns.length + 2 + (hasThumbnails ? 1 : 0)} className="py-[32px] text-center text-muted-foreground">Nenhum anúncio com gasto ou conversão no período</TableCell></TableRow>}
-                  {filtered.slice(0, limit).map((row, index) => <TableRow key={`${row.nivel_id}-${index}`}>
+                  {anuncios.slice(0, limit).map((row, index) => <TableRow key={`${row.nivel_id}-${index}`}>
                     {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-card px-[12px] py-[12px]">
                       {row.ad_preview
                         ? <button type="button" onClick={() => setPreviewRow(row)} aria-label={`Ver anúncio ${row.nome}`}
@@ -287,15 +302,36 @@ export function CriativosTable({ from, to, data: modeloData, toque }: CriativosT
                     </TableCell>
                     <Metrics row={row} />
                   </TableRow>)}
+                  {extras.length > 0 && <TableRow><TableCell colSpan={columns.length + 2 + (hasThumbnails ? 1 : 0)} className="bg-muted/40 px-[12px] py-[8px] text-[11px] text-muted-foreground">{origem === "todas" ? "Fora dos anúncios" : "Sem anúncio identificado"}: sem investimento, custo nem ROAS</TableCell></TableRow>}
+                  {extras.map(row => <TableRow key={`extra-${row.nivel_id}`}>
+                    {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-card px-[12px] py-[12px]" />}
+                    <TableCell className="min-w-[240px] max-w-[320px] px-[12px] py-[12px]">
+                      <p title={row.nome} className="line-clamp-2 break-words font-medium leading-[1.5]">{row.nome}</p>
+                      <Badge variant="outline" className="mt-[4px] px-[6px] py-[2px] text-[10px] font-normal">{rotuloExtra(row)}</Badge>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap px-[12px] py-[12px] text-muted-foreground">—</TableCell>
+                    <Metrics row={row} />
+                  </TableRow>)}
                 </TableBody>
-                <TableFooter><TableRow>
+                <TableFooter>{origem === "todas" ? <>
+                  <TableRow>
+                    {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-muted" />}
+                    <TableCell className="px-[12px] py-[12px] font-semibold">Subtotal anúncios</TableCell><TableCell />
+                    <Metrics row={subtotalAnuncios} total />
+                  </TableRow>
+                  <TableRow>
+                    {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-muted" />}
+                    <TableCell className="px-[12px] py-[12px] font-semibold">TOTAL BU</TableCell><TableCell />
+                    <Metrics row={totals} total roasGeral />
+                  </TableRow>
+                </> : <TableRow>
                   {hasThumbnails && <TableCell className="sticky left-0 z-10 bg-muted" />}
                   <TableCell className="px-[12px] py-[12px] font-semibold">TOTAL</TableCell><TableCell />
                   <Metrics row={totals} total />
-                </TableRow></TableFooter>
+                </TableRow>}</TableFooter>
               </Table>
             </div>
-            {filtered.length > limit && <div className="flex justify-center"><Button variant="outline" onClick={() => setLimit(current => current + 30)} className="h-[40px] px-[16px] text-[12px]">Mostrar mais 30</Button></div>}
+            {anuncios.length > limit && <div className="flex justify-center"><Button variant="outline" onClick={() => setLimit(current => current + 30)} className="h-[40px] px-[16px] text-[12px]">Mostrar mais 30</Button></div>}
           </>}
       </CardContent>
     </Card>

@@ -222,24 +222,27 @@ export const useFunilAnuncios = ({
   nivel = 'criativo',
   data = 'venda',
   toque = 'primeiro',
+  origem = 'anuncio',
 }: {
   from: string | null;
   to: string | null;
   nivel?: Nivel;
   data?: ModeloData;
   toque?: ModeloToque;
+  origem?: ModeloOrigem;
 }) =>
   useQuery<FunilAnuncioRow[]>({
-    queryKey: ['mkt-funil-anuncios', from, to, nivel, data, toque],
+    queryKey: ['mkt-funil-anuncios', from, to, nivel, data, toque, origem],
     staleTime: 5 * 60 * 1000,
     enabled: !!from && !!to,
     queryFn: async () => {
-      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos_v2', {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos_v3', {
         p_from: from,
         p_to: to,
         p_nivel: nivel,
         p_data: data,
         p_toque: toque,
+        p_origem: origem,
       });
       if (error) {
         if (error.code === '42501') throw new Error(PERM_ERROR);

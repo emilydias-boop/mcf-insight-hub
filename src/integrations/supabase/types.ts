@@ -5038,6 +5038,7 @@ export type Database = {
       }
       carrinho_acompanhamento_log: {
         Row: {
+          automatico: boolean
           autor: string | null
           campo: string
           contrato_attendee_id: string
@@ -5047,6 +5048,7 @@ export type Database = {
           valor_novo: string | null
         }
         Insert: {
+          automatico?: boolean
           autor?: string | null
           campo: string
           contrato_attendee_id: string
@@ -5056,6 +5058,7 @@ export type Database = {
           valor_novo?: string | null
         }
         Update: {
+          automatico?: boolean
           autor?: string | null
           campo?: string
           contrato_attendee_id?: string
@@ -23479,6 +23482,17 @@ export type Database = {
       carrinho_pode_configurar: { Args: never; Returns: boolean }
       carrinho_pode_editar: { Args: never; Returns: boolean }
       carrinho_pode_ver: { Args: never; Returns: boolean }
+      carrinho_rolar_pendentes: {
+        Args: { p_dia?: string; p_dry_run?: boolean }
+        Returns: {
+          contrato_attendee_id: string
+          lead_name: string
+          r2_data: string
+          safra_destino: string
+          safra_origem: string
+          status_reuniao: string
+        }[]
+      }
       carrinho_rotulo_produto: { Args: { p_nome: string }; Returns: string }
       carrinho_safra_leads: {
         Args: { p_safra_id: string }
@@ -25602,6 +25616,53 @@ export type Database = {
           video_3s: number
         }[]
       }
+      mkt_funil_criativos_v3: {
+        Args: {
+          p_data?: string
+          p_from: string
+          p_nivel?: string
+          p_origem?: string
+          p_to: string
+          p_toque?: string
+        }
+        Returns: {
+          ad_preview: string
+          campanha: string
+          checkout_iniciado: number
+          cliques_link: number
+          compras_pixel: number
+          conjunto: string
+          conta: string
+          contratos: number
+          cpc: number
+          cpm: number
+          ctr: number
+          custo_contrato: number
+          custo_entrada: number
+          custo_parceria: number
+          custo_r1_realizada: number
+          entradas: number
+          impressoes: number
+          investimento: number
+          leads: number
+          liq_parceria: number
+          liq_total: number
+          lpv: number
+          nivel_id: string
+          nome: string
+          parcerias: number
+          r1_agendadas: number
+          r1_realizadas: number
+          r2_realizadas: number
+          roas_liquido: number
+          status: string
+          taxa_lpv_checkout: number
+          thruplays: number
+          thumbnail_url: string
+          tipo_criativo: string
+          video_3s: number
+        }[]
+      }
       mkt_funil_periodo: {
         Args: {
           p_data?: string
@@ -26439,6 +26500,16 @@ export type Database = {
       }
       tv_incorporador_closer_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_com_avatares: { Args: { _p: Json }; Returns: Json }
+      tv_incorporador_contratos: {
+        Args: { _ate: string; _de: string }
+        Returns: {
+          a: number
+          b: number
+          c: number
+          sem_icp: number
+          total: number
+        }[]
+      }
       tv_incorporador_ligacao_ranking_rows: { Args: never; Returns: Json }
       tv_incorporador_payload: { Args: never; Returns: Json }
       tv_incorporador_regua_r1: { Args: { _today?: string }; Returns: Json }
