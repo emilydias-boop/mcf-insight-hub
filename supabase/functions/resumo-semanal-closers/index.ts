@@ -22,26 +22,38 @@ function semanaAnterior(): { inicio: string; fim: string } {
 const br = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
-type Linha = { closer_nome: string; bu: string | null; reunioes_realizadas: number; participantes_atendidos: number; contratos_pagos: number; conversao_pct: number | null };
+type Linha = { closer_nome: string; bu: string | null; reunioes_realizadas: number; participantes_atendidos: number; contratos_pagos: number; conversao_pct: number | null; vendas_consorcio: number; cartas: number; credito: number };
 
 function html(bu: string, inicio: string, fim: string, linhas: Linha[]) {
+  const cons = bu === "consorcio";
+  const venda = (l: Linha) => cons ? (l.vendas_consorcio || 0) : l.contratos_pagos;
   const tot = linhas.reduce((a, l) => ({
-    r: a.r + l.reunioes_realizadas, p: a.p + l.participantes_atendidos, c: a.c + l.contratos_pagos,
-  }), { r: 0, p: 0, c: 0 });
+    r: a.r + l.reunioes_realizadas, p: a.p + l.participantes_atendidos, c: a.c + venda(l),
+    k: a.k + (l.cartas || 0), cr: a.cr + (Number(l.credito) || 0),
+  }), { r: 0, p: 0, c: 0, k: 0, cr: 0 });
   const conv = (c: number, p: number) => (p > 0 ? `${((100 * c) / p).toFixed(1).replace(".", ",")}%` : "-");
+  const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const td = 'style="padding:6px 10px;border-bottom:1px solid #ddd"';
+  const extra = (k: number, cr: number, b = false) => cons
+    ? `<td ${td} align="right">${b ? `<b>${k}</b>` : k}</td><td ${td} align="right">${b ? `<b>${brl(cr)}</b>` : brl(cr)}</td>` : "";
   const rows = linhas.map((l) =>
-    `<tr><td ${td}>${esc(l.closer_nome)}</td><td ${td} align="right">${l.reunioes_realizadas}</td><td ${td} align="right">${l.participantes_atendidos}</td><td ${td} align="right">${l.contratos_pagos}</td><td ${td} align="right">${conv(l.contratos_pagos, l.participantes_atendidos)}</td></tr>`
+    `<tr><td ${td}>${esc(l.closer_nome)}</td><td ${td} align="right">${l.reunioes_realizadas}</td><td ${td} align="right">${l.participantes_atendidos}</td><td ${td} align="right">${venda(l)}</td>${extra(l.cartas || 0, Number(l.credito) || 0)}<td ${td} align="right">${conv(venda(l), l.participantes_atendidos)}</td></tr>`
   ).join("");
+  const cab = cons
+    ? `<th ${td}>Atendidos</th><th ${td}>Vendas (propostas aceitas)</th><th ${td}>Cartas</th><th ${td}>Crédito</th>`
+    : `<th ${td}>Participantes atendidos</th><th ${td}>Contratos pagos</th>`;
+  const rodape = cons
+    ? "Vendas pela régua oficial do consórcio (mesma do painel). Conversão = vendas aceitas na semana ÷ participantes atendidos nas R1 da semana."
+    : "Conversão = contratos pagos sem reembolso ÷ participantes atendidos (completed/contract_paid) em R1 não canceladas.";
   return `<div style="font-family:Arial,sans-serif;color:#222">
 <h2>Resumo semanal dos closers — ${esc(BU_NOME[bu] ?? bu)}</h2>
 <p>Semana de ${br(inicio)} a ${br(fim)} (reuniões R1 realizadas).</p>
 <table style="border-collapse:collapse;font-size:14px">
-<tr><th ${td} align="left">Closer</th><th ${td}>Reuniões realizadas</th><th ${td}>Participantes atendidos</th><th ${td}>Contratos pagos</th><th ${td}>Conversão</th></tr>
+<tr><th ${td} align="left">Closer</th><th ${td}>Reuniões realizadas</th>${cab}<th ${td}>Conversão</th></tr>
 ${rows}
-<tr><td ${td}><b>Total</b></td><td ${td} align="right"><b>${tot.r}</b></td><td ${td} align="right"><b>${tot.p}</b></td><td ${td} align="right"><b>${tot.c}</b></td><td ${td} align="right"><b>${conv(tot.c, tot.p)}</b></td></tr>
+<tr><td ${td}><b>Total</b></td><td ${td} align="right"><b>${tot.r}</b></td><td ${td} align="right"><b>${tot.p}</b></td><td ${td} align="right"><b>${tot.c}</b></td>${extra(tot.k, tot.cr, true)}<td ${td} align="right"><b>${conv(tot.c, tot.p)}</b></td></tr>
 </table>
-<p style="font-size:12px;color:#666">Conversão = contratos pagos (sem reembolso) ÷ participantes atendidos (sem no-show). Enviado automaticamente pelo MCF Gestão.</p>
+<p style="font-size:12px;color:#666">${rodape} Enviado automaticamente pelo MCF Gestão.</p>
 </div>`;
 }
 
@@ -86,18 +98,30 @@ Deno.serve(async (req) => {
       await sb.from("resumo_semanal_closers_envios")
         .upsert({ semana_inicio: inicio, bu, destinatarios: dest, status: "pendente", updated_at: new Date().toISOString() }, { onConflict: "semana_inicio,bu" });
 
+      const subject = `Resumo semanal dos closers — ${BU_NOME[bu] ?? bu} — ${br(inicio)} a ${br(fim)}`;
+      const htmlBody = html(bu, inicio, fim, linhas);
       const r = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: { accept: "application/json", "api-key": apiKey, "content-type": "application/json" },
         body: JSON.stringify({
           sender: { name: "MCF Gestão", email: "marketing@minhacasafinanciada.com" },
           to: dest.map((email) => ({ email })),
-          subject: `Resumo semanal dos closers — ${BU_NOME[bu] ?? bu} — ${br(inicio)} a ${br(fim)}`,
-          htmlContent: html(bu, inicio, fim, linhas),
+          subject,
+          htmlContent: htmlBody,
           tags: ["resumo-semanal-closers"],
         }),
       });
       const corpo = await r.text();
+      try {
+        let msgId: string | null = null; try { msgId = JSON.parse(corpo)?.messageId ?? null; } catch { /* ignore */ }
+        const { error: logErr } = await sb.from("automation_logs").insert(dest.map((email) => ({
+          channel: "email", recipient: email, status: r.ok ? "sent" : "failed",
+          sent_at: r.ok ? new Date().toISOString() : null, content_sent: htmlBody,
+          external_id: msgId, error_message: r.ok ? null : corpo.slice(0, 500),
+          metadata: { subject, tags: ["resumo-semanal-closers", `resumo-semanal-closers-${inicio}-${bu}`], bu, semana_inicio: inicio, senderEmail: "marketing@minhacasafinanciada.com" },
+        })));
+        if (logErr) console.error("[resumo-semanal-closers] automation_logs:", logErr.message);
+      } catch (e) { console.error("[resumo-semanal-closers] automation_logs:", String(e).slice(0, 300)); }
       await sb.from("resumo_semanal_closers_envios").update({
         status: r.ok ? "enviado" : "erro", erro: r.ok ? null : corpo.slice(0, 500), updated_at: new Date().toISOString(),
       }).eq("semana_inicio", inicio).eq("bu", bu);
