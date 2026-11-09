@@ -5135,6 +5135,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ceo_metas: {
+        Row: {
+          atualizado_em: string
+          chave: string
+          descricao: string
+          fonte: string
+          unidade: string
+          valor: number
+        }
+        Insert: {
+          atualizado_em?: string
+          chave: string
+          descricao: string
+          fonte: string
+          unidade: string
+          valor: number
+        }
+        Update: {
+          atualizado_em?: string
+          chave?: string
+          descricao?: string
+          fonte?: string
+          unidade?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      ceo_painel_snapshots: {
+        Row: {
+          chave: string
+          dados: Json
+          duracao_ms: number | null
+          gerado_em: string
+        }
+        Insert: {
+          chave: string
+          dados: Json
+          duracao_ms?: number | null
+          gerado_em?: string
+        }
+        Update: {
+          chave?: string
+          dados?: Json
+          duracao_ms?: number | null
+          gerado_em?: string
+        }
+        Relationships: []
+      }
       channels: {
         Row: {
           color: string | null
@@ -23756,6 +23804,19 @@ export type Database = {
           transaction_id: string
           tx_date: string
         }[]
+      }
+      ceo_painel: { Args: never; Returns: Json }
+      ceo_painel_atualizar: {
+        Args: { p_completo?: boolean }
+        Returns: undefined
+      }
+      ceo_painel_bloco: {
+        Args: { p_fim: string; p_ini: string }
+        Returns: Json
+      }
+      ceo_painel_extras: {
+        Args: { p_fim: string; p_ini: string }
+        Returns: Json
       }
       check_duplicate_contact_by_identity: {
         Args: { p_email?: string; p_phone?: string }

@@ -148,6 +148,12 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "manager", "coordenador"],
   },
   {
+    title: "Painel do CEO",
+    url: "/ceo",
+    icon: Crown,
+    requiredRoles: ["admin"],
+  },
+  {
     title: "Marketing MCF",
     url: "/marketing",
     icon: Megaphone,
