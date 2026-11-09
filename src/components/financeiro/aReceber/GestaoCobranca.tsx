@@ -85,6 +85,7 @@ export function FiltrosGlobais({ value, onChange, produtos }: {
               <SelectItem value="todos">Todos os status</SelectItem>
               <SelectItem value="em_dia">Em dia</SelectItem>
               <SelectItem value="atrasado">Atrasado</SelectItem>
+              <SelectItem value="negociacao">Negociação</SelectItem>
             </SelectContent>
           </Select>
           {ativos > 0 && (
@@ -102,6 +103,7 @@ export function FiltrosGlobais({ value, onChange, produtos }: {
 const STATUS_CLIENTE: Record<StatusCliente, { label: string; cls: string }> = {
   em_dia: { label: 'Em dia', cls: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' },
   atrasado: { label: 'Atrasado', cls: 'bg-red-500/15 text-red-600 border-red-500/30' },
+  negociacao: { label: 'Negociação', cls: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
   judicial: { label: 'Cobrança Jurídica', cls: 'bg-purple-500/15 text-purple-600 border-purple-500/30' },
   quitado: { label: 'Quitado', cls: 'bg-muted text-muted-foreground' },
   cancelado: { label: 'Cancelado', cls: 'bg-muted text-muted-foreground' },

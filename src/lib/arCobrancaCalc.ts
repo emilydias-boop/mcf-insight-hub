@@ -15,6 +15,9 @@ export interface ParcelaCalc {
   status: string; // pendente | pago | atrasado | cancelado
   data_vencimento: string;
   data_pagamento: string | null;
+  evento?: string | null;
+  cobrador_id?: string | null;
+  forma_pagamento?: string | null;
 }
 
 export interface TituloCalc {
@@ -23,6 +26,7 @@ export interface TituloCalc {
   payment_method?: string | null;
   cobranca_stage?: string | null;
   cobranca_responsavel_id?: string | null;
+  negociacao?: boolean | null;
 }
 
 export function hojeSP(now: Date = new Date()): string {
@@ -105,12 +109,13 @@ export function isPendenciaMesAnterior(p: ParcelaCalc, hoje: string): boolean {
   return emAberto(p) > 0 && mesDe(p.data_vencimento) < mesDe(hoje);
 }
 
-export type StatusCliente = 'em_dia' | 'atrasado' | 'judicial' | 'quitado' | 'cancelado';
+export type StatusCliente = 'em_dia' | 'atrasado' | 'negociacao' | 'judicial' | 'quitado' | 'cancelado';
 
 export function statusCliente(t: TituloCalc, parcelas: ParcelaCalc[], hoje: string): StatusCliente {
   if (t.status === 'quitado') return 'quitado';
   if (t.status !== 'aberto') return 'cancelado';
   if (t.cobranca_stage === 'judicial') return 'judicial';
+  if (t.negociacao) return 'negociacao';
   if ((t.payment_method || '').toLowerCase() === 'credit_card') return 'em_dia';
   return parcelas.some((p) => isAtrasada(p, hoje)) ? 'atrasado' : 'em_dia';
 }
@@ -121,3 +126,11 @@ export function telefoneDigitos(tel?: string | null): string | null {
   if (d.length < 10) return null;
   return d.startsWith('55') && d.length >= 12 ? d : `55${d}`;
 }
+
+/** Saldo devedor = valor total − entrada − pagos via cobrança (mínimo 0). */
+export function saldoDevedor(valorTotal: number, entrada: number, pagosCobranca: number): number {
+  return Math.max(Number(valorTotal || 0) - Number(entrada || 0) - Number(pagosCobranca || 0), 0);
+}
+
+/** Visões regulares (Cobranças Regulares, Agenda, Pendências, Inadimplência) nunca mostram jurídico. */
+export const visivelNaCobrancaRegular = (t: TituloCalc) => t.cobranca_stage !== 'judicial';

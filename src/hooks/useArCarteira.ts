@@ -15,6 +15,7 @@ export interface TituloCarteira {
   status: string;
   cobranca_stage: string | null;
   cobranca_responsavel_id: string | null;
+  negociacao: boolean;
   sale_date: string | null;
 }
 
@@ -43,11 +44,11 @@ export function useArCarteira() {
       const [titulos, parcelas] = await Promise.all([
         fetchAll<TituloCarteira>(
           'ar_titulos',
-          'id,customer_name,customer_email,customer_phone,customer_document,product_code,product_name,valor_total,payment_method,status,cobranca_stage,cobranca_responsavel_id,sale_date',
+          'id,customer_name,customer_email,customer_phone,customer_document,product_code,product_name,valor_total,payment_method,status,cobranca_stage,cobranca_responsavel_id,sale_date,negociacao',
         ),
         fetchAll<ParcelaCalc>(
           'ar_parcelas',
-          'id,titulo_id,numero,valor,valor_pago,status,data_vencimento,data_pagamento',
+          'id,titulo_id,numero,valor,valor_pago,status,data_vencimento,data_pagamento,evento,cobrador_id,forma_pagamento',
         ),
       ]);
       const porTitulo = new Map<string, ParcelaCalc[]>();

@@ -32,3 +32,4 @@
 - Pós-Venda cross-BU scheduling goes only through pos_venda_encaminhar_bu (public invoker wrapper over pv_private), which finds or creates the destination-BU card and logs tag/timeline/activity; scheduling then reuses that BU's QuickScheduleModal inside a BUProvider, so other BUs' agendas and rules stay untouched.
 
 - A receber management tabs (Agenda, Pendências, Inadimplência, Resultados, side panel) derive all values from src/lib/arCobrancaCalc.ts over useArCarteira, so pendências and histórico share one source and existing listagem/esteira logic stays untouched.
+- A receber never deletes remaining installments automatically and batch settlement only posts the unpaid remainder, so recurring plans and received totals are never lost or doubled; judicial titles appear only in the Cobrança Jurídica tab (useArTitulos excluir_judicial).
