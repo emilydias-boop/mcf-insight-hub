@@ -285,25 +285,12 @@ export async function settleTituloIfFullyPaid(tituloId: string): Promise<boolean
   // Tolerância de 1 centavo
   if (pago + 0.01 < valorTotal) return false;
 
+  // Parcelas restantes NUNCA são apagadas automaticamente (recorrências sumiam após uma baixa).
+  // Só quita o título quando não sobra nenhuma parcela em aberto.
   const pendentes = list.filter(
     (p) => p.status === 'pendente' || p.status === 'atrasado',
   );
-  if (pendentes.length > 0) {
-    const ids = pendentes.map((p) => p.id);
-    const { error: eDel } = await supabase
-      .from('ar_parcelas' as any)
-      .delete()
-      .in('id', ids);
-    if (eDel) throw eDel;
-    await supabase.from('ar_historico' as any).insert({
-      titulo_id: tituloId,
-      parcela_id: null,
-      tipo: 'baixa_total_auto',
-      descricao: `Baixa total atingida — ${pendentes.length} parcela(s) pendente(s) removida(s) automaticamente`,
-      valor: null,
-      metadata: { removidas: ids },
-    } as any);
-  }
+  if (pendentes.length > 0) return false;
 
   if (t.status !== 'quitado') {
     await supabase
@@ -347,14 +334,24 @@ export function useBaixarTitulosLote() {
       // 1) Buscar títulos alvo
       const { data: titulos, error: e1 } = await supabase
         .from('ar_titulos' as any)
-        .select('id, valor_total, status')
+        .select('id, valor_total, status, cobranca_responsavel_id')
         .in('id', tituloIds);
       if (e1) throw e1;
+
+      // Total já pago por título (para nunca registrar recebido em dobro)
+      const { data: pagas } = await supabase
+        .from('ar_parcelas' as any)
+        .select('titulo_id, valor, valor_pago')
+        .in('titulo_id', tituloIds)
+        .eq('status', 'pago');
+      const pagoPorTitulo = new Map<string, number>();
+      ((pagas ?? []) as any[]).forEach((p) =>
+        pagoPorTitulo.set(p.titulo_id, (pagoPorTitulo.get(p.titulo_id) ?? 0) + Number(p.valor_pago ?? p.valor ?? 0)));
 
       // 2) Buscar parcelas em aberto desses títulos
       const { data: parcelas, error: e2 } = await supabase
         .from('ar_parcelas' as any)
-        .select('id, titulo_id, valor, status')
+        .select('id, titulo_id, valor, valor_pago, status')
         .in('titulo_id', tituloIds)
         .not('status', 'in', '("pago","cancelado")');
       if (e2) throw e2;
@@ -382,6 +379,7 @@ export function useBaixarTitulosLote() {
                 valor_pago: valor,
                 data_pagamento,
                 forma_pagamento: forma_pagamento || null,
+                cobrador_id: t.cobranca_responsavel_id ?? null,
               } as any)
               .eq('id', p.id);
             if (eu) throw eu;
@@ -395,8 +393,8 @@ export function useBaixarTitulosLote() {
             totalParcelasBaixadas += 1;
           }
         } else {
-          // Sem parcelas: criar entrada integral quitando o título
-          const valor = Number(t.valor_total ?? 0);
+          // Sem parcelas em aberto: lança só o que falta (nunca duplica o já recebido)
+          const valor = Math.max(Number(t.valor_total ?? 0) - (pagoPorTitulo.get(t.id) ?? 0), 0);
           if (valor > 0) {
             const { data: novaParc, error: ei } = await supabase
               .from('ar_parcelas' as any)
@@ -410,6 +408,7 @@ export function useBaixarTitulosLote() {
                 data_pagamento,
                 forma_pagamento: forma_pagamento || null,
                 status: 'pago',
+                cobrador_id: t.cobranca_responsavel_id ?? null,
               } as any)
               .select()
               .single();
