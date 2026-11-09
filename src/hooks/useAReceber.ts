@@ -231,12 +231,17 @@ export function useUpdateArParcela() {
 export function useMarkArParcelaPaga() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, tituloId, valor_pago, data_pagamento, forma_pagamento }: {
-      id: string; tituloId: string; valor_pago: number; data_pagamento: string; forma_pagamento?: string;
+    mutationFn: async ({ id, tituloId, valor_pago, data_pagamento, forma_pagamento, evento }: {
+      id: string; tituloId: string; valor_pago: number; data_pagamento: string; forma_pagamento?: string; evento?: string | null;
     }) => {
+      const { data: tit } = await supabase.from('ar_titulos' as any).select('cobranca_responsavel_id').eq('id', tituloId).maybeSingle();
       const { error } = await supabase
         .from('ar_parcelas' as any)
-        .update({ status: 'pago', valor_pago, data_pagamento, forma_pagamento: forma_pagamento || null } as any)
+        .update({
+          status: 'pago', valor_pago, data_pagamento, forma_pagamento: forma_pagamento || null,
+          cobrador_id: (tit as any)?.cobranca_responsavel_id ?? null,
+          ...(evento ? { evento } : {}),
+        } as any)
         .eq('id', id);
       if (error) throw error;
       await supabase.from('ar_historico' as any).insert({
