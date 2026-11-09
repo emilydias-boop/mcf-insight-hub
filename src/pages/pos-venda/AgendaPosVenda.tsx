@@ -7,7 +7,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Video, ExternalLink, Loader2, RefreshCw, Columns3, Search, ArrowUpDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { horariosLivresPosVenda, horariosTravadosPosVenda } from '@/lib/posVendaDisponibilidade';
+import { horariosLivresPosVenda, horariosTravadosPosVenda, inicioSlotSP, type OcupacaoPosVenda } from '@/lib/posVendaDisponibilidade';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -502,6 +502,51 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
   const [status, setStatus] = useState(reuniao.status);
   const [obs, setObs] = useState(reuniao.observacao ?? '');
   const [abrindo, setAbrindo] = useState<string | null>(null);
+  // Reagendamento: só reuniões agendadas que ainda não aconteceram.
+  const agoraR = useAgora();
+  const podeReagendar = reuniao.status === 'agendada' && new Date(reuniao.inicio).getTime() > agoraR.getTime();
+  const [reagendando, setReagendando] = useState(false);
+  const [novaData, setNovaData] = useState(() => format(new Date(reuniao.inicio), 'yyyy-MM-dd'));
+  const [novaHora, setNovaHora] = useState('');
+  const { data: dispR = [], isLoading: carregandoDispR } = usePosVendaDisponibilidade();
+  const configuradoR = dispR.some((d) => d.gerente_id === reuniao.gerente_id);
+  const { data: ocupadasR = [], isLoading: carregandoOcupR } = useQuery({
+    queryKey: ['pos-venda-ocupacao', reuniao.gerente_id, novaData, 'reagendar', reuniao.id],
+    enabled: reagendando && configuradoR && Boolean(novaData),
+    queryFn: async () => {
+      const ini = inicioSlotSP(novaData, '00:00');
+      const { data, error } = await db.from('pos_venda_reunioes').select('id, gerente_id, inicio, duracao_min, status')
+        .eq('gerente_id', reuniao.gerente_id).neq('status', 'cancelada').neq('id', reuniao.id)
+        .lt('inicio', new Date(+ini + 86_400_000).toISOString())
+        .gte('inicio', new Date(+ini - 86_400_000).toISOString());
+      if (error) throw error;
+      return (data ?? []) as OcupacaoPosVenda[];
+    },
+  });
+  const livresR = horariosLivresPosVenda(dispR, reuniao.gerente_id, novaData, ocupadasR, reuniao.duracao_min, agoraR);
+
+  const reagendar = useMutation({
+    mutationFn: async () => {
+      if (!novaData || !/^\d{2}:\d{2}$/.test(novaHora)) throw new Error('Escolha a nova data e o horário.');
+      if (configuradoR && !livresR.includes(novaHora)) throw new Error('Escolha um horário disponível.');
+      const novoInicio = inicioSlotSP(novaData, novaHora);
+      if (novoInicio.getTime() <= Date.now()) throw new Error('O novo horário precisa ser no futuro.');
+      const nota = `Reagendada de ${format(new Date(reuniao.inicio), 'dd/MM HH:mm')}`;
+      const observacao = [obs.trim(), nota].filter(Boolean).join('\n');
+      const { error } = await db.from('pos_venda_reunioes').update({ inicio: novoInicio.toISOString(), observacao }).eq('id', reuniao.id);
+      if (error) throw error;
+      return novoInicio;
+    },
+    onSuccess: async (novoInicio) => {
+      toast.success(`Reunião reagendada para ${format(novoInicio, "dd/MM 'às' HH:mm")}. O novo convite vai por e-mail para o cliente.`);
+      onSalvo(); onClose();
+      // Cancela o convite antigo e só depois cria o novo (a criação é ignorada enquanto existir o evento antigo).
+      try { await supabase.functions.invoke('pos-venda-calendar-sync', { body: { action: 'cancel', reuniao_id: reuniao.id } }); }
+      catch (err) { console.warn('[pos-venda-convite]', err); }
+      syncConvitePosVenda('create', reuniao.id);
+    },
+    onError: (e: any) => toast.error(e.message ?? 'Erro ao reagendar'),
+  });
 
   const { data: gravacoes = [], isLoading } = useQuery({
     queryKey: ['pos-venda-gravacoes', reuniao.id],
@@ -546,6 +591,43 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
             <a href={reuniao.link_reuniao} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary underline">
               <ExternalLink className="h-3 w-3" />Entrar na reunião
             </a>
+          )}
+          {podeReagendar && (
+            <div className="rounded-md border border-border p-3 space-y-2">
+              {!reagendando ? (
+                <Button variant="outline" size="sm" onClick={() => setReagendando(true)}>
+                  <CalendarDays className="mr-1 h-4 w-4" />Reagendar
+                </Button>
+              ) : (
+                <>
+                  <p className="font-medium">Reagendar reunião</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div>
+                      <Label>Nova data</Label>
+                      <Input type="date" value={novaData} min={format(new Date(), 'yyyy-MM-dd')} onChange={(e) => { setNovaData(e.target.value); setNovaHora(''); }} />
+                    </div>
+                    <div>
+                      <Label>Novo horário</Label>
+                      {configuradoR ? (
+                        <Select value={novaHora} onValueChange={setNovaHora} disabled={carregandoDispR || carregandoOcupR}>
+                          <SelectTrigger><SelectValue placeholder={carregandoOcupR ? 'Carregando…' : 'Escolha'} /></SelectTrigger>
+                          <SelectContent>{livresR.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Input type="time" value={novaHora} onChange={(e) => setNovaHora(e.target.value)} />
+                      )}
+                    </div>
+                  </div>
+                  {configuradoR && !carregandoOcupR && livresR.length === 0 && <p className="text-xs text-muted-foreground">Nenhum horário disponível nesta data.</p>}
+                  <div className="flex gap-2">
+                    <Button size="sm" disabled={!novaHora || reagendar.isPending} onClick={() => reagendar.mutate()}>
+                      {reagendar.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}Confirmar reagendamento
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setReagendando(false)}>Voltar</Button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           <div>
             <Label>Status</Label>
