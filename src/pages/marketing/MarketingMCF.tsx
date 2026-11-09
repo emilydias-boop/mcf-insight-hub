@@ -177,7 +177,7 @@ export default function MarketingMCF() {
           <div role="group" aria-label="Origem" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Origem</span>
             <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre a origem" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">Só anúncio: pessoas que vieram de anúncio da Meta (base do custo e do ROAS). BU inteira: todas as pessoas da BU Incorporador, de qualquer origem — os números batem com a Visão Diária e o Painel Comercial.</TooltipContent></Tooltip>
-            {([{ value: "anuncio", label: "Só anúncio" }, { value: "todas", label: "BU inteira" }] as const).map(item => <Button key={item.value} variant={origem === item.value ? "secondary" : "ghost"} aria-pressed={origem === item.value} disabled={tab !== "funil" || data === "safra"} onClick={() => setOrigem(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+            {([{ value: "anuncio", label: "Só anúncio" }, { value: "todas", label: "BU inteira" }] as const).map(item => <Button key={item.value} variant={origem === item.value ? "secondary" : "ghost"} aria-pressed={origem === item.value} disabled={(tab !== "funil" && tab !== "criativos") || data === "safra"} onClick={() => setOrigem(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
           </div>
         </div>
       </TooltipProvider>
@@ -200,7 +200,7 @@ export default function MarketingMCF() {
       </TabsList>
       {tab !== "pauta-viral" && (!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
         <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} data={data} toque={toque} origem={origem} /></TabsContent>
-        <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} data={data} toque={toque} /></TabsContent>
+        <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} data={data} toque={toque} origem={origem} /></TabsContent>
         <TabsContent value="canais" className="m-0"><CanaisPeriodo from={from} to={to} /></TabsContent>
         <TabsContent value="email" className="m-0"><EmailMarketing from={from} to={to} grao={effectiveGrao} /></TabsContent>
         <TabsContent value="instagram" className="m-0"><InstagramMCF from={from} to={to} /></TabsContent>
