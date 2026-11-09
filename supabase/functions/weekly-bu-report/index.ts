@@ -9,28 +9,31 @@ const corsHeaders = {
 const DIRECTOR_EMAIL = 'grimaldo.neto@minhacasafinanciada.com';
 
 function getLastCompletedWeek() {
-  // Custom week: Saturday to Friday
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun ... 6=Sat
-  // Days since last Saturday
-  const daysSinceSat = day === 6 ? 0 : day + 1;
-  // Last Friday = most recent Friday
-  const lastFriday = new Date(now);
-  lastFriday.setDate(now.getDate() - (daysSinceSat === 0 ? 1 : daysSinceSat));
-  lastFriday.setHours(23, 59, 59, 999);
-
+  // Semana de sábado a sexta, calculada no fuso America/Sao_Paulo
+  const agora = new Date();
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  }).formatToParts(agora);
+  const p: Record<string, string> = {};
+  for (const x of partes) p[x.type] = x.value;
+  const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const day = dowMap[p.weekday] ?? 0;
+  const hoje = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)));
+  const daysSinceFri = ((day + 2) % 7) || 7; // seg=3, sáb=1, dom=2, sex=7
+  const lastFriday = new Date(hoje);
+  lastFriday.setUTCDate(hoje.getUTCDate() - daysSinceFri);
   const lastSaturday = new Date(lastFriday);
-  lastSaturday.setDate(lastFriday.getDate() - 6);
-  lastSaturday.setHours(0, 0, 0, 0);
-
-  return { start: lastSaturday, end: lastFriday };
+  lastSaturday.setUTCDate(lastFriday.getUTCDate() - 6);
+  const iso = (d: Date) => d.toISOString().split('T')[0];
+  return { start: iso(lastSaturday), end: iso(lastFriday) };
 }
 
 function fmtDate(d: Date) {
   return d.toLocaleDateString('pt-BR');
-}
-function isoDate(d: Date) {
-  return d.toISOString().split('T')[0];
 }
 function fmtBRL(v: number) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
