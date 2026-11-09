@@ -249,14 +249,21 @@ export function useEditarReembolso() {
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData.user?.id ?? null;
 
+      // Reembolso já pago com valor/data de pagamento corrigidos (ou apagados) volta para "A pagar"
+      // e aguarda nova confirmação manual de pagamento.
+      const { data: atual } = await supabase.from('ar_reembolsos' as any).select('status').eq('id', input.id).maybeSingle();
+      const voltaAPagar = (atual as any)?.status === 'pago'
+        && (changed.includes('valor' as any) || changed.includes('data_pagamento' as any));
+
       const { data: updated, error } = await supabase
         .from('ar_reembolsos' as any)
         .update({
           valor: input.next.valor,
           data_pedido: input.next.data_pedido,
           data_prevista_pagamento: input.next.data_prevista_pagamento || null,
-          data_pagamento: input.next.data_pagamento || null,
+          data_pagamento: voltaAPagar ? null : (input.next.data_pagamento || null),
           motivo: input.next.motivo || null,
+          ...(voltaAPagar ? { status: 'pendente' } : {}),
         } as any)
         .eq('id', input.id)
         .select()
@@ -289,7 +296,7 @@ export function useEditarReembolso() {
       };
       const desc = `Reembolso editado — campos: ${changed.map((c) => label[c] || c).join(', ')}${
         sensitiveChanged.length > 0 ? ` | justificativa: ${input.justificativa?.trim()}` : ''
-      }`;
+      }${voltaAPagar ? ' | pagamento corrigido: status voltou para "A pagar" aguardando confirmação' : ''}`;
 
       await supabase.from('ar_historico' as any).insert({
         titulo_id: input.titulo_id,
