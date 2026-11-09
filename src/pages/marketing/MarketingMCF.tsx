@@ -198,15 +198,15 @@ export default function MarketingMCF() {
         <TabsTrigger value="pauta-viral" className="h-[36px] px-[12px] text-[12px]">Pauta Viral</TabsTrigger>
         <TabsTrigger value="gastos" className="h-[36px] px-[12px] text-[12px]">Gastos</TabsTrigger>
       </TabsList>
-      {tab !== "pauta-viral" && tab !== "gastos" && (!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
+      {tab !== "pauta-viral" && (!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
         <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} data={data} toque={toque} origem={origem} /></TabsContent>
         <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} data={data} toque={toque} /></TabsContent>
         <TabsContent value="canais" className="m-0"><CanaisPeriodo from={from} to={to} /></TabsContent>
         <TabsContent value="email" className="m-0"><EmailMarketing from={from} to={to} grao={effectiveGrao} /></TabsContent>
         <TabsContent value="instagram" className="m-0"><InstagramMCF from={from} to={to} /></TabsContent>
+        <TabsContent value="gastos" className="m-0"><GastosMarketing from={from} to={to} /></TabsContent>
       </>)}
       <TabsContent value="pauta-viral" className="m-0"><PautaViral /></TabsContent>
-      <TabsContent value="gastos" className="m-0"><GastosMarketing /></TabsContent>
     </Tabs>
   </section>;
 }
