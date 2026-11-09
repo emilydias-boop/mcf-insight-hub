@@ -26,6 +26,25 @@ const REENTRY_STAGE_BY_SLUG: Record<string, string> = {
   'anamnese-mcf': STAGE_ANAMNESE,
 };
 
+// --- Rastreamento de tráfego (UTMs) enviado pelo app de anamnese ---
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src'] as const;
+type UtmFields = Record<typeof UTM_KEYS[number], string | null>;
+
+/** Extrai os 6 campos de rastreamento do body, com fallback null (ignora vazio e placeholder "{{...}}"). */
+function extractUtms(payload: Record<string, unknown> | null | undefined): UtmFields {
+  const out = {} as UtmFields;
+  for (const key of UTM_KEYS) {
+    const raw = payload?.[key];
+    const value = typeof raw === 'string' ? raw.trim() : typeof raw === 'number' ? String(raw) : '';
+    out[key] = value && !/^\{\{.*\}\}$/.test(value) ? value.slice(0, 500) : null;
+  }
+  return out;
+}
+
+function hasAnyUtm(fields: Partial<Record<typeof UTM_KEYS[number], unknown>> | null | undefined): boolean {
+  return !!fields && UTM_KEYS.some((key) => fields[key] !== null && fields[key] !== undefined && fields[key] !== '');
+}
+
 /**
  * Proteção contra regressão de cliente já pago.
  * Máximo 2 queries, com curto-circuito.
@@ -257,6 +276,12 @@ serve(async (req) => {
           payload[targetField as string] = payload[sourceField];
         }
       }
+    }
+
+    // 4.1 Rastreamento de tráfego (UTMs + src) — primeiro toque
+    const utmFields = extractUtms(payload);
+    if (hasAnyUtm(utmFields)) {
+      console.log('[WEBHOOK-RECEIVER] UTMs recebidas:', utmFields);
     }
 
     // 5. Validate required fields
@@ -720,6 +745,7 @@ serve(async (req) => {
               custom_fields: isCustomFields,
               data_source: 'webhook',
               stage_moved_at: new Date().toISOString(),
+              ...utmFields,
             })
             .select('id')
             .single();
@@ -837,7 +863,7 @@ serve(async (req) => {
     if (existingDealId) {
       const { data } = await supabase
         .from('crm_deals')
-        .select('id, tags, stage_id, custom_fields, owner_id, owner_profile_id')
+        .select('id, tags, stage_id, custom_fields, owner_id, owner_profile_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, src')
         .eq('id', existingDealId)
         .maybeSingle();
       existingDeal = data;
@@ -849,6 +875,8 @@ serve(async (req) => {
       const currentTags: string[] = (existingDeal.tags as string[]) || [];
       const isIncompleta = currentTags.some(t => t.toUpperCase() === 'ANAMNESE-INCOMPLETA');
       const isAnamnaseEndpoint = slug === 'anamnese-mcf';
+      // UTMs: preserva o primeiro toque — só preenche se o deal ainda não tem nenhuma
+      const fillUtms = !hasAnyUtm(existingDeal) && hasAnyUtm(utmFields);
 
       // --- FLUXO ESPECIAL: ANAMNESE-INCOMPLETA → ANAMNESE completa ---
       if (isIncompleta && isAnamnaseEndpoint) {
@@ -898,6 +926,7 @@ serve(async (req) => {
             custom_fields: mergedCustomFields,
             stage_id: newStageId,
             stage_moved_at: new Date().toISOString(),
+            ...(fillUtms ? utmFields : {}),
           })
           .eq('id', existingDeal.id);
 
@@ -978,6 +1007,9 @@ serve(async (req) => {
       if (stageMoved) {
         dealUpdate.stage_id = targetStageId;
         dealUpdate.stage_moved_at = new Date().toISOString();
+      }
+      if (fillUtms) {
+        Object.assign(dealUpdate, utmFields);
       }
 
       if (Object.keys(dealUpdate).length > 0) {
@@ -1127,7 +1159,8 @@ serve(async (req) => {
         custom_fields: customFields,
         data_source: 'webhook',
         created_at: dealCreatedAt,
-        stage_moved_at: new Date().toISOString()
+        stage_moved_at: new Date().toISOString(),
+        ...utmFields,
       })
       .select('id')
       .single();
