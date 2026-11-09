@@ -46,7 +46,7 @@ export function useArTitulos(filters: ArTitulosFilters = {}) {
       const ids = titulos.map(t => t.id);
       const { data: parcelas } = await supabase
         .from('ar_parcelas' as any)
-        .select('titulo_id,valor,valor_pago,status,data_vencimento')
+        .select('titulo_id,valor,valor_pago,status,data_vencimento,tipo_parcela')
         .in('titulo_id', ids);
 
       const today = new Date();
@@ -54,19 +54,20 @@ export function useArTitulos(filters: ArTitulosFilters = {}) {
       const monthKey = `${today.getFullYear()}-${today.getMonth()}`;
 
       type Agg = {
-        pago: number; pendente: number; qtdPagas: number; qtdTotal: number;
+        pago: number; entrada: number; pendente: number; qtdPagas: number; qtdTotal: number;
         hasAtraso: boolean; hasMes: boolean;
         proxima: string | null; diasAtraso: number;
       };
       const map = new Map<string, Agg>();
       (parcelas as any[] | null)?.forEach(p => {
         const cur = map.get(p.titulo_id) || {
-          pago: 0, pendente: 0, qtdPagas: 0, qtdTotal: 0,
+          pago: 0, entrada: 0, pendente: 0, qtdPagas: 0, qtdTotal: 0,
           hasAtraso: false, hasMes: false, proxima: null, diasAtraso: 0,
         };
         cur.qtdTotal += 1;
         if (p.status === 'pago') {
           cur.pago += Number(p.valor_pago ?? p.valor ?? 0);
+          if (p.tipo_parcela === 'entrada') cur.entrada += Number(p.valor_pago ?? p.valor ?? 0);
           cur.qtdPagas += 1;
         } else if (p.status !== 'cancelado') {
           cur.pendente += Number(p.valor ?? 0);
@@ -110,6 +111,7 @@ export function useArTitulos(filters: ArTitulosFilters = {}) {
         return {
           ...t,
           valor_pago: pagoCalc,
+          valor_entrada: isCreditCardHubla ? valorTotal : (m?.entrada ?? 0),
           valor_pendente: pendenteCalc,
           parcelas_pagas: isCreditCardHubla ? (m?.qtdTotal ?? 0) : (m?.qtdPagas ?? 0),
           parcelas_total: m?.qtdTotal ?? 0,
