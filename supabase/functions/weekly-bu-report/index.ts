@@ -32,8 +32,10 @@ function getLastCompletedWeek() {
   return { start: iso(lastSaturday), end: iso(lastFriday) };
 }
 
-function fmtDate(d: Date) {
-  return d.toLocaleDateString('pt-BR');
+function fmtDate(s: string) {
+  // 'YYYY-MM-DD' -> 'DD/MM/YYYY' sem new Date() (evita voltar um dia no fuso)
+  const [y, m, d] = s.split('-');
+  return `${d}/${m}/${y}`;
 }
 function fmtBRL(v: number) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -52,92 +54,81 @@ serve(async (req) => {
   try {
     console.log('[WEEKLY-BU-REPORT] Starting weekly report generation...');
 
-    const { start, end } = getLastCompletedWeek();
-    const startStr = isoDate(start);
-    const endStr = isoDate(end);
+    const { start: startStr, end: endStr } = getLastCompletedWeek();
 
-    console.log(`[WEEKLY-BU-REPORT] Period: ${fmtDate(start)} - ${fmtDate(end)} (${startStr} to ${endStr})`);
+    console.log(`[WEEKLY-BU-REPORT] Period: ${fmtDate(startStr)} - ${fmtDate(endStr)} (${startStr} to ${endStr})`);
 
-    // 1. Fetch weekly_metrics for the period (sat-fri)
-    const { data: weeklyMetrics, error: wmErr } = await supabase
-      .from('weekly_metrics')
-      .select('start_date, end_date, a010_sales, a010_revenue, ob_construir_sales, ob_construir_revenue, ob_vitalicio_sales, ob_vitalicio_revenue, ob_evento_sales, ob_evento_revenue, contract_sales, contract_revenue, clint_revenue, incorporador_50k, faturamento_total, total_revenue, ads_cost, team_cost, office_cost, total_cost, operating_cost, real_cost, operating_profit, roi, roas, cpl, week_label')
-      .gte('start_date', startStr)
-      .lte('start_date', endStr)
-      .limit(1);
+    // 1. Incorporador + custos + KPIs: RPC relatorio_semanal_mcf
+    const { data: rel, error: relErr } = await supabase.rpc('relatorio_semanal_mcf', { p_ini: startStr, p_fim: endStr });
+    if (relErr) throw relErr; // nunca mandar 0 silencioso
 
-    if (wmErr) console.error('[WEEKLY-BU-REPORT] weekly_metrics error:', wmErr.message);
+    // 2. Consórcio: régua oficial (proposta aceita), mesma do painel
+    const { data: prod, error: prodErr } = await supabase.rpc('consorcio_producao_gerada', { p_ini: startStr, p_fim: endStr, p_bu: 'consorcio' });
+    if (prodErr) console.error('[WEEKLY-BU-REPORT] consorcio_producao_gerada:', prodErr.message);
 
-    const wm = weeklyMetrics?.[0] || null;
+    const consorcioVendas = Number(prod?.total?.cartas ?? 0);
+    const consorcioCredito = Number(prod?.total?.credito ?? 0);
 
-    // 2. Consórcio: cards sold in period
-    const { data: consortiumCards, error: ccErr } = await supabase
-      .from('consortium_cards')
-      .select('valor_credito, status')
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString())
-      .eq('status', 'ativa');
-
-    if (ccErr) console.error('[WEEKLY-BU-REPORT] consortium_cards error:', ccErr.message);
-
-    const consorcioVendas = consortiumCards?.length || 0;
-    const consorcioCredito = consortiumCards?.reduce((s, c) => s + (c.valor_credito || 0), 0) || 0;
-
-    // 3. Crédito: transactions in period
+    // 3. Crédito: contratos assinados no período
     const { data: creditTx, error: ctErr } = await supabase
-      .from('hubla_transactions')
-      .select('net_value, product_category')
-      .gte('sale_date', startStr)
-      .lte('sale_date', endStr)
-      .eq('product_category', 'credito');
+      .from('credito_vendas')
+      .select('valor_credito')
+      .eq('status', 'contratado')
+      .gte('data_assinatura', startStr)
+      .lte('data_assinatura', endStr);
 
-    if (ctErr) console.error('[WEEKLY-BU-REPORT] hubla_transactions error:', ctErr.message);
+    if (ctErr) console.error('[WEEKLY-BU-REPORT] credito_vendas error:', ctErr.message);
 
     const creditoVendas = creditTx?.length || 0;
-    const creditoReceita = creditTx?.reduce((s, t) => s + (t.net_value || 0), 0) || 0;
+    const creditoVolume = creditTx?.reduce((s, t) => s + Number(t.valor_credito || 0), 0) || 0;
 
     // --- Build metrics ---
+    const inc = rel?.incorporador || {};
     const incorp = {
-      vendasA010: wm?.a010_sales || 0,
-      receitaA010: wm?.a010_revenue || 0,
-      contratos: wm?.contract_sales || 0,
-      receitaContratos: wm?.contract_revenue || 0,
-      obConstruir: wm?.ob_construir_sales || 0,
-      obVitalicio: wm?.ob_vitalicio_sales || 0,
-      obEvento: wm?.ob_evento_sales || 0,
-      incorporador50k: wm?.incorporador_50k || 0,
-      clintRevenue: wm?.clint_revenue || 0,
-      faturamentoTotal: wm?.faturamento_total || wm?.total_revenue || 0,
+      vendasA010: Number(inc?.a010?.vendas ?? 0),
+      receitaA010: Number(inc?.a010?.receita ?? 0),
+      contratos: Number(inc?.contratos?.vendas ?? 0),
+      receitaContratos: Number(inc?.contratos?.receita ?? 0),
+      obConstruir: Number(inc?.ob_construir?.vendas ?? 0),
+      obVitalicio: Number(inc?.ob_vitalicio?.vendas ?? 0),
+      obEvento: Number(inc?.ob_evento?.vendas ?? 0),
+      incorporador50k: Number(inc?.incorporador_50k?.vendas ?? 0),
+      receitaIncorporador50k: Number(inc?.incorporador_50k?.receita ?? 0),
+      clintRevenue: Number(inc?.clint?.receita ?? 0),
+      faturamentoTotal: Number(inc?.faturamento_total ?? 0),
     };
 
     const custos = {
-      ads: wm?.ads_cost || 0,
-      equipe: wm?.team_cost || 0,
-      escritorio: wm?.office_cost || 0,
-      total: wm?.total_cost || wm?.real_cost || 0,
+      ads: Number(rel?.custos?.ads ?? 0),
+      equipe: Number(rel?.custos?.equipe ?? 0),
+      escritorio: Number(rel?.custos?.escritorio ?? 0),
+      total: Number(rel?.custos?.total ?? 0),
     };
 
     const kpis = {
-      lucroOperacional: wm?.operating_profit || 0,
-      roi: wm?.roi || 0,
-      roas: wm?.roas || 0,
-      cpl: wm?.cpl || 0,
+      lucroOperacional: Number(rel?.kpis?.lucro_operacional ?? 0),
+      roi: Number(rel?.kpis?.roi_lucro ?? 0),
+      roas: Number(rel?.kpis?.roas ?? 0),
+      cpl: Number(rel?.kpis?.cpl ?? 0),
     };
 
-    const receitaTotal = incorp.faturamentoTotal + consorcioCredito + creditoReceita;
+    const custosFixosMesRef = rel?.fonte?.custos_fixos_mes_ref?.equipe || '';
+
+    // Receita Total = SÓ o faturamento do Incorporador (crédito de carta não é receita)
+    const receitaTotal = incorp.faturamentoTotal;
 
     // --- Build HTML ---
     const htmlContent = buildEmailHTML({
-      periodLabel: `${fmtDate(start)} a ${fmtDate(end)}`,
-      weekLabel: wm?.week_label || `${fmtDate(start)} - ${fmtDate(end)}`,
+      periodLabel: `${fmtDate(startStr)} a ${fmtDate(endStr)}`,
       incorp,
       consorcioVendas,
       consorcioCredito,
       creditoVendas,
-      creditoReceita,
+      creditoVolume,
       custos,
       kpis,
       receitaTotal,
+      custosFixosMesRef,
     });
 
     // Send via brevo-send
