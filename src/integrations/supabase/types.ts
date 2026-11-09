@@ -9927,10 +9927,16 @@ export type Database = {
           replicated_at: string | null
           replicated_from_deal_id: string | null
           resgate_em: string | null
+          src: string | null
           stage_id: string | null
           stage_moved_at: string | null
           tags: string[] | null
           updated_at: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
           value: number | null
         }
         Insert: {
@@ -9973,10 +9979,16 @@ export type Database = {
           replicated_at?: string | null
           replicated_from_deal_id?: string | null
           resgate_em?: string | null
+          src?: string | null
           stage_id?: string | null
           stage_moved_at?: string | null
           tags?: string[] | null
           updated_at?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           value?: number | null
         }
         Update: {
@@ -10019,10 +10031,16 @@ export type Database = {
           replicated_at?: string | null
           replicated_from_deal_id?: string | null
           resgate_em?: string | null
+          src?: string | null
           stage_id?: string | null
           stage_moved_at?: string | null
           tags?: string[] | null
           updated_at?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
           value?: number | null
         }
         Relationships: [
