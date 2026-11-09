@@ -70,6 +70,27 @@ interface QuickScheduleModalProps {
    * Default: false.
    */
   searchAllOwnersInBU?: boolean;
+  /**
+   * Encaminhamento do Pós-venda: horário com qualquer reunião ativa do closer
+   * fica indisponível (ignora capacidade em grupo). Default: false.
+   */
+  exclusiveSlots?: boolean;
+}
+
+const STATUS_INATIVOS_SLOT = '("canceled","cancelled","rescheduled")';
+
+async function fetchHorariosOcupados(closerId: string, date: Date): Promise<Set<string>> {
+  const ini = new Date(date); ini.setHours(0, 0, 0, 0);
+  const fim = new Date(date); fim.setHours(23, 59, 59, 999);
+  const { data, error } = await supabase
+    .from('meeting_slots')
+    .select('scheduled_at')
+    .eq('closer_id', closerId)
+    .gte('scheduled_at', ini.toISOString())
+    .lte('scheduled_at', fim.toISOString())
+    .not('status', 'in', STATUS_INATIVOS_SLOT);
+  if (error) throw error;
+  return new Set((data || []).map(m => format(new Date(m.scheduled_at as string), 'HH:mm')));
 }
 
 interface DealOption {
@@ -141,6 +162,7 @@ export function QuickScheduleModal({
   prefilledNotes,
   ownerEmail,
   searchAllOwnersInBU = false,
+  exclusiveSlots = false,
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const activeBU = useActiveBU();
@@ -425,8 +447,21 @@ export function QuickScheduleModal({
     setSearchMode('normal');
   }, []);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
+    if (exclusiveSlots) {
+      try {
+        const ocupados = await fetchHorariosOcupados(selectedCloser, selectedDate);
+        if (ocupados.has(selectedTime)) {
+          toast.error('Este horário já foi ocupado. Escolha outro.');
+          refetchOcupados();
+          return;
+        }
+      } catch {
+        toast.error('Não foi possível conferir a agenda do closer. Tente novamente.');
+        return;
+      }
+    }
     // Defesa adicional: nunca submeter para leads bloqueados
     if (isLeadBlocked) return;
     if (isApprovalBlocked) return;
@@ -550,6 +585,13 @@ export function QuickScheduleModal({
   // Fetch configured time slots for this day
   const { data: closerDaySlots } = useCloserDaySlots(dayOfWeek ?? 0);
 
+  const { data: horariosOcupados, refetch: refetchOcupados } = useQuery({
+    queryKey: ['horarios-ocupados-closer', selectedCloser, selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null],
+    queryFn: () => fetchHorariosOcupados(selectedCloser, selectedDate as Date),
+    enabled: exclusiveSlots && !!selectedCloser && !!selectedDate,
+    staleTime: 0,
+  });
+
   // Build time slots from configured meeting links for selected closer
   const timeSlots = useMemo(() => {
     if (!selectedCloser || !closerDaySlots || dayOfWeek === undefined) {
@@ -561,8 +603,16 @@ export function QuickScheduleModal({
       .filter(s => s.closer_id === selectedCloser)
       .map(s => s.start_time.substring(0, 5)); // "09:00:00" → "09:00"
     
-    return [...new Set(closerSlots)].sort();
-  }, [closerDaySlots, selectedCloser, dayOfWeek]);
+    const todos = [...new Set(closerSlots)].sort();
+    if (!exclusiveSlots || !selectedDate) return todos;
+    const agora = new Date();
+    return todos.filter(t => {
+      if (horariosOcupados?.has(t)) return false;
+      const [h, m] = t.split(':').map(Number);
+      const d = new Date(selectedDate); d.setHours(h, m, 0, 0);
+      return d.getTime() > agora.getTime();
+    });
+  }, [closerDaySlots, selectedCloser, dayOfWeek, exclusiveSlots, selectedDate, horariosOcupados]);
 
   // Get time slot status with capacity check
   const getTimeSlotStatus = useCallback((time: string) => {
@@ -1235,7 +1285,9 @@ export function QuickScheduleModal({
                         ? "Selecione um closer primeiro"
                         : !selectedDate
                           ? "Selecione uma data primeiro"
-                          : "Nenhum horário configurado para este dia"
+                          : exclusiveSlots
+                            ? "Nenhum horário livre neste dia"
+                            : "Nenhum horário configurado para este dia"
                       }
                     </div>
                   ) : (

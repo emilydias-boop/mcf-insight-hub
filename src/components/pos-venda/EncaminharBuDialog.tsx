@@ -40,6 +40,7 @@ export function EncaminharBuDialog({ dealId, clienteNome, onClose, onConcluido }
           open
           onOpenChange={(o) => { if (!o) { onConcluido?.(); onClose(); } }}
           prefilledDealId={destino.dealDestinoId}
+          exclusiveSlots
           prefilledNotes="Cliente licenciado encaminhado pelo gerente de relacionamento (Pós-venda)."
         />
       </BUProvider>
