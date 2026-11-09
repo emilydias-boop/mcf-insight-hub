@@ -305,7 +305,10 @@ export function AgendaCobrancas({ filtros }: { filtros: FiltrosCobranca }) {
   }, [modo, ref]);
 
   const doPeriodo = useMemo(
-    () => linhas.filter((l) => !tituloForaCobranca(l.t) || l.t.status === 'quitado' ? !(l.t.cobranca_stage === 'judicial') && l.t.status !== 'cancelado' && l.t.status !== 'reembolsado' : false)
+    () => linhas
+      .filter((l) => l.t.cobranca_stage !== 'judicial'
+        && (l.t.status === 'aberto' || l.t.status === 'quitado')
+        && (l.t.payment_method || '').toLowerCase() !== 'credit_card')
       .filter((l) => l.p.status !== 'cancelado' && l.p.data_vencimento >= inicio && l.p.data_vencimento <= fim)
       .sort((a, b) => a.p.data_vencimento.localeCompare(b.p.data_vencimento)),
     [linhas, inicio, fim],
