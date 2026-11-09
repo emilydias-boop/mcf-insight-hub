@@ -382,7 +382,7 @@ async function buildIncorporadorReport(supabase: any) {
 
   const { data: r2Attendees } = await supabase
     .from('meeting_slot_attendees')
-    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, deal_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
+    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, attendee_phone, refunded_at, contract_paid_at, deal_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
     .gte('meeting_slot.scheduled_at', r2StartISO)
     .lte('meeting_slot.scheduled_at', r2EndISO);
@@ -391,7 +391,7 @@ async function buildIncorporadorReport(supabase: any) {
   const weekStartStr = carrinhoThuStr;
   const { data: encaixados } = await supabase
     .from('meeting_slot_attendees')
-    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, contract_paid_at, deal_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
+    .select('id, status, r2_status_id, booked_by, is_partner, attendee_name, attendee_phone, refunded_at, contract_paid_at, deal_id, meeting_slot:meeting_slots!inner(id, status, scheduled_at, meeting_type, closer_id, lead_type)')
     .eq('meeting_slot.meeting_type', 'r2')
     .eq('carrinho_week_start', weekStartStr);
 
@@ -404,7 +404,7 @@ async function buildIncorporadorReport(supabase: any) {
 
   // ── Classify R2 lead origins: A010 > ANAMNESE > LIVE ──
   const r2DealIds = r2NonPartner.map((a: any) => a.deal_id).filter(Boolean);
-  let dealContactMap: Record<string, { email: string | null }> = {};
+  let dealContactMap: Record<string, { email: string | null; phone: string | null }> = {};
   let a010EmailSet = new Set<string>();
   let anamneseDealIds = new Set<string>();
 
@@ -412,13 +412,14 @@ async function buildIncorporadorReport(supabase: any) {
     // Fetch deal → contact email
     const { data: dealContacts } = await supabase
       .from('crm_deals')
-      .select('id, crm_contacts(email)')
+      .select('id, crm_contacts(email, phone)')
       .in('id', r2DealIds);
 
     for (const dc of dealContacts || []) {
       const contact = (dc as any).crm_contacts;
       dealContactMap[dc.id] = {
         email: contact?.email || null,
+        phone: contact?.phone || null,
       };
     }
 
@@ -464,6 +465,30 @@ async function buildIncorporadorReport(supabase: any) {
     console.log(`[INCORP] Anamnese stages found: ${anamnaseStageIds.size}, deals with anamnese: ${anamneseDealIds.size}`);
   }
 
+  // Desde 07/2026 r2_status_id não é preenchido. "Comprou" = venda de parceria casada (mesma regra de r2_desfecho).
+  const fechamento = new Date(r2End.getTime() + 2 * 86400000);
+  const { data: vpRows, error: vpErr } = await supabase.rpc('vendas_parceria', {
+    p_from: new Date(r2Start.getTime() - 86400000).toISOString(), p_to: fechamento.toISOString() });
+  if (vpErr) console.error('[WEEKLY-MANAGER-REPORT] vendas_parceria error:', vpErr.message);
+  const tail9 = (p?: string | null) => { const d = (p || '').replace(/\D/g, ''); return d ? d.slice(-9) : null; };
+  const compraByAtt = new Map<string, any>();
+  const txUsada = new Set<string>();
+  const ordenados = [...r2NonPartner].sort((a: any, b: any) => a.meeting_slot.scheduled_at.localeCompare(b.meeting_slot.scheduled_at));
+  for (const att of ordenados) {
+    const r2At = new Date(att.meeting_slot.scheduled_at).getTime();
+    const em = dealContactMap[att.deal_id]?.email?.trim().toLowerCase() || null;
+    const ph = tail9(att.attendee_phone || dealContactMap[att.deal_id]?.phone);
+    const hit = (vpRows || []).filter((v: any) => {
+      if (txUsada.has(v.id)) return false;
+      const t = new Date(v.sale_date).getTime();
+      if (t < r2At - 86400000 || t > r2At + 30 * 86400000) return false;
+      return v.linked_attendee_id === att.id
+        || (!!em && (v.customer_email || '').trim().toLowerCase() === em)
+        || (!!ph && tail9(v.customer_phone) === ph);
+    }).sort((a: any, b: any) => new Date(a.sale_date).getTime() - new Date(b.sale_date).getTime())[0];
+    if (hit) { compraByAtt.set(att.id, hit); txUsada.add(hit.id); }
+  }
+  let noShows = 0;
   let r2Agendadas = 0, r2Realizadas = 0, aprovados = 0, pendentes = 0, emAnalise = 0, foraDoCarrinho = 0, proximaSemana = 0, reprovados = 0;
   let originA010 = 0, originAnamnese = 0, originLive = 0;
 
@@ -490,18 +515,21 @@ async function buildIncorporadorReport(supabase: any) {
       r2Realizadas++;
     }
 
-    if (att.r2_status_id === APROVADO_ID) aprovados++;
-    else if (att.r2_status_id === PENDENTE_ID) pendentes++;
-    else if (att.r2_status_id === EM_ANALISE_ID) emAnalise++;
+    if (compraByAtt.has(att.id)) aprovados++;
     else if (att.r2_status_id === PROXIMA_SEMANA_ID) proximaSemana++;
     else if (att.r2_status_id === REPROVADO_ID) reprovados++;
-    else if (att.r2_status_id && FORA_IDS.includes(att.r2_status_id)) foraDoCarrinho++;
+    else if (att.status === 'desistencia' || att.status === 'refunded' || att.refunded_at
+             || (att.r2_status_id && FORA_IDS.includes(att.r2_status_id))) foraDoCarrinho++;
+    else if (att.r2_status_id === EM_ANALISE_ID) emAnalise++;
+    else if (att.status === 'no_show' && slot.status !== 'completed') noShows++;
+    else pendentes++;
   }
 
   // Pie chart data for R2 status
   const pieData = [
-    { label: 'Aprovados', value: aprovados, color: '#059669' },
-    { label: 'Pendentes', value: pendentes, color: '#f59e0b' },
+    { label: 'Comprou parceria', value: aprovados, color: '#059669' },
+    { label: 'Realizou sem compra', value: pendentes, color: '#f59e0b' },
+    { label: 'No-show', value: noShows, color: '#9ca3af' },
     { label: 'Em Análise', value: emAnalise, color: '#3b82f6' },
     { label: 'Próxima Sem.', value: proximaSemana, color: '#8b5cf6' },
     { label: 'Reprovados', value: reprovados, color: '#ef4444' },
@@ -771,7 +799,7 @@ async function buildIncorporadorReport(supabase: any) {
       const st = closerR2Map.get(cid)!;
       if (att.status !== 'cancelled' && att.status !== 'rescheduled') st.r2Agendadas++; // R2 keeps excluding rescheduled
       if (att.status === 'completed' || att.status === 'presente' || slot.status === 'completed') st.r2Realizadas++;
-      if (att.r2_status_id === APROVADO_ID) st.aprovados++;
+      if (compraByAtt.has(att.id)) st.aprovados++;
       if (att.r2_status_id === REPROVADO_ID) st.reprovados++;
     }
   }
@@ -779,7 +807,7 @@ async function buildIncorporadorReport(supabase: any) {
   // Partnership sales per R2 closer: match approved attendees' emails with hubla_transactions for A001/A009 products
   const { data: parceriaTx } = await supabase
     .from('hubla_transactions')
-    .select('id, product_name, net_value, customer_email, linked_attendee_id')
+    .select('id, product_name, net_value, customer_email, linked_attendee_id, sale_status, installment_number')
     .or('product_name.ilike.%A001%,product_name.ilike.%A009%')
     .in('sale_status', ['completed', 'refunded'])
     .gte('sale_date', carrinhoStartISO)
@@ -792,9 +820,9 @@ async function buildIncorporadorReport(supabase: any) {
     if (slot?.closer_id) attendeeCloserMap.set(att.id, slot.closer_id);
   }
 
-  for (const tx of parceriaTx || []) {
-    if (tx.linked_attendee_id && attendeeCloserMap.has(tx.linked_attendee_id)) {
-      const closerId = attendeeCloserMap.get(tx.linked_attendee_id)!;
+  for (const [attId, tx] of compraByAtt) {
+    if (attendeeCloserMap.has(attId)) {
+      const closerId = attendeeCloserMap.get(attId)!;
       if (closerR2Map.has(closerId)) {
         const st = closerR2Map.get(closerId)!;
         st.vendasParceria++;
@@ -870,7 +898,7 @@ async function buildIncorporadorReport(supabase: any) {
   // Partnership by product (A001, A009 etc) — bruto e líquido
   const parceriaByProduct = new Map<string, { count: number; bruto: number; liquido: number }>();
   for (const tx of parceriaTx || []) {
-    if (tx.sale_status === 'refunded') continue;
+    if (tx.sale_status === 'refunded' || (tx.installment_number || 1) > 1) continue;
     const pname = (tx.product_name || 'Outro').trim();
     if (!parceriaByProduct.has(pname)) parceriaByProduct.set(pname, { count: 0, bruto: 0, liquido: 0 });
     const p = parceriaByProduct.get(pname)!;
@@ -946,7 +974,7 @@ async function buildIncorporadorReport(supabase: any) {
     <div class="kpi-row">
       <div class="kpi"><div class="value">${r2Agendadas}</div><div class="label">R2 Agendada</div><div class="kpi-hint">Não-parceiros + encaixados</div></div>
       <div class="kpi"><div class="value">${r2Realizadas}</div><div class="label">R2 Realizada</div><div class="kpi-hint">Agend. − no-shows reais</div></div>
-      <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div><div class="kpi-hint">Status = Aprovado</div></div>
+      <div class="kpi green"><div class="value">${aprovados}</div><div class="label">Aprovados</div><div class="kpi-hint">Comprou parceria (R2−1d a R2+30d)</div></div>
       <div class="kpi purple"><div class="value">${proximaSemana}</div><div class="label">Próx. Semana</div><div class="kpi-hint">Adiados</div></div>
       <div class="kpi red"><div class="value">${foraDoCarrinho}</div><div class="label">Fora Carrinho</div><div class="kpi-hint">Reprov./Reembolso/Desist./Cancel.</div></div>
     </div>
