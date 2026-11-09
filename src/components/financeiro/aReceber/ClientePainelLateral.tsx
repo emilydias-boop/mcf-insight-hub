@@ -7,7 +7,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { useArHistorico, useArParcelas } from '@/hooks/useAReceber';
+import { useArHistorico, useArParcelas, useUpdateArTitulo } from '@/hooks/useAReceber';
+import { useCanManageAr } from '@/hooks/useArGestores';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ticketNumber } from '@/lib/arTicketNumber';
 import { emAberto, hojeSP, isAtrasada, diasEntre } from '@/lib/arCobrancaCalc';
 import type { ArTitulo } from '@/types/aReceber';
@@ -22,6 +25,23 @@ export function ClientePainelLateral({ titulo, onClose }: { titulo: ArTitulo | n
   const [nota, setNota] = useState('');
   const [salvando, setSalvando] = useState(false);
   const hoje = hojeSP();
+  const { canManage } = useCanManageAr();
+  const updTitulo = useUpdateArTitulo();
+  const [forma, setForma] = useState<string | null>(null);
+  const [negoc, setNegoc] = useState<boolean | null>(null);
+  const formaAtual = forma ?? titulo?.payment_method ?? '';
+  const negocAtual = negoc ?? !!titulo?.negociacao;
+
+  const alterar = async (patch: Record<string, any>, desc: string) => {
+    if (!titulo) return;
+    try {
+      await updTitulo.mutateAsync({ id: titulo.id, ...patch } as any);
+      await supabase.from('ar_historico' as any).insert({ titulo_id: titulo.id, tipo: 'alteracao_titulo', descricao: desc, metadata: patch } as any);
+      qc.invalidateQueries({ queryKey: ['ar-historico', titulo.id] });
+      qc.invalidateQueries({ queryKey: ['ar-reembolsos'] });
+      toast.success('Atualizado');
+    } catch (e: any) { toast.error(e?.message || 'Erro ao atualizar'); }
+  };
 
   const anotar = async () => {
     if (!titulo || !nota.trim()) return;
@@ -48,7 +68,25 @@ export function ClientePainelLateral({ titulo, onClose }: { titulo: ArTitulo | n
                 <div><div className="text-xs text-muted-foreground">Contato</div><ContatoRapido telefone={titulo.customer_phone} email={titulo.customer_email} /></div>
                 <div><div className="text-xs text-muted-foreground">CPF/CNPJ</div>{titulo.customer_document || '—'}</div>
                 <div><div className="text-xs text-muted-foreground">Valor total</div>{brl(Number(titulo.valor_total))}</div>
-                <div><div className="text-xs text-muted-foreground">Forma de pagamento</div>{titulo.payment_method || '—'}</div>
+                <div><div className="text-xs text-muted-foreground">Forma de pagamento</div>
+                  {canManage ? (
+                    <Select value={formaAtual || 'none'} onValueChange={(v) => { setForma(v); alterar({ payment_method: v }, `Forma de pagamento alterada de ${titulo.payment_method || '—'} para ${v} (prazo de reembolso recalculado)`); }}>
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {formaAtual && !['pix', 'credit_card', 'boleto', 'bank_slip'].includes(formaAtual) && <SelectItem value={formaAtual}>{formaAtual}</SelectItem>}
+                        {!formaAtual && <SelectItem value="none" disabled>—</SelectItem>}
+                        <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="credit_card">Cartão de crédito</SelectItem>
+                        <SelectItem value="boleto">Boleto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (titulo.payment_method || '—')}
+                </div>
+                <div className="col-span-2 flex items-center gap-2">
+                  <Switch checked={negocAtual} disabled={!canManage || titulo.status !== 'aberto'}
+                    onCheckedChange={(v) => { setNegoc(v); alterar({ negociacao: v }, v ? 'Cliente marcado em Negociação' : 'Cliente saiu de Negociação'); }} />
+                  <span className="text-sm">Em negociação</span>
+                </div>
                 <div><div className="text-xs text-muted-foreground">Recebido</div><span className="text-emerald-600">{brl(titulo.valor_pago || 0)}</span></div>
                 <div><div className="text-xs text-muted-foreground">Saldo devedor</div><SaldoValor valor={titulo.valor_pendente || 0} /></div>
               </div>
