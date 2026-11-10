@@ -42,15 +42,46 @@ import { useReembolsoTotais } from '@/hooks/useArReembolsos';
 import { ticketNumber } from '@/lib/arTicketNumber';
 import {
   AgendaCobrancas, PendenciasMes, InadimplenciaHistorica, ResultadosCobrador, FiltrosGlobais,
-  FILTROS_VAZIOS, ContatoRapido, SaldoValor, type FiltrosCobranca,
+  FILTROS_VAZIOS, SaldoValor, StatusClienteBadge, type FiltrosCobranca,
 } from '@/components/financeiro/aReceber/GestaoCobranca';
 import { CobrancaJuridica, RelatoriosNotas, useReembolsosProximos } from '@/components/financeiro/aReceber/AReceberExtras';
-import { saldoDevedor } from '@/lib/arCobrancaCalc';
+import { saldoDevedor, statusListagem, telefoneDigitos } from '@/lib/arCobrancaCalc';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { SlidersHorizontal, MoreHorizontal, Phone, MessageCircle } from 'lucide-react';
 import { Gavel, NotebookPen } from 'lucide-react';
 import { ClientePainelLateral } from '@/components/financeiro/aReceber/ClientePainelLateral';
 import { CalendarDays, AlarmClock, History, Trophy, Download } from 'lucide-react';
 
-const TAB_CLS = 'flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all';
+const TAB_CLS_OLD = 'flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all';
+
+const TAB_CLS = 'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
+const TH = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap h-9';
+const ABAS: [string, string][] = [
+  ['listagem', 'Cobranças Regulares'], ['agenda', 'Agenda de Cobranças'], ['pendencias', 'Pendências por Mês'],
+  ['inadimplencia', 'Inadimplência Histórica'], ['juridica', 'Cobrança Jurídica'], ['resultados', 'Resultados por Cobrador'],
+  ['kanban', 'Esteira Cobrança'], ['reconciliacao', 'Reconciliação'], ['relatorios', 'Relatórios e Notas'],
+];
+
+function KpiBox({ label, valor, tom }: { label: string; valor: string; tom?: string }) {
+  return (
+    <Card className="px-4 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`text-xl font-bold tabular-nums ${tom ?? 'text-foreground'}`}>{valor}</div>
+    </Card>
+  );
+}
+
+function TelefoneCell({ telefone }: { telefone?: string | null }) {
+  const d = telefoneDigitos(telefone);
+  if (!d) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <div className="flex items-center gap-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      <span className="text-xs tabular-nums">{telefone}</span>
+      <a href={`tel:+${d}`} title="Ligar" className="p-1 rounded text-emerald-600 hover:bg-muted"><Phone className="w-3.5 h-3.5" /></a>
+      <a href={`https://wa.me/${d}`} target="_blank" rel="noreferrer" title="WhatsApp" className="p-1 rounded text-emerald-600 hover:bg-muted"><MessageCircle className="w-3.5 h-3.5" /></a>
+    </div>
+  );
+}
 
 const brl = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -138,6 +169,7 @@ export default function AReceber() {
   const [openDuplicidade, setOpenDuplicidade] = useState(false);
   const { data: reembTotais } = useReembolsoTotais();
   const [painelTitulo, setPainelTitulo] = useState<ArTitulo | null>(null);
+  const maisFiltrosAtivos = [status !== 'aberto', tipo !== 'todos', cobrancaStage !== 'todos', !!numeroTitulo.trim()].filter(Boolean).length;
   const produtosGestao = PRODUCT_OPTIONS.filter(o => o.value !== 'todos').map(o => o.value);
 
   const exportarCsv = () => {
@@ -375,22 +407,12 @@ export default function AReceber() {
                       );
                     })()}
                   </TableHead>
-                  <TableHead className="w-[90px]">Nº</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Produto</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>Data venda</TableHead>
-                  <TableHead className="text-right">Valor total</TableHead>
-                  <TableHead className="text-right">Entrada</TableHead>
-                  <TableHead className="text-right">Pago via cobranças</TableHead>
-                  <TableHead className="text-right">Saldo</TableHead>
-                  <TableHead>Parcelas</TableHead>
-                  <TableHead>Próxima cobrança</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Cobrança</TableHead>
-                  <TableHead>Resp. cobrança</TableHead>
-                  <TableHead>Responsável</TableHead>
+                  {['Cliente','Telefone','E-mail','Status','Produto','Gerente','Cobrador'].map(h => <TableHead key={h} className={TH}>{h}</TableHead>)}
+                  {['Valor ofertado'].map(h => <TableHead key={h} className={`${TH} text-right`}>{h}</TableHead>)}
+                  <TableHead className={TH}>Forma</TableHead>
+                  {['Entrada','Pago','Saldo devedor'].map(h => <TableHead key={h} className={`${TH} text-right`}>{h}</TableHead>)}
+                  <TableHead className={TH}>Próxima cobrança</TableHead>
+                  <TableHead className={TH}>Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -401,7 +423,7 @@ export default function AReceber() {
                   return (
                     <TableRow
                       key={t.id}
-                      className={`${precisaLancar ? 'bg-orange-500/5 ' : ''}${isSel ? 'bg-lime-500/10 ' : ''}cursor-pointer hover:bg-muted/40`}
+                      className={`text-xs ${precisaLancar ? 'bg-orange-500/5 ' : ''}${isSel ? 'bg-lime-500/10 ' : ''}cursor-pointer hover:bg-muted/40`}
                       onClick={() => setPainelTitulo(t)}
                       onDoubleClick={() => navigate(`/financeiro/a-receber/${t.id}`)}
                     >
@@ -413,92 +435,77 @@ export default function AReceber() {
                           aria-label={`Selecionar título ${ticketNumber(t.id)}`}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {ticketNumber(t.id)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{t.customer_name}</div>
-                        <div className="text-xs text-muted-foreground">{t.customer_email || t.customer_document || '—'}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-xs font-medium">{t.product_code}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-1 max-w-[180px]">{t.product_name}</div>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-                        {canManage ? (
-                          <Select
-                            value={t.tipo}
-                            onValueChange={(v) => handleChangeTipo(t.id, v as ArTitulo['tipo'])}
-                          >
-                            <SelectTrigger className="h-8 min-w-[130px]"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="integral">Integral</SelectItem>
-                              <SelectItem value="parcelado">Parcelado</SelectItem>
-                              <SelectItem value="pendente_lancamento">Pendente de lançamento</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <TipoBadge tipo={t.tipo} />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <ContatoRapido telefone={t.customer_phone} email={t.customer_email} />
-                        {t.payment_method && <div className="text-[11px] text-muted-foreground mt-0.5">{t.payment_method}</div>}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">{brl(Number(t.valor_total))}</TableCell>
-                      <TableCell className="text-right">{brl(t.valor_entrada || 0)}</TableCell>
-                      <TableCell className="text-right text-emerald-600">{brl(Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0))}</TableCell>
-                      <TableCell className="text-right"><SaldoValor valor={t.status === 'aberto' ? saldoDevedor(Number(t.valor_total), t.valor_entrada || 0, Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0)) : 0} /></TableCell>
-                      <TableCell className="text-xs">
-                        {precisaLancar
-                          ? <span className="text-orange-600 font-medium">Lançar</span>
-                          : `${t.parcelas_pagas}/${t.parcelas_total}`}
-                      </TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {t.status === 'aberto' && t.proxima_parcela ? t.proxima_parcela.split('-').reverse().join('/') : '—'}
-                        {t.status === 'aberto' && (t.dias_atraso ?? 0) > 0 && (
-                          <div className="font-semibold text-red-600">{t.dias_atraso} dias de atraso</div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={t.status} />
-                        {t.negociacao && t.status === 'aberto' && <Badge variant="outline" className="mt-1 bg-amber-500/15 text-amber-600 border-amber-500/30">Negociação</Badge>}
-                      </TableCell>
-                      <TableCell>
-                        {t.status === 'aberto' && t.stage_effective ? (
-                          <CobrancaStageBadge stage={t.stage_effective} />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-                        <div className="space-y-1">
-                          <CobrancaResponsavelInfo titulo={t} compact />
-                          <GerenteContaInfo gerente={gerentesConta?.get(t.id)} compact />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-[11px]"
-                            onClick={(e) => { e.stopPropagation(); setCobrancaTitulo(t); }}
-                          >
-                            Cobrança
-                          </Button>
+                      <TableCell className="py-2">
+                        <div className="font-medium whitespace-nowrap">{t.customer_name}</div>
+                        <div className="text-[11px] text-muted-foreground font-mono whitespace-nowrap">
+                          {ticketNumber(t.id)} · {precisaLancar ? <span className="text-orange-600 font-medium">Lançar parcelas</span> : `${t.parcelas_pagas}/${t.parcelas_total} parcelas`}
                         </div>
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-                        <Select
-                          value={t.responsavel_id ?? 'none'}
-                          onValueChange={(v) => handleAssign(t.id, v)}
-                        >
-                          <SelectTrigger className="h-8 min-w-[140px]"><SelectValue placeholder="Definir…" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">— Sem responsável —</SelectItem>
-                            {(users ?? []).map(u => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                      <TableCell className="py-2"><TelefoneCell telefone={t.customer_phone} /></TableCell>
+                      <TableCell className="py-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                        {t.customer_email ? <a href={`mailto:${t.customer_email}`} className="text-primary hover:underline whitespace-nowrap">{t.customer_email}</a> : '—'}
+                      </TableCell>
+                      <TableCell className="py-2"><StatusClienteBadge status={statusListagem(t)} /></TableCell>
+                      <TableCell className="py-2 text-xs">
+                        <div className="whitespace-nowrap">{t.product_name || t.product_code}</div>
+                        <div className="text-[11px] text-muted-foreground">{t.product_code}</div>
+                      </TableCell>
+                      <TableCell className="py-2 text-xs whitespace-nowrap">{gerentesConta?.get(t.id)?.gerente_nome ?? '—'}</TableCell>
+                      <TableCell className="py-2 text-xs whitespace-nowrap">{(users ?? []).find(u => u.id === t.cobranca_responsavel_id)?.full_name ?? '—'}</TableCell>
+                      <TableCell className="py-2 text-right text-xs tabular-nums whitespace-nowrap">{brl(Number(t.valor_total))}</TableCell>
+                      <TableCell className="py-2 text-xs whitespace-nowrap">{t.payment_method || '—'}</TableCell>
+                      <TableCell className="py-2 text-right text-xs tabular-nums whitespace-nowrap">{brl(t.valor_entrada || 0)}</TableCell>
+                      <TableCell className="py-2 text-right text-xs tabular-nums whitespace-nowrap">{brl(Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0))}</TableCell>
+                      <TableCell className="py-2 text-right text-xs tabular-nums whitespace-nowrap">
+                        {(() => {
+                          const sd = t.status === 'aberto' ? saldoDevedor(Number(t.valor_total), t.valor_entrada || 0, Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0)) : 0;
+                          return (t.dias_atraso ?? 0) > 0 && t.status === 'aberto' ? <span className="font-bold text-destructive">{brl(sd)}</span> : <SaldoValor valor={sd} />;
+                        })()}
+                      </TableCell>
+                      <TableCell className="py-2 text-xs whitespace-nowrap tabular-nums">
+                        {t.status === 'aberto' && t.proxima_parcela ? (
+                          <span className={(t.dias_atraso ?? 0) > 0 ? 'font-semibold text-destructive' : ''}>{t.proxima_parcela.split('-').reverse().join('/')}</span>
+                        ) : '—'}
+                        {t.status === 'aberto' && (t.dias_atraso ?? 0) > 0 && (
+                          <span className="ml-2 text-[11px] font-semibold text-destructive">{t.dias_atraso} dias de atraso</span>
+                        )}
+                        {t.status === 'aberto' && t.stage_effective && <div className="mt-0.5"><CobrancaStageBadge stage={t.stage_effective} /></div>}
+                      </TableCell>
+                      <TableCell className="py-2" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Ações"><MoreHorizontal className="w-4 h-4" /></Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-64 space-y-3">
+                            <div className="space-y-1">
+                              <CobrancaResponsavelInfo titulo={t} compact />
+                              <GerenteContaInfo gerente={gerentesConta?.get(t.id)} compact />
+                            </div>
+                            <Button size="sm" variant="outline" className="w-full" onClick={() => setCobrancaTitulo(t)}>Definir cobrança</Button>
+                            <div className="space-y-1"><Label className="text-xs">Tipo</Label>
+                              {canManage ? (
+                                <Select value={t.tipo} onValueChange={(v) => handleChangeTipo(t.id, v as ArTitulo['tipo'])}>
+                                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="integral">Integral</SelectItem>
+                                    <SelectItem value="parcelado">Parcelado</SelectItem>
+                                    <SelectItem value="pendente_lancamento">Pendente de lançamento</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : <div><TipoBadge tipo={t.tipo} /></div>}
+                            </div>
+                            <div className="space-y-1"><Label className="text-xs">Responsável</Label>
+                              <Select value={t.responsavel_id ?? 'none'} onValueChange={(v) => handleAssign(t.id, v)}>
+                                <SelectTrigger className="h-8"><SelectValue placeholder="Definir…" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">— Sem responsável —</SelectItem>
+                                  {(users ?? []).map(u => <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">Venda: {t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'} · {AR_TITULO_STATUS_LABEL[t.status]}</div>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                     </TableRow>
                   );
@@ -584,14 +591,6 @@ export default function AReceber() {
                     <span className="font-medium text-amber-600">{brl(Number(t.valor_pendente ?? t.valor_total ?? 0))}</span>
                   </div>
                 ))}
-        <TabsContent value="juridica" className="mt-4 space-y-4">
-          <FiltrosGlobais value={filtrosGestao} onChange={setFiltrosGestao} produtos={produtosGestao} />
-          <CobrancaJuridica filtros={filtrosGestao} onAbrir={(id) => navigate(`/financeiro/a-receber/${id}`)} />
-        </TabsContent>
-        <TabsContent value="relatorios" className="mt-4 space-y-4">
-          <FiltrosGlobais value={filtrosGestao} onChange={setFiltrosGestao} produtos={produtosGestao} />
-          <RelatoriosNotas filtros={filtrosGestao} />
-        </TabsContent>
               </div>
             </div>
           </div>
@@ -634,10 +633,15 @@ export default function AReceber() {
           ['resultados', ResultadosCobrador],
         ] as const).map(([v, C]) => (
           <TabsContent key={v} value={v} className="mt-4 space-y-4">
-            <FiltrosGlobais value={filtrosGestao} onChange={setFiltrosGestao} produtos={produtosGestao} />
             <C filtros={filtrosGestao} />
           </TabsContent>
         ))}
+        <TabsContent value="juridica" className="mt-4 space-y-4">
+          <CobrancaJuridica filtros={filtrosGestao} onAbrir={(id) => navigate(`/financeiro/a-receber/${id}`)} />
+        </TabsContent>
+        <TabsContent value="relatorios" className="mt-4 space-y-4">
+          <RelatoriosNotas filtros={filtrosGestao} />
+        </TabsContent>
       </Tabs>
       <ReembolsosPanel open={openReembolsos} onOpenChange={setOpenReembolsos} />
       <DuplicidadePanel open={openDuplicidade} onOpenChange={setOpenDuplicidade} />
