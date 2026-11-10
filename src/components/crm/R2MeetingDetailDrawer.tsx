@@ -46,6 +46,7 @@ import { matchR2SpecialMarking } from '@/types/r2SpecialMarking';
 import { useAttendeeChannels } from '@/hooks/useAttendeeChannels';
 import { useContractPaidClosersByDeal } from '@/hooks/useContractPaidClosersByDeal';
 import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
+import { useAddAttendeeNote } from '@/hooks/useAttendeeNotes';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
@@ -81,6 +82,8 @@ export function R2MeetingDetailDrawer({
   const [editingPhone, setEditingPhone] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
   const [saveTrigger, setSaveTrigger] = useState(0);
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const addNote = useAddAttendeeNote();
   const [phoneValue, setPhoneValue] = useState('');
   const [emailValue, setEmailValue] = useState('');
   
@@ -118,8 +121,8 @@ export function R2MeetingDetailDrawer({
 
   // Initialize selection when meeting changes
   useEffect(() => {
-    if (meeting?.attendees?.length && !selectedAttendeeId) {
-      setSelectedAttendeeId(meeting.attendees[0].id);
+    if (!meeting?.attendees?.some(a => a.id === selectedAttendeeId)) {
+      setSelectedAttendeeId(meeting?.attendees?.[0]?.id ?? null);
     }
   }, [meeting?.id, meeting?.attendees, selectedAttendeeId]);
 
@@ -354,7 +357,13 @@ export function R2MeetingDetailDrawer({
   })();
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={(next) => {
+      if (next === false && meeting.attendees?.some(a => noteDrafts[a.id]?.trim())) {
+        if (!confirm('Há uma nota não salva. Fechar mesmo assim e descartar?')) return;
+      }
+      setNoteDrafts({});
+      onOpenChange(next);
+    }}>
       <SheetContent side="right" className="w-full sm:w-[40vw] sm:min-w-[400px] sm:max-w-none p-0 flex flex-col">
         <SheetHeader className="border-b p-4">
           <div className="flex items-center justify-between">
@@ -787,7 +796,11 @@ export function R2MeetingDetailDrawer({
                 )}
                 
                 <TabsContent value="notas" className="mt-4">
-                  <R2NotesTab attendee={attendee} />
+                  <R2NotesTab
+                    attendee={attendee}
+                    draft={noteDrafts[attendee.id] ?? ''}
+                    onDraftChange={(v) => setNoteDrafts(prev => ({ ...prev, [attendee.id]: v }))}
+                  />
                 </TabsContent>
               </Tabs>
             )}
@@ -808,9 +821,30 @@ export function R2MeetingDetailDrawer({
           )}
           <Button 
             className="w-full"
-            onClick={() => {
+            disabled={addNote.isPending}
+            onClick={async () => {
               setSaveTrigger(p => p + 1);
-              toast.success('Informações salvas!');
+              const draftsToSave = (meeting.attendees || [])
+                .map(a => ({ attendeeId: a.id, note: noteDrafts[a.id]?.trim() || '' }))
+                .filter(draft => draft.note);
+              if (draftsToSave.length === 0) {
+                toast.success('Informações salvas!');
+                return;
+              }
+              let hasError = false;
+              for (const { attendeeId, note } of draftsToSave) {
+                try {
+                  await addNote.mutateAsync({ attendeeId, note, noteType: 'r2' });
+                  setNoteDrafts(prev => ({ ...prev, [attendeeId]: '' }));
+                } catch {
+                  hasError = true;
+                }
+              }
+              if (hasError) {
+                toast.error('Erro ao salvar a nota — o texto continua na aba Notas');
+              } else {
+                toast.success('Informações e nota salvas!');
+              }
             }}
           >
             <Save className="h-4 w-4 mr-2" />

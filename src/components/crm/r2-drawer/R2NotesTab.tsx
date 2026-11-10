@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Send, FileText, ShoppingCart, ChevronDown } from 'lucide-react';
+import { Send, FileText, ShoppingCart, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,8 @@ import { useAddAttendeeNote } from '@/hooks/useAttendeeNotes';
 
 interface R2NotesTabProps {
   attendee: R2AttendeeExtended;
+  draft?: string;
+  onDraftChange?: (value: string) => void;
 }
 
 const NOTE_TYPE_STYLES: Record<NoteType, { bg: string; label: string }> = {
@@ -36,11 +38,13 @@ const PURCHASE_STATUS_ICONS: Record<string, { icon: string; color: string }> = {
   pending: { icon: '⏳', color: 'text-yellow-600' },
 };
 
-export function R2NotesTab({ attendee }: R2NotesTabProps) {
+export function R2NotesTab({ attendee, draft, onDraftChange }: R2NotesTabProps) {
   const [showNotes, setShowNotes] = useState(true);
   const [showPurchases, setShowPurchases] = useState(true);
-  const [showAddNoteForm, setShowAddNoteForm] = useState(false);
-  const [newNoteText, setNewNoteText] = useState('');
+  const [internalDraft, setInternalDraft] = useState('');
+  const isControlled = draft !== undefined && onDraftChange !== undefined;
+  const newNoteText = isControlled ? draft : internalDraft;
+  const setNewNoteText = isControlled ? onDraftChange : setInternalDraft;
   
   const contactEmail = attendee?.deal?.contact?.email;
   const contactPhone = attendee?.deal?.contact?.phone;
@@ -60,7 +64,6 @@ export function R2NotesTab({ attendee }: R2NotesTabProps) {
       {
         onSuccess: () => {
           setNewNoteText('');
-          setShowAddNoteForm(false);
           toast.success('Nota adicionada!');
         },
         onError: () => {
@@ -88,17 +91,6 @@ export function R2NotesTab({ attendee }: R2NotesTabProps) {
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-2 space-y-2">
           {/* Add note form */}
-          {!showAddNoteForm ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => setShowAddNoteForm(true)}
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              Adicionar Nota
-            </Button>
-          ) : (
             <div className="space-y-2 bg-muted/30 rounded-lg p-3">
               <Textarea
                 value={newNoteText}
@@ -106,34 +98,31 @@ export function R2NotesTab({ attendee }: R2NotesTabProps) {
                 placeholder="Digite sua nota sobre este lead..."
                 rows={3}
                 className="bg-background"
-                autoFocus
               />
               <div className="flex gap-2 justify-end">
+                {newNoteText && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setShowAddNoteForm(false);
-                    setNewNoteText('');
-                  }}
+                  onClick={() => setNewNoteText('')}
                 >
-                  Cancelar
+                  Limpar
                 </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={handleAddNote}
                   disabled={addNote.isPending || !newNoteText.trim()}
                 >
                   <Send className="h-3 w-3 mr-1" />
-                  Salvar
+                  Salvar nota
                 </Button>
               </div>
             </div>
-          )}
 
           {/* Notes list */}
           <div className="space-y-2 max-h-48 overflow-y-auto">
-            {(!leadNotes || leadNotes.length === 0) && !showAddNoteForm && (
+            {(!leadNotes || leadNotes.length === 0) && (
               <p className="text-xs text-muted-foreground text-center py-2">
                 Nenhuma nota encontrada
               </p>
