@@ -57,6 +57,7 @@ export default function ScriptVendas() {
   const [erros, setErros] = useState<Record<string, { etapa?: boolean; criterio?: boolean }>>({});
   const [confirmPublicar, setConfirmPublicar] = useState(false);
   const [confirmReavaliar, setConfirmReavaliar] = useState(false);
+  const { data: progresso } = useReavaliacaoProgresso(meetingType);
 
   useEffect(() => {
     if (!etapasAtivas) return;
@@ -488,7 +489,7 @@ export default function ScriptVendas() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reavaliar reuniões com este script?</AlertDialogTitle>
             <AlertDialogDescription>
-              Todas as reuniões de {meetingType.toUpperCase()} já transcritas voltam para a fila e
+              As reuniões de {meetingType.toUpperCase()} dos últimos 7 dias já transcritas voltam para a fila e
               serão reanalisadas pela IA. Isso leva algum tempo e consome cota de análise.
             </AlertDialogDescription>
           </AlertDialogHeader>
