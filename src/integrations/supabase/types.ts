@@ -26473,6 +26473,10 @@ export type Database = {
         Args: { _etapas: Json; _icp_segment?: string; _meeting_type: string }
         Returns: Json
       }
+      script_reavaliacao_progresso: {
+        Args: { _meeting_type?: string }
+        Returns: Json
+      }
       script_reavaliar: { Args: { _meeting_type?: string }; Returns: Json }
       script_resolver: {
         Args: { _icp_segment?: string; _meeting_type: string }
