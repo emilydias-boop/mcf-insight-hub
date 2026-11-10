@@ -24035,6 +24035,7 @@ export type Database = {
       dono_esta_ativo: { Args: { p_email: string }; Returns: boolean }
       donos_das_vendas: { Args: { p_ids: string[] }; Returns: Json }
       e_produto_parceria: { Args: { p: string }; Returns: boolean }
+      e_produto_war_room: { Args: { p_name: string }; Returns: boolean }
       eh_produto_parceria: { Args: { p_nome: string }; Returns: boolean }
       email_event_norm: { Args: { p_raw: string }; Returns: string }
       email_events_ingest: {
@@ -26925,6 +26926,10 @@ export type Database = {
       }
       wa_sender_padrao: { Args: never; Returns: string }
       wa_window_open: { Args: { _conversation_id: string }; Returns: boolean }
+      war_room_autovincular: {
+        Args: { p_dry_run?: boolean; p_transaction_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       activity_task_status: "pending" | "done" | "canceled"
