@@ -23,6 +23,7 @@ import {
 import { ArrowDown, ArrowUp, ClipboardList, Info, Plus, RefreshCw, Trash2, Upload, CopyPlus } from 'lucide-react';
 import {
   useSalesScript,
+  useReavaliacaoProgresso,
   type MeetingType,
   type IcpSegment,
   type ScriptStepInput,
