@@ -213,6 +213,11 @@ export default function ScriptVendas() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Reavaliar reuniões com este script
           </Button>
+          {progresso && progresso.pendentes > 0 && (
+            <span className="text-xs text-muted-foreground">
+              Reavaliação: {progresso.total - progresso.pendentes} de {progresso.total} concluídas
+            </span>
+          )}
           <Button onClick={abrirPublicar} disabled={publicar.isPending}>
             <Upload className="mr-2 h-4 w-4" />
             Publicar nova versão
