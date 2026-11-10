@@ -134,3 +134,12 @@ export function saldoDevedor(valorTotal: number, entrada: number, pagosCobranca:
 
 /** Visões regulares (Cobranças Regulares, Agenda, Pendências, Inadimplência) nunca mostram jurídico. */
 export const visivelNaCobrancaRegular = (t: TituloCalc) => t.cobranca_stage !== 'judicial';
+
+/** Status de exibição na listagem (resumo do título): Negociação > Atrasado > Em dia. */
+export function statusListagem(t: { status: string; negociacao?: boolean | null; cobranca_stage?: string | null; dias_atraso?: number | null }): StatusCliente {
+  if (t.status === 'quitado') return 'quitado';
+  if (t.status !== 'aberto') return 'cancelado';
+  if (t.cobranca_stage === 'judicial') return 'judicial';
+  if (t.negociacao) return 'negociacao';
+  return (t.dias_atraso ?? 0) > 0 ? 'atrasado' : 'em_dia';
+}
