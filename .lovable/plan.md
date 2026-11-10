@@ -1,18 +1,18 @@
-# Reavaliação de reuniões: por que "não aconteceu" e como corrigir
+# Reavaliação de reuniões: últimos 7 dias e mais rápida
 
 ## O que encontrei (só leitura)
-- O botão funcionou: as **1.192 reuniões de R1** voltaram para a fila às 14:55 (e 1 de R2).
-- A reanálise roda sozinha a cada 10 minutos, mas hoje processa **na prática 1 reunião por rodada** (cada análise leva ~46 s e a rodada é cortada em 55 s).
-- Resultado: cerca de 6 reuniões por hora, ou seja, **mais de 8 dias** para reavaliar tudo. Enquanto isso, as notas antigas continuam aparecendo, dando a impressão de que nada mudou.
-- A tela não mostra nenhum progresso depois do aviso de "reenfileiradas".
+- O botão funcionou: as **1.192 reuniões de R1** voltaram para a fila às 14:55.
+- A fila processa na prática **1 reunião a cada 10 minutos** (cada análise leva ~46 s). Por isso as notas parecem não mudar: levaria mais de 8 dias.
 
 ## O que vou mudar
-1. **Acelerar a fila**: analisar várias reuniões ao mesmo tempo em cada rodada (3 em paralelo) e rodar a cada 2 minutos. Estimativa: ~90 reuniões por hora, cerca de 13 horas para as 1.192. Se a cota de IA acabar, a fila pausa sozinha e continua depois, sem perder nada (isso já existe).
-2. **Mostrar o progresso na tela do Script de vendas**: ao lado do botão, um contador "Reavaliação em andamento: X de Y concluídas", atualizado sozinho, e "concluída" ao terminar.
-3. Nada muda nas notas já gravadas: a nota nova é salva junto da versão do script, e a antiga fica no histórico.
+1. **Janela de 7 dias**: o botão passa a reavaliar só reuniões dos últimos 7 dias (hoje são **123** de R1). O texto de confirmação diz isso.
+2. **Limpar a fila atual**: as reuniões mais antigas que 7 dias que estão aguardando por causa do clique de hoje voltam para "analisado" (mantêm a nota que já tinham). Reuniões que ainda não tinham nota nenhuma continuam na fila.
+3. **Acelerar**: 3 análises em paralelo por rodada, rodada a cada 2 minutos. As 123 terminam em cerca de 1h30.
+4. **Progresso na tela**: ao lado do botão, "Reavaliação: X de Y concluídas", atualizado sozinho.
 
 ## Detalhes técnicos
-- `supabase/functions/meetgeek-analisar/index.ts`: processar os itens reivindicados com concorrência 3 (Promise.allSettled), mantendo o tratamento de IAQuotaError (interrompe e devolve à fila) e MAX_TENTATIVAS.
-- Cron `meetgeek-analisar`: schedule `*/2 * * * *`, body com `lote: 3` (via SQL de `cron.alter_job`, não migration de schema).
-- Nova RPC só de leitura `script_reavaliacao_progresso(_meeting_type)` (admin/manager): contagem de pendente/analisado/erro das gravações ingeridas com transcrição. `ScriptVendas.tsx` consulta com refetch a cada 30 s enquanto houver pendentes.
-- Custo: o mesmo número de análises de antes, só que concluídas mais rápido.
+- Migration: `script_reavaliar` filtra `s.scheduled_at >= now() - interval '7 days'`; nova RPC de leitura `script_reavaliacao_progresso(_meeting_type)` (admin/manager).
+- SQL pontual: gravações `pendente` com `analysis_attempts=0`, slot com mais de 7 dias e que já possuem `meeting_ai_reviews` → `analysis_status='analisado'`.
+- `meetgeek-analisar`: processar o lote com concorrência 3 (Promise.allSettled), mantendo pausa por cota e MAX_TENTATIVAS.
+- Cron `meetgeek-analisar`: `*/2 * * * *` (720 rodadas/dia; sem fila, a rodada só consulta e sai).
+- `ScriptVendas.tsx`: texto do diálogo e contador com refetch a cada 30 s.
