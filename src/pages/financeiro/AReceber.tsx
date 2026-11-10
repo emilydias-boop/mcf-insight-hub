@@ -101,16 +101,18 @@ export default function AReceber() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const { data: gerentesConta } = useGerentesConta();
-  const [gerenteFiltro, setGerenteFiltro] = useState('todos');
   const { canManage } = useCanManageAr();
-  const [search, setSearch] = useState('');
   const [status, setStatus] = useState<string>('aberto');
   const [tipo, setTipo] = useState<string>('todos');
-  const [product, setProduct] = useState<string>('todos');
   const [numeroTitulo, setNumeroTitulo] = useState<string>('');
   const [cobrancaStage, setCobrancaStage] = useState<string>('todos');
-  const [cobrancaResp, setCobrancaResp] = useState<string>('todos');
   const [cobrancaTitulo, setCobrancaTitulo] = useState<ArTitulo | null>(null);
+  const [filtrosGestao, setFiltrosGestao] = useState<FiltrosCobranca>(FILTROS_VAZIOS);
+  const [aba, setAba] = useState('listagem');
+  const search = filtrosGestao.busca;
+  const product = filtrosGestao.produto;
+  const cobrancaResp = filtrosGestao.cobrador;
+  const gerenteFiltro = filtrosGestao.gerente;
 
   const { data: titulos, isLoading } = useArTitulos({
     search: search || undefined,
@@ -118,7 +120,7 @@ export default function AReceber() {
     tipo: tipo === 'todos' ? undefined : tipo,
     product_code: product === 'todos' ? undefined : product,
     cobranca_stage: cobrancaStage === 'todos' ? undefined : (cobrancaStage as ArCobrancaStage),
-    cobranca_responsavel_id: cobrancaResp === 'todos' ? undefined : cobrancaResp,
+    cobranca_responsavel_id: cobrancaResp === 'todos' || cobrancaResp === 'none' ? undefined : cobrancaResp,
     excluir_judicial: true,
   });
   const reembolsosProximos = useReembolsosProximos();
@@ -135,7 +137,6 @@ export default function AReceber() {
   const [openCadastroManual, setOpenCadastroManual] = useState(false);
   const [openDuplicidade, setOpenDuplicidade] = useState(false);
   const { data: reembTotais } = useReembolsoTotais();
-  const [filtrosGestao, setFiltrosGestao] = useState<FiltrosCobranca>(FILTROS_VAZIOS);
   const [painelTitulo, setPainelTitulo] = useState<ArTitulo | null>(null);
   const produtosGestao = PRODUCT_OPTIONS.filter(o => o.value !== 'todos').map(o => o.value);
 
@@ -182,6 +183,8 @@ export default function AReceber() {
         return gerenteFiltro === 'none' ? !g : g === gerenteFiltro;
       });
     }
+    if (cobrancaResp === 'none') list = list.filter(t => !t.cobranca_responsavel_id);
+    if (filtrosGestao.status !== 'todos') list = list.filter(t => statusListagem(t) === filtrosGestao.status);
     const q = numeroTitulo.trim().toLowerCase();
     if (!q) return list;
     return list.filter(t => {
@@ -189,7 +192,7 @@ export default function AReceber() {
       // aceita "761226" ou "761226-2" (prefixo do documento da parcela)
       return num.includes(q) || q.startsWith(num);
     });
-  }, [titulos, numeroTitulo, gerenteFiltro, gerentesConta]);
+  }, [titulos, numeroTitulo, gerenteFiltro, gerentesConta, cobrancaResp, filtrosGestao.status]);
 
   const kpis = useMemo(() => {
     const list = titulosFiltrados;
@@ -197,7 +200,11 @@ export default function AReceber() {
     const totalRecebido = list.reduce((s, t) => s + (t.valor_pago || 0), 0);
     const saldo = list.reduce((s, t) => s + (t.valor_pendente || 0), 0);
     const pendentesLancamento = list.filter(t => t.tipo === 'parcelado' && (t.parcelas_total ?? 0) === 0).length;
-    return { totalContratado, totalRecebido, saldo, pendentesLancamento, qtd: list.length };
+    const pagoCobrancas = list.reduce((s, t) => s + Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0), 0);
+    const saldoDev = list.reduce((s, t) => s + (t.status === 'aberto' ? saldoDevedor(Number(t.valor_total), t.valor_entrada || 0, Math.max((t.valor_pago || 0) - (t.valor_entrada || 0), 0)) : 0), 0);
+    const vencidos = list.filter(t => t.status === 'aberto' && (t.dias_atraso ?? 0) > 0).length;
+    const clientes = new Set(list.map(t => (t.customer_email || t.customer_name || t.id).toLowerCase())).size;
+    return { totalContratado, totalRecebido, saldo, pendentesLancamento, qtd: list.length, pagoCobrancas, saldoDev, vencidos, clientes };
   }, [titulosFiltrados]);
 
   const handleAssign = async (tituloId: string, userId: string) => {
@@ -220,93 +227,85 @@ export default function AReceber() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Contas a Receber</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestão automática de títulos gerados a partir das vendas Hubla (A001, A002, A003, A004, A009 e recorrências R001, R009).
-          </p>
+      <Tabs value={aba} onValueChange={setAba} className="w-full">
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-2 bg-background/95 backdrop-blur border-b border-border space-y-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="flex items-center gap-2 text-lg font-bold text-foreground whitespace-nowrap">
+            <Wallet className="w-5 h-5 text-primary" /> Contas a Receber
+          </h1>
+          <div className="flex-1 min-w-[280px]">
+            <FiltrosGlobais
+              barra
+              value={filtrosGestao}
+              onChange={setFiltrosGestao}
+              produtos={produtosGestao}
+              extra={
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-10">
+                      <SlidersHorizontal className="w-4 h-4 mr-1" /> Mais filtros
+                      {maisFiltrosAtivos > 0 && <Badge className="ml-1 h-5 px-1.5">{maisFiltrosAtivos}</Badge>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 space-y-3">
+                    <p className="text-xs text-muted-foreground">Valem para Cobranças Regulares.</p>
+                    <div className="space-y-1"><Label className="text-xs">Situação do título</Label>
+                      <Select value={status} onValueChange={setStatus}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todas</SelectItem>
+                          <SelectItem value="aberto">Em aberto</SelectItem>
+                          <SelectItem value="quitado">Quitado</SelectItem>
+                          <SelectItem value="cancelado">Cancelado</SelectItem>
+                        </SelectContent>
+                      </Select></div>
+                    <div className="space-y-1"><Label className="text-xs">Tipo</Label>
+                      <Select value={tipo} onValueChange={setTipo}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos os tipos</SelectItem>
+                          <SelectItem value="integral">Integral</SelectItem>
+                          <SelectItem value="parcelado">Parcelado</SelectItem>
+                        </SelectContent>
+                      </Select></div>
+                    <div className="space-y-1"><Label className="text-xs">Stage cobrança</Label>
+                      <Select value={cobrancaStage} onValueChange={setCobrancaStage}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos os stages</SelectItem>
+                          <SelectItem value="mes">Cobrança do mês</SelectItem>
+                          <SelectItem value="atraso">Cobrança em atraso</SelectItem>
+                        </SelectContent>
+                      </Select></div>
+                    <div className="space-y-1"><Label className="text-xs">Nº do título</Label>
+                      <Input placeholder="ex.: 761226 ou 761226-2" value={numeroTitulo} onChange={(e) => setNumeroTitulo(e.target.value)} /></div>
+                  </PopoverContent>
+                </Popover>
+              }
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && <ArGestoresDialog />}
+        <div className="flex items-end justify-between gap-2 flex-wrap">
+          <TabsList className="h-auto bg-transparent p-0 gap-0 flex-wrap justify-start rounded-none">
+            {ABAS.map(([v, l]) => (
+              <TabsTrigger key={v} value={v} className={TAB_CLS}>{l}</TabsTrigger>
+            ))}
+          </TabsList>
+          <div className="flex items-center gap-1 pb-1 flex-wrap">
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setOpenReembolsos(true)}>
+              <Undo2 className="w-4 h-4 mr-1" /> Reembolsos
+              {reembolsosProximos.length > 0 && <Badge variant="destructive" className="ml-1 h-5 px-1.5">{reembolsosProximos.length} perto do prazo</Badge>}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setOpenCadastroManual(true)}>
+              <FilePlus2 className="w-4 h-4 mr-1" /> Cadastro Manual
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setOpenDuplicidade(true)}>
+              <Users className="w-4 h-4 mr-1" /> Duplicidade
+            </Button>
+            {isAdmin && <ArGestoresDialog />}
+          </div>
         </div>
       </div>
-
-      <Tabs defaultValue="listagem" className="w-full">
-        <TabsList className="h-auto gap-2 bg-transparent p-0 flex-wrap justify-start">
-          <TabsTrigger
-            value="listagem"
-            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all"
-          >
-            <List className="w-5 h-5" />
-            <span className="text-sm font-semibold">Cobranças Regulares</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="kanban"
-            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all"
-          >
-            <KanbanSquare className="w-5 h-5" />
-            <span className="text-sm font-semibold">Esteira Cobrança</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="reconciliacao"
-            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all"
-          >
-            <Scale className="w-5 h-5" />
-            <span className="text-sm font-semibold">Reconciliação</span>
-          </TabsTrigger>
-          <TabsTrigger value="agenda" className={TAB_CLS}>
-            <CalendarDays className="w-5 h-5" />
-            <span className="text-sm font-semibold">Agenda</span>
-          </TabsTrigger>
-          <TabsTrigger value="pendencias" className={TAB_CLS}>
-            <AlarmClock className="w-5 h-5" />
-            <span className="text-sm font-semibold">Pendências</span>
-          </TabsTrigger>
-          <TabsTrigger value="inadimplencia" className={TAB_CLS}>
-            <History className="w-5 h-5" />
-            <span className="text-sm font-semibold">Inadimplência</span>
-          </TabsTrigger>
-          <TabsTrigger value="resultados" className={TAB_CLS}>
-            <Trophy className="w-5 h-5" />
-            <span className="text-sm font-semibold">Resultados</span>
-          </TabsTrigger>
-          <TabsTrigger value="juridica" className={TAB_CLS}>
-            <Gavel className="w-5 h-5" />
-            <span className="text-sm font-semibold">Cobrança Jurídica</span>
-          </TabsTrigger>
-          <TabsTrigger value="relatorios" className={TAB_CLS}>
-            <NotebookPen className="w-5 h-5" />
-            <span className="text-sm font-semibold">Relatórios e Notas</span>
-          </TabsTrigger>
-          <button
-            type="button"
-            onClick={() => setOpenReembolsos(true)}
-            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-rose-600 hover:border-rose-500/60 hover:shadow-[0_0_0_1px_hsl(var(--border))] transition-all"
-          >
-            <Undo2 className="w-5 h-5" />
-            <span className="text-sm font-semibold">Reembolsos</span>
-            {reembolsosProximos.length > 0 && (
-              <span className="text-[10px] font-bold rounded-full bg-destructive text-destructive-foreground px-1.5">{reembolsosProximos.length} perto do prazo</span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpenCadastroManual(true)}
-            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-primary hover:border-primary/60 hover:shadow-[0_0_0_1px_hsl(var(--border))] transition-all"
-          >
-            <FilePlus2 className="w-5 h-5" />
-            <span className="text-sm font-semibold">Cadastro Manual</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpenDuplicidade(true)}
-            className="flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-amber-600 hover:border-amber-500/60 hover:shadow-[0_0_0_1px_hsl(var(--border))] transition-all"
-          >
-            <Users className="w-5 h-5" />
-            <span className="text-sm font-semibold">Duplicidade</span>
-          </button>
-        </TabsList>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
       {reembolsosProximos.length > 0 && (
         <button type="button" onClick={() => setOpenReembolsos(true)}
@@ -314,107 +313,28 @@ export default function AReceber() {
           {reembolsosProximos.length} reembolso(s) a pagar vencem em até 7 dias (prazo limite ou data prevista). Clique para ver.
         </button>
       )}
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">Valor contratado</CardTitle></CardHeader>
-          <CardContent className="text-lg font-bold">{brl(kpis.totalContratado)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">Recebido</CardTitle></CardHeader>
-          <CardContent className="text-lg font-bold text-emerald-600">{brl(kpis.totalRecebido)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">Saldo a receber</CardTitle></CardHeader>
-          <CardContent className="text-lg font-bold text-amber-600">{brl(kpis.saldo)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">Parcelados aguardando lançamento</CardTitle></CardHeader>
-          <CardContent className="text-lg font-bold text-orange-600">{kpis.pendentesLancamento}</CardContent>
-        </Card>
-        <Card
-          className="cursor-pointer hover:bg-muted/40 border-rose-500/30"
-          onClick={() => setOpenReembolsos(true)}
-        >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
-              <Undo2 className="w-3 h-3" /> Reembolsos a pagar
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold text-rose-600">{brl(reembTotais?.somaPendentes || 0)}</div>
-            <div className="text-[11px] text-muted-foreground">{reembTotais?.qtdPendentes ?? 0} pendente(s)</div>
-          </CardContent>
-        </Card>
-        <Card
-          className="cursor-pointer hover:bg-muted/40 border-emerald-500/30"
-          onClick={() => setOpenReembolsos(true)}
-        >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Reembolsos pagos no mês
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold text-emerald-600">{brl(reembTotais?.somaPagos || 0)}</div>
-            <div className="text-[11px] text-muted-foreground">{reembTotais?.qtdPagos ?? 0} pago(s)</div>
-          </CardContent>
-        </Card>
+      <div>
+        <h2 className="text-xl font-bold text-foreground">Cobranças Regulares</h2>
+        <p className="text-sm text-muted-foreground">Clique na linha para detalhes · clique duplo para abrir a ficha completa</p>
       </div>
-
-      {/* Filtros */}
-      <Card>
-        <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por cliente, e-mail, CPF…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
-          </div>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os status</SelectItem>
-              <SelectItem value="aberto">Em aberto</SelectItem>
-              <SelectItem value="quitado">Quitado</SelectItem>
-              <SelectItem value="cancelado">Cancelado</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={tipo} onValueChange={setTipo}>
-            <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os tipos</SelectItem>
-              <SelectItem value="integral">Integral</SelectItem>
-              <SelectItem value="parcelado">Parcelado</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={product} onValueChange={setProduct}>
-            <SelectTrigger><SelectValue placeholder="Produto" /></SelectTrigger>
-            <SelectContent>
-              {PRODUCT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Nº do título (ex.: 761226 ou 761226-2)"
-              value={numeroTitulo}
-              onChange={(e) => setNumeroTitulo(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Select value={cobrancaStage} onValueChange={setCobrancaStage}>
-            <SelectTrigger><SelectValue placeholder="Stage cobrança" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os stages</SelectItem>
-              <SelectItem value="mes">Cobrança do mês</SelectItem>
-              <SelectItem value="atraso">Cobrança em atraso</SelectItem>
-            </SelectContent>
-          </Select>
-          <CobrancaResponsavelFilter value={cobrancaResp} onChange={setCobrancaResp} />
-          <GerenteContaFilter value={gerenteFiltro} onChange={setGerenteFiltro} gerentes={gerentesConta} />
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiBox label="Clientes" valor={String(kpis.clientes)} />
+        <KpiBox label="Saldo devedor total" valor={brl(kpis.saldoDev)} />
+        <KpiBox label="Pago via cobranças" valor={brl(kpis.pagoCobrancas)} tom="text-emerald-600" />
+        <KpiBox label="Com cobrança vencida" valor={String(kpis.vencidos)} tom="text-destructive" />
+      </div>
+      <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+        <div className="flex gap-4 flex-wrap">
+          <span>Valor contratado: <b className="text-foreground">{brl(kpis.totalContratado)}</b></span>
+          <span>Recebido: <b className="text-foreground">{brl(kpis.totalRecebido)}</b></span>
+          <span>Parcelados aguardando lançamento: <b className="text-foreground">{kpis.pendentesLancamento}</b></span>
+          <button type="button" className="hover:underline" onClick={() => setOpenReembolsos(true)}>
+            Reembolsos a pagar: <b className="text-destructive">{brl(reembTotais?.somaPendentes || 0)}</b> ({reembTotais?.qtdPendentes ?? 0})
+          </button>
+          <button type="button" className="hover:underline" onClick={() => setOpenReembolsos(true)}>
+            Reembolsos pagos no mês: <b className="text-emerald-600">{brl(reembTotais?.somaPagos || 0)}</b>
+          </button>
+        </div>
         <Button size="sm" variant="outline" onClick={exportarCsv} disabled={titulosFiltrados.length === 0}>
           <Download className="w-4 h-4 mr-1" /> Exportar CSV
         </Button>

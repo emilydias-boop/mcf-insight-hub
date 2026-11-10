@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Mail, MessageCircle, Phone, Search, X, CheckCheck, CalendarClock, StickyNote, Gavel } from 'lucide-react';
@@ -36,7 +36,7 @@ const mesLabel = (m: string) => {
 export interface FiltrosCobranca { busca: string; cobrador: string; gerente: string; produto: string; status: string }
 export const FILTROS_VAZIOS: FiltrosCobranca = { busca: '', cobrador: 'todos', gerente: 'todos', produto: 'todos', status: 'todos' };
 
-function FiltrosWrap({ barra, children }: { barra?: boolean; children: React.ReactNode }) {
+function FiltrosWrap({ barra, children }: { barra?: boolean; children: ReactNode }) {
   return barra
     ? <div className="flex flex-wrap items-center gap-2 [&>button]:w-auto [&>button]:min-w-[150px]">{children}</div>
     : <Card><CardContent className="pt-4 grid grid-cols-1 md:grid-cols-6 gap-3">{children}</CardContent></Card>;
@@ -45,7 +45,7 @@ function FiltrosWrap({ barra, children }: { barra?: boolean; children: React.Rea
 export function FiltrosGlobais({ value, onChange, produtos, barra, extra }: {
   value: FiltrosCobranca; onChange: (v: FiltrosCobranca) => void; produtos: string[];
   /** Layout em linha única (barra superior compartilhada por todas as abas). */
-  barra?: boolean; extra?: React.ReactNode;
+  barra?: boolean; extra?: ReactNode;
 }) {
   const { data: users } = useFinanceiroUsers();
   const { data: gerentes } = useGerentesConta();
