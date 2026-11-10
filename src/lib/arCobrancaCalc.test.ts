@@ -51,3 +51,11 @@ console.log('arCobrancaCalc: ok');
   assert.equal(visivelNaCobrancaRegular({ id: 't', status: 'aberto', cobranca_stage: 'atraso' }), true);
   console.log('arCobrancaCalc saldo/jurídico: ok');
 }
+{
+  const { statusListagem } = await import('./arCobrancaCalc');
+  assert.equal(statusListagem({ status: 'aberto', negociacao: true, dias_atraso: 30 }), 'negociacao');
+  assert.equal(statusListagem({ status: 'aberto', dias_atraso: 5 }), 'atrasado');
+  assert.equal(statusListagem({ status: 'aberto', dias_atraso: 0 }), 'em_dia');
+  assert.equal(statusListagem({ status: 'quitado', dias_atraso: 5 }), 'quitado');
+  console.log('arCobrancaCalc statusListagem: ok');
+}
