@@ -52,7 +52,6 @@ import { Gavel, NotebookPen } from 'lucide-react';
 import { ClientePainelLateral } from '@/components/financeiro/aReceber/ClientePainelLateral';
 import { CalendarDays, AlarmClock, History, Trophy, Download } from 'lucide-react';
 
-const TAB_CLS_OLD = 'flex flex-col items-center justify-center gap-1.5 h-auto min-w-[110px] px-6 py-3 rounded-xl border border-border bg-card text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:shadow-[0_0_0_1px_hsl(var(--primary))] transition-all';
 
 const TAB_CLS = 'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 const TH = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap h-9';
