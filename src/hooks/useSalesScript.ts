@@ -97,7 +97,20 @@ export function useSalesScript(meetingType: MeetingType, icpSegment: IcpSegment 
       if (error) throw error;
       return data as { reenfileiradas?: number } | null;
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['script-reavaliacao-progresso'] }),
   });
 
   return { ...query, resolvido, publicar, reavaliar };
+}
+
+export function useReavaliacaoProgresso(tipo: MeetingType | null) {
+  return useQuery({
+    queryKey: ['script-reavaliacao-progresso', tipo],
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)('script_reavaliacao_progresso', tipo ? { _meeting_type: tipo } : {});
+      if (error) throw error;
+      return data as { pendentes: number; analisadas: number; erros: number; total: number };
+    },
+    refetchInterval: (q) => ((q.state.data?.pendentes ?? 0) > 0 ? 30_000 : false),
+  });
 }

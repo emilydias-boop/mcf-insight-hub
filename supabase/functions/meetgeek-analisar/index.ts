@@ -190,10 +190,12 @@ Deno.serve(async (req) => {
   const resultado = { ok: 0, erro: 0, sem_script: 0, quota: false };
   let processadas = 0;
 
-  for (const item of fila as Array<{
+  type ItemFila = {
     id: string; meeting_slot_id: string | null; closer_id: string | null;
     meeting_type: string | null; analysis_attempts: number;
-  }>) {
+  };
+  // Analises em paralelo: cada uma leva ~45s e a rodada tem limite de tempo.
+  const processar = async (item: ItemFila) => {
     try {
       // O claim so entrega linhas com slot, entao o tipo vem do slot de verdade.
       const tipo = item.meeting_type ?? "r1";
@@ -211,7 +213,7 @@ Deno.serve(async (req) => {
           .update({ analysis_status: "ignorado" }).eq("id", item.id);
         resultado.sem_script++;
         processadas++;
-        continue;
+        return;
       }
 
       const todas = etapasRaw as unknown as Etapa[];
@@ -270,7 +272,7 @@ Deno.serve(async (req) => {
           analysis_attempts: Math.max(0, item.analysis_attempts - 1),
         }).eq("id", item.id);
         console.warn("[meetgeek-analisar] quota de IA, interrompendo rodada");
-        break;
+        return;
       }
 
       const msg = String(e).slice(0, 500);
@@ -283,7 +285,8 @@ Deno.serve(async (req) => {
       resultado.erro++;
       processadas++;
     }
-  }
+  };
+  await Promise.allSettled((fila as ItemFila[]).map(processar));
 
   const saida = {
     reivindicadas: fila.length, processadas, ...resultado,

@@ -23,6 +23,7 @@ import {
 import { ArrowDown, ArrowUp, ClipboardList, Info, Plus, RefreshCw, Trash2, Upload, CopyPlus } from 'lucide-react';
 import {
   useSalesScript,
+  useReavaliacaoProgresso,
   type MeetingType,
   type IcpSegment,
   type ScriptStepInput,
@@ -57,6 +58,7 @@ export default function ScriptVendas() {
   const [erros, setErros] = useState<Record<string, { etapa?: boolean; criterio?: boolean }>>({});
   const [confirmPublicar, setConfirmPublicar] = useState(false);
   const [confirmReavaliar, setConfirmReavaliar] = useState(false);
+  const { data: progresso } = useReavaliacaoProgresso(meetingType);
 
   useEffect(() => {
     if (!etapasAtivas) return;
@@ -212,6 +214,11 @@ export default function ScriptVendas() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Reavaliar reuniões com este script
           </Button>
+          {progresso && progresso.pendentes > 0 && (
+            <span className="text-xs text-muted-foreground">
+              Reavaliação: {progresso.total - progresso.pendentes} de {progresso.total} concluídas
+            </span>
+          )}
           <Button onClick={abrirPublicar} disabled={publicar.isPending}>
             <Upload className="mr-2 h-4 w-4" />
             Publicar nova versão
@@ -488,7 +495,7 @@ export default function ScriptVendas() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reavaliar reuniões com este script?</AlertDialogTitle>
             <AlertDialogDescription>
-              Todas as reuniões de {meetingType.toUpperCase()} já transcritas voltam para a fila e
+              As reuniões de {meetingType.toUpperCase()} dos últimos 7 dias já transcritas voltam para a fila e
               serão reanalisadas pela IA. Isso leva algum tempo e consome cota de análise.
             </AlertDialogDescription>
           </AlertDialogHeader>
