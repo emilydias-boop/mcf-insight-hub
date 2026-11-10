@@ -1,0 +1,2 @@
+select public.pos_venda_registrar_cliente(t.customer_email, t.customer_phone, t.customer_name, 'A009', t.product_name, coalesce(t.product_price,t.net_value), t.sale_date, coalesce(t.source,'hubla'), coalesce(t.hubla_id,t.id::text))
+from (select * from hubla_transactions where lower(customer_email)='ozielneto.esporte@gmail.com' and product_name ilike 'A009%' and sale_status='completed' order by sale_date limit 1) t;
