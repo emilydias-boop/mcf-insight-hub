@@ -36,8 +36,10 @@ const mesLabel = (m: string) => {
 export interface FiltrosCobranca { busca: string; cobrador: string; gerente: string; produto: string; status: string }
 export const FILTROS_VAZIOS: FiltrosCobranca = { busca: '', cobrador: 'todos', gerente: 'todos', produto: 'todos', status: 'todos' };
 
-export function FiltrosGlobais({ value, onChange, produtos }: {
+export function FiltrosGlobais({ value, onChange, produtos, barra, extra }: {
   value: FiltrosCobranca; onChange: (v: FiltrosCobranca) => void; produtos: string[];
+  /** Layout em linha única (barra superior compartilhada por todas as abas). */
+  barra?: boolean; extra?: React.ReactNode;
 }) {
   const { data: users } = useFinanceiroUsers();
   const { data: gerentes } = useGerentesConta();
@@ -47,12 +49,14 @@ export function FiltrosGlobais({ value, onChange, produtos }: {
   );
   const ativos = (Object.keys(value) as (keyof FiltrosCobranca)[]).filter((k) => value[k] !== FILTROS_VAZIOS[k]).length;
   const set = (k: keyof FiltrosCobranca, v: string) => onChange({ ...value, [k]: v });
+  const Wrap = ({ children }: { children: React.ReactNode }) => barra
+    ? <div className="flex flex-wrap items-center gap-2 [&>button]:w-auto [&>button]:min-w-[150px]">{children}</div>
+    : <Card><CardContent className="pt-4 grid grid-cols-1 md:grid-cols-6 gap-3">{children}</CardContent></Card>;
   return (
-    <Card>
-      <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-6 gap-3">
-        <div className="relative md:col-span-2">
+    <Wrap>
+        <div className={barra ? 'relative flex-1 min-w-[240px]' : 'relative md:col-span-2'}>
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-8" placeholder="Nome, telefone, e-mail, CPF, produto ou nº do título"
+          <Input className="pl-8" placeholder={barra ? 'Buscar nome, telefone, e-mail, produto…' : 'Nome, telefone, e-mail, CPF, produto ou nº do título'}
             value={value.busca} onChange={(e) => set('busca', e.target.value)} />
         </div>
         <Select value={value.cobrador} onValueChange={(v) => set('cobrador', v)}>
@@ -93,9 +97,9 @@ export function FiltrosGlobais({ value, onChange, produtos }: {
               <X className="w-4 h-4" />
             </Button>
           )}
+          {extra}
         </div>
-      </CardContent>
-    </Card>
+    </Wrap>
   );
 }
 
