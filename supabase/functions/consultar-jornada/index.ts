@@ -60,9 +60,13 @@ Deno.serve(async (req) => {
     const calculo = await sb.rpc("jornada_calcular", { p_deal_id: deal.id });
     if (calculo.error) throw calculo.error;
     if (!calculo.data) return json(NAO_ACHOU, 404);
+    const ult = await sb.from("deal_activities").select("metadata").eq("deal_id", String(deal.id))
+      .eq("activity_type", "pos_venda_resumo_reuniao").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const m = ult.data?.metadata as Record<string, unknown> | undefined;
+    const ultima_reuniao = m ? { data: m.data ?? null, tipo: m.tipo ?? null, proximos_passos: m.proximos_passos ?? null } : null;
     const nome = nomeCompleto.trim().split(/\s+/)[0] ?? "";
     return json({ primeiro_nome: nome ? nome.charAt(0).toUpperCase() + nome.slice(1).toLowerCase() : "",
-      data_compra: compra?.data_compra ?? null, etapa_atual: calculo.data.etapa_atual, historico: calculo.data.historico });
+      data_compra: compra?.data_compra ?? null, etapa_atual: calculo.data.etapa_atual, historico: calculo.data.historico, ultima_reuniao });
   } catch {
     return json({ erro: "Não foi possível consultar a jornada agora. Tente novamente." }, 500);
   }
