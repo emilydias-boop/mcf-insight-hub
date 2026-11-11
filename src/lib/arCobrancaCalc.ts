@@ -146,13 +146,22 @@ export function statusListagem(t: { status: string; negociacao?: boolean | null;
 
 // ---------- Meta mensal de cobrança ----------
 export interface MetaCobranca { cobrador_id: string | null; valor: number }
-export interface BatimentoCobrador { cobrador_id: string | null; meta: number; realizado: number; pct: number }
+export interface BatimentoCobrador { cobrador_id: string | null; meta: number; realizado: number; previsto: number; pct: number }
 
 const isEstorno = (p: ParcelaCalc) => /reemb|estorn/i.test(p.evento || '');
 
+/** Título elegível para meta de cobrança: fora jurídico, cartão recebido no ato e cancelado/reembolsado (quitado continua valendo). */
+function tituloEmCobranca(t: TituloCalc | undefined): boolean {
+  if (!t) return false;
+  if (t.cobranca_stage === 'judicial') return false;
+  if ((t.payment_method || '').toLowerCase() === 'credit_card') return false;
+  return !/cancel|reemb/i.test(t.status || '');
+}
+
 /**
- * Batimento do mês (yyyy-MM): recebido = pagamentos com data_pagamento no mês,
- * atribuídos a parcela.cobrador_id ou ao responsável do título; reembolsos/estornos fora.
+ * Batimento do mês (yyyy-MM). Só conta cobrança: parcela 2+ (sem entrada nem pagamento integral),
+ * título em cobrança regular, sem reembolso/estorno. Recebido = pago no mês; previsto = vence no mês
+ * + atrasadas de meses anteriores (em aberto ou pagas no mês). Atribuição: cobrador da parcela > responsável do título.
  * Meta individual sem valor próprio = meta geral ÷ nº de cobradores.
  */
 export function batimentoPorCobrador(
@@ -163,27 +172,35 @@ export function batimentoPorCobrador(
   cobradores: string[],
 ): { geral: BatimentoCobrador; porCobrador: BatimentoCobrador[] } {
   const real = new Map<string | null, number>();
-  let total = 0;
+  const prev = new Map<string | null, number>();
+  const add = (m: Map<string | null, number>, k: string | null, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+  let total = 0, totalPrev = 0;
   for (const p of parcelas) {
-    if (!p.data_pagamento || p.data_pagamento.slice(0, 7) !== mes || isEstorno(p)) continue;
-    const v = recebido(p);
-    if (v <= 0) continue;
-    const quem = p.cobrador_id ?? tituloMap.get(p.titulo_id)?.cobranca_responsavel_id ?? null;
-    real.set(quem, (real.get(quem) ?? 0) + v);
-    total += v;
+    if (p.numero <= 1 || p.status === 'cancelado' || isEstorno(p)) continue;
+    const t = tituloMap.get(p.titulo_id);
+    if (!tituloEmCobranca(t)) continue;
+    const quem = p.cobrador_id ?? t?.cobranca_responsavel_id ?? null;
+    const pagoNoMes = !!p.data_pagamento && p.data_pagamento.slice(0, 7) === mes;
+    const r = pagoNoMes ? recebido(p) : 0;
+    if (r > 0) { add(real, quem, r); total += r; }
+    const vm = p.data_vencimento.slice(0, 7);
+    let pv = 0;
+    if (vm === mes) pv = Number(p.valor || 0);
+    else if (vm < mes) pv = emAberto(p) + r;
+    if (pv > 0) { add(prev, quem, pv); totalPrev += pv; }
   }
   const metaGeral = Number(metas.find((m) => m.cobrador_id === null)?.valor ?? 0);
   const ids = Array.from(new Set([...cobradores, ...Array.from(real.keys()).filter((k): k is string => !!k)]));
   const padrao = ids.length ? metaGeral / ids.length : 0;
   const pct = (r: number, m: number) => (m > 0 ? (r / m) * 100 : 0);
-  const porCobrador = ids.map((id) => {
+  const porCobrador: BatimentoCobrador[] = ids.map((id) => {
     const proprio = metas.find((m) => m.cobrador_id === id);
     const meta = proprio ? Number(proprio.valor) : padrao;
     const r = real.get(id) ?? 0;
-    return { cobrador_id: id, meta, realizado: r, pct: pct(r, meta) };
+    return { cobrador_id: id, meta, realizado: r, previsto: prev.get(id) ?? 0, pct: pct(r, meta) };
   });
   const semCob = real.get(null) ?? 0;
-  if (semCob > 0) porCobrador.push({ cobrador_id: null, meta: 0, realizado: semCob, pct: 0 });
+  if (semCob > 0) porCobrador.push({ cobrador_id: null, meta: 0, realizado: semCob, previsto: prev.get(null) ?? 0, pct: 0 });
   porCobrador.sort((a, b) => b.realizado - a.realizado);
-  return { geral: { cobrador_id: null, meta: metaGeral, realizado: total, pct: pct(total, metaGeral) }, porCobrador };
+  return { geral: { cobrador_id: null, meta: metaGeral, realizado: total, previsto: totalPrev, pct: pct(total, metaGeral) }, porCobrador };
 }

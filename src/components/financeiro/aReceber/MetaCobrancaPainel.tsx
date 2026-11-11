@@ -60,8 +60,9 @@ export function MetaCobrancaPainel({ isAdmin }: { isAdmin: boolean }) {
           <Gauge pct={g.pct} size={170} />
           <div className="flex-1 min-w-[200px]">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Target className="h-4 w-4" /> Meta de cobrança do mês</div>
+            <div className="text-xs text-muted-foreground">Conta só parcelas a partir da 2ª em cobrança regular (sem entrada, à vista, cartão no ato, jurídico ou reembolso).</div>
             <div className="text-3xl font-bold">{brl(g.meta)}</div>
-            <div className="text-sm">Recebido: <b>{brl(g.realizado)}</b> · Falta: <b>{brl(Math.max(g.meta - g.realizado, 0))}</b></div>
+            <div className="text-sm">Previsto em cobrança: <b>{brl(g.previsto)}</b> · Recebido: <b>{brl(g.realizado)}</b> · Falta: <b>{brl(Math.max(g.meta - g.realizado, 0))}</b></div>
           </div>
           <div className="flex items-center gap-2">
             <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} className="w-40" />
@@ -75,6 +76,7 @@ export function MetaCobrancaPainel({ isAdmin }: { isAdmin: boolean }) {
                 {c.cobrador_id ? <Gauge pct={c.pct} size={110} /> : <div className="h-16" />}
                 <div className="text-sm font-medium truncate w-full">{nome(c.cobrador_id)}</div>
                 <div className="text-xs text-muted-foreground">{brl(c.realizado)}{c.cobrador_id && ` de ${brl(c.meta)}`}</div>
+                <div className="text-xs text-muted-foreground">Previsto: {brl(c.previsto)}</div>
               </div>
             ))}
           </div>
