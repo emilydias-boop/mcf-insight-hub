@@ -57,7 +57,7 @@ import { CalendarDays, AlarmClock, History, Trophy, Download } from 'lucide-reac
 const TAB_CLS = 'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 const TH = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap h-9';
 const ABAS: [string, string][] = [
-  ['listagem', 'Cobranças Regulares'], ['agenda', 'Agenda de Cobranças'], ['pendencias', 'Pendências por Mês'],
+  ['meta', 'Meta de Cobrança'], ['listagem', 'Cobranças Regulares'], ['agenda', 'Agenda de Cobranças'], ['pendencias', 'Pendências por Mês'],
   ['inadimplencia', 'Inadimplência Histórica'], ['juridica', 'Cobrança Jurídica'], ['resultados', 'Resultados por Cobrador'],
   ['kanban', 'Esteira Cobrança'], ['reconciliacao', 'Reconciliação'], ['relatorios', 'Relatórios e Notas'],
 ];
@@ -140,6 +140,7 @@ export default function AReceber() {
   const [cobrancaTitulo, setCobrancaTitulo] = useState<ArTitulo | null>(null);
   const [filtrosGestao, setFiltrosGestao] = useState<FiltrosCobranca>(FILTROS_VAZIOS);
   const [aba, setAba] = useState('listagem');
+  const [tvEntrada, setTvEntrada] = useState(true);
   const search = filtrosGestao.busca;
   const product = filtrosGestao.produto;
   const cobrancaResp = filtrosGestao.cobrador;
@@ -259,7 +260,7 @@ export default function AReceber() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <MetaCobrancaPainel isAdmin={isAdmin} />
+      {tvEntrada && <div className="hidden"><MetaCobrancaPainel isAdmin={isAdmin} tvInicial onFecharTv={() => { setTvEntrada(false); setAba('listagem'); }} /></div>}
       <Tabs value={aba} onValueChange={setAba} className="w-full">
       <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-2 bg-background/95 backdrop-blur border-b border-border space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
@@ -339,6 +340,9 @@ export default function AReceber() {
           </div>
         </div>
       </div>
+        <TabsContent value="meta" className="mt-4">
+          <MetaCobrancaPainel isAdmin={isAdmin} />
+        </TabsContent>
         <TabsContent value="listagem" className="space-y-4 sm:space-y-6 mt-4">
       {reembolsosProximos.length > 0 && (
         <button type="button" onClick={() => setOpenReembolsos(true)}
