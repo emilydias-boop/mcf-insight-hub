@@ -31,3 +31,15 @@ const r3 = batimentoPorCobrador('2026-11', [
 assert.equal(r3.geral.previsto, 2000);
 assert.equal(r3.geral.realizado, 0);
 console.log('arMetaCobranca ok');
+
+import { ritmoMetaCobranca } from './arCobrancaCalc';
+// Novembro/2026 tem 21 dias úteis; meta 250 mil → ~11.904,76/dia; semanas seg→dom
+const rt = ritmoMetaCobranca('2026-11', '2026-11-11', 210000, { '2026-11-11': 500, '2026-11-03': 100 });
+assert.equal(rt.diasUteis, 21);
+assert.equal(rt.metaDia, 10000);
+assert.equal(rt.esperadoAteHoje, 80000);
+assert.equal(rt.realizadoHoje, 500);
+assert.equal(rt.semanas[0].inicio, '2026-11-01'); // domingo isolado
+assert.equal(rt.semanas[1].inicio, '2026-11-02');
+assert.ok(rt.semanas.find((s) => s.isCurrent)!.realizado === 500);
+console.log('ritmo ok');
