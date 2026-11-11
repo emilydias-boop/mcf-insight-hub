@@ -54,7 +54,7 @@ function Kpi({ icon, label, value, hint }: { icon: React.ReactNode; label: strin
 
 const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
-export function MetaCobrancaPainel({ isAdmin, tvInicial = false, onFecharTv, soTv = false }: { isAdmin: boolean; tvInicial?: boolean; onFecharTv?: () => void; soTv?: boolean }) {
+export function MetaCobrancaPainel({ isAdmin, tvInicial = false, onFecharTv }: { isAdmin: boolean; tvInicial?: boolean; onFecharTv?: () => void }) {
   const hoje = hojeSP();
   const [mes, setMes] = useState(hoje.slice(0, 7));
   const [aberto, setAberto] = useState(false);
