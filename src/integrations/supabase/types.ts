@@ -26145,6 +26145,7 @@ export type Database = {
           transcript: Json
         }[]
       }
+      pos_venda_html_texto: { Args: { t: string }; Returns: string }
       pos_venda_listar_gerentes: {
         Args: never
         Returns: {
@@ -26170,6 +26171,10 @@ export type Database = {
       pos_venda_registrar_nota: {
         Args: { p_deal_id: string; p_nota: string }
         Returns: undefined
+      }
+      pos_venda_registrar_resumo: {
+        Args: { p_reuniao_id: string }
+        Returns: string
       }
       pos_venda_salvar_distribuicao: {
         Args: { p_itens: Json }
