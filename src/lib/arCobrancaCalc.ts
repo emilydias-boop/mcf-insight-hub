@@ -170,7 +170,8 @@ export function batimentoPorCobrador(
   tituloMap: Map<string, TituloCalc>,
   metas: MetaCobranca[],
   cobradores: string[],
-): { geral: BatimentoCobrador; porCobrador: BatimentoCobrador[] } {
+): { geral: BatimentoCobrador; porCobrador: BatimentoCobrador[]; porDia: Record<string, number> } {
+  const porDia: Record<string, number> = {};
   const real = new Map<string | null, number>();
   const prev = new Map<string | null, number>();
   const add = (m: Map<string | null, number>, k: string | null, v: number) => m.set(k, (m.get(k) ?? 0) + v);
@@ -182,7 +183,7 @@ export function batimentoPorCobrador(
     const quem = p.cobrador_id ?? t?.cobranca_responsavel_id ?? null;
     const pagoNoMes = !!p.data_pagamento && p.data_pagamento.slice(0, 7) === mes;
     const r = pagoNoMes ? recebido(p) : 0;
-    if (r > 0) { add(real, quem, r); total += r; }
+    if (r > 0) { add(real, quem, r); total += r; const d = p.data_pagamento!.slice(0, 10); porDia[d] = (porDia[d] ?? 0) + r; }
     const vm = p.data_vencimento.slice(0, 7);
     let pv = 0;
     if (vm === mes) pv = Number(p.valor || 0);
@@ -202,5 +203,30 @@ export function batimentoPorCobrador(
   const semCob = real.get(null) ?? 0;
   if (semCob > 0) porCobrador.push({ cobrador_id: null, meta: 0, realizado: semCob, previsto: prev.get(null) ?? 0, pct: 0 });
   porCobrador.sort((a, b) => b.realizado - a.realizado);
-  return { geral: { cobrador_id: null, meta: metaGeral, realizado: total, previsto: totalPrev, pct: pct(total, metaGeral) }, porCobrador };
+  return { geral: { cobrador_id: null, meta: metaGeral, realizado: total, previsto: totalPrev, pct: pct(total, metaGeral) }, porCobrador, porDia };
+}
+
+export interface SemanaMeta { index: number; inicio: string; fim: string; diasUteis: number; metaSemana: number; realizado: number; isCurrent: boolean }
+
+/** Ritmo da meta no mês: dias úteis (seg–sex), meta/dia, semanas seg→dom recortadas ao mês e meta esperada até hoje. */
+export function ritmoMetaCobranca(mes: string, hoje: string, meta: number, porDia: Record<string, number>) {
+  const ini = `${mes}-01`;
+  const dias: string[] = [];
+  for (let d = ini; d.slice(0, 7) === mes; d = addDias(d, 1)) dias.push(d);
+  const util = (d: string) => { const w = toDate(d).getUTCDay(); return w !== 0 && w !== 6; };
+  const diasUteis = dias.filter(util).length;
+  const metaDia = diasUteis ? meta / diasUteis : 0;
+  const semanas: SemanaMeta[] = [];
+  for (const d of dias) {
+    const k = inicioSemana(d);
+    let s = semanas.find((x) => x.index === semanas.length - 1 && inicioSemana(x.inicio) === k);
+    if (!s) { s = { index: semanas.length, inicio: d, fim: d, diasUteis: 0, metaSemana: 0, realizado: 0, isCurrent: false }; semanas.push(s); }
+    s.fim = d;
+    if (util(d)) { s.diasUteis++; s.metaSemana += metaDia; }
+    s.realizado += porDia[d] ?? 0;
+    if (d === hoje) s.isCurrent = true;
+  }
+  const uteisAteHoje = dias.filter((d) => util(d) && d <= hoje).length;
+  const uteisRestantes = dias.filter((d) => util(d) && d > hoje).length + (util(hoje) && hoje.slice(0, 7) === mes ? 1 : 0);
+  return { diasUteis, metaDia, semanas, esperadoAteHoje: metaDia * uteisAteHoje, uteisRestantes, realizadoHoje: porDia[hoje] ?? 0 };
 }
