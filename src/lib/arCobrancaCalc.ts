@@ -143,3 +143,47 @@ export function statusListagem(t: { status: string; negociacao?: boolean | null;
   if (t.negociacao) return 'negociacao';
   return (t.dias_atraso ?? 0) > 0 ? 'atrasado' : 'em_dia';
 }
+
+// ---------- Meta mensal de cobrança ----------
+export interface MetaCobranca { cobrador_id: string | null; valor: number }
+export interface BatimentoCobrador { cobrador_id: string | null; meta: number; realizado: number; pct: number }
+
+const isEstorno = (p: ParcelaCalc) => /reemb|estorn/i.test(p.evento || '');
+
+/**
+ * Batimento do mês (yyyy-MM): recebido = pagamentos com data_pagamento no mês,
+ * atribuídos a parcela.cobrador_id ou ao responsável do título; reembolsos/estornos fora.
+ * Meta individual sem valor próprio = meta geral ÷ nº de cobradores.
+ */
+export function batimentoPorCobrador(
+  mes: string,
+  parcelas: ParcelaCalc[],
+  tituloMap: Map<string, TituloCalc>,
+  metas: MetaCobranca[],
+  cobradores: string[],
+): { geral: BatimentoCobrador; porCobrador: BatimentoCobrador[] } {
+  const real = new Map<string | null, number>();
+  let total = 0;
+  for (const p of parcelas) {
+    if (!p.data_pagamento || p.data_pagamento.slice(0, 7) !== mes || isEstorno(p)) continue;
+    const v = recebido(p);
+    if (v <= 0) continue;
+    const quem = p.cobrador_id ?? tituloMap.get(p.titulo_id)?.cobranca_responsavel_id ?? null;
+    real.set(quem, (real.get(quem) ?? 0) + v);
+    total += v;
+  }
+  const metaGeral = Number(metas.find((m) => m.cobrador_id === null)?.valor ?? 0);
+  const ids = Array.from(new Set([...cobradores, ...Array.from(real.keys()).filter((k): k is string => !!k)]));
+  const padrao = ids.length ? metaGeral / ids.length : 0;
+  const pct = (r: number, m: number) => (m > 0 ? (r / m) * 100 : 0);
+  const porCobrador = ids.map((id) => {
+    const proprio = metas.find((m) => m.cobrador_id === id);
+    const meta = proprio ? Number(proprio.valor) : padrao;
+    const r = real.get(id) ?? 0;
+    return { cobrador_id: id, meta, realizado: r, pct: pct(r, meta) };
+  });
+  const semCob = real.get(null) ?? 0;
+  if (semCob > 0) porCobrador.push({ cobrador_id: null, meta: 0, realizado: semCob, pct: 0 });
+  porCobrador.sort((a, b) => b.realizado - a.realizado);
+  return { geral: { cobrador_id: null, meta: metaGeral, realizado: total, pct: pct(total, metaGeral) }, porCobrador };
+}

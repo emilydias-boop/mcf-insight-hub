@@ -1445,6 +1445,36 @@ export type Database = {
           },
         ]
       }
+      ar_metas_cobranca: {
+        Row: {
+          cobrador_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mes: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          cobrador_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mes: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          cobrador_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mes?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       ar_notas_gerais: {
         Row: {
           autor_id: string
