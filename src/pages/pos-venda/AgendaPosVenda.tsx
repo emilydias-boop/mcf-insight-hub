@@ -583,7 +583,14 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
 
   if (encaminhando) return <EncaminharBuDialog dealId={reuniao.deal_id} clienteNome={reuniao.crm_deals?.name} onClose={() => { setEncaminhando(false); onClose(); }} onConcluido={onSalvo} />;
 
-  const resumo = (s: any) => typeof s === 'string' ? s : s?.summary ?? null;
+  const resumo = (s: any) => {
+    const html = typeof s === 'string' ? s : s?.summary ?? null;
+    if (!html) return null;
+    const el = document.createElement('div');
+    el.innerHTML = String(html).replace(/<a[^>]*title="Open transcript[^"]*"[^>]*>[^<]*<\/a>/gi, '')
+      .replace(/<li[^>]*>/gi, '\n• ').replace(/<br\s*\/?>|<\/p>|<\/strong>|<\/ul>/gi, '\n');
+    return (el.textContent ?? '').replace(/\n\s*\n+/g, '\n').trim();
+  };
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
