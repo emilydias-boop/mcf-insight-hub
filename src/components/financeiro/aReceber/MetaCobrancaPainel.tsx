@@ -54,11 +54,11 @@ function Kpi({ icon, label, value, hint }: { icon: React.ReactNode; label: strin
 
 const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
-export function MetaCobrancaPainel({ isAdmin }: { isAdmin: boolean }) {
+export function MetaCobrancaPainel({ isAdmin, tvInicial = false, onFecharTv }: { isAdmin: boolean; tvInicial?: boolean; onFecharTv?: () => void }) {
   const hoje = hojeSP();
   const [mes, setMes] = useState(hoje.slice(0, 7));
   const [aberto, setAberto] = useState(false);
-  const [tv, setTv] = useState(false);
+  const [tv, setTv] = useState(tvInicial);
   const { data: carteira, refetch } = useArCarteira();
   const { data: metas = [] } = useMetas(mes);
   const { data: gestores = [] } = useArGestores();
@@ -169,7 +169,7 @@ export function MetaCobrancaPainel({ isAdmin }: { isAdmin: boolean }) {
           monthStart={new Date(`${mes}-01T12:00:00`)}
           semanas={rt.semanas.map((s) => ({ index: s.index, metaSemana: s.metaSemana, realizado: s.realizado, isCurrent: s.isCurrent, diasUteis: s.diasUteis, start: new Date(`${s.inicio}T12:00:00`), end: new Date(`${s.fim}T12:00:00`) }))}
           closers={ranking.map((c) => ({ id: c.cobrador_id!, name: nome(c.cobrador_id), metaIndividual: c.meta, realizado: c.realizado }))}
-          onClose={() => setTv(false)} accent="orange" title="MCF · Meta de Cobrança ao vivo" showCampaign={false}
+          onClose={() => { setTv(false); onFecharTv?.(); }} accent="orange" title="MCF · Meta de Cobrança ao vivo" showCampaign={false}
         />
       )}
     </div>
