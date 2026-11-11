@@ -13,3 +13,7 @@
 - `BITVMode.tsx`: novas props opcionais `closersTitle` (padrão "Metas individuais dos Closers") e `apenasSemanaAtual` (padrão false, filtra `semanas` por `isCurrent`). As outras telas não passam essas props, então não mudam.
 - `MetaCobrancaPainel.tsx`: lista fixa `COBRADORAS_META` por e-mail; resolve ids via perfis carregados; meta = meta individual gravada ou `meta geral / 2`; realizado = `porCobrador` do id (0 se ausente). Passa `closersTitle="Metas individuais dos Cobradores"` e `apenasSemanaAtual`.
 - Painel da aba (fora do TV) fica como está.
+
+## Modo TV de entrada sem piscar
+- O Modo TV abre sozinho só quando a pessoa entra no sistema ou sai de Financeiro > A receber e volta. Depois de fechado, não reaparece nem pisca enquanto ela continua na tela (troca de aba, atualização automática dos dados, recarregamento interno da página).
+- Técnico: a abertura automática passa a usar só o Modo TV (sem montar uma segunda cópia do painel por trás); um controle por entrada na rota (marca "já exibido" ao fechar, limpa quando o usuário sai de /financeiro/a-receber ou no login) impede que ele reabra por montagens repetidas da página.
