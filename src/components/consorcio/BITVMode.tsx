@@ -45,12 +45,15 @@ interface Props {
   subtitle?: string;
   showCampaign?: boolean;
   closers?: TVCloserData[];
+  closersTitle?: string;
+  apenasSemanaAtual?: boolean;
 }
 
 export function BITVMode({
   meta, realizado, realizadoHoje, metaDia, diasUteis, semanas, monthStart, onClose,
   accent = "lime", title = "MCF · BI Consórcio ao vivo", subtitle,
   showCampaign: enableCampaign = true, closers,
+  closersTitle = "Metas individuais dos Closers", apenasSemanaAtual = false,
 }: Props) {
   const ACC = accent === "orange" ? "#ff7a00" : "#bfff00";
   const ACC_GLOW = accent === "orange" ? "rgba(255,122,0,0.6)" : "rgba(191,255,0,0.6)";
@@ -235,7 +238,7 @@ export function BITVMode({
                 </div>
               </div>
               <div className="grid gap-3 overflow-hidden">
-                {semanas.map((s) => {
+                {(apenasSemanaAtual ? semanas.filter((w) => w.isCurrent) : semanas).map((s) => {
                   const p = s.metaSemana > 0 ? Math.min(120, (s.realizado / s.metaSemana) * 100) : 0;
                   const done = s.realizado >= s.metaSemana && s.metaSemana > 0;
                   return (
@@ -320,7 +323,7 @@ export function BITVMode({
             <div className="flex items-center gap-2 mb-4">
               <Users className="h-5 w-5" style={{ color: ACC }} />
               <div className="text-xs uppercase tracking-[0.3em] text-white/60 font-bold">
-                Metas individuais dos Closers
+                {closersTitle}
               </div>
             </div>
             <div className={`grid gap-4 ${closers.length <= 2 ? "grid-cols-2" : closers.length === 3 ? "grid-cols-3" : "grid-cols-2 xl:grid-cols-4"}`}>
