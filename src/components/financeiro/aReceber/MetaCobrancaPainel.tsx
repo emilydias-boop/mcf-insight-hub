@@ -54,7 +54,9 @@ function Kpi({ icon, label, value, hint }: { icon: React.ReactNode; label: strin
 
 const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
-export function MetaCobrancaPainel({ isAdmin, tvInicial = false, onFecharTv }: { isAdmin: boolean; tvInicial?: boolean; onFecharTv?: () => void }) {
+const COBRADORAS_META = ['bruna.carielo@minhacasafinanciada.com', 'leticia.rodrigues@minhacasafinanciada.com'];
+
+export function MetaCobrancaPainel({ isAdmin, tvInicial = false, onFecharTv, soTv = false }: { isAdmin: boolean; tvInicial?: boolean; onFecharTv?: () => void; soTv?: boolean }) {
   const hoje = hojeSP();
   const [mes, setMes] = useState(hoje.slice(0, 7));
   const [aberto, setAberto] = useState(false);
@@ -82,6 +84,23 @@ export function MetaCobrancaPainel({ isAdmin, tvInicial = false, onFecharTv }: {
     : { t: `Acelera! Faltam ${brl(rt.esperadoAteHoje - g.realizado)} para entrar no ritmo de hoje 🔥`, c: 'text-destructive' };
   const ranking = res.porCobrador.filter((c) => c.cobrador_id);
   const sem = res.porCobrador.find((c) => !c.cobrador_id);
+  const cobradorasTv = COBRADORAS_META.map((email) => {
+    const p = perfis.find((x: any) => (x.email ?? '').toLowerCase() === email);
+    const id = p?.id ?? email;
+    const ind = metas.find((m) => m.cobrador_id === id);
+    const r = res.porCobrador.find((c) => c.cobrador_id === id);
+    return { id, name: p?.full_name ?? email, metaIndividual: ind ? Number(ind.valor) : g.meta / COBRADORAS_META.length, realizado: r?.realizado ?? 0 };
+  });
+  const tvEl = tv ? (
+    <BITVMode
+      meta={g.meta} realizado={g.realizado} realizadoHoje={rt.realizadoHoje} metaDia={rt.metaDia} diasUteis={rt.diasUteis}
+      monthStart={new Date(`${mes}-01T12:00:00`)}
+      semanas={rt.semanas.map((s) => ({ index: s.index, metaSemana: s.metaSemana, realizado: s.realizado, isCurrent: s.isCurrent, diasUteis: s.diasUteis, start: new Date(`${s.inicio}T12:00:00`), end: new Date(`${s.fim}T12:00:00`) }))}
+      closers={cobradorasTv} closersTitle="Metas individuais dos Cobradores" apenasSemanaAtual
+      onClose={() => { setTv(false); onFecharTv?.(); }} accent="orange" title="MCF · Meta de Cobrança ao vivo" showCampaign={false}
+    />
+  ) : null;
+  if (soTv) return tvEl;
   const mesLabel = new Date(`${mes}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   return (
@@ -163,15 +182,7 @@ export function MetaCobrancaPainel({ isAdmin, tvInicial = false, onFecharTv }: {
       )}
 
       {aberto && <MetaDialog mes={mes} metas={metas} cobradores={ranking.map((c) => c.cobrador_id!)} nome={nome} onClose={() => setAberto(false)} />}
-      {tv && (
-        <BITVMode
-          meta={g.meta} realizado={g.realizado} realizadoHoje={rt.realizadoHoje} metaDia={rt.metaDia} diasUteis={rt.diasUteis}
-          monthStart={new Date(`${mes}-01T12:00:00`)}
-          semanas={rt.semanas.map((s) => ({ index: s.index, metaSemana: s.metaSemana, realizado: s.realizado, isCurrent: s.isCurrent, diasUteis: s.diasUteis, start: new Date(`${s.inicio}T12:00:00`), end: new Date(`${s.fim}T12:00:00`) }))}
-          closers={ranking.map((c) => ({ id: c.cobrador_id!, name: nome(c.cobrador_id), metaIndividual: c.meta, realizado: c.realizado }))}
-          onClose={() => { setTv(false); onFecharTv?.(); }} accent="orange" title="MCF · Meta de Cobrança ao vivo" showCampaign={false}
-        />
-      )}
+      {tvEl}
     </div>
   );
 }

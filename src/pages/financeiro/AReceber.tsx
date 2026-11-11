@@ -260,7 +260,7 @@ export default function AReceber() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {tvEntrada && <MetaCobrancaPainel isAdmin={isAdmin} tvInicial onFecharTv={() => { setTvEntrada(false); setAba('listagem'); }} />}
+      {tvEntrada && <MetaCobrancaPainel isAdmin={isAdmin} tvInicial soTv onFecharTv={() => { setTvEntrada(false); setAba('listagem'); }} />}
       <Tabs value={aba} onValueChange={setAba} className="w-full">
       <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-2 bg-background/95 backdrop-blur border-b border-border space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
