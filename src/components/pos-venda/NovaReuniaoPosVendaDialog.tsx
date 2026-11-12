@@ -68,13 +68,13 @@ export function NovaReuniaoPosVendaDialog({ onClose, onSalvo, preSelecao, dealId
     queryKey: ['pos-venda-deal-nome', dealIdProp],
     enabled: Boolean(dealIdProp),
     queryFn: async () => {
-      const { data: d } = await db.from('crm_deals').select('name, stage_id').eq('id', dealIdProp).maybeSingle();
+      const { data: d } = await db.from('crm_deals').select('name, stage_id, origin_id').eq('id', dealIdProp).maybeSingle();
       let stageName: string | null = null;
       if (d?.stage_id) {
         const { data: s } = await db.from('crm_stages').select('stage_name').eq('id', d.stage_id).maybeSingle();
         stageName = s?.stage_name ?? null;
       }
-      return { name: (d?.name ?? null) as string | null, stageName };
+      return { name: (d?.name ?? null) as string | null, stageName, foraPosVenda: Boolean(d && d.origin_id !== POS_VENDA_ORIGIN_ID) };
     },
   });
   const [tipoSugerido, setTipoSugerido] = useState(false);
@@ -131,6 +131,7 @@ export function NovaReuniaoPosVendaDialog({ onClose, onSalvo, preSelecao, dealId
 
   const salvar = useMutation({
     mutationFn: async () => {
+      if (dealInfo?.foraPosVenda) throw new Error('Este cliente ainda não tem cartão no Pós-venda. Abra o cartão dele no funil Relacionamento - Pós venda para agendar.');
       if (aguardandoHorarios || (configurado && !livres.includes(hora))) throw new Error('Escolha um horário disponível.');
       const inicio = inicioSlotSP(data, hora).toISOString();
       const { data: criada, error } = await db.from('pos_venda_reunioes').insert({
