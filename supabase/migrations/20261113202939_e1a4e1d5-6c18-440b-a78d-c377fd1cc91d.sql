@@ -1,4 +1,3 @@
--- Presença/ociosidade na telemetria (colunas novas, todas opcionais)
 ALTER TABLE public.app_telemetry
   ADD COLUMN IF NOT EXISTS session_id text,
   ADD COLUMN IF NOT EXISTS last_interaction_at timestamptz,
@@ -7,7 +6,6 @@ ALTER TABLE public.app_telemetry
 CREATE INDEX IF NOT EXISTS idx_app_telemetry_type_created ON public.app_telemetry (event_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_app_telemetry_user_created ON public.app_telemetry (user_id, created_at DESC);
 
--- Aceite do aviso de transparência (LGPD)
 CREATE TABLE IF NOT EXISTS public.telemetria_aceite (
   user_id uuid PRIMARY KEY DEFAULT auth.uid(),
   aceito_em timestamptz NOT NULL DEFAULT now(),
@@ -21,7 +19,6 @@ CREATE POLICY "aceite_select_own" ON public.telemetria_aceite FOR SELECT TO auth
 CREATE POLICY "aceite_insert_own" ON public.telemetria_aceite FOR INSERT TO authenticated
   WITH CHECK (user_id = (select auth.uid()));
 
--- Presença ao vivo: último heartbeat de cada pessoa nas últimas 2 h (só admin)
 CREATE OR REPLACE FUNCTION public.telemetria_presenca()
 RETURNS TABLE(user_id uuid, nome text, email text, route text, screen_name text,
               last_heartbeat timestamptz, last_interaction_at timestamptz, tab_visible boolean)
@@ -42,8 +39,6 @@ END $$;
 REVOKE ALL ON FUNCTION public.telemetria_presenca() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.telemetria_presenca() TO authenticated;
 
--- Atividade por pessoa num dia (São Paulo): tempo = intervalo real até o próximo
--- evento de presença da mesma session_id (máx. 60 s), classificado pelo heartbeat de início
 CREATE OR REPLACE FUNCTION public.telemetria_atividade_dia(p_dia date, p_ocioso_min int DEFAULT 5)
 RETURNS TABLE(user_id uuid, nome text, email text, ativo_seg int, ocioso_seg int,
               segundo_plano_seg int, telas jsonb)
@@ -85,7 +80,6 @@ END $$;
 REVOKE ALL ON FUNCTION public.telemetria_atividade_dia(date,int) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.telemetria_atividade_dia(date,int) TO authenticated;
 
--- Retenção: apaga só registros de presença com mais de 90 dias
 CREATE OR REPLACE FUNCTION public.telemetria_limpar_presenca()
 RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE n int;
