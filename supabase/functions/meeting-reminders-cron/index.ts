@@ -20,9 +20,6 @@ const OFFSETS: Record<string, number> = {
 
 const WINDOW_MINUTES = 5; // ±5 min tolerance
 
-// Content SID (Twilio) do template "Lembrete Reunião R1 — MCF Capital"
-const WHATSAPP_REMINDER_TEMPLATE_SID = 'HX007cedb0ed56087bae3609dc10474710';
-
 function formatPtBR(date: Date): { date: string; time: string } {
   const fmt = new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo',
@@ -35,6 +32,56 @@ function formatPtBR(date: Date): { date: string; time: string } {
     date: `${get('day')}/${get('month')}/${get('year')}`,
     time: `${get('hour')}:${get('minute')}`,
   };
+}
+
+// A Meta recusa parâmetro vazio, com quebra de linha/tab ou com 4+ espaços seguidos.
+function valorParam(v: string | null | undefined): string {
+  const s = String(v ?? '').replace(/[\n\t]+/g, ' ').replace(/ {4,}/g, ' ').trim();
+  return s || '—';
+}
+
+async function enviarMetaWa(
+  supabase: any,
+  body: Record<string, unknown>,
+): Promise<{ success: boolean; messageId?: string; code: string; incerto: boolean; detalhe?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('meta-wa-send', { body });
+    if (error) {
+      let code = 'erro_invoke';
+      let detalhe = error.message;
+      try {
+        const resp = (error as any)?.context?.response ?? (error as any)?.context;
+        if (resp && typeof resp.text === 'function') {
+          const txt = await resp.text();
+          let j: any = null;
+          try { j = JSON.parse(txt); } catch (_) { /* corpo não é JSON */ }
+          if (j?.code) code = String(j.code);
+          detalhe = `HTTP ${resp.status ?? '?'}${j?.campo ? ` campo=${j.campo}` : ''}${j?.esperado != null ? ` esperado=${j.esperado}` : ''}`;
+        }
+      } catch (_) { /* ignore */ }
+      return { success: false, code, incerto: false, detalhe };
+    }
+    return {
+      success: data?.success === true,
+      messageId: data?.messageId || undefined,
+      code: String(data?.code ?? ''),
+      incerto: data?.incerto === true,
+      detalhe: data?.erro_titulo || data?.motivo || undefined,
+    };
+  } catch (e: any) {
+    return { success: false, code: 'erro_invoke', incerto: false, detalhe: e?.message };
+  }
+}
+
+// UUID determinístico (SHA-1 no formato de UUID v5): o mesmo lembrete gera sempre o mesmo ref_id,
+// e a meta-wa-send não reenvia o que já saiu, mesmo que o cron rode duas vezes na janela.
+async function uuidDeterministico(chave: string): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(chave)));
+  const b = hash.slice(0, 16);
+  b[6] = (b[6] & 0x0f) | 0x50; // versão 5
+  b[8] = (b[8] & 0x3f) | 0x80; // variante RFC 4122
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 // Espelha um envio de WhatsApp na thread do MCF - Atendimento (wa_messages).
@@ -118,6 +165,12 @@ serve(async (req) => {
 
     const enabledOffsets: string[] = settings.enabled_offsets || [];
     const fallbackLink: string | null = settings.fallback_meeting_link || null;
+    // Template da Meta do lembrete (aba Lembretes Reunião). Vazio = WhatsApp do lembrete desligado, só e-mail.
+    const metaTemplate: string = String(settings.whatsapp_meta_template || '').trim();
+    const metaLanguage: string = String(settings.whatsapp_meta_language || '').trim() || 'pt_BR';
+    if (!metaTemplate) {
+      console.warn('[MEETING-REMINDERS-CRON] meeting_reminder_settings.whatsapp_meta_template vazio — lembrete por WhatsApp desligado, só e-mail');
+    }
 
     // 2. Load upcoming meetings (next 26h)
     const nowIso = new Date().toISOString();
@@ -409,7 +462,7 @@ serve(async (req) => {
           }
           }
 
-          // ===== Canal WHATSAPP (Twilio) =====
+          // ===== Canal WHATSAPP (Meta) =====
           if (!existingWa) {
             const waBase = { ...baseLog, channel: 'whatsapp', contact_email: contact.email || 'unknown' };
 
@@ -420,8 +473,15 @@ serve(async (req) => {
                 skip_reason: 'no_phone',
               });
               summary.skipped++;
+            } else if (!metaTemplate) {
+              await supabase.from('meeting_reminders_log').insert({
+                ...waBase,
+                status: 'skipped',
+                skip_reason: 'sem_template_meta',
+              });
+              summary.skipped++;
             } else {
-              // Variáveis do template Twilio — ÚNICA fonte de verdade usada tanto no
+              // Variáveis do template — ÚNICA fonte de verdade usada tanto no
               // envio quanto no espelho, para que o corpo da thread nunca diverja do
               // que a lead realmente recebeu.
               const varsTemplate: Record<string, string> = {
@@ -458,9 +518,9 @@ serve(async (req) => {
               }
               const nomeLead = varsTemplate['1'];
               // ATENÇÃO: o corpo espelhado abaixo é uma RECONSTRUÇÃO APROXIMADA do
-              // template aprovado na Meta (WHATSAPP_REMINDER_TEMPLATE_SID). O texto
+              // template aprovado na Meta (meeting_reminder_settings.whatsapp_meta_template). O texto
               // exato que a lead recebe é o template aprovado; se ele mudar na Meta,
-              // esta string precisa ser atualizada junto. Sem buscar o texto na Twilio,
+              // esta string precisa ser atualizada junto. Sem buscar o texto na Meta,
               // esta aproximação é o melhor possível.
               // corpoEspelho deriva das MESMAS constantes (varsTemplate/closerName)
               // usadas no envio, para que a thread nunca diverja do que a lead recebeu.
@@ -475,24 +535,65 @@ serve(async (req) => {
               const telefoneEspelho = contact.phone;
 
               try {
-                const waRes = await supabase.functions.invoke('twilio-whatsapp-send', {
-                  body: {
-                    to: contact.phone,
-                    templateSid: WHATSAPP_REMINDER_TEMPLATE_SID,
-                    contentVariables: varsTemplate,
-                    dealId: deal.id,
-                  },
+                // Um ref_id por lembrete: participante + tipo + offset + horário da reunião.
+                // Reagendar a reunião muda o horário e gera um ref_id novo.
+                const refId = await uuidDeterministico(
+                  `lembrete:${attendee.id}:${meetingType}:${offsetKey}:${slot.scheduled_at}`,
+                );
+                const r = await enviarMetaWa(supabase, {
+                  to: contact.phone,
+                  template_name: metaTemplate,
+                  language: metaLanguage,
+                  // Mesmas variáveis e mesma ordem que iam para a Twilio: nome, data e hora, closer, link.
+                  body_params: [
+                    valorParam(varsTemplate['1']),
+                    valorParam(varsTemplate['2']),
+                    valorParam(varsTemplate['3']),
+                    valorParam(varsTemplate['4']),
+                  ],
+                  origem: 'lembrete',
+                  ref_id: refId,
+                  deal_id: deal.id,
+                  contact_id: contact.id,
+                  nome: nomeLead,
                 });
 
-                if (waRes.error || !waRes.data?.success) {
-                  let detailed = waRes.error?.message || JSON.stringify(waRes.data || {});
-                  try {
-                    const resp = (waRes.error as any)?.context?.response ?? (waRes.error as any)?.context;
-                    if (resp && typeof resp.text === 'function') {
-                      const txt = await resp.text();
-                      if (txt) detailed = `${detailed} | body=${txt.slice(0, 500)}`;
-                    }
-                  } catch (_) { /* ignore */ }
+                if (r.success) {
+                  await supabase.from('meeting_reminders_log').insert({
+                    ...waBase,
+                    status: 'sent',
+                  });
+                  summary.sent++;
+                  console.log(`[MEETING-REMINDERS-CRON] whatsapp enviado attendee=${attendee.id} offset=${offsetKey} wamid=${r.messageId}`);
+                  await espelharNaThreadWa(supabase, {
+                    telefoneBruto: telefoneEspelho,
+                    dealId: attendee.deal_id || deal.id,
+                    nomeContato: nomeLead,
+                    corpo: corpoEspelho,
+                    remetenteNome: remetenteEspelho,
+                    sucesso: true,
+                    sid: r.messageId || null,
+                  });
+                } else if (r.code === 'duplicado') {
+                  // Já saiu antes (mesmo ref_id): registra e não espelha de novo.
+                  await supabase.from('meeting_reminders_log').insert({
+                    ...waBase,
+                    status: 'skipped',
+                    skip_reason: 'duplicado',
+                  });
+                  summary.skipped++;
+                } else if (['envio_desligado', 'fora_allowlist', 'opt_out', 'teto'].includes(r.code)) {
+                  // Barrado pelas travas da meta-wa-send: nada saiu. Não é falha do lead e não vai para a thread.
+                  await supabase.from('meeting_reminders_log').insert({
+                    ...waBase,
+                    status: 'skipped',
+                    skip_reason: r.code,
+                  });
+                  summary.skipped++;
+                } else {
+                  const detailed = `meta-wa-send: ${r.code}` +
+                    `${r.incerto ? ' (resultado incerto — não repetir; conferir meta_wa_envios)' : ''}` +
+                    `${r.detalhe ? ` — ${r.detalhe}` : ''}`;
                   await supabase.from('meeting_reminders_log').insert({
                     ...waBase,
                     status: 'failed',
@@ -508,21 +609,6 @@ serve(async (req) => {
                     remetenteNome: remetenteEspelho,
                     sucesso: false,
                     erro: detailed,
-                  });
-                } else {
-                  await supabase.from('meeting_reminders_log').insert({
-                    ...waBase,
-                    status: 'sent',
-                  });
-                  summary.sent++;
-                  await espelharNaThreadWa(supabase, {
-                    telefoneBruto: telefoneEspelho,
-                    dealId: attendee.deal_id || deal.id,
-                    nomeContato: nomeLead,
-                    corpo: corpoEspelho,
-                    remetenteNome: remetenteEspelho,
-                    sucesso: true,
-                    sid: waRes.data?.messageSid || null,
                   });
                 }
               } catch (e: any) {

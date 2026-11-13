@@ -56,7 +56,10 @@ serve(async (req) => {
             subject,
             twilio_template_sid,
             activecampaign_template_id,
-            variables
+            variables,
+            buttons_config,
+            meta_template_name,
+            meta_language
           )
         ),
         automation_flows:flow_id (
@@ -451,16 +454,48 @@ serve(async (req) => {
         });
 
         // 8. Send via appropriate channel
-        let sendResult: { success: boolean; externalId?: string; error?: string };
+        let sendResult: { success: boolean; externalId?: string; error?: string; pular?: string; semRepetir?: boolean };
 
         if (step.channel === 'whatsapp') {
-          sendResult = await sendWhatsApp(supabase, {
+          // Só API oficial da Meta. Template sem vínculo com a Meta não sai (a Twilio não é mais usada).
+          if (!template.meta_template_name) {
+            await markAsSkipped(supabase, item.id, 'Template WhatsApp sem vínculo com a Meta');
+            results.skipped++;
+            continue;
+          }
+          const bodyParams = nomesNoTexto(template.content).map((n) => valorParam(variables[n] ?? variables[n.toLowerCase()]));
+          // Variável dentro da URL do 1º botão (ex.: .../wa-redirect/{{wa_agendar_token}}) vira o parâmetro do botão.
+          const btn0: any = Array.isArray(template.buttons_config) ? template.buttons_config[0] : null;
+          const varBotao = btn0 && String(btn0.type || '').toLowerCase() === 'url'
+            ? nomesNoTexto(String(btn0.url || ''))[0]
+            : undefined;
+          const buttonParams: string[] = [];
+          if (varBotao) {
+            const valorBotao = String(variables[varBotao] ?? variables[varBotao.toLowerCase()] ?? '').trim();
+            if (!valorBotao) {
+              await markAsSkipped(supabase, item.id, `Variável do botão vazia: ${varBotao}`);
+              results.skipped++;
+              continue;
+            }
+            buttonParams.push(valorBotao);
+          }
+          sendResult = await sendWhatsAppMeta(supabase, {
             to: contact.phone,
-            templateSid: template.twilio_template_sid,
-            content,
-            variables,
-            contentVariables,
+            template_name: template.meta_template_name,
+            language: template.meta_language || 'pt_BR',
+            body_params: bodyParams,
+            button_params: buttonParams,
+            origem: 'automacao',
+            ref_id: item.id, // id da fila: a meta-wa-send não reenvia o mesmo item
+            deal_id: item.deal_id,
+            contact_id: contact.id,
+            nome: contact.name || undefined,
           });
+          if (sendResult.pular) {
+            await markAsSkipped(supabase, item.id, sendResult.pular);
+            results.skipped++;
+            continue;
+          }
         } else if (step.channel === 'email') {
           sendResult = await sendEmail(supabase, {
             to: contact.email,
@@ -517,7 +552,9 @@ serve(async (req) => {
           console.log(`[AUTOMATION-PROCESSOR] Sent ${step.channel} to ${contact.name}`);
         } else {
           const newAttempts = (item.attempts || 0) + 1;
-          const newStatus = newAttempts >= MAX_RETRIES ? 'failed' : 'pending';
+          // Resultado incerto na Meta (a mensagem pode ter saído) ou 4xx da meta-wa-send (repetir não muda nada):
+          // nunca volta para a fila.
+          const newStatus = (sendResult.semRepetir || newAttempts >= MAX_RETRIES) ? 'failed' : 'pending';
           
           await supabase
             .from('automation_queue')
@@ -731,6 +768,80 @@ function replaceVariables(content: string, variables: Record<string, string>): s
     result = result.replace(new RegExp(`{{${key}}}`, 'gi'), value || '');
   }
   return result;
+}
+
+// Nomes das variáveis {{nome}} na ordem da 1ª aparição, sem repetir.
+// Mesma RE_VAR da fase A (src/lib/automationMetaTemplate.ts): não importar nada de src/.
+function nomesNoTexto(texto: string | null | undefined): string[] {
+  const nomes: string[] = [];
+  for (const m of String(texto || '').matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g)) {
+    if (!nomes.includes(m[1])) nomes.push(m[1]);
+  }
+  return nomes;
+}
+
+// A Meta recusa parâmetro vazio, com quebra de linha/tab ou com 4+ espaços seguidos.
+function valorParam(v: string | null | undefined): string {
+  const s = String(v ?? '').replace(/[\n\t]+/g, ' ').replace(/ {4,}/g, ' ').trim();
+  return s || '—';
+}
+
+async function sendWhatsAppMeta(
+  supabase: any,
+  body: {
+    to: string;
+    template_name: string;
+    language: string;
+    body_params: string[];
+    button_params: string[];
+    origem: 'automacao';
+    ref_id: string;
+    deal_id?: string | null;
+    contact_id?: string | null;
+    nome?: string;
+  },
+): Promise<{ success: boolean; externalId?: string; error?: string; pular?: string; semRepetir?: boolean }> {
+  try {
+    if (!body.to) return { success: false, error: 'No phone number' };
+    const { data, error } = await supabase.functions.invoke('meta-wa-send', { body });
+    if (error) {
+      // invoke perde o corpo em resposta não-2xx: lê de error.context
+      let detalhe = error.message;
+      let status = 0;
+      try {
+        const resp = (error as any)?.context?.response ?? (error as any)?.context;
+        if (resp && typeof resp.text === 'function') {
+          status = Number(resp.status) || 0;
+          const txt = await resp.text();
+          let j: any = null;
+          try { j = JSON.parse(txt); } catch (_) { /* corpo não é JSON */ }
+          detalhe = j?.code
+            ? `${j.code} (HTTP ${resp.status ?? '?'})${j.campo ? ` campo=${j.campo}` : ''}${j.esperado != null ? ` esperado=${j.esperado}` : ''}`
+            : `${error.message} | body=${String(txt || '').slice(0, 300)}`;
+        }
+      } catch (_) { /* ignore */ }
+      // 4xx = configuração ou entrada errada: repetir não muda nada. Só 500 e falha de rede repetem.
+      return { success: false, error: `meta-wa-send: ${detalhe}`, semRepetir: status >= 400 && status < 500 };
+    }
+    if (data?.success === true) return { success: true, externalId: data.messageId };
+    if (data?.code === 'duplicado') {
+      return { success: false, pular: 'Duplicado: este item já tem envio na Meta (enviado, em andamento ou incerto). Conferir meta_wa_envios.' };
+    }
+    if (['envio_desligado', 'fora_allowlist', 'opt_out', 'teto'].includes(data?.code)) {
+      // Barrado pelas travas da meta-wa-send: nada saiu e não é falha do lead.
+      return { success: false, pular: `WhatsApp não enviado (${data.code})` };
+    }
+    if (data?.incerto === true) {
+      return {
+        success: false,
+        semRepetir: true,
+        error: `meta-wa-send: resultado_incerto (${data?.motivo || 'sem motivo'}) — não repetir; conferir meta_wa_envios ${data?.envio_id || ''}`,
+      };
+    }
+    return { success: false, error: `meta-wa-send: ${data?.code || 'erro'}${data?.erro_titulo ? ` — ${data.erro_titulo}` : ''}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
 async function sendWhatsApp(
