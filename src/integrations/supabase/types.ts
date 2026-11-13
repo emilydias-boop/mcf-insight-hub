@@ -1326,8 +1326,12 @@ export type Database = {
           duration_ms: number | null
           event_type: string
           id: string
+          last_interaction_at: string | null
           message: string | null
           route: string | null
+          screen_name: string | null
+          session_id: string | null
+          tab_visible: boolean | null
           user_id: string
         }
         Insert: {
@@ -1336,8 +1340,12 @@ export type Database = {
           duration_ms?: number | null
           event_type: string
           id?: string
+          last_interaction_at?: string | null
           message?: string | null
           route?: string | null
+          screen_name?: string | null
+          session_id?: string | null
+          tab_visible?: boolean | null
           user_id?: string
         }
         Update: {
@@ -1346,8 +1354,12 @@ export type Database = {
           duration_ms?: number | null
           event_type?: string
           id?: string
+          last_interaction_at?: string | null
           message?: string | null
           route?: string | null
+          screen_name?: string | null
+          session_id?: string | null
+          tab_visible?: boolean | null
           user_id?: string
         }
         Relationships: []
@@ -21191,6 +21203,24 @@ export type Database = {
           },
         ]
       }
+      telemetria_aceite: {
+        Row: {
+          aceito_em: string
+          user_id: string
+          versao: string
+        }
+        Insert: {
+          aceito_em?: string
+          user_id?: string
+          versao?: string
+        }
+        Update: {
+          aceito_em?: string
+          user_id?: string
+          versao?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount: number
@@ -27124,6 +27154,32 @@ export type Database = {
       sync_hubla_buyer_to_crm: {
         Args: { p_attendee_id: string }
         Returns: undefined
+      }
+      telemetria_atividade_dia: {
+        Args: { p_dia: string; p_ocioso_min?: number }
+        Returns: {
+          ativo_seg: number
+          email: string
+          nome: string
+          ocioso_seg: number
+          segundo_plano_seg: number
+          telas: Json
+          user_id: string
+        }[]
+      }
+      telemetria_limpar_presenca: { Args: never; Returns: number }
+      telemetria_presenca: {
+        Args: never
+        Returns: {
+          email: string
+          last_heartbeat: string
+          last_interaction_at: string
+          nome: string
+          route: string
+          screen_name: string
+          tab_visible: boolean
+          user_id: string
+        }[]
       }
       transferir_r1_parados: {
         Args: { p_dry_run?: boolean; p_hoje?: string }
