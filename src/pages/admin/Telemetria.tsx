@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import TelemetriaTop5 from "@/components/admin/TelemetriaTop5";
+import TelemetriaPresenca from "@/components/admin/TelemetriaPresenca";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,6 +27,7 @@ export default function Telemetria() {
         const { data, error } = await (supabase as any)
           .from("app_telemetry")
           .select("event_type, route, message, duration_ms, user_id, created_at")
+          .in("event_type", ["page_view", "page_load", "error"])
           .gte("created_at", desde)
           .order("created_at", { ascending: false })
           .range(from, from + 999);
@@ -80,6 +82,8 @@ export default function Telemetria() {
       </div>
       {isLoading && <p className="text-muted-foreground">Carregando…</p>}
       {error && <p className="text-destructive">Não foi possível carregar os registros.</p>}
+
+      <TelemetriaPresenca />
 
       <TelemetriaTop5 data={data} />
 

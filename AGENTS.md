@@ -33,3 +33,4 @@
 
 - A receber management tabs (Agenda, Pendências, Inadimplência, Resultados, side panel) derive all values from src/lib/arCobrancaCalc.ts over useArCarteira, so pendências and histórico share one source and existing listagem/esteira logic stays untouched.
 - A receber never deletes remaining installments automatically and batch settlement only posts the unpaid remainder, so recurring plans and received totals are never lost or doubled; judicial titles appear only in the Cobrança Jurídica tab (useArTitulos excluir_judicial).
+- Presence/idle telemetry flows only through src/lib/presenca.ts → telemetry-proxy edge function (email taken from JWT), which writes app_telemetry and forwards best-effort to Centro de Controle; admin views read only via telemetria_presenca/telemetria_atividade_dia RPCs so non-admins never read others' heartbeats.

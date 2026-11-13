@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { logTelemetry, installGlobalErrorTracking } from "@/lib/telemetry";
+import { installPresenceTracking } from "@/lib/presenca";
+import { AvisoTelemetria } from "@/components/AvisoTelemetria";
 
 /** Registra abertura de tela e tempo até a tela ficar pronta (próximo quadro ocioso). */
 export function TelemetryTracker() {
@@ -9,6 +11,7 @@ export function TelemetryTracker() {
 
   useEffect(() => {
     installGlobalErrorTracking();
+    installPresenceTracking();
   }, []);
 
   useEffect(() => {
@@ -29,5 +32,5 @@ export function TelemetryTracker() {
     };
   }, [location.pathname]);
 
-  return null;
+  return <AvisoTelemetria />;
 }
