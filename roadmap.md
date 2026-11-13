@@ -49,3 +49,5 @@
 
 - [x] Automações: templates WhatsApp via Meta (6 arquivos, sem Twilio)
 - [ ] Secrets: aguardando Thobson dizer quais chaves
+
+- [ ] Remover aviso de transparência da telemetria (AvisoTelemetria) do front
