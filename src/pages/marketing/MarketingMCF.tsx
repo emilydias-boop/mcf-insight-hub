@@ -6,6 +6,9 @@ import { InstagramMCF } from "@/components/marketing/InstagramMCF";
 import { EmailMarketing } from "@/components/marketing/EmailMarketing";
 import { WhatsAppAPI } from "@/components/marketing/WhatsAppAPI";
 import { GastosMarketing } from "@/components/marketing/GastosMarketing";
+import { AutomacoesPainel } from "@/components/automations/AutomacoesPainel";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useCanaisPeriodo, CANAL_LABELS, formatInt, type Grao, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -122,6 +125,7 @@ export default function MarketingMCF() {
   const [toque, setToque] = useState<ModeloToque>("primeiro");
   const [origem, setOrigem] = useState<ModeloOrigem>("anuncio");
   const [tab, setTab] = useState("funil");
+  const podeAutomacao = useQuery({ queryKey: ["mkt-automacao-pode"], queryFn: async () => { const { data, error } = await (supabase as any).rpc("mkt_automacao_pode"); if (error) throw error; return data === true; }, staleTime: 5 * 60_000 }).data === true;
   const [wasClamped, setWasClamped] = useState(false);
   const from = clampDate(period.from), to = clampDate(period.to);
   const validPeriod = !!from && !!to && from <= to;
@@ -168,12 +172,12 @@ export default function MarketingMCF() {
           <div role="group" aria-label="Contar pela" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Contar pela</span>
             <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre a data de contagem" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">Data da venda: a parceria de hoje aparece hoje, no criativo que trouxe a pessoa. Data do 1º clique: a venda volta para o período em que a pessoa clicou no anúncio — serve para medir o retorno do dinheiro gasto naquele período.</TooltipContent></Tooltip>
-            {([{ value: "venda", label: "Data da venda" }, { value: "safra", label: "Data do 1º clique" }] as const).map(item => <Button key={item.value} variant={data === item.value ? "secondary" : "ghost"} aria-pressed={data === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral" || tab === "email" || tab === "gastos" || tab === "whatsapp"} onClick={() => { setData(item.value); if (item.value === "safra") setOrigem("anuncio"); }} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+            {([{ value: "venda", label: "Data da venda" }, { value: "safra", label: "Data do 1º clique" }] as const).map(item => <Button key={item.value} variant={data === item.value ? "secondary" : "ghost"} aria-pressed={data === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral" || tab === "email" || tab === "gastos" || tab === "whatsapp" || tab === "automacoes"} onClick={() => { setData(item.value); if (item.value === "safra") setOrigem("anuncio"); }} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
           </div>
           <div role="group" aria-label="Crédito para" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Crédito para</span>
             <Tooltip><TooltipTrigger asChild><span tabIndex={0}><Info aria-label="Sobre o crédito do anúncio" className="h-[13px] w-[13px] text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" sideOffset={6} className="min-w-[220px] max-w-[340px] whitespace-normal px-3 py-2 text-[11px] leading-[1.45]">1º anúncio: quem trouxe a pessoa. Último anúncio: o último anúncio com que ela interagiu antes daquela compra.</TooltipContent></Tooltip>
-            {([{ value: "primeiro", label: "1º anúncio" }, { value: "ultimo", label: "Último anúncio" }] as const).map(item => <Button key={item.value} variant={toque === item.value ? "secondary" : "ghost"} aria-pressed={toque === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral" || tab === "email" || tab === "gastos" || tab === "whatsapp"} onClick={() => setToque(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
+            {([{ value: "primeiro", label: "1º anúncio" }, { value: "ultimo", label: "Último anúncio" }] as const).map(item => <Button key={item.value} variant={toque === item.value ? "secondary" : "ghost"} aria-pressed={toque === item.value} disabled={tab === "canais" || tab === "instagram" || tab === "pauta-viral" || tab === "email" || tab === "gastos" || tab === "whatsapp" || tab === "automacoes"} onClick={() => setToque(item.value)} className="h-[36px] px-[12px] text-[12px]">{item.label}</Button>)}
           </div>
           <div role="group" aria-label="Origem" className="flex flex-wrap items-center gap-[6px]">
             <span className="text-[12px] text-muted-foreground">Origem</span>
@@ -196,11 +200,12 @@ export default function MarketingMCF() {
         <TabsTrigger value="canais" className="h-[36px] px-[12px] text-[12px]">Canais</TabsTrigger>
         <TabsTrigger value="email" className="h-[36px] px-[12px] text-[12px]">E-mail</TabsTrigger>
         <TabsTrigger value="whatsapp" className="h-[36px] px-[12px] text-[12px]">WhatsApp</TabsTrigger>
+        {podeAutomacao && <TabsTrigger value="automacoes" className="h-[36px] px-[12px] text-[12px]">Automações</TabsTrigger>}
         <TabsTrigger value="instagram" className="h-[36px] px-[12px] text-[12px]">Instagram</TabsTrigger>
         <TabsTrigger value="pauta-viral" className="h-[36px] px-[12px] text-[12px]">Pauta Viral</TabsTrigger>
         <TabsTrigger value="gastos" className="h-[36px] px-[12px] text-[12px]">Gastos</TabsTrigger>
       </TabsList>
-      {tab !== "pauta-viral" && (!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
+      {tab !== "pauta-viral" && tab !== "automacoes" && (!validPeriod ? <Alert className="p-[16px]"><AlertDescription className="text-[13px]">{!from || !to ? "Selecione as duas datas do período." : "A data inicial deve ser anterior ou igual à data final."}</AlertDescription></Alert> : <>
         <TabsContent value="funil" className="m-0"><FunilSafras from={from} to={to} grao={effectiveGrao} data={data} toque={toque} origem={origem} /></TabsContent>
         <TabsContent value="criativos" className="m-0"><CriativosTable from={from} to={to} data={data} toque={toque} origem={origem} /></TabsContent>
         <TabsContent value="canais" className="m-0"><CanaisPeriodo from={from} to={to} /></TabsContent>
@@ -210,6 +215,7 @@ export default function MarketingMCF() {
         <TabsContent value="gastos" className="m-0"><GastosMarketing from={from} to={to} /></TabsContent>
       </>)}
       <TabsContent value="pauta-viral" className="m-0"><PautaViral /></TabsContent>
+      {podeAutomacao && <TabsContent value="automacoes" className="m-0"><AutomacoesPainel /></TabsContent>}
     </Tabs>
   </section>;
 }

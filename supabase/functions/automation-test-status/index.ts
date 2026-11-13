@@ -35,7 +35,8 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: isAdmin } = await admin.rpc('has_role', { _user_id: userId, _role: 'admin' });
     const { data: isManager } = await admin.rpc('has_role', { _user_id: userId, _role: 'manager' });
-    if (!isAdmin && !isManager) {
+    const { data: isMarketing } = await admin.rpc('has_role', { _user_id: userId, _role: 'marketing' });
+    if (!isAdmin && !isManager && !isMarketing) {
       return new Response(JSON.stringify({ error: 'Forbidden' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
