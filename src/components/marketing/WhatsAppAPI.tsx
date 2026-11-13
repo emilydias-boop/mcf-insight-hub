@@ -1,0 +1,119 @@
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RefreshCw, X, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import { WhatsAppDisparos, TabelaDisparosWA, rpc, isPermError, fmtInt, dinheiro, dataSP, hojeSP, mensagemErro, useDebounce, cellWA, type EstadoWA, type DisparoWA } from "./WhatsAppDisparos";
+
+type Numeros = { enviados: number; entregues: number; lidos: number; responderam: number; falhas: number; custo_brl: number | null };
+type Resumo = { totais: Numeros & { rejeitados: number; ignorados: number; na_fila: number; cobraveis: number; custo_sem_preco: number }; testes: { enviados: number; cobraveis: number; custo_brl: number | null }; por_origem: (Numeros & { origem: string })[]; serie: (Numeros & { periodo: string })[]; erros: { code: string; titulo: string; tipo: string; n: number }[]; opt_outs: number };
+type Envio = { id: string; nome: string | null; telefone: string | null; origem: string; template: string; status: string; motivo_ignorado: string | null; erro_code: string | null; erro_titulo: string | null; momento: string | null; entregue_em: string | null; lido_em: string | null; respondeu_em: string | null; deal_id: string | null; resposta: { botao: string | null; tipo: string; texto: string | null; opt_out: boolean } | null };
+const ORIGEM: Record<string, string> = { disparo: "Disparo", lembrete: "Lembrete de reunião", confirmacao: "Confirmação de agendamento", no_show: "Reagendamento (no-show)", teste: "Teste" };
+const STATUS: Record<string, string> = { fila: "Na fila", enviado: "Enviado", entregue: "Entregue", lido: "Lido", respondeu: "Respondeu", falhou: "Falhou", ignorado: "Ignorado" };
+const MOTIVO: Record<string, string> = { opt_out: "Pediu para sair", cooldown: "Recebeu disparo há pouco", teto: "Teto do dia", fora_allowlist: "Fora dos telefones de teste", envio_desligado: "Envio desligado", avancou_funil: "Já agendou R1", cancelado: "Disparo cancelado", duplicado: "Duplicado", sem_telefone: "Sem telefone" };
+const ERRO: Record<string, string> = { "141006": "Falta forma de pagamento válida na conta do WhatsApp (WhatsApp Manager → Cobrança)", "131042": "Problema de pagamento", "368": "Conta restrita por política", "131048": "Limite por spam" };
+const CATEGORIAS: Record<string, string> = { marketing: "Marketing", utility: "Utilidade", authentication: "Autenticação", service: "Serviço" };
+const fmtDate = (d: string) => { const [y, m, dd] = d.slice(0, 10).split("-"); return `${dd}/${m}/${y}`; };
+const pct = (a: number, b: number) => b > 0 ? `${(a / b * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%` : "—";
+function ErrorBox({ error }: { error: unknown }) { return <Alert variant="destructive"><AlertDescription>{mensagemErro(error)}</AlertDescription></Alert>; }
+function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) { return <Card className="min-w-0"><CardHeader className="p-[20px]"><CardTitle className="text-[18px] tracking-normal">{titulo}</CardTitle></CardHeader><CardContent className="space-y-[12px] p-[20px] pt-0">{children}</CardContent></Card>; }
+
+export function WhatsAppAPI({ from, to, grao }: { from: string; to: string; grao: "day" | "week" | "month" }) {
+  const qc = useQueryClient();
+  const [origem, setOrigem] = useState("todas");
+  const [status, setStatus] = useState("todos");
+  const [busca, setBusca] = useState("");
+  const buscaDeb = useDebounce(busca, 500);
+  const [pagina, setPagina] = useState(0);
+  const [disparo, setDisparo] = useState<{ id: string; titulo: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const trava = useRef(false);
+  const [confirmar, setConfirmar] = useState(false);
+  const [config, setConfig] = useState({ teto: "", ritmo: "", cooldown: "" });
+  const [telefones, setTelefones] = useState("");
+  const [precos, setPrecos] = useState<Record<string, string>>({});
+  const estado = useQuery({ queryKey: ["mkt-wa-estado"], queryFn: () => rpc<EstadoWA>("mkt_wa_estado"), staleTime: 60_000, refetchInterval: q => (q.state.data?.na_fila ?? 0) > 0 ? 30_000 : false });
+  const resumo = useQuery({ queryKey: ["mkt-wa-resumo", from, to, grao], queryFn: () => rpc<Resumo>("mkt_wa_resumo", { p_from: from, p_to: to, p_grao: grao }), staleTime: 60_000 });
+  const lista = useQuery({ queryKey: ["mkt-wa-disparos", from, to], queryFn: () => rpc<DisparoWA[]>("mkt_wa_disparos", { p_from: from, p_to: to }), staleTime: 60_000, refetchInterval: q => q.state.data?.some(d => ["enviando", "agendado"].includes(d.status)) ? 10_000 : false });
+  const envios = useQuery({ queryKey: ["mkt-wa-envios", from, to, disparo?.id, origem, status, buscaDeb, pagina], queryFn: () => rpc<{ total: number; itens: Envio[] }>("mkt_wa_envios", { p_from: from, p_to: to, p_disparo: disparo?.id ?? null, p_origem: origem === "todas" ? null : origem, p_status: status === "todos" ? null : status, p_busca: buscaDeb.trim() || null, p_limit: 50, p_offset: pagina * 50 }), staleTime: 60_000 });
+  // Also observes queries mounted in the editor, so permission errors replace the entire tab.
+  const [erroPermissao, setErroPermissao] = useState(false);
+  useEffect(() => qc.getQueryCache().subscribe(event => { const key = String(event.query.queryKey[0]); if ((key.startsWith("mkt-wa-") || key === "mkt-email-estagios") && isPermError(event.query.state.error)) setErroPermissao(true); }), [qc]);
+  useEffect(() => { setPagina(0); }, [from, to, disparo?.id, origem, status, buscaDeb]);
+  useEffect(() => { const e = estado.data; if (!e) return; setConfig({ teto: String(e.config.teto_diario), ritmo: String(e.config.ritmo_por_minuto), cooldown: String(e.config.cooldown_dias) }); setPrecos(Object.fromEntries(Object.keys(CATEGORIAS).map(k => [k, e.precos[k] == null ? "" : Number(e.precos[k]).toFixed(4)]))); }, [estado.data?.config.atualizado_em]);
+  async function acao(tarefa: () => Promise<void>) {
+    if (trava.current) return; trava.current = true; setBusy(true);
+    try { await tarefa(); } catch (e) { toast.error(mensagemErro(e)); }
+    finally { trava.current = false; setBusy(false); }
+  }
+  async function salvarConfig(extra: Record<string, unknown> = {}, editar = false) {
+    const e = estado.data;
+    if (!e?.pode_mexer) return;
+    const nums = editar ? [config.teto, config.ritmo, config.cooldown].map(v => v.trim() === "" ? NaN : Number(v)) : [e.config.teto_diario, e.config.ritmo_por_minuto, e.config.cooldown_dias];
+    if (nums.some(v => !Number.isInteger(v)) || nums[0] < 1 || nums[1] < 1 || nums[2] < 0) throw new Error("Informe teto e ritmo inteiros maiores que zero e cooldown inteiro maior ou igual a zero.");
+    const r = await rpc<EstadoWA>("mkt_wa_config_salvar", { p_envio_ativo: e.config.envio_ativo, p_teto_diario: nums[0], p_ritmo_por_minuto: nums[1], p_cooldown_dias: nums[2], p_so_allowlist: e.config.so_allowlist, ...extra });
+    qc.setQueryData(["mkt-wa-estado"], r); await qc.invalidateQueries({ queryKey: ["mkt-wa-estado"] }); setConfirmar(false); toast.success("Configuração salva.");
+  }
+  async function sincronizar() {
+    const { data, error } = await supabase.functions.invoke("meta-wa-sync", { body: {} });
+    if (error) {
+      if (error.context?.status === 429) throw new Error("Sincronizado há menos de 30 s. Tente de novo em instantes.");
+      let msg = error.message;
+      try { const body = await error.context.json(); msg = body.error || body.message || msg; } catch { /* Usa a mensagem original. */ }
+      throw new Error(msg);
+    }
+    if (data?.error || data?.ok === false) throw new Error(data.error || data.message || "Não foi possível atualizar a saúde.");
+    await qc.invalidateQueries({ queryKey: ["mkt-wa-estado"] }); toast.success("Saúde atualizada.");
+  }
+  const e = estado.data, r = resumo.data;
+  const saude = e?.saude;
+  const liberacao = saude?.pode_enviar ?? "BLOCKED";
+  const errosSaude = (saude?.erros ?? []).filter(v => !["138024", "138025"].includes(String(v.code)));
+  const voz = (saude?.erros ?? []).some(v => ["138024", "138025"].includes(String(v.code)));
+  if (erroPermissao || [estado.error, resumo.error, lista.error, envios.error].some(isPermError)) return <Alert className="p-[16px]"><AlertDescription className="text-[13px]">Sem permissão para ver os dados do WhatsApp</AlertDescription></Alert>;
+  return <div className="space-y-[16px]">
+    <Bloco titulo="Saúde e controle">{estado.isLoading ? <Skeleton className="h-[120px] w-full" /> : estado.error ? <ErrorBox error={estado.error} /> : e && <>
+      <div className="flex flex-wrap items-center gap-[12px] text-[13px]"><strong>{e.config.numero || "Número não informado"}</strong><span>Pode enviar: <Badge className={liberacao === "AVAILABLE" ? "bg-success text-success-foreground" : liberacao === "LIMITED" ? "bg-warning text-warning-foreground" : "bg-destructive text-destructive-foreground"}>{liberacao === "AVAILABLE" ? "Liberado" : liberacao === "LIMITED" ? "Limitado" : "Bloqueado"}</Badge></span><span>Qualidade: {({ GREEN: "Verde", YELLOW: "Amarela", RED: "Vermelha", UNKNOWN: "Sem nota" } as Record<string, string>)[saude?.qualidade ?? "UNKNOWN"] ?? "Sem nota"}</span><span>{saude?.tier?.startsWith("TIER_") ? `até ${fmtInt(Number(saude.tier.slice(5)))} pessoas por dia` : "Limite não informado"}</span><span>Lida em: {dataSP(saude?.lido_em ?? null)}</span><Button size="sm" variant="outline" disabled={busy || !e.pode_mexer} onClick={() => void acao(sincronizar)}><RefreshCw className="mr-[6px] h-[14px] w-[14px]" />Atualizar saúde</Button></div>
+      {!!errosSaude.length && <Alert variant="destructive"><AlertDescription><p className="mb-[6px] font-semibold">Erros da saúde</p>{errosSaude.map((v, i) => <p key={`${v.code}-${i}`}>{v.code} — {ERRO[String(v.code)] ?? v.description}</p>)}</AlertDescription></Alert>}{voz && <p className="text-[12px] text-muted-foreground">Chamadas de voz não configuradas (não afeta mensagens)</p>}
+      <div className="flex flex-wrap items-center gap-[20px] text-[13px]"><Label htmlFor="wa-envio" className="flex items-center gap-[8px]"><Switch id="wa-envio" checked={e.config.envio_ativo} disabled={!e.pode_mexer || busy} onCheckedChange={v => { if (v) setConfirmar(true); else void acao(() => salvarConfig({ p_envio_ativo: false })); }} />Envio ligado</Label><Label htmlFor="wa-teste" className="flex items-center gap-[8px]"><Switch id="wa-teste" checked={e.config.so_allowlist} disabled={!e.pode_mexer || busy} onCheckedChange={v => void acao(() => salvarConfig({ p_so_allowlist: v }))} />Modo teste (só telefones de teste)</Label><span>Pessoas nas últimas 24 h: {fmtInt(e.pessoas_24h)} de {fmtInt(e.config.teto_diario)}</span><span>Na fila: {fmtInt(e.na_fila)}</span></div>
+      {e.config.freio_em && <Alert variant="destructive"><AlertDescription>Envio pausado automaticamente em {dataSP(e.config.freio_em)}: {e.config.freio_motivo}</AlertDescription></Alert>}
+      {e.pode_mexer && <details className="border-t pt-[12px]"><summary className="cursor-pointer text-[13px] font-semibold">Configurações</summary><div className="mt-[16px] space-y-[16px]"><div className="grid gap-[12px] sm:grid-cols-3">{([ ["teto", "Teto (pessoas em 24 h)"], ["ritmo", "Ritmo por minuto"], ["cooldown", "Cooldown (dias)"] ] as const).map(([k, l]) => <div key={k} className="space-y-[6px]"><Label htmlFor={`wa-config-${k}`}>{l}</Label><Input id={`wa-config-${k}`} type="number" step={1} min={k === "cooldown" ? 0 : 1} value={config[k]} disabled={busy} onChange={ev => setConfig(c => ({ ...c, [k]: ev.target.value }))} /></div>)}</div><Button disabled={busy} onClick={() => void acao(() => salvarConfig({}, true))}>Salvar</Button>
+        <div className="space-y-[8px]"><Label htmlFor="wa-telefones">Telefones de teste</Label><p className="text-[13px] text-muted-foreground">{e.config.allowlist.join(" · ") || "Nenhum telefone de teste"}</p><p className="text-[12px] text-muted-foreground">Para mudar, digite de novo todos os telefones de teste</p><Textarea id="wa-telefones" placeholder="Um telefone por linha" value={telefones} disabled={busy} onChange={ev => setTelefones(ev.target.value)} /><Button variant="outline" disabled={busy} onClick={() => void acao(async () => { const arr = telefones.split(/\r?\n/).map(v => v.trim()).filter(Boolean); if (arr.length > 20) throw new Error("Informe no máximo 20 telefones."); const r = await rpc<EstadoWA>("mkt_wa_allowlist_salvar", { p_telefones: arr }); qc.setQueryData(["mkt-wa-estado"], r); setTelefones(""); await qc.invalidateQueries({ queryKey: ["mkt-wa-estado"] }); toast.success("Telefones salvos."); })}>Salvar telefones</Button></div>
+        <div className="space-y-[12px]"><h3 className="text-[13px] font-semibold">Preço por categoria (R$)</h3><p className="text-[12px] text-muted-foreground">Confira o valor na fatura da Meta. Sem preço, o custo aparece —</p><div className="grid gap-[12px] sm:grid-cols-4">{Object.entries(CATEGORIAS).map(([k, l]) => <div key={k} className="space-y-[6px]"><Label htmlFor={`wa-preco-${k}`}>{l}</Label><Input id={`wa-preco-${k}`} type="text" inputMode="decimal" placeholder="Não conferido" value={precos[k] ?? ""} disabled={busy} onBlur={() => { const v = (precos[k] ?? "").trim().replace(",", "."); if (v && /^\d+(\.\d{1,4})?$/.test(v)) setPrecos(p => ({ ...p, [k]: Number(v).toFixed(4) })); }} onChange={ev => setPrecos(p => ({ ...p, [k]: ev.target.value }))} /></div>)}</div><Button variant="outline" disabled={busy} onClick={() => void acao(async () => { const valores = Object.keys(CATEGORIAS).map(k => { const v = (precos[k] ?? "").trim().replace(",", "."); if (v && !/^\d+(\.\d{1,4})?$/.test(v)) throw new Error("Informe preços positivos com até quatro casas decimais, ou deixe em branco."); return [k, v === "" ? null : Number(v)] as const; }); for (const [k, v] of valores) await rpc("mkt_wa_preco_salvar", { p_categoria: k, p_valor_brl: v, p_vigente_desde: hojeSP() }); await Promise.all([qc.invalidateQueries({ queryKey: ["mkt-wa-estado"] }), qc.invalidateQueries({ queryKey: ["mkt-wa-resumo"] })]); toast.success("Preços salvos."); })}>Salvar preços</Button></div>
+      </div></details>}
+    </>}</Bloco>
+    {resumo.isLoading ? <Skeleton className="h-[100px] w-full" /> : resumo.error ? <ErrorBox error={resumo.error} /> : r && <>
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2 lg:grid-cols-4">{[
+        { label: "Enviados", valor: fmtInt(r.totais.enviados), nota: "" },
+        { label: "Entregues", valor: fmtInt(r.totais.entregues), nota: `${pct(r.totais.entregues, r.totais.enviados)} dos enviados` },
+        { label: "Lidos", valor: fmtInt(r.totais.lidos), nota: `${pct(r.totais.lidos, r.totais.entregues)} dos entregues` },
+        { label: "Responderam", valor: fmtInt(r.totais.responderam), nota: `${pct(r.totais.responderam, r.totais.entregues)} dos entregues` },
+        { label: "Falhas", valor: fmtInt(r.totais.falhas), nota: `${pct(r.totais.falhas, r.totais.enviados + r.totais.rejeitados)} das tentativas` },
+        { label: "Descadastros", valor: fmtInt(r.opt_outs), nota: "" },
+        { label: "Custo estimado", valor: dinheiro(r.totais.custo_brl), nota: r.totais.custo_sem_preco > 0 ? `${fmtInt(r.totais.custo_sem_preco)} mensagens cobráveis sem preço cadastrado` : "" },
+      ].map(c => <Card key={c.label}><CardContent className="space-y-[4px] p-[16px]"><p className="text-[12px] text-muted-foreground">{c.label}</p><p className="text-[24px] font-semibold tabular-nums">{c.valor}</p>{c.nota && <p className="text-[11px] text-muted-foreground">{c.nota}</p>}</CardContent></Card>)}</div>
+      <Bloco titulo="Por origem"><Table className="text-[12px]"><TableHeader><TableRow>{["Origem", "Enviados", "Entregues", "Lidos", "Responderam", "Falhas", "Custo"].map(t => <TableHead key={t} className={cellWA}>{t}</TableHead>)}</TableRow></TableHeader><TableBody>{r.por_origem.map(o => <TableRow key={o.origem}><TableCell className={cellWA}>{ORIGEM[o.origem] ?? o.origem}</TableCell>{[o.enviados, o.entregues, o.lidos, o.responderam, o.falhas].map((v, i) => <TableCell key={i} className={`${cellWA} text-right tabular-nums`}>{fmtInt(v)}</TableCell>)}<TableCell className={cellWA}>{dinheiro(o.custo_brl)}</TableCell></TableRow>)}</TableBody></Table>{!r.por_origem.length && <p className="text-[13px] text-muted-foreground">Sem dados no período</p>}</Bloco>
+      <Bloco titulo="Por período"><Table className="text-[12px]"><TableHeader><TableRow>{["Período", "Enviados", "Entregues", "Lidos", "Responderam", "Falhas"].map(t => <TableHead key={t} className={cellWA}>{t}</TableHead>)}</TableRow></TableHeader><TableBody>{r.serie.map(s => <TableRow key={s.periodo}><TableCell className={cellWA}>{fmtDate(s.periodo)}</TableCell>{[s.enviados, s.entregues, s.lidos, s.responderam, s.falhas].map((v, i) => <TableCell key={i} className={`${cellWA} text-right tabular-nums`}>{fmtInt(v)}</TableCell>)}</TableRow>)}</TableBody></Table>{!r.serie.length && <p className="text-[13px] text-muted-foreground">Sem dados no período</p>}</Bloco>
+      <Bloco titulo="Erros mais comuns"><Table className="text-[12px]"><TableHeader><TableRow>{["Código", "Título", "Tipo", "Quantidade"].map(t => <TableHead key={t} className={cellWA}>{t}</TableHead>)}</TableRow></TableHeader><TableBody>{r.erros.map((v, i) => <TableRow key={`${v.code}-${i}`}><TableCell className={cellWA}>{v.code}</TableCell><TableCell className="px-[12px] py-[12px]">{v.titulo}</TableCell><TableCell className={cellWA}>{({ destinatario: "Destinatário", conta: "Conta", outro: "Outro" } as Record<string, string>)[v.tipo] ?? v.tipo}</TableCell><TableCell className={cellWA}>{fmtInt(v.n)}</TableCell></TableRow>)}</TableBody></Table>{!r.erros.length && <p className="text-[13px] text-muted-foreground">Nenhum erro no período</p>}</Bloco>
+      {r.testes.enviados > 0 && <p className="text-[12px] text-muted-foreground">Testes no período: {fmtInt(r.testes.enviados)} enviados (custo {dinheiro(r.testes.custo_brl)}), fora dos números acima</p>}
+    </>}
+    {e?.pode_mexer ? <WhatsAppDisparos from={from} to={to} onSelecionar={setDisparo} /> : <Bloco titulo="Disparos">{lista.isLoading ? <Skeleton className="h-[80px] w-full" /> : lista.error ? <ErrorBox error={lista.error} /> : <TabelaDisparosWA rows={lista.data ?? []} onSelecionar={setDisparo} />}</Bloco>}
+    <Bloco titulo="Destinatários"><div className="flex flex-wrap items-center gap-[12px]"><Select value={origem} onValueChange={v => { setOrigem(v); setPagina(0); }}><SelectTrigger aria-label="Origem dos destinatários" className="w-[240px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todas as origens</SelectItem>{Object.entries(ORIGEM).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select><Select value={status} onValueChange={v => { setStatus(v); setPagina(0); }}><SelectTrigger aria-label="Status dos destinatários" className="w-[180px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todos os status</SelectItem>{Object.entries(STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select><Input aria-label="Buscar destinatários" placeholder="Nome ou 4 últimos dígitos" className="w-full sm:w-[260px]" value={busca} onChange={ev => setBusca(ev.target.value)} />{disparo && <Badge variant="secondary" className="max-w-full gap-[6px]"><span className="break-words">Disparo: {disparo.titulo}</span><Button variant="ghost" size="icon" className="h-[24px] w-[24px] shrink-0" aria-label="Limpar filtro de disparo" onClick={() => setDisparo(null)}><X className="h-[12px] w-[12px]" /></Button></Badge>}</div>
+      {envios.isLoading ? <Skeleton className="h-[100px] w-full" /> : envios.error ? <ErrorBox error={envios.error} /> : <><Table className="text-[12px]"><TableHeader><TableRow>{["Data", "Nome", "Telefone", "Origem", "Template", "Status", "Detalhe", "Resposta", "Negócio"].map(t => <TableHead key={t} className={cellWA}>{t}</TableHead>)}</TableRow></TableHeader><TableBody>{envios.data?.itens.map(v => <TableRow key={v.id}><TableCell className={cellWA}>{dataSP(v.momento)}</TableCell><TableCell className={cellWA}>{v.nome || "—"}</TableCell><TableCell className={cellWA}>{v.telefone || "—"}</TableCell><TableCell className={cellWA}>{ORIGEM[v.origem] ?? v.origem}</TableCell><TableCell className={cellWA}>{v.template}</TableCell><TableCell className={cellWA}><Badge variant={v.status === "falhou" ? "destructive" : "outline"}>{STATUS[v.status] ?? v.status}</Badge></TableCell><TableCell className="min-w-[180px] px-[12px] py-[12px]">{v.status === "falhou" ? `${v.erro_code ?? "—"} — ${v.erro_titulo ?? "—"}` : v.status === "ignorado" ? MOTIVO[v.motivo_ignorado ?? ""] ?? v.motivo_ignorado : "—"}</TableCell><TableCell className={`min-w-[180px] break-words px-[12px] py-[12px] ${v.resposta?.opt_out ? "text-destructive" : ""}`}>{v.resposta?.opt_out ? "Pediu para sair" : (v.resposta?.botao || v.resposta?.texto || "—").slice(0, 80)}</TableCell><TableCell className={cellWA}>{v.deal_id ? <Button variant="link" size="sm" asChild><Link to={`/crm/negocios?deal=${encodeURIComponent(v.deal_id)}`}><ExternalLink className="mr-[6px] h-[12px] w-[12px]" />Abrir negócio</Link></Button> : "—"}</TableCell></TableRow>)}</TableBody></Table>{!envios.data?.itens.length && <p className="py-[24px] text-center text-[13px] text-muted-foreground">Nenhum destinatário encontrado.</p>}<div className="flex flex-wrap items-center justify-between gap-[12px] text-[13px]"><span>{fmtInt(envios.data?.total)} no total</span><div className="flex gap-[8px]"><Button size="sm" variant="outline" disabled={pagina === 0 || envios.isFetching} onClick={() => setPagina(p => p - 1)}>Anterior</Button><Button size="sm" variant="outline" disabled={envios.isFetching || (pagina + 1) * 50 >= (envios.data?.total ?? 0)} onClick={() => setPagina(p => p + 1)}>Próxima</Button></div></div></>}
+    </Bloco>
+    <Dialog open={confirmar} onOpenChange={v => { if (!busy) setConfirmar(v); }}><DialogContent><DialogHeader><DialogTitle>Ligar envio</DialogTitle><DialogDescription>Ligar o envio do WhatsApp oficial? Com o modo teste ligado, só os telefones de teste recebem.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={busy} onClick={() => setConfirmar(false)}>Voltar</Button><Button disabled={busy} onClick={() => void acao(() => salvarConfig({ p_envio_ativo: true }))}>Confirmar</Button></DialogFooter></DialogContent></Dialog>
+  </div>;
+}
