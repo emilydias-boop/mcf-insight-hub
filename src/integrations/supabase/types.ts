@@ -15710,6 +15710,385 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_wa_config: {
+        Row: {
+          allowlist: string[]
+          atualizado_em: string
+          atualizado_por: string | null
+          cooldown_dias: number
+          envio_ativo: boolean
+          freio_em: string | null
+          freio_motivo: string | null
+          id: boolean
+          numero_exibicao: string
+          pausar_se_falha_pct: number
+          phone_number_id: string
+          ritmo_por_minuto: number
+          so_allowlist: boolean
+          teto_diario: number
+          waba_id: string
+          worker_lock_ate: string | null
+          worker_run: string | null
+        }
+        Insert: {
+          allowlist?: string[]
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cooldown_dias?: number
+          envio_ativo?: boolean
+          freio_em?: string | null
+          freio_motivo?: string | null
+          id?: boolean
+          numero_exibicao?: string
+          pausar_se_falha_pct?: number
+          phone_number_id?: string
+          ritmo_por_minuto?: number
+          so_allowlist?: boolean
+          teto_diario?: number
+          waba_id?: string
+          worker_lock_ate?: string | null
+          worker_run?: string | null
+        }
+        Update: {
+          allowlist?: string[]
+          atualizado_em?: string
+          atualizado_por?: string | null
+          cooldown_dias?: number
+          envio_ativo?: boolean
+          freio_em?: string | null
+          freio_motivo?: string | null
+          id?: boolean
+          numero_exibicao?: string
+          pausar_se_falha_pct?: number
+          phone_number_id?: string
+          ritmo_por_minuto?: number
+          so_allowlist?: boolean
+          teto_diario?: number
+          waba_id?: string
+          worker_lock_ate?: string | null
+          worker_run?: string | null
+        }
+        Relationships: []
+      }
+      meta_wa_disparos: {
+        Row: {
+          acionado_em: string | null
+          acionado_por: string | null
+          agendado_para: string | null
+          atualizado_em: string
+          botoes: Json
+          concluido_em: string | null
+          criado_em: string
+          criado_por: string | null
+          erro: string | null
+          id: string
+          idioma: string
+          iniciado_em: string | null
+          limite_alvos: number | null
+          publico: Json
+          status: string
+          template_nome: string
+          titulo: string
+          total_alvos: number | null
+          utm_campaign: string | null
+          variaveis: Json
+        }
+        Insert: {
+          acionado_em?: string | null
+          acionado_por?: string | null
+          agendado_para?: string | null
+          atualizado_em?: string
+          botoes?: Json
+          concluido_em?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          erro?: string | null
+          id?: string
+          idioma?: string
+          iniciado_em?: string | null
+          limite_alvos?: number | null
+          publico?: Json
+          status?: string
+          template_nome: string
+          titulo: string
+          total_alvos?: number | null
+          utm_campaign?: string | null
+          variaveis?: Json
+        }
+        Update: {
+          acionado_em?: string | null
+          acionado_por?: string | null
+          agendado_para?: string | null
+          atualizado_em?: string
+          botoes?: Json
+          concluido_em?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          erro?: string | null
+          id?: string
+          idioma?: string
+          iniciado_em?: string | null
+          limite_alvos?: number | null
+          publico?: Json
+          status?: string
+          template_nome?: string
+          titulo?: string
+          total_alvos?: number | null
+          utm_campaign?: string | null
+          variaveis?: Json
+        }
+        Relationships: []
+      }
+      meta_wa_envios: {
+        Row: {
+          categoria: string | null
+          cobravel: boolean | null
+          contact_id: string | null
+          criado_em: string
+          criado_por: string | null
+          deal_id: string | null
+          disparo_id: string | null
+          entregue_em: string | null
+          enviado_em: string | null
+          erro_code: number | null
+          erro_tipo: string | null
+          erro_titulo: string | null
+          falhou_em: string | null
+          id: string
+          lido_em: string | null
+          momento: string | null
+          motivo_ignorado: string | null
+          nome: string | null
+          origem: string
+          params: Json | null
+          phone_key: string
+          preco_categoria: string | null
+          preco_tipo: string | null
+          ref_id: string | null
+          respondeu_em: string | null
+          status: string
+          telefone_e164: string
+          template_nome: string
+          wamid: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          cobravel?: boolean | null
+          contact_id?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          deal_id?: string | null
+          disparo_id?: string | null
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro_code?: number | null
+          erro_tipo?: string | null
+          erro_titulo?: string | null
+          falhou_em?: string | null
+          id?: string
+          lido_em?: string | null
+          momento?: string | null
+          motivo_ignorado?: string | null
+          nome?: string | null
+          origem: string
+          params?: Json | null
+          phone_key: string
+          preco_categoria?: string | null
+          preco_tipo?: string | null
+          ref_id?: string | null
+          respondeu_em?: string | null
+          status?: string
+          telefone_e164: string
+          template_nome: string
+          wamid?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          cobravel?: boolean | null
+          contact_id?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          deal_id?: string | null
+          disparo_id?: string | null
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro_code?: number | null
+          erro_tipo?: string | null
+          erro_titulo?: string | null
+          falhou_em?: string | null
+          id?: string
+          lido_em?: string | null
+          momento?: string | null
+          motivo_ignorado?: string | null
+          nome?: string | null
+          origem?: string
+          params?: Json | null
+          phone_key?: string
+          preco_categoria?: string | null
+          preco_tipo?: string | null
+          ref_id?: string | null
+          respondeu_em?: string | null
+          status?: string
+          telefone_e164?: string
+          template_nome?: string
+          wamid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_wa_envios_disparo_id_fkey"
+            columns: ["disparo_id"]
+            isOneToOne: false
+            referencedRelation: "meta_wa_disparos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_wa_precos: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          categoria: string
+          valor_brl: number | null
+          vigente_desde: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          categoria: string
+          valor_brl?: number | null
+          vigente_desde?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          categoria?: string
+          valor_brl?: number | null
+          vigente_desde?: string | null
+        }
+        Relationships: []
+      }
+      meta_wa_respostas: {
+        Row: {
+          botao: string | null
+          envio_id: string | null
+          id: string
+          opt_out: boolean
+          phone_key: string
+          recebido_em: string
+          telefone_e164: string
+          texto: string | null
+          tipo: string | null
+          wamid: string
+        }
+        Insert: {
+          botao?: string | null
+          envio_id?: string | null
+          id?: string
+          opt_out?: boolean
+          phone_key: string
+          recebido_em?: string
+          telefone_e164: string
+          texto?: string | null
+          tipo?: string | null
+          wamid: string
+        }
+        Update: {
+          botao?: string | null
+          envio_id?: string | null
+          id?: string
+          opt_out?: boolean
+          phone_key?: string
+          recebido_em?: string
+          telefone_e164?: string
+          texto?: string | null
+          tipo?: string | null
+          wamid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_wa_respostas_envio_id_fkey"
+            columns: ["envio_id"]
+            isOneToOne: false
+            referencedRelation: "meta_wa_envios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_wa_saude: {
+        Row: {
+          erros: Json
+          id: number
+          lido_em: string
+          origem: string
+          pode_enviar: string | null
+          qualidade: string | null
+          status_numero: string | null
+          tier: string | null
+        }
+        Insert: {
+          erros?: Json
+          id?: number
+          lido_em?: string
+          origem?: string
+          pode_enviar?: string | null
+          qualidade?: string | null
+          status_numero?: string | null
+          tier?: string | null
+        }
+        Update: {
+          erros?: Json
+          id?: number
+          lido_em?: string
+          origem?: string
+          pode_enviar?: string | null
+          qualidade?: string | null
+          status_numero?: string | null
+          tier?: string | null
+        }
+        Relationships: []
+      }
+      meta_wa_templates: {
+        Row: {
+          botoes: Json
+          categoria: string | null
+          corpo: string | null
+          idioma: string
+          meta_template_id: string | null
+          motivo_rejeicao: string | null
+          nome: string
+          qualidade: string | null
+          sincronizado_em: string
+          status: string | null
+          variaveis: number
+        }
+        Insert: {
+          botoes?: Json
+          categoria?: string | null
+          corpo?: string | null
+          idioma?: string
+          meta_template_id?: string | null
+          motivo_rejeicao?: string | null
+          nome: string
+          qualidade?: string | null
+          sincronizado_em?: string
+          status?: string | null
+          variaveis?: number
+        }
+        Update: {
+          botoes?: Json
+          categoria?: string | null
+          corpo?: string | null
+          idioma?: string
+          meta_template_id?: string | null
+          motivo_rejeicao?: string | null
+          nome?: string
+          qualidade?: string | null
+          sincronizado_em?: string
+          status?: string | null
+          variaveis?: number
+        }
+        Relationships: []
+      }
       metas_componentes: {
         Row: {
           ativo: boolean
@@ -25479,6 +25858,37 @@ export type Database = {
           phone: string
         }[]
       }
+      meta_wa_avancou_funil: { Args: { p_phone_key: string }; Returns: boolean }
+      meta_wa_cron_ok: { Args: { p_segredo: string }; Returns: boolean }
+      meta_wa_em_cooldown: {
+        Args: {
+          p_dias: number
+          p_ignorar_disparo?: string
+          p_phone_key: string
+        }
+        Returns: boolean
+      }
+      meta_wa_frear: { Args: { p_motivo: string }; Returns: undefined }
+      meta_wa_mascara: { Args: { _tel: string }; Returns: string }
+      meta_wa_pessoas_24h: { Args: never; Returns: number }
+      meta_wa_publico_incorporador: {
+        Args: { p_dias?: number; p_dias_min?: number; p_estagios?: string[] }
+        Returns: {
+          contact_id: string
+          deal_id: string
+          estagio: string
+          nome: string
+          phone_key: string
+          primeiro_nome: string
+          telefone_e164: string
+          ultimo_movimento: string
+        }[]
+      }
+      meta_wa_worker_lock: {
+        Args: { p_run: string; p_ttl_s?: number }
+        Returns: boolean
+      }
+      meta_wa_worker_unlock: { Args: { p_run: string }; Returns: undefined }
       metas_agendamento_mes: {
         Args: { p_ano_mes: string; p_squad?: string }
         Returns: {
@@ -25983,6 +26393,55 @@ export type Database = {
         Returns: undefined
       }
       mkt_url_param: { Args: { p_key: string; p_url: string }; Returns: string }
+      mkt_wa_allowlist_salvar: {
+        Args: { p_telefones: string[] }
+        Returns: Json
+      }
+      mkt_wa_config_salvar: {
+        Args: {
+          p_cooldown_dias: number
+          p_envio_ativo: boolean
+          p_ritmo_por_minuto: number
+          p_so_allowlist: boolean
+          p_teto_diario: number
+        }
+        Returns: Json
+      }
+      mkt_wa_disparo_acao: {
+        Args: { p_acao: string; p_agendar_para?: string; p_id: string }
+        Returns: Json
+      }
+      mkt_wa_disparos: { Args: { p_from: string; p_to: string }; Returns: Json }
+      mkt_wa_envios: {
+        Args: {
+          p_busca?: string
+          p_disparo?: string
+          p_from: string
+          p_limit?: number
+          p_offset?: number
+          p_origem?: string
+          p_status?: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      mkt_wa_estado: { Args: never; Returns: Json }
+      mkt_wa_preco_salvar: {
+        Args: {
+          p_categoria: string
+          p_valor_brl: number
+          p_vigente_desde: string
+        }
+        Returns: undefined
+      }
+      mkt_wa_publico_resumo: {
+        Args: { p_dias?: number; p_dias_min?: number; p_estagios?: string[] }
+        Returns: Json
+      }
+      mkt_wa_resumo: {
+        Args: { p_from: string; p_grao?: string; p_to: string }
+        Returns: Json
+      }
       montar_contexto_briefing: { Args: { p_deal_id: string }; Returns: Json }
       nome_usuario: { Args: { p_id: string }; Returns: string }
       nomes_compativeis: { Args: { a: string; b: string }; Returns: boolean }
