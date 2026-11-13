@@ -134,7 +134,7 @@ interface MenuItem {
 // ESTRUTURA REORGANIZADA POR BUs
 // ============================
 
-const menuItems: MenuItem[] = [
+export const menuItems: MenuItem[] = [
   // ===== DASHBOARD =====
   {
     title: "MCF - Atendimento",
