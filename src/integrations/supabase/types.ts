@@ -25916,6 +25916,7 @@ export type Database = {
           sdr_id: string
         }[]
       }
+      mkt_automacao_pode: { Args: never; Returns: boolean }
       mkt_can_view: { Args: { _uid: string }; Returns: boolean }
       mkt_canais_periodo: {
         Args: { p_from: string; p_to: string }
