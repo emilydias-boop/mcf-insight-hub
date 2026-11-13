@@ -46,3 +46,6 @@
 - [x] CriativosTable: Subtotal sem anúncio e custo médio no TOTAL BU
 - [x] weekly-manager-report: pular R2 cancelada/reagendada no casamento; erro e nota do visao_diaria_bus (Matheus)
 - [x] PDF I.T. Jornada do Cliente Licenciado (Thobson) — aguardando aprovação do plano
+
+- [x] Automações: templates WhatsApp via Meta (6 arquivos, sem Twilio)
+- [ ] Secrets: aguardando Thobson dizer quais chaves

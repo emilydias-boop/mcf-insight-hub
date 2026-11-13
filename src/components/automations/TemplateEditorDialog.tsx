@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,14 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Save, MessageCircle, Mail, Eye, Plus, Trash2, RefreshCw, Send, Cloud } from "lucide-react";
+import { Loader2, Save, MessageCircle, Mail, Eye, Plus, Trash2, Send } from "lucide-react";
 import {
   useAutomationTemplate,
   useCreateTemplate,
   useUpdateTemplate,
   AutomationTemplate,
   TemplateButton,
-  ApprovalStatus,
   TemplateBU,
 } from "@/hooks/useAutomationTemplates";
 import {
@@ -31,10 +30,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  useCreateTwilioContent,
-  useSubmitTwilioContent,
-  useRefreshTwilioContent,
-} from "@/hooks/useTwilioContent";
+  useAutomationTemplatesMeta,
+  useVincularTemplateMeta,
+} from "@/hooks/useAutomationTemplates";
+import {
+  slugMeta,
+  proximoNomeMeta,
+  corpoParaMeta,
+  variaveisDoTemplate,
+  variaveisDoTexto,
+  botoesParaMeta,
+  baseUrlVariavel,
+  validarParaMeta,
+  campoDaEdge,
+  lerErroEdge,
+  podeEnviarParaMeta,
+  statusMetaVisual,
+  type ErrosMeta,
+} from "@/lib/automationMetaTemplate";
+import { rpc, type EstadoWA } from "@/components/marketing/WhatsAppDisparos";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { TemplatePreview } from "./TemplatePreview";
 
 interface TemplateEditorDialogProps {
@@ -46,7 +63,7 @@ interface TemplateEditorDialogProps {
 
 const AVAILABLE_VARIABLES = [
   'nome', 'sdr', 'data', 'link', 'produto', 'empresa', 'telefone', 'email',
-  'dono_nome', 'dono_telefone', 'dono_link_wa',
+  'dono_nome', 'dono_telefone', 'dono_link_wa', 'data_hora', 'closer', 'wa_agendar_token',
 ];
 
 const BU_LABELS: Record<TemplateBU, string> = {
@@ -59,15 +76,6 @@ const BU_LABELS: Record<TemplateBU, string> = {
 };
 const ALL_BUS: TemplateBU[] = ['incorporador', 'consorcio', 'credito', 'projetos', 'leilao', 'marketing'];
 
-const STATUS_LABEL: Record<ApprovalStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  draft: { label: 'Rascunho', variant: 'outline' },
-  pending: { label: 'Aguardando Meta', variant: 'secondary' },
-  approved: { label: 'Aprovado', variant: 'default' },
-  rejected: { label: 'Rejeitado', variant: 'destructive' },
-  paused: { label: 'Pausado', variant: 'destructive' },
-  disabled: { label: 'Desativado', variant: 'destructive' },
-  unknown: { label: 'Desconhecido', variant: 'outline' },
-};
 
 export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', open, onOpenChange }: TemplateEditorDialogProps) {
   const isEditing = !!templateId;
@@ -75,16 +83,12 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
   
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
-  const createTwilio = useCreateTwilioContent();
-  const submitTwilio = useSubmitTwilioContent();
-  const refreshTwilio = useRefreshTwilioContent();
 
   // Form state
   const [name, setName] = useState("");
   const [channel, setChannel] = useState<'whatsapp' | 'email'>(defaultChannel);
   const [content, setContent] = useState("");
   const [subject, setSubject] = useState("");
-  const [twilioTemplateSid, setTwilioTemplateSid] = useState("");
   const [activecampaignTemplateId, setActivecampaignTemplateId] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
@@ -92,6 +96,14 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
   const [language, setLanguage] = useState('pt_BR');
   const [buttons, setButtons] = useState<TemplateButton[]>([]);
   const [businessUnits, setBusinessUnits] = useState<TemplateBU[]>([]);
+  const [nomeMeta, setNomeMeta] = useState("");
+  const [nomeMetaEditado, setNomeMetaEditado] = useState(false);
+  const [exemplos, setExemplos] = useState<Record<string, string>>({});
+  const [exemplosUrl, setExemplosUrl] = useState<Record<number, string>>({});
+  const [erros, setErros] = useState<ErrosMeta>({});
+  const [enviandoMeta, setEnviandoMeta] = useState(false);
+  const trava = useRef(false);
+  const idSalvo = useRef<string | null>(null);
 
   // Reset form when template changes
   useEffect(() => {
@@ -100,7 +112,6 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       setChannel(template.channel);
       setContent(template.content);
       setSubject(template.subject || "");
-      setTwilioTemplateSid(template.twilio_template_sid || "");
       setActivecampaignTemplateId(template.activecampaign_template_id || "");
       setIsActive(template.is_active);
       setCategory(template.category ?? 'utility');
@@ -112,7 +123,6 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       setChannel(defaultChannel);
       setContent("");
       setSubject("");
-      setTwilioTemplateSid("");
       setActivecampaignTemplateId("");
       setIsActive(true);
       setCategory('utility');
@@ -122,14 +132,32 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
     }
   }, [template, open, defaultChannel]);
 
-  const approvalStatus: ApprovalStatus = template?.approval_status ?? 'draft';
-  const isLocked = channel === 'whatsapp' && approvalStatus !== 'draft' && approvalStatus !== 'rejected';
+  useEffect(() => {
+    setNomeMeta(""); setNomeMetaEditado(false); setExemplos({}); setExemplosUrl({}); setErros({});
+    idSalvo.current = null;
+  }, [templateId, open]);
+
+  const { data: metaRows } = useAutomationTemplatesMeta();
+  const metaInfo = metaRows?.find(r => r.template_id === templateId);
+  const metaNome = template?.meta_template_name ?? null;
+  const metaStatus = metaInfo?.status ?? null;
+  // pode (re)enviar: sem vínculo, recusado/excluído, ou vinculado mas sumiu da Meta (linha não encontrada)
+  const podeEnviarMeta = channel === 'whatsapp' && podeEnviarParaMeta(metaNome, metaInfo);
+  const visualMeta = statusMetaVisual(!!metaNome, metaStatus);
+  const isLocked = channel === 'whatsapp' && !!metaNome && !podeEnviarMeta;
+  const nomeMetaSugerido = metaNome && podeEnviarMeta ? proximoNomeMeta(metaNome) : slugMeta(name);
+  const nomeMetaFinal = nomeMetaEditado ? nomeMeta : nomeMetaSugerido;
+  const previaMeta = corpoParaMeta(content);
+  const EXEMPLO_PH: Record<string, string> = {
+    nome: "Maria", data_hora: "14/11/2026 às 15:00", closer: "Diego",
+    link: "https://meet.google.com/abc-defg-hij", data: "14/11/2026", sdr: "Ana", dono_nome: "Ana",
+  };
 
   const buildPayload = (): Partial<AutomationTemplate> => {
     // Extract used variables from content
-    const usedVariables = AVAILABLE_VARIABLES.filter(v => 
-      content.includes(`{{${v}}}`)
-    );
+    const usedVariables = channel === 'whatsapp'
+      ? variaveisDoTemplate(content, buttons)
+      : AVAILABLE_VARIABLES.filter(v => content.includes(`{{${v}}}`));
 
     return {
       name,
@@ -137,7 +165,6 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
       content,
       subject: channel === 'email' ? subject : undefined,
       variables: usedVariables,
-      twilio_template_sid: channel === 'whatsapp' ? twilioTemplateSid || undefined : undefined,
       activecampaign_template_id: channel === 'email' ? activecampaignTemplateId || undefined : undefined,
       is_active: isActive,
       category: channel === 'whatsapp' ? category : undefined,
@@ -149,12 +176,15 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
 
   const persist = async (): Promise<string | null> => {
     const data = buildPayload();
-    if (isEditing && templateId) {
-      await updateTemplate.mutateAsync({ id: templateId, ...data });
-      return templateId;
+    const alvo = templateId ?? idSalvo.current;
+    if (alvo) {
+      await updateTemplate.mutateAsync({ id: alvo, ...data });
+      return alvo;
     }
     const created = await createTemplate.mutateAsync(data);
-    return (created as { id?: string } | null)?.id ?? null;
+    const novoId = (created as { id?: string } | null)?.id ?? null;
+    idSalvo.current = novoId;
+    return novoId;
   };
 
   const handleSave = async () => {
@@ -166,20 +196,62 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
     }
   };
 
+  const qc = useQueryClient();
+  const vincular = useVincularTemplateMeta();
   const handleSaveAndSubmit = async () => {
+    if (trava.current) return;
+    const err = validarParaMeta({ nomeMeta: nomeMetaFinal, categoria: category, content, botoes: buttons, exemplos, exemplosUrl });
+    setErros(err);
+    if (Object.keys(err).length) { toast.error("Corrija os campos marcados antes de enviar para a Meta."); return; }
+    trava.current = true; setEnviandoMeta(true);
     try {
-      const id = await persist();
+      const id = await persist();            // grava automation_templates (sem meta_template_name)
       if (!id) return;
-      // Se já tem SID, pula criação
-      const hasSid = !!template?.twilio_template_sid || !!twilioTemplateSid;
-      if (!hasSid) {
-        await createTwilio.mutateAsync(id);
+      const { corpo, ordem } = corpoParaMeta(content);
+      const body = {
+        acao: "criar", nome: nomeMetaFinal, categoria: category === 'marketing' ? "MARKETING" : "UTILITY", idioma: "pt_BR",
+        cabecalho: null, rodape: null, corpo,
+        exemplos: ordem.map(v => exemplos[v].trim()),
+        botoes: botoesParaMeta(buttons, exemplosUrl),
+      };
+      const { data, error } = await supabase.functions.invoke("meta-wa-templates", { body });
+      if (error) {
+        const { status, mensagem, campo } = await lerErroEdge(error);
+        if (status === 409) {
+          // Depois de um 504 ou de um vincular que falhou, o template pode já estar na Meta: liga em vez de criar outro.
+          const est = await rpc<EstadoWA>("mkt_wa_estado").catch(() => null);
+          const ja = est?.templates.find(t => t.nome === nomeMetaFinal && t.idioma === "pt_BR" && t.corpo.trim() === corpo);
+          if (ja) {
+            try { await vincular.mutateAsync({ id, meta_template_name: nomeMetaFinal }); }
+            catch { toast.error("Não foi possível ligar o template que já está na Meta. Tente de novo."); return; }
+            toast.success("Esse template já estava na Meta e foi ligado a este template.");
+            await qc.invalidateQueries({ queryKey: ["mkt-wa-estado"] });
+            onOpenChange(false);
+            return;
+          }
+        }
+        const chave = campoDaEdge(campo, ordem);
+        if (chave) setErros(x => ({ ...x, [chave]: mensagem }));
+        toast.error(
+          status === 409 ? "Já existe um template na Meta com esse nome. Troque o Nome na Meta."
+          : status === 504 ? "A Meta não respondeu. Clique em Sincronizar status e tente de novo com o mesmo nome: se ele já tiver sido criado, o painel liga sozinho."
+          : mensagem);
+        return;                               // NÃO grava meta_template_name
       }
-      await submitTwilio.mutateAsync(id);
+      try {
+        await vincular.mutateAsync({ id, meta_template_name: nomeMetaFinal });
+      } catch {
+        toast.error(`O template ${nomeMetaFinal} foi criado na Meta, mas não ficou ligado a este template. Clique de novo em Salvar e enviar para a Meta, sem trocar o nome: o painel liga sozinho.`);
+        return;
+      }
+      toast.success("Template enviado para análise da Meta. A aprovação costuma levar de minutos a algumas horas.");
+      const aviso = (data as { aviso?: string } | null)?.aviso;
+      if (aviso) toast.warning("O template foi criado na Meta, mas o status ainda não apareceu aqui. Clique em Sincronizar status na lista antes de qualquer reenvio.");
+      await qc.invalidateQueries({ queryKey: ["mkt-wa-estado"] });
       onOpenChange(false);
-    } catch (e) {
-      // toasts já exibidos pelos hooks; mantém diálogo aberto
-    }
+    } catch {
+      // erros de persist já mostram toast nos hooks; mantém o diálogo aberto
+    } finally { trava.current = false; setEnviandoMeta(false); }
   };
 
   const insertVariable = (variable: string) => {
@@ -200,7 +272,6 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
   };
 
   const isSaving = createTemplate.isPending || updateTemplate.isPending;
-  const isTwilioBusy = createTwilio.isPending || submitTwilio.isPending || refreshTwilio.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -231,57 +302,30 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
           <div className="flex-1 overflow-auto space-y-4">
             {/* Status Meta (apenas WhatsApp + edição) */}
             {isEditing && channel === 'whatsapp' && (
-              <div className="flex items-center justify-between rounded-md border p-3 bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Status Meta:</span>
-                  <Badge variant={STATUS_LABEL[approvalStatus].variant}>
-                    {STATUS_LABEL[approvalStatus].label}
-                  </Badge>
-                  {template?.approval_rejected_reason && approvalStatus === 'rejected' && (
-                    <span className="text-xs text-destructive ml-2">
-                      Motivo: {template.approval_rejected_reason}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {!template?.twilio_template_sid && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => templateId && createTwilio.mutate(templateId)}
-                      disabled={isTwilioBusy}
-                    >
-                      <Cloud className="h-3 w-3 mr-1" />
-                      Criar no Twilio
-                    </Button>
-                  )}
-                  {template?.twilio_template_sid && approvalStatus === 'draft' && (
-                    <Button
-                      size="sm"
-                      onClick={() => templateId && submitTwilio.mutate(templateId)}
-                      disabled={isTwilioBusy}
-                    >
-                      <Send className="h-3 w-3 mr-1" />
-                      Submeter à Meta
-                    </Button>
-                  )}
-                  {template?.twilio_template_sid && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => templateId && refreshTwilio.mutate(templateId)}
-                      disabled={isTwilioBusy}
-                    >
-                      <RefreshCw className={`h-3 w-3 ${refreshTwilio.isPending ? 'animate-spin' : ''}`} />
-                    </Button>
-                  )}
-                </div>
+              <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
+                {metaNome ? (
+                  <>
+                    <span className="text-sm font-medium">Meta: {metaNome}</span>
+                    <Badge variant="outline" className={visualMeta.cls}>{visualMeta.label}</Badge>
+                    {metaStatus?.toUpperCase() === 'REJECTED' && (
+                      <span className="text-xs text-destructive">Motivo: {metaInfo?.motivo_rejeicao}</span>
+                    )}
+                    {metaStatus === null && (
+                      <span className="text-xs text-muted-foreground">Clique em Sincronizar status na lista.</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Badge variant="outline" className={visualMeta.cls}>{visualMeta.label}</Badge>
+                    <span className="text-xs text-muted-foreground">Preencha os exemplos abaixo e clique em Salvar e enviar para a Meta.</span>
+                  </>
+                )}
               </div>
             )}
 
             {isLocked && (
               <p className="text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/30 rounded p-2">
-                Conteúdo congelado: a Meta não permite alterar templates após aprovação. Crie um novo template para mudar a mensagem.
+                Conteúdo congelado: este template já está na Meta. Para mudar a mensagem, crie um novo template.
               </p>
             )}
 
@@ -375,6 +419,7 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
                 className="font-mono text-sm"
                 disabled={isLocked}
               />
+              {erros.content && <p className="text-xs text-destructive">{erros.content}</p>}
             </div>
 
             {/* Variables */}
@@ -410,15 +455,15 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
                     <Select value={category} onValueChange={(v) => setCategory(v as typeof category)} disabled={isLocked}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="utility">Utility (notificações, lembretes)</SelectItem>
-                        <SelectItem value="marketing">Marketing (promoções)</SelectItem>
-                        <SelectItem value="authentication">Authentication (códigos)</SelectItem>
+                        <SelectItem value="utility">Utilidade (lembretes, confirmações)</SelectItem>
+                        <SelectItem value="marketing">Marketing (ofertas, boas-vindas)</SelectItem>
                       </SelectContent>
                     </Select>
+                    {erros.categoria && <p className="text-xs text-destructive">{erros.categoria}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>Idioma</Label>
-                    <Input value={language} onChange={(e) => setLanguage(e.target.value)} disabled={isLocked} />
+                    <Input value="pt_BR" disabled />
                   </div>
                 </div>
 
@@ -445,27 +490,92 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
                           <SelectContent>
                             <SelectItem value="quick_reply">Quick Reply</SelectItem>
                             <SelectItem value="url">URL</SelectItem>
+                            <SelectItem value="phone">Telefone</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Texto do botão</Label>
                         <Input value={b.text} onChange={(e) => updateButton(idx, { text: e.target.value })} disabled={isLocked} />
+                        {erros[`botao_${idx}_texto`] && <p className="text-xs text-destructive">{erros[`botao_${idx}_texto`]}</p>}
                         {b.type === 'url' && (
                           <Input
-                            placeholder="https://exemplo.com (use {{1}} para variável)"
+                            placeholder="https://exemplo.com/{{wa_agendar_token}} (variável só no final)"
                             value={b.url ?? ''}
                             onChange={(e) => updateButton(idx, { url: e.target.value })}
                             disabled={isLocked}
                           />
                         )}
+                        {erros[`botao_${idx}_url`] && <p className="text-xs text-destructive">{erros[`botao_${idx}_url`]}</p>}
+                        {b.type === 'phone' && (
+                          <Input
+                            placeholder="Telefone com +55 e DDD"
+                            value={b.phone ?? ''}
+                            onChange={(e) => updateButton(idx, { phone: e.target.value })}
+                            disabled={isLocked}
+                          />
+                        )}
+                        {erros[`botao_${idx}_telefone`] && <p className="text-xs text-destructive">{erros[`botao_${idx}_telefone`]}</p>}
                       </div>
                       <Button type="button" size="icon" variant="ghost" onClick={() => removeButton(idx)} disabled={isLocked}>
                         <Trash2 className="h-3 w-3 text-destructive" />
                       </Button>
                     </div>
                   ))}
+                  {erros.botoes && <p className="text-xs text-destructive">{erros.botoes}</p>}
                 </div>
+              </div>
+            )}
+
+            {channel === 'whatsapp' && podeEnviarMeta && (
+              <div className="space-y-4">
+                <h4 className="font-medium text-sm">Envio para a Meta</h4>
+                <div className="space-y-2">
+                  <Label htmlFor="nomeMeta">Nome na Meta</Label>
+                  <Input
+                    id="nomeMeta"
+                    value={nomeMetaFinal}
+                    onChange={(e) => { setNomeMeta(e.target.value.toLowerCase().replace(/ /g, "_")); setNomeMetaEditado(true); }}
+                  />
+                  <p className="text-xs text-muted-foreground">Só letras minúsculas, números e _. A Meta não deixa reaproveitar o nome de um template excluído por um tempo.</p>
+                  {erros.nomeMeta && <p className="text-xs text-destructive">{erros.nomeMeta}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Como vai para a Meta</Label>
+                  <div className="rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">{previaMeta.corpo}</div>
+                  {previaMeta.ordem.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {previaMeta.ordem.map((v, i) => `{{${i + 1}}} = ${v}`).join(" · ")}
+                    </p>
+                  )}
+                </div>
+                {previaMeta.ordem.map((v, i) => (
+                  <div key={v} className="space-y-1">
+                    <Label className="text-xs">{`Exemplo para {{${v}}} ({{${i + 1}}})`}</Label>
+                    <Input
+                      value={exemplos[v] ?? ""}
+                      placeholder={EXEMPLO_PH[v] ?? ""}
+                      onChange={(e) => setExemplos(x => ({ ...x, [v]: e.target.value }))}
+                    />
+                    {erros[`exemplo_${v}`] && <p className="text-xs text-destructive">{erros[`exemplo_${v}`]}</p>}
+                  </div>
+                ))}
+                {buttons.map((b, i) => {
+                  if (b.type !== 'url') return null;
+                  const base = baseUrlVariavel(b.url ?? "");
+                  if (base === null) return null;
+                  return (
+                    <div key={`ex-url-${i}`} className="space-y-1">
+                      <Label className="text-xs">Exemplo da URL completa (botão {i + 1})</Label>
+                      <Input
+                        value={exemplosUrl[i] ?? ""}
+                        placeholder={`${base}abc123`}
+                        onChange={(e) => setExemplosUrl(x => ({ ...x, [i]: e.target.value }))}
+                      />
+                      {erros[`botao_${i}_exemplo`] && <p className="text-xs text-destructive">{erros[`botao_${i}_exemplo`]}</p>}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -475,22 +585,6 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
             <div className="space-y-4">
               <h4 className="font-medium text-sm">Configurações Avançadas</h4>
               
-              {channel === 'whatsapp' && (
-                <div className="space-y-2">
-                  <Label htmlFor="twilioSid">Twilio Content SID</Label>
-                  <Input
-                    id="twilioSid"
-                    value={twilioTemplateSid}
-                    onChange={(e) => setTwilioTemplateSid(e.target.value)}
-                    placeholder="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    disabled={!!template?.twilio_template_sid}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Preenchido automaticamente após "Criar no Twilio". Cole manualmente apenas se já existir no Console.
-                  </p>
-                </div>
-              )}
-
               {channel === 'email' && (
                 <div className="space-y-2">
                   <Label htmlFor="activecampaignId">ActiveCampaign Template ID (opcional)</Label>
@@ -534,26 +628,26 @@ export function TemplateEditorDialog({ templateId, defaultChannel = 'whatsapp', 
             <Button
               variant={channel === 'whatsapp' ? 'outline' : 'default'}
               onClick={handleSave}
-              disabled={!name || !content || isSaving || isTwilioBusy}
+              disabled={!name || !content || isSaving || enviandoMeta}
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Save className="h-4 w-4 mr-2" />
               )}
-              {channel === 'whatsapp' ? 'Salvar rascunho' : (isEditing ? 'Salvar' : 'Criar Template')}
+              {channel === 'whatsapp' ? (isLocked ? 'Salvar' : 'Salvar rascunho') : (isEditing ? 'Salvar' : 'Criar Template')}
             </Button>
-            {channel === 'whatsapp' && (
+            {channel === 'whatsapp' && podeEnviarMeta && (
               <Button
                 onClick={handleSaveAndSubmit}
-                disabled={!name || !content || isSaving || isTwilioBusy || isLocked}
+                disabled={!name || !content || isSaving || enviandoMeta}
               >
-                {(isSaving || isTwilioBusy) ? (
+                {enviandoMeta ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Send className="h-4 w-4 mr-2" />
                 )}
-                Salvar e Enviar para Meta
+                Salvar e enviar para a Meta
               </Button>
             )}
           </div>

@@ -12,6 +12,8 @@ export interface MeetingReminderSettings {
   ac_list_id: number | null;
   ac_setup_confirmed: boolean;
   ac_setup_checklist: Record<string, boolean>;
+  whatsapp_meta_template: string | null;
+  whatsapp_meta_language: string;
   updated_at: string;
 }
 
