@@ -12,8 +12,9 @@ import {
   RefreshCw,
   Send
 } from "lucide-react";
-import { useAutomationTemplates, useDeleteTemplate, ApprovalStatus, TemplateBU } from "@/hooks/useAutomationTemplates";
-import { useSyncAllTwilioStatus } from "@/hooks/useTwilioContent";
+import { useAutomationTemplates, useDeleteTemplate, TemplateBU, useAutomationTemplatesMeta, useSincronizarMeta } from "@/hooks/useAutomationTemplates";
+import { podeEnviarParaMeta, statusMetaVisual } from "@/lib/automationMetaTemplate";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { TemplateTestSendDialog } from "./TemplateTestSendDialog";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,16 +38,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const STATUS_BADGE: Record<ApprovalStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  draft: { label: 'Rascunho', variant: 'outline' },
-  pending: { label: 'Aguardando Meta', variant: 'secondary' },
-  approved: { label: 'Aprovado', variant: 'default' },
-  rejected: { label: 'Rejeitado', variant: 'destructive' },
-  paused: { label: 'Pausado', variant: 'destructive' },
-  disabled: { label: 'Desativado', variant: 'destructive' },
-  unknown: { label: '—', variant: 'outline' },
-};
-
 const BU_LABELS: Record<TemplateBU, string> = {
   incorporador: 'Incorporador',
   consorcio: 'Consórcio',
@@ -60,7 +51,9 @@ const ALL_BUS: TemplateBU[] = ['incorporador', 'consorcio', 'credito', 'projetos
 export function TemplateList() {
   const { data: templates, isLoading } = useAutomationTemplates();
   const deleteTemplate = useDeleteTemplate();
-  const syncAll = useSyncAllTwilioStatus();
+  const { data: metaRows } = useAutomationTemplatesMeta();
+  const metaPorId = useMemo(() => new Map((metaRows ?? []).map(r => [r.template_id, r])), [metaRows]);
+  const sincronizar = useSincronizarMeta();
   const { hasAnyRole } = useAuth();
   const { data: myBUs = [] } = useMyBU();
   const isAdmin = hasAnyRole('admin', 'manager');
@@ -155,11 +148,10 @@ export function TemplateList() {
                   <CardTitle className="text-base">{template.name}</CardTitle>
                 </div>
                 <div className="flex items-center gap-1">
-                  {template.channel === 'whatsapp' && (
-                    <Badge variant={STATUS_BADGE[template.approval_status ?? 'draft'].variant}>
-                      {STATUS_BADGE[template.approval_status ?? 'draft'].label}
-                    </Badge>
-                  )}
+                  {template.channel === 'whatsapp' && (() => {
+                    const v = statusMetaVisual(!!template.meta_template_name, metaPorId.get(template.id)?.status ?? null);
+                    return <Badge variant="outline" className={v.cls}>{v.label}</Badge>;
+                  })()}
                   <Badge variant={template.is_active ? "default" : "secondary"}>
                     {template.is_active ? "Ativo" : "Inativo"}
                   </Badge>
@@ -201,10 +193,15 @@ export function TemplateList() {
               )}
 
               {/* External IDs */}
-              {(template.twilio_template_sid || template.activecampaign_template_id) && (
+              {((template.channel === 'whatsapp' && template.meta_template_name) || template.activecampaign_template_id) && (
                 <div className="text-xs text-muted-foreground">
-                  {template.twilio_template_sid && (
-                    <p>Twilio SID: {template.twilio_template_sid}</p>
+                  {template.channel === 'whatsapp' && template.meta_template_name && (
+                    <>
+                      <p>Meta: {template.meta_template_name}</p>
+                      {(metaPorId.get(template.id)?.status ?? "").toUpperCase() === 'REJECTED' && (
+                        <p className="text-destructive">Motivo: {metaPorId.get(template.id)?.motivo_rejeicao}</p>
+                      )}
+                    </>
                   )}
                   {template.activecampaign_template_id && (
                     <p>ActiveCampaign ID: {template.activecampaign_template_id}</p>
@@ -223,16 +220,21 @@ export function TemplateList() {
                   <Pencil className="h-3 w-3 mr-1" />
                   Editar
                 </Button>
-                {template.channel === 'whatsapp' && template.twilio_template_sid && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setTestingTemplate({ id: template.id, name: template.name })}
-                    title="Disparar este template para um número de teste"
-                  >
+                {template.channel === 'whatsapp' && podeEnviarParaMeta(template.meta_template_name, metaPorId.get(template.id)) && (
+                  <Button size="sm" onClick={() => setEditingTemplateId(template.id)}>
                     <Send className="h-3 w-3 mr-1" />
-                    Testar
+                    {template.meta_template_name ? "Corrigir e reenviar" : "Enviar para a Meta"}
                   </Button>
+                )}
+                {template.channel === 'whatsapp' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button variant="outline" size="sm" disabled><Send className="h-3 w-3 mr-1" />Testar</Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Teste pelo disparo de teste na aba WhatsApp (telefones de teste)</TooltipContent>
+                  </Tooltip>
                 )}
                 <Button
                   variant="outline"
@@ -288,11 +290,11 @@ export function TemplateList() {
             </Select>
             <Button
               variant="outline"
-              onClick={() => syncAll.mutate()}
-              disabled={syncAll.isPending}
-              title="Consulta a Meta sob demanda — atualiza status de todos os templates pendentes"
+              onClick={() => sincronizar.mutate()}
+              disabled={sincronizar.isPending}
+              title="Consulta a Meta e atualiza o status dos templates do WhatsApp"
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncAll.isPending ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 mr-2 ${sincronizar.isPending ? 'animate-spin' : ''}`} />
               Sincronizar status
             </Button>
             <Button onClick={() => handleCreateNew('whatsapp')}>

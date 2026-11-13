@@ -16,6 +16,9 @@ import {
 import { ACSetupChecklist } from './ACSetupChecklist';
 import { MeetingRemindersLogs } from './MeetingRemindersLogs';
 import { MeetingRemindersMetrics } from './MeetingRemindersMetrics';
+import { useQuery } from '@tanstack/react-query';
+import { rpc, type EstadoWA } from '@/components/marketing/WhatsAppDisparos';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const OFFSETS = [
   { key: 'd-1', label: '24 horas antes' },
@@ -33,6 +36,8 @@ export function MeetingRemindersSettings() {
 
   const [fallbackLink, setFallbackLink] = useState('');
   const [acListId, setAcListId] = useState('');
+  const estadoWa = useQuery({ queryKey: ["mkt-wa-estado"], queryFn: () => rpc<EstadoWA>("mkt_wa_estado"), staleTime: 60_000 });
+  const aprovados = (estadoWa.data?.templates ?? []).filter(t => t.status === "APPROVED");
 
   useEffect(() => {
     if (settings) {
@@ -162,6 +167,66 @@ export function MeetingRemindersSettings() {
                 onCheckedChange={v => update.mutate({ apply_to_r2: v })}
               />
             </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">WhatsApp do lembrete (Meta)</h3>
+            {(() => {
+              const atual = settings.whatsapp_meta_template;
+              const valor = atual ? `${atual}::${settings.whatsapp_meta_language}` : "__nenhum__";
+              const escolhido = atual ? aprovados.find(t => `${t.nome}::${t.idioma}` === valor) : undefined;
+              return (
+                <div className="space-y-2">
+                  <Label>Template do WhatsApp (Meta)</Label>
+                  {estadoWa.isLoading ? (
+                    <p className="text-xs text-muted-foreground">Carregando templates...</p>
+                  ) : (
+                    <>
+                      <Select
+                        value={valor}
+                        disabled={!!estadoWa.error || update.isPending}
+                        onValueChange={v => {
+                          if (v === "__nenhum__") { update.mutate({ whatsapp_meta_template: null, whatsapp_meta_language: "pt_BR" }); return; }
+                          const t = aprovados.find(x => `${x.nome}::${x.idioma}` === v);
+                          if (t) update.mutate({ whatsapp_meta_template: t.nome, whatsapp_meta_language: t.idioma });
+                        }}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__nenhum__">Nenhum (lembrete só por e-mail)</SelectItem>
+                          {atual && !escolhido && (
+                            <SelectItem value={valor} disabled>{atual} (não aprovado)</SelectItem>
+                          )}
+                          {aprovados.map(t => {
+                            const linkVar = (t.botoes ?? []).some(b => b.type === "URL" && (b.url ?? "").includes("{{"));
+                            const motivo = t.variaveis !== 4 ? " (precisa de 4 variáveis)" : linkVar ? " (botão com link variável não é suportado)" : "";
+                            return (
+                              <SelectItem key={`${t.nome}::${t.idioma}`} value={`${t.nome}::${t.idioma}`} disabled={!!motivo}>
+                                {t.nome} ({t.idioma}) · {t.variaveis} variáveis{motivo}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      {estadoWa.error && <p className="text-xs text-destructive">Sem permissão para ler os templates do WhatsApp</p>}
+                      {!estadoWa.error && atual && !escolhido && (
+                        <Alert variant="default" className="border-warning bg-warning/10">
+                          <AlertTriangle className="h-4 w-4 text-warning" />
+                          <AlertDescription>O template {atual} não está aprovado na Meta. O lembrete não sai por WhatsApp até ele ser aprovado ou trocado.</AlertDescription>
+                        </Alert>
+                      )}
+                      {!estadoWa.error && aprovados.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Nenhum template aprovado ainda. Crie um em Marketing → WhatsApp ou em Automações → Templates.</p>
+                      )}
+                      {escolhido && <p className="text-xs text-muted-foreground">Este template tem {escolhido.variaveis} variáveis.</p>}
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {"O lembrete envia 4 variáveis no corpo, nesta ordem: {{1}} nome do lead (ex.: Maria) · {{2}} data e hora (ex.: 14/11/2026 às 15:00) · {{3}} closer (ou \"MCF Capital\" quando a reunião não tem closer) · {{4}} link da reunião."}
+                  </p>
+                </div>
+              );
+            })()}
           </section>
 
           <section className="space-y-3">
