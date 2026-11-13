@@ -53,6 +53,56 @@ function textToHtml(text: string): string {
   return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#333;white-space:pre-wrap;">${safe}</div>`;
 }
 
+
+// Nomes das variáveis {{nome}} na ordem da 1ª aparição, sem repetir.
+// Mesma RE_VAR da fase A (src/lib/automationMetaTemplate.ts): não importar nada de src/.
+function nomesNoTexto(texto: string | null | undefined): string[] {
+  const nomes: string[] = [];
+  for (const m of String(texto || '').matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g)) {
+    if (!nomes.includes(m[1])) nomes.push(m[1]);
+  }
+  return nomes;
+}
+
+// A Meta recusa parâmetro vazio, com quebra de linha/tab ou com 4+ espaços seguidos.
+function valorParam(v: string | null | undefined): string {
+  const s = String(v ?? '').replace(/[\n\t]+/g, ' ').replace(/ {4,}/g, ' ').trim();
+  return s || '—';
+}
+
+async function enviarMetaWa(
+  supabase: any,
+  body: Record<string, unknown>,
+): Promise<{ success: boolean; messageId?: string; code: string; incerto: boolean; detalhe?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('meta-wa-send', { body });
+    if (error) {
+      let code = 'erro_invoke';
+      let detalhe = error.message;
+      try {
+        const resp = (error as any)?.context?.response ?? (error as any)?.context;
+        if (resp && typeof resp.text === 'function') {
+          const txt = await resp.text();
+          let j: any = null;
+          try { j = JSON.parse(txt); } catch (_) { /* corpo não é JSON */ }
+          if (j?.code) code = String(j.code);
+          detalhe = `HTTP ${resp.status ?? '?'}${j?.campo ? ` campo=${j.campo}` : ''}${j?.esperado != null ? ` esperado=${j.esperado}` : ''}`;
+        }
+      } catch (_) { /* ignore */ }
+      return { success: false, code, incerto: false, detalhe };
+    }
+    return {
+      success: data?.success === true,
+      messageId: data?.messageId || undefined,
+      code: String(data?.code ?? ''),
+      incerto: data?.incerto === true,
+      detalhe: data?.erro_titulo || data?.motivo || undefined,
+    };
+  } catch (e: any) {
+    return { success: false, code: 'erro_invoke', incerto: false, detalhe: e?.message };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -81,7 +131,7 @@ serve(async (req) => {
       .from('automation_flows')
       .select(`
         id, name, channel, subject, body_template, template_id, is_active, trigger_type, trigger_event,
-        template:automation_templates(id, name, approval_status, twilio_template_sid)
+        template:automation_templates(id, name, approval_status, twilio_template_sid, content, buttons_config, meta_template_name, meta_language)
       `)
       .eq('trigger_type', 'system_event')
       .eq('trigger_event', event)
@@ -227,48 +277,64 @@ serve(async (req) => {
         } else {
           try {
             const tpl: any = (flow as any).template ?? null;
-            const payload: any = {
-              to: ctx.telefone,
-              dealId: regRow?.deal_id ?? attendeeRow?.deal_id,
-            };
-
-            if (tpl) {
-              if (tpl.approval_status !== 'approved' || !tpl.twilio_template_sid) {
-                results.push({
-                  flow: flow.name,
-                  channel: 'whatsapp',
-                  skipped: 'template_not_approved',
-                  template: tpl.name,
-                  approval_status: tpl.approval_status,
-                });
-                continue;
-              }
-              // Template Meta aprovado → envio fora da janela de 24h
-              payload.templateSid = tpl.twilio_template_sid;
-              // Variável {{1}} = primeiro nome
-              payload.contentVariables = JSON.stringify({ 1: ctx.nome });
+            if (!tpl || !tpl.meta_template_name) {
+              // Sem template da Meta não sai nada (a Twilio e o texto livre não são mais usados).
+              results.push({ flow: flow.name, channel: 'whatsapp', skipped: 'sem template da Meta', template: tpl?.name ?? null });
             } else {
-              // Sem template → texto livre (só entrega dentro da janela de 24h)
-              payload.body = bodyText;
+              // Variáveis disponíveis no evento (as mesmas que render() já usa no texto do e-mail).
+              const vars: Record<string, string> = {
+                nome: ctx.nome || '',
+                email: ctx.email || '',
+                telefone: ctx.telefone || '',
+                grupo: ctx.grupo || '',
+                cota: ctx.cota || '',
+              };
+              const bodyParams = nomesNoTexto(tpl.content).map((n) => valorParam(vars[n] ?? vars[n.toLowerCase()]));
+              const btn0: any = Array.isArray(tpl.buttons_config) ? tpl.buttons_config[0] : null;
+              const varBotao = btn0 && String(btn0.type || '').toLowerCase() === 'url'
+                ? nomesNoTexto(String(btn0.url || ''))[0]
+                : undefined;
+              const valorBotao = varBotao ? String(vars[varBotao] ?? vars[varBotao.toLowerCase()] ?? '').trim() : '';
+              if (varBotao && !valorBotao) {
+                results.push({ flow: flow.name, channel: 'whatsapp', skipped: `variável do botão sem valor no evento: ${varBotao}`, template: tpl.name });
+              } else {
+                const r = await enviarMetaWa(supabase, {
+                  to: ctx.telefone,
+                  template_name: tpl.meta_template_name,
+                  language: tpl.meta_language || 'pt_BR',
+                  body_params: bodyParams,
+                  button_params: varBotao ? [valorBotao] : [],
+                  origem: 'automacao',
+                  // attendee_id (contrato pago) ou registration_id (carta de consórcio): não reenvia o mesmo evento
+                  ref_id: attendeeRow?.id ?? regRow?.id ?? null,
+                  deal_id: regRow?.deal_id ?? attendeeRow?.deal_id ?? null,
+                  nome: ctx.nome || undefined,
+                });
+                if (r.success) {
+                  if (regRow) {
+                    await supabase
+                      .from('consorcio_pending_registrations')
+                      .update({ boas_vindas_whatsapp_enviado_em: new Date().toISOString() })
+                      .eq('id', regRow.id);
+                  }
+                  if (attendeeRow) {
+                    await supabase
+                      .from('meeting_slot_attendees')
+                      .update({ boas_vindas_r2_whatsapp_enviado_em: new Date().toISOString() })
+                      .eq('id', attendeeRow.id);
+                  }
+                  results.push({ flow: flow.name, channel: 'whatsapp', sent: true, messageId: r.messageId });
+                } else if (r.code === 'duplicado') {
+                  // Já existe envio deste evento na Meta: marca para o dispatcher não tentar de novo.
+                  if (regRow) await supabase.from('consorcio_pending_registrations').update({ boas_vindas_whatsapp_enviado_em: new Date().toISOString() }).eq('id', regRow.id);
+                  if (attendeeRow) await supabase.from('meeting_slot_attendees').update({ boas_vindas_r2_whatsapp_enviado_em: new Date().toISOString() }).eq('id', attendeeRow.id);
+                  results.push({ flow: flow.name, channel: 'whatsapp', skipped: 'duplicado' });
+                } else {
+                  console.error('[event-dispatcher] whatsapp meta error', r.code, r.detalhe || '');
+                  results.push({ flow: flow.name, channel: 'whatsapp', error: r.code, incerto: r.incerto, detalhe: r.detalhe });
+                }
+              }
             }
-
-            const { error: waErr } = await supabase.functions.invoke('twilio-whatsapp-send', {
-              body: payload,
-            });
-            if (waErr) throw waErr;
-            if (regRow) {
-              await supabase
-                .from('consorcio_pending_registrations')
-                .update({ boas_vindas_whatsapp_enviado_em: new Date().toISOString() })
-                .eq('id', regRow.id);
-            }
-            if (attendeeRow) {
-              await supabase
-                .from('meeting_slot_attendees')
-                .update({ boas_vindas_r2_whatsapp_enviado_em: new Date().toISOString() })
-                .eq('id', attendeeRow.id);
-            }
-            results.push({ flow: flow.name, channel: 'whatsapp', sent: true });
           } catch (e: any) {
             console.error('[event-dispatcher] whatsapp error', e?.message || e);
             results.push({ flow: flow.name, channel: 'whatsapp', error: e?.message || String(e) });
