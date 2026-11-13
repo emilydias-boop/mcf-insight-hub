@@ -2883,6 +2883,8 @@ export type Database = {
           id: string
           is_active: boolean | null
           language: string | null
+          meta_language: string
+          meta_template_name: string | null
           name: string
           subject: string | null
           twilio_template_sid: string | null
@@ -2906,6 +2908,8 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           language?: string | null
+          meta_language?: string
+          meta_template_name?: string | null
           name: string
           subject?: string | null
           twilio_template_sid?: string | null
@@ -2929,6 +2933,8 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           language?: string | null
+          meta_language?: string
+          meta_template_name?: string | null
           name?: string
           subject?: string | null
           twilio_template_sid?: string | null
@@ -15158,6 +15164,8 @@ export type Database = {
           is_active: boolean
           updated_at: string
           updated_by: string | null
+          whatsapp_meta_language: string
+          whatsapp_meta_template: string | null
         }
         Insert: {
           ac_field_ids?: Json | null
@@ -15173,6 +15181,8 @@ export type Database = {
           is_active?: boolean
           updated_at?: string
           updated_by?: string | null
+          whatsapp_meta_language?: string
+          whatsapp_meta_template?: string | null
         }
         Update: {
           ac_field_ids?: Json | null
@@ -15188,6 +15198,8 @@ export type Database = {
           is_active?: boolean
           updated_at?: string
           updated_by?: string | null
+          whatsapp_meta_language?: string
+          whatsapp_meta_template?: string | null
         }
         Relationships: []
       }
@@ -25917,6 +25929,20 @@ export type Database = {
         }[]
       }
       mkt_automacao_pode: { Args: never; Returns: boolean }
+      mkt_automacao_templates_meta: {
+        Args: never
+        Returns: {
+          categoria: string
+          meta_language: string
+          meta_template_name: string
+          motivo_rejeicao: string
+          qualidade: string
+          sincronizado_em: string
+          status: string
+          template_id: string
+          variaveis: number
+        }[]
+      }
       mkt_can_view: { Args: { _uid: string }; Returns: boolean }
       mkt_canais_periodo: {
         Args: { p_from: string; p_to: string }
