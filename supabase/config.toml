@@ -312,3 +312,6 @@ verify_jwt = false
 
 [functions.pos-venda-calendar-sync]
 verify_jwt = false
+
+[functions.telemetry-proxy]
+verify_jwt = false
