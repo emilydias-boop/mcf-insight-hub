@@ -24,7 +24,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Save, Zap, ArrowRight, Clock, Calendar, FileText } from "lucide-react";
 import { useAutomationFlow, useCreateFlow, useUpdateFlow, useFlowSteps, AutomationFlow } from "@/hooks/useAutomationFlows";
 import { useCRMStages, useCRMOrigins } from "@/hooks/useCRMData";
-import { useAutomationTemplates } from "@/hooks/useAutomationTemplates";
+import { useAutomationTemplates, useAutomationTemplatesMeta } from "@/hooks/useAutomationTemplates";
+import { statusMetaVisual } from "@/lib/automationMetaTemplate";
 import { FlowStepList } from "./FlowStepList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -64,6 +65,10 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
   // Templates WhatsApp (para eventos do sistema com canal WhatsApp / Both)
   const { data: waTemplates } = useAutomationTemplates('whatsapp');
   const selectedTemplate = waTemplates?.find((t) => t.id === templateId);
+  const { data: metaStatus } = useAutomationTemplatesMeta();
+  const metaDe = (id: string) => metaStatus?.find((m) => m.template_id === id);
+  const metaSel = selectedTemplate ? metaDe(selectedTemplate.id) : undefined;
+  const metaSelAprovado = (metaSel?.status ?? "").toUpperCase() === "APPROVED";
 
   // Get stages for selected origin (or group if no origin selected)
   const { data: stages } = useCRMStages(originId || groupId || undefined);
@@ -369,13 +374,13 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
                 </SelectTrigger>
                 <SelectContent className="bg-popover z-50">
                   <SelectItem value="email">E-mail (Brevo)</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp (Twilio)</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp (oficial)</SelectItem>
                   <SelectItem value="both">E-mail + WhatsApp</SelectItem>
                 </SelectContent>
               </Select>
               {(channel === 'whatsapp' || channel === 'both') && (
                 <p className="text-xs text-muted-foreground">
-                  Mensagens de texto livre no WhatsApp só são entregues dentro da janela de 24h após o último contato do cliente. Fora dela, é necessário um template HSM aprovado.
+                  O WhatsApp só sai com um template aprovado pela Meta. Sem template aprovado, o envio é pulado (o e-mail continua).
                 </p>
               )}
             </div>
@@ -393,40 +398,26 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
                     <SelectItem value="__none__">
-                      Nenhum (texto livre — só funciona dentro da janela de 24h)
+                      Nenhum — o WhatsApp não será enviado
                     </SelectItem>
                     {waTemplates?.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         <div className="flex items-center gap-2">
                           <span>{t.name}</span>
-                          <Badge
-                            variant="outline"
-                            className={
-                              t.approval_status === 'approved'
-                                ? 'border-green-600 text-green-700'
-                                : t.approval_status === 'pending'
-                                ? 'border-amber-600 text-amber-700'
-                                : t.approval_status === 'rejected'
-                                ? 'border-red-600 text-red-700'
-                                : 'border-muted-foreground text-muted-foreground'
-                            }
-                          >
-                            {t.approval_status || 'draft'}
-                          </Badge>
+                          {(() => { const m = metaDe(t.id); const v = statusMetaVisual(!!m?.meta_template_name, m?.status ?? null); return <Badge variant="outline" className={v.cls}>{v.label}</Badge>; })()}
                         </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedTemplate && selectedTemplate.approval_status !== 'approved' && (
+                {selectedTemplate && !metaSelAprovado && (
                   <p className="text-xs text-amber-600">
-                    ⚠️ Este template ainda não está aprovado pela Meta. O disparo será pulado até a aprovação.
-                    Aprove/submeta em Automações → Templates.
+                    ⚠️ Este template ainda não está aprovado pela Meta ({statusMetaVisual(!!metaSel?.meta_template_name, metaSel?.status ?? null).label}). O WhatsApp será pulado até a aprovação. Envie ou acompanhe em Automações → Templates.
                   </p>
                 )}
-                {selectedTemplate?.approval_status === 'approved' && (
+                {metaSelAprovado && (
                   <p className="text-xs text-green-700">
-                    ✓ Template Meta aprovado — SID <code>{selectedTemplate.twilio_template_sid}</code>. Envio funciona 24/7.
+                    ✓ Template aprovado na Meta: <code>{metaSel?.meta_template_name}</code>.
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
