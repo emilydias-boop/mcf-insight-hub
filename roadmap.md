@@ -52,4 +52,4 @@
 
 - [x] Remover aviso de transparência da telemetria (AvisoTelemetria) do front
 - [x] Grimaldo: resumo_app criada
-- [x] Thobson: gerente na Jornada/HARVEY (falta URL+segredo do HARVEY e página da trilha exibir)
+- [ ] Thobson: carga inicial HARVEY — primeiro cliente com HTTP 200 e registro enviado; enviar demais e verificar resultados. Página externa da trilha ainda precisa exibir gerente.
