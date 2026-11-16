@@ -52,4 +52,4 @@
 
 - [x] Remover aviso de transparência da telemetria (AvisoTelemetria) do front
 - [x] Grimaldo: resumo_app criada
-- [ ] Thobson: gerente na Jornada/HARVEY (plano aguardando aprovação)
+- [x] Thobson: gerente na Jornada/HARVEY (falta URL+segredo do HARVEY e página da trilha exibir)

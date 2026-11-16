@@ -17502,6 +17502,60 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_venda_gerente_contato: {
+        Row: {
+          created_at: string
+          profile_id: string
+          telefone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          profile_id: string
+          telefone: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          profile_id?: string
+          telefone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pos_venda_harvey_gerente_envios: {
+        Row: {
+          created_at: string
+          deal_id: string
+          erro: string | null
+          gerente_id: string | null
+          http_status: number | null
+          id: string
+          payload: Json | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          deal_id: string
+          erro?: string | null
+          gerente_id?: string | null
+          http_status?: number | null
+          id?: string
+          payload?: Json | null
+          status: string
+        }
+        Update: {
+          created_at?: string
+          deal_id?: string
+          erro?: string | null
+          gerente_id?: string | null
+          http_status?: number | null
+          id?: string
+          payload?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
       pos_venda_reunioes: {
         Row: {
           convite_enviado_em: string | null
