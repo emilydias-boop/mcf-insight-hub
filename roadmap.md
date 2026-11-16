@@ -51,3 +51,5 @@
 - [ ] Secrets: aguardando Thobson dizer quais chaves
 
 - [x] Remover aviso de transparência da telemetria (AvisoTelemetria) do front
+- [x] Grimaldo: resumo_app criada
+- [ ] Thobson: gerente na Jornada/HARVEY (plano aguardando aprovação)
