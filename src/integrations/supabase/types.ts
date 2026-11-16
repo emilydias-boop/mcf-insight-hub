@@ -23852,6 +23852,8 @@ export type Database = {
         Returns: Json
       }
       academia_abrir_extensao: { Args: { _frente_id: string }; Returns: string }
+      academia_app_equipe: { Args: never; Returns: Json }
+      academia_app_trilha: { Args: never; Returns: Json }
       academia_assinar_marco: {
         Args: { _milestone_id: string; _observacoes?: string; _papel: string }
         Returns: undefined
@@ -26751,6 +26753,10 @@ export type Database = {
         Returns: undefined
       }
       pos_venda_tem_acesso: { Args: never; Returns: boolean }
+      posvenda_app_resumo: {
+        Args: { p_fim: string; p_ini: string }
+        Returns: Json
+      }
       presenca_e_lider: { Args: { p_bu: string }; Returns: boolean }
       presenca_lista_dia: {
         Args: { p_bu: string; p_data: string }
