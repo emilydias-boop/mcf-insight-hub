@@ -26972,6 +26972,7 @@ export type Database = {
       }
       resolve_owner_label: { Args: { _owner: string }; Returns: string }
       resolve_stage_name: { Args: { _stage_id: string }; Returns: string }
+      resumo_app: { Args: never; Returns: Json }
       resumo_semanal_closers: {
         Args: { _fim: string; _inicio: string }
         Returns: {
