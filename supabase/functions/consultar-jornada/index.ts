@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) throw new Error("Configuração indisponível");
     const sb = createClient(url, key);
-    const sel = "id, contact_id";
+    const sel = "id, contact_id, owner_profile_id";
     const direto = await sb.from("crm_deals").select(sel).eq("origin_id", ORIGIN_POS_VENDA)
       .eq("cpf", cpf).eq("is_archived", false).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle();
     if (direto.error) throw direto.error;
@@ -64,9 +64,17 @@ Deno.serve(async (req) => {
       .eq("activity_type", "pos_venda_resumo_reuniao").order("created_at", { ascending: false }).limit(1).maybeSingle();
     const m = ult.data?.metadata as Record<string, unknown> | undefined;
     const ultima_reuniao = m ? { data: m.data ?? null, tipo: m.tipo ?? null, proximos_passos: m.proximos_passos ?? null } : null;
+    let gerente: { nome: string | null; telefone: string } | null = null;
+    if (deal.owner_profile_id) {
+      const gc = await sb.from("pos_venda_gerente_contato").select("telefone").eq("profile_id", deal.owner_profile_id).maybeSingle();
+      if (gc.data) {
+        const gp = await sb.from("profiles").select("full_name").eq("id", deal.owner_profile_id).maybeSingle();
+        gerente = { nome: gp.data?.full_name ?? null, telefone: gc.data.telefone };
+      }
+    }
     const nome = nomeCompleto.trim().split(/\s+/)[0] ?? "";
     return json({ primeiro_nome: nome ? nome.charAt(0).toUpperCase() + nome.slice(1).toLowerCase() : "",
-      data_compra: compra?.data_compra ?? null, etapa_atual: calculo.data.etapa_atual, historico: calculo.data.historico, ultima_reuniao });
+      data_compra: compra?.data_compra ?? null, etapa_atual: calculo.data.etapa_atual, historico: calculo.data.historico, ultima_reuniao, gerente });
   } catch {
     return json({ erro: "Não foi possível consultar a jornada agora. Tente novamente." }, 500);
   }

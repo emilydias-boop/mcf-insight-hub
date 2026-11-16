@@ -315,3 +315,6 @@ verify_jwt = false
 
 [functions.telemetry-proxy]
 verify_jwt = false
+
+[functions.harvey-gerente-sync]
+verify_jwt = false
