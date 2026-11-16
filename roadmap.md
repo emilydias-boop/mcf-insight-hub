@@ -52,4 +52,5 @@
 
 - [x] Remover aviso de transparência da telemetria (AvisoTelemetria) do front
 - [x] Grimaldo: resumo_app criada
-- [ ] Thobson: carga inicial HARVEY — primeiro cliente com HTTP 200 e registro enviado; enviar demais e verificar resultados. Página externa da trilha ainda precisa exibir gerente.
+- [x] Thobson: carga inicial HARVEY — teste real HTTP 200; 1.439 clientes processados, 1.429 enviados com HTTP 200 e fila zerada.
+- [ ] HARVEY: corrigir 9 usuários não encontrados (404) e 1 CPF duplicado (409) no serviço externo antes de reenviar; página externa da trilha ainda precisa exibir gerente.
