@@ -10,21 +10,22 @@ O gerente do cliente é o **dono do cartão Pós-venda** (já passa a ser o gere
    - William Rangel de Barros Silva: (11) 92018-0929
    - Vitor Ferreira: (11) 98401-1224
 2. **Link da Jornada (consulta por CPF)** — a resposta passa a trazer `gerente: { nome, telefone }` do dono do cartão. Se não houver dono ou ele for a Karen, volta vazio. A página trilha.mcfcapital.com.br precisa exibir esse campo (projeto externo: aviso o que mostrar).
-3. **HARVEY** — sempre que o dono do cartão Pós-venda mudar para um gerente, o sistema envia ao mesmo webhook do HARVEY um aviso `pos_venda.gerente_relacionamento.v1` com CPF, e-mail e telefone do cliente + nome e telefone do gerente, para atualizar direto no usuário. Cada envio fica registrado (sucesso/erro) para reenvio.
+3. **HARVEY** — sempre que o dono do cartão Pós-venda mudar para um gerente, o sistema envia a um **webhook exclusivo do HARVEY para gerentes** (separado do Relatório da Cota) um aviso `pos_venda.gerente_relacionamento.v1` com CPF, e-mail e telefone do cliente + nome e telefone do gerente, para atualizar direto no usuário. Cada envio fica registrado (sucesso/erro) para reenvio.
 4. **Carga inicial** — enviar ao HARVEY os clientes que já têm gerente hoje (somente após você confirmar que o time do HARVEY já trata o novo aviso).
 
 ## Pendência externa
-O time do HARVEY precisa tratar o novo tipo de aviso no webhook atual; até lá os envios aparecem com erro no registro, sem afetar o sistema.
+O time do HARVEY precisa criar o novo endereço e me passar URL e segredo de assinatura (cadastro como secrets `HARVEY_GERENTE_WEBHOOK_URL` e `HARVEY_GERENTE_WEBHOOK_SECRET`); até lá os envios aparecem com erro no registro, sem afetar o sistema.
 
 ## Texto para enviar ao time do HARVEY
 ```text
-Olá, time HARVEY. A partir de agora o MCF Gestão vai enviar, no mesmo webhook
-que já recebe o Relatório da Cota, um novo aviso para definir o gerente de
-relacionamento de cada cliente. Precisamos que vocês tratem esse aviso.
+Olá, time HARVEY. A partir de agora o MCF Gestão vai enviar um novo aviso, em um
+webhook NOVO e exclusivo (separado do que recebe o Relatório da Cota), para definir o gerente de
+relacionamento de cada cliente. Precisamos que vocês criem esse endereço e nos enviem a URL e um segredo
+de assinatura próprio para ele.
 
 Como identificar: campo "tipo" = "pos_venda.gerente_relacionamento.v1".
 Assinatura: cabeçalho X-MCF-Signature (HMAC-SHA256 do corpo com o mesmo
-segredo já usado hoje). Rejeitem se a assinatura não conferir.
+segredo deste novo endereço). Rejeitem se a assinatura não conferir.
 
 Corpo enviado (JSON):
 {
@@ -53,7 +54,7 @@ assim que vocês confirmarem que o aviso está pronto.
 ```
 
 ## Detalhes técnicos
-- Dados: UPDATE em `employees.telefone` (por profile_id dos gerentes).
+- Telefones: só Vitor tem cadastro no RH; os outros 3 não. Os telefones ficam numa tabela de contato dos gerentes Pós-venda (editável por admin/RH), usada pela Jornada e pelo HARVEY.
 - `consultar-jornada`: buscar `owner_profile_id` do deal → profiles.full_name + employees.telefone.
 - Nova tabela `pos_venda_harvey_gerente_envios` (deal_id, gerente_id, status, http_status, erro, payload) com grants/RLS admin.
-- Nova edge `harvey-gerente-sync` (HMAC com HARVEY_WEBHOOK_SECRET, igual a harvey-relatorio-cota), chamada por trigger em `crm_deals` (origem Pós-venda, quando o dono muda) via pg_net; falha nunca bloqueia a mudança do cartão.
+- Nova edge `harvey-gerente-sync` (HMAC com HARVEY_GERENTE_WEBHOOK_SECRET para HARVEY_GERENTE_WEBHOOK_URL; Relatório da Cota inalterado), chamada por trigger em `crm_deals` (origem Pós-venda, quando o dono muda) via pg_net; falha nunca bloqueia a mudança do cartão.
