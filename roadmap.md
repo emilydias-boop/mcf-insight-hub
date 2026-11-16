@@ -51,5 +51,5 @@
 - [ ] Secrets: aguardando Thobson dizer quais chaves
 
 - [x] Remover aviso de transparência da telemetria (AvisoTelemetria) do front
-- [ ] Grimaldo: criar função somente leitura resumo_app (SQL anexo)
+- [x] Grimaldo: resumo_app criada
 - [ ] Thobson: gerente na Jornada/HARVEY (plano aguardando aprovação)
