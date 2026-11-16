@@ -16,6 +16,42 @@ O gerente do cliente é o **dono do cartão Pós-venda** (já passa a ser o gere
 ## Pendência externa
 O time do HARVEY precisa tratar o novo tipo de aviso no webhook atual; até lá os envios aparecem com erro no registro, sem afetar o sistema.
 
+## Texto para enviar ao time do HARVEY
+```text
+Olá, time HARVEY. A partir de agora o MCF Gestão vai enviar, no mesmo webhook
+que já recebe o Relatório da Cota, um novo aviso para definir o gerente de
+relacionamento de cada cliente. Precisamos que vocês tratem esse aviso.
+
+Como identificar: campo "tipo" = "pos_venda.gerente_relacionamento.v1".
+Assinatura: cabeçalho X-MCF-Signature (HMAC-SHA256 do corpo com o mesmo
+segredo já usado hoje). Rejeitem se a assinatura não conferir.
+
+Corpo enviado (JSON):
+{
+  "tipo": "pos_venda.gerente_relacionamento.v1",
+  "enviado_em": "2026-11-16T16:00:00-03:00",
+  "cliente": { "cpf": "12345678901", "email": "cliente@exemplo.com",
+               "telefone": "5511999999999", "nome": "Nome do Cliente" },
+  "gerente": { "nome": "Rebeca Carlos de Aguiar Saar",
+               "telefone": "5524998165099" }
+}
+
+O que fazer ao receber:
+1. Localizar o usuário pelo CPF (se não achar, pelo e-mail; depois telefone).
+2. Gravar nome e telefone do gerente direto no cadastro desse usuário e
+   exibir para o cliente como "Seu gerente de relacionamento".
+3. Esse dado tem prioridade sobre qualquer distribuição de gerentes do
+   HARVEY. Não redistribuir nem sobrescrever por regra interna.
+4. Se chegar outro aviso para o mesmo cliente, o mais recente substitui
+   o anterior (o gerente pode mudar).
+5. Responder HTTP 200 quando gravar; 404 se o usuário não existir;
+   401 se a assinatura for inválida. Qualquer outro erro: 4xx/5xx com
+   mensagem curta no corpo. Reenviamos os que falharem.
+
+Faremos uma carga inicial com todos os clientes que já têm gerente,
+assim que vocês confirmarem que o aviso está pronto.
+```
+
 ## Detalhes técnicos
 - Dados: UPDATE em `employees.telefone` (por profile_id dos gerentes).
 - `consultar-jornada`: buscar `owner_profile_id` do deal → profiles.full_name + employees.telefone.
