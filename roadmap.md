@@ -1,4 +1,5 @@
 # Roadmap
+- [x] Auditoria comercial diária Incorporador: funções SQL, feriados/destinatários/envios, edge de e-mail, cron 07h SP, dry_run e teste somente para Thobson (Brevo aceito).
 - [x] Grimaldo: criadas somente app_pascoa/app_dias_uteis/painel_app_metas com SQL do anexo (arquivo gerado omite apenas quebra de linha final); privilégios painel anon=false/authenticated=true; sem publicar.
 - [ ] Grimaldo Painel: testes READ ONLY com perfil e JSON mês/semana/hoje bloqueados por 42501 ao SET LOCAL ROLE authenticated; consulta dias úteis também negada. Requer conexão autorizada a assumir authenticated; não contornar nem alterar permissões.
 - [x] Pós-venda: novo agendamento/troca de gerente atribui o cartão ao gerente escolhido, independentemente do dono anterior; Thobson/Rebeca confirmado HARVEY 200; Vinicius/William correto no Gestão, reenvio HARVEY bloqueado por CPF duplicado (409). Quatro verificações SQL passaram; compilação OK.

@@ -1,5 +1,7 @@
 # Architecture rules
 
+- Incorporador daily commercial audit uses the three auditoria_* read models with São Paulo business-day rules; auditoria-diaria-email is reachable only by an admin or a single-use database-issued cron ticket, and Brevo sends are deduplicated per data_ref.
+
 - Pós-Venda recurring manager availability lives in pos_venda_disponibilidade and uses São Paulo slot starts; booking validation only applies to configured managers in pos_venda_reunioes, preserving the separate closer agendas and unconfigured managers.
 
 - Revenue summaries classify portfolio payments by period-wide deduplicated gross per existing sale identity before row attribution, so all grouping modes preserve attribution and share the same new-sale boundary.

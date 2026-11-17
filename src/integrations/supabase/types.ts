@@ -2360,6 +2360,87 @@ export type Database = {
         }
         Relationships: []
       }
+      auditoria_cron_tickets: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          token_hash: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          token_hash: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token_hash?: string
+        }
+        Relationships: []
+      }
+      auditoria_destinatarios: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          email: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      auditoria_envios: {
+        Row: {
+          created_at: string
+          data_ref: string
+          destinatarios: Json
+          enviado_em: string
+          erro: string | null
+          id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          data_ref: string
+          destinatarios?: Json
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          status: string
+        }
+        Update: {
+          created_at?: string
+          data_ref?: string
+          destinatarios?: Json
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       auditoria_fechamento: {
         Row: {
           acao: string
@@ -12774,6 +12855,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      feriados: {
+        Row: {
+          data: string
+          nome: string
+        }
+        Insert: {
+          data: string
+          nome: string
+        }
+        Update: {
+          data?: string
+          nome?: string
+        }
+        Relationships: []
       }
       funnel_data: {
         Row: {
@@ -23796,6 +23892,12 @@ export type Database = {
     Functions: {
       _actor_name: { Args: { _uid: string }; Returns: string }
       _assert_stage_admin: { Args: never; Returns: undefined }
+      _auditoria_dia_util: { Args: { p_data: string }; Returns: boolean }
+      _auditoria_dias_uteis_anteriores: {
+        Args: { p_ref: string }
+        Returns: string[]
+      }
+      _auditoria_proximo_dia_util: { Args: { p_data: string }; Returns: string }
       _c360_ident: {
         Args: { _contact_id: string }
         Returns: {
@@ -24025,6 +24127,10 @@ export type Database = {
         Args: { p_bu?: string; p_ids: string[] }
         Returns: Json
       }
+      auditoria_contato_d0: { Args: { p_ref?: string }; Returns: Json }
+      auditoria_cron_disparar: { Args: { p_body?: Json }; Returns: undefined }
+      auditoria_leads_sem_interacao: { Args: { p_ref?: string }; Returns: Json }
+      auditoria_noshow: { Args: { p_ref?: string }; Returns: Json }
       auto_move_deal_to_em_contato: {
         Args: {
           p_deal_id: string
