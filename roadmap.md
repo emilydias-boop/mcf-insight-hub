@@ -1,4 +1,5 @@
 # Roadmap
+- [ ] Grimaldo: aplicar painel_app_metas.sql exatamente; testar mês/semana/hoje e dias úteis em READ ONLY com perfil confirmado e ROLLBACK; devolver JSON integral e privilégios, sem publicar.
 - [x] Pós-venda: novo agendamento/troca de gerente atribui o cartão ao gerente escolhido, independentemente do dono anterior; Thobson/Rebeca confirmado HARVEY 200; Vinicius/William correto no Gestão, reenvio HARVEY bloqueado por CPF duplicado (409). Quatro verificações SQL passaram; compilação OK.
 - [ ] Vinicius: HARVEY precisa resolver CPF duplicado (409) antes de aceitar o gerente William; não alterar CPF ou escolher cadastro duplicado por suposição.
 - [x] Governança RH — Fase 1: hierarquia (setor pai/responsável, cargo reporta a/faixa), histórico de cargos (34 carregados), funções de hierarquia, regras de alçada e aba Governança
