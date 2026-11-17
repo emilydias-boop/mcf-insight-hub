@@ -23974,6 +23974,11 @@ export type Database = {
         }[]
       }
       agendador_ajuste_info: { Args: { p_attendee_id: string }; Returns: Json }
+      app_dias_uteis: {
+        Args: { p_fim: string; p_ini: string }
+        Returns: number
+      }
+      app_pascoa: { Args: { p_ano: number }; Returns: string }
       apply_no_show_approval_effects: {
         Args: { p_validation_id: string }
         Returns: undefined
@@ -26627,6 +26632,7 @@ export type Database = {
         }[]
       }
       pagamentos_da_venda: { Args: { p_ids: string[] }; Returns: Json }
+      painel_app_metas: { Args: { p_preset?: string }; Returns: Json }
       painel_comercial_credito: {
         Args: { p_from: string; p_to: string }
         Returns: Json
