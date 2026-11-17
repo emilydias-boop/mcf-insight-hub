@@ -27,6 +27,8 @@ interface SdrPerformanceFiltersProps {
   customMeta?: number;
   onRefresh?: () => void;
   isLoading?: boolean;
+  /** Oculta Comparação/Meta (usadas só pelas métricas do Incorporador). */
+  hideMetaComparison?: boolean;
 }
 
 export function SdrPerformanceFilters({
@@ -38,6 +40,7 @@ export function SdrPerformanceFilters({
   customMeta,
   onRefresh,
   isLoading,
+  hideMetaComparison = false,
 }: SdrPerformanceFiltersProps) {
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("this_month");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -146,6 +149,7 @@ export function SdrPerformanceFilters({
         </Popover>
       )}
 
+      {!hideMetaComparison && (<>
       <div className="w-px h-6 bg-border" />
 
       {/* Comparison */}
@@ -191,6 +195,8 @@ export function SdrPerformanceFilters({
           onChange={(e) => handleCustomMetaChange(e.target.value)}
         />
       )}
+
+      </>)}
 
       {/* Period display + Refresh */}
       <div className="ml-auto flex items-center gap-3">

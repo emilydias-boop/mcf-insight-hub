@@ -20,8 +20,9 @@ import { PersonalRefundsCard } from "@/components/sdr/PersonalRefundsCard";
 import { useCloserPerformanceData } from "@/hooks/useCloserPerformanceData";
 import { ComparisonMode, MetaMode, computeCompDates } from "@/hooks/useSdrPerformanceData";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { WarRoomCloserKPICards } from "@/components/closer/WarRoomCloserKPICards";
 
 export default function CloserMeetingsDetailPage() {
   const { closerId } = useParams<{ closerId: string }>();
@@ -30,21 +31,32 @@ export default function CloserMeetingsDetailPage() {
   const activeBU = useActiveBU();
   const wso = getWeekStartsOn(activeBU);
   const { user, role } = useAuth();
+  const queryClient = useQueryClient();
 
   const isPrivilegedViewer = role === "admin" || role === "manager" || role === "coordenador";
-  const { data: myCloserId, isLoading: loadingOwn } = useQuery({
-    queryKey: ["my-closer-id", user?.email],
+  const { data: myCloserIds, isLoading: loadingOwn } = useQuery({
+    queryKey: ["my-closer-ids", user?.email],
     enabled: !isPrivilegedViewer && !!user?.email && role === "closer",
     queryFn: async () => {
       const { data } = await supabase
         .from("closers")
         .select("id")
-        .ilike("email", user!.email!.toLowerCase())
-        .maybeSingle();
-      return data?.id ?? null;
+        .ilike("email", user!.email!.toLowerCase());
+      return (data || []).map((r: any) => r.id as string);
     },
   });
-  const ownsThisView = !!myCloserId && myCloserId === closerId;
+  const ownsThisView = !!closerId && (myCloserIds || []).includes(closerId);
+
+  // BU do closer da URL — War Room (solar) usa régua própria
+  const { data: closerBu } = useQuery({
+    queryKey: ["closer-bu", closerId],
+    enabled: !!closerId,
+    queryFn: async () => {
+      const { data } = await supabase.from("closers").select("bu").eq("id", closerId!).maybeSingle();
+      return ((data as any)?.bu as string | null) ?? null;
+    },
+  });
+  const isWarRoom = closerBu === "solar";
   const accessDenied = !isPrivilegedViewer && !loadingOwn && !ownsThisView;
 
   const preset = searchParams.get("preset") || "month";
@@ -152,8 +164,12 @@ export default function CloserMeetingsDetailPage() {
             metaMode={metaMode}
             customMeta={customMeta}
             onFiltersChange={handleFiltersChange}
-            onRefresh={() => perfData.refetch()}
+            onRefresh={() => {
+              perfData.refetch();
+              if (isWarRoom) queryClient.invalidateQueries({ queryKey: ["war-room-closer-kpis"] });
+            }}
             isLoading={perfData.isLoading}
+            hideMetaComparison={isWarRoom}
           />
         </div>
         {closerId && perfData.closerInfo && (
@@ -171,12 +187,19 @@ export default function CloserMeetingsDetailPage() {
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="leads">Leads Realizados ({perfData.leads.length})</TabsTrigger>
           <TabsTrigger value="noshows">No-Shows ({perfData.noShowLeads.length})</TabsTrigger>
-          <TabsTrigger value="r2">R2 Agendadas ({perfData.r2Leads.length})</TabsTrigger>
-          <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
+          {!isWarRoom && (
+            <>
+              <TabsTrigger value="r2">R2 Agendadas ({perfData.r2Leads.length})</TabsTrigger>
+              <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-5">
           {/* KPI Cards + Projection + Reembolsos individuais */}
+          {isWarRoom ? (
+            <WarRoomCloserKPICards closerId={closerId} startDate={startDate} endDate={endDate} />
+          ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
             <SdrDetailKPICards metrics={perfData.metrics} isLoading={perfData.isLoading} />
             <div className="space-y-5">
@@ -188,6 +211,7 @@ export default function CloserMeetingsDetailPage() {
               />
             </div>
           </div>
+          )}
         </TabsContent>
 
         <TabsContent value="leads">
@@ -206,6 +230,7 @@ export default function CloserMeetingsDetailPage() {
           </Card>
         </TabsContent>
 
+        {!isWarRoom && (<>
         <TabsContent value="r2">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
@@ -221,6 +246,7 @@ export default function CloserMeetingsDetailPage() {
             endDate={endDate}
           />
         </TabsContent>
+        </>)}
       </Tabs>
     </div>
   );

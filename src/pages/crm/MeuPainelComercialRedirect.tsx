@@ -14,12 +14,16 @@ export default function MeuPainelComercialRedirect() {
     queryFn: async () => {
       const email = user!.email!.toLowerCase();
       if (role === "closer") {
-        const { data: c } = await supabase
+        // Pode haver mais de um registro com o mesmo e-mail: prioriza o que tem BU definida
+        const { data: rows } = await supabase
           .from("closers")
-          .select("id")
+          .select("id, bu, created_at")
           .ilike("email", email)
-          .maybeSingle();
-        return { kind: "closer" as const, id: c?.id ?? null };
+          .eq("is_active", true)
+          .order("created_at", { ascending: true });
+        const list = (rows || []) as any[];
+        const c = list.find((r) => r.bu != null) ?? list[0];
+        return { kind: "closer" as const, id: (c?.id as string) ?? null };
       }
       return { kind: "sdr" as const, email };
     },
