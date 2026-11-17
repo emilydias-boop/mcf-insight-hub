@@ -1,4 +1,6 @@
 # Roadmap
+- [x] Grimaldo: criadas somente app_pascoa/app_dias_uteis/painel_app_metas com SQL do anexo (arquivo gerado omite apenas quebra de linha final); privilégios painel anon=false/authenticated=true; sem publicar.
+- [ ] Grimaldo Painel: testes READ ONLY com perfil e JSON mês/semana/hoje bloqueados por 42501 ao SET LOCAL ROLE authenticated; consulta dias úteis também negada. Requer conexão autorizada a assumir authenticated; não contornar nem alterar permissões.
 - [x] Pós-venda: novo agendamento/troca de gerente atribui o cartão ao gerente escolhido, independentemente do dono anterior; Thobson/Rebeca confirmado HARVEY 200; Vinicius/William correto no Gestão, reenvio HARVEY bloqueado por CPF duplicado (409). Quatro verificações SQL passaram; compilação OK.
 - [ ] Vinicius: HARVEY precisa resolver CPF duplicado (409) antes de aceitar o gerente William; não alterar CPF ou escolher cadastro duplicado por suposição.
 - [x] Governança RH — Fase 1: hierarquia (setor pai/responsável, cargo reporta a/faixa), histórico de cargos (34 carregados), funções de hierarquia, regras de alçada e aba Governança
