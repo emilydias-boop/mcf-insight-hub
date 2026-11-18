@@ -80,18 +80,30 @@ interface QuickScheduleModalProps {
 
 const STATUS_INATIVOS_SLOT = '("canceled","cancelled","rescheduled")';
 
-async function fetchHorariosOcupados(closerId: string, date: Date): Promise<Set<string>> {
+type IntervaloOcupado = { ini: number; fim: number };
+
+async function fetchHorariosOcupados(closerId: string, date: Date): Promise<IntervaloOcupado[]> {
   const ini = new Date(date); ini.setHours(0, 0, 0, 0);
   const fim = new Date(date); fim.setHours(23, 59, 59, 999);
+  // Inclui reuniões que começaram até 3h antes do dia (sobreposição na virada)
   const { data, error } = await supabase
     .from('meeting_slots')
-    .select('scheduled_at')
+    .select('scheduled_at, duration_minutes')
     .eq('closer_id', closerId)
     .gte('scheduled_at', ini.toISOString())
     .lte('scheduled_at', fim.toISOString())
     .not('status', 'in', STATUS_INATIVOS_SLOT);
   if (error) throw error;
-  return new Set((data || []).map(m => format(new Date(m.scheduled_at as string), 'HH:mm')));
+  return (data || []).map((m: any) => {
+    const i = new Date(m.scheduled_at as string).getTime();
+    return { ini: i, fim: i + (Number(m.duration_minutes) || 60) * 60000 };
+  });
+}
+
+/** Horário [inicio, inicio+dur) choca com alguma reunião ativa do closer? */
+export function horarioSobrepoe(inicio: number, durMin: number, ocupados: IntervaloOcupado[]): boolean {
+  const fim = inicio + durMin * 60000;
+  return ocupados.some(o => inicio < o.fim && o.ini < fim);
 }
 
 interface DealOption {
@@ -474,7 +486,10 @@ export function QuickScheduleModal({
     if (exclusiveSlots) {
       try {
         const ocupados = await fetchHorariosOcupados(selectedCloser, selectedDate);
-        if (ocupados.has(selectedTime)) {
+        const [hh, mm] = selectedTime.split(':').map(Number);
+        const alvo = new Date(selectedDate); alvo.setHours(hh, mm, 0, 0);
+        const grade = [...new Set((closerDaySlots ?? []).filter(s => s.closer_id === selectedCloser).map(s => s.start_time.substring(0, 5)))];
+        if (horarioSobrepoe(alvo.getTime(), duracaoSelecionada ?? 60, ajustarOcupados(ocupados, grade))) {
           toast.error('Este horário já foi ocupado. Escolha outro.');
           refetchOcupados();
           return;
@@ -534,6 +549,7 @@ export function QuickScheduleModal({
       alreadyBuilds,
       parentAttendeeId,
       bookedAt: isRetroactiveBooking ? customBookedAt : undefined,
+      ...(exclusiveSlots && duracaoSelecionada ? { durationMinutes: duracaoSelecionada } : {}),
     }, {
       onSuccess: (data) => {
         // Send WhatsApp notification if enabled
@@ -615,6 +631,21 @@ export function QuickScheduleModal({
   });
 
   // Build time slots from configured meeting links for selected closer
+  // Duração de cada horário = intervalo até o próximo horário da grade (máx. 60)
+  const duracaoDoHorario = useCallback((t: string, todos: string[]) => {
+    const toMin = (x: string) => { const [h, m] = x.split(':').map(Number); return h * 60 + m; };
+    const prox = todos.map(toMin).filter(m => m > toMin(t)).sort((a, b) => a - b)[0];
+    if (prox === undefined) return 60;
+    return Math.min(60, prox - toMin(t));
+  }, []);
+
+  // Reunião antiga de 60 min marcada num horário da grade ocupa só até o próximo horário da grade
+  const ajustarOcupados = useCallback((ocup: IntervaloOcupado[], todos: string[]) => ocup.map(o => {
+    const hhmm = format(new Date(o.ini), 'HH:mm');
+    if (!todos.includes(hhmm)) return o;
+    return { ini: o.ini, fim: Math.min(o.fim, o.ini + duracaoDoHorario(hhmm, todos) * 60000) };
+  }), [duracaoDoHorario]);
+
   const timeSlots = useMemo(() => {
     if (!selectedCloser || !closerDaySlots || dayOfWeek === undefined) {
       return [];
@@ -629,12 +660,18 @@ export function QuickScheduleModal({
     if (!exclusiveSlots || !selectedDate) return todos;
     const agora = new Date();
     return todos.filter(t => {
-      if (horariosOcupados?.has(t)) return false;
       const [h, m] = t.split(':').map(Number);
       const d = new Date(selectedDate); d.setHours(h, m, 0, 0);
+      if (horarioSobrepoe(d.getTime(), duracaoDoHorario(t, todos), ajustarOcupados(horariosOcupados ?? [], todos))) return false;
       return d.getTime() > agora.getTime();
     });
-  }, [closerDaySlots, selectedCloser, dayOfWeek, exclusiveSlots, selectedDate, horariosOcupados]);
+  }, [closerDaySlots, selectedCloser, dayOfWeek, exclusiveSlots, selectedDate, horariosOcupados, duracaoDoHorario, ajustarOcupados]);
+
+  const duracaoSelecionada = useMemo(() => {
+    if (!exclusiveSlots || !selectedTime || !closerDaySlots || !selectedCloser) return undefined;
+    const todos = [...new Set(closerDaySlots.filter(s => s.closer_id === selectedCloser).map(s => s.start_time.substring(0, 5)))];
+    return duracaoDoHorario(selectedTime, todos);
+  }, [exclusiveSlots, selectedTime, closerDaySlots, selectedCloser, duracaoDoHorario]);
 
   // Get time slot status with capacity check
   const getTimeSlotStatus = useCallback((time: string) => {
