@@ -18,7 +18,7 @@ import { fetchAllPages, fetchAllByIds } from '@/lib/supabasePaginacao';
  *
  * DEDUP (obrigatório para bater com o Painel Comercial / `get_agenda_fatos_consorcio`):
  *  - 1 ocorrência por (deal_id, dia da reunião), priorizando completed > no_show > resto
- *  - cap de 2 ocorrências por deal dentro do período (as 2 primeiras por data)
+ *  - cap de 2 ocorrências por deal dentro do período; realizada (completed/contract_paid) nunca é cortada — ocupa a vaga primeiro, o resto vai por data
  * Sem isso a tela inflava com remarcações do mesmo lead.
  */
 
@@ -38,6 +38,11 @@ function spDay(iso: string): string {
   } catch {
     return iso.slice(0, 10);
   }
+}
+
+/** Reunião realizada nunca sai pelo cap (mesma regra do RPC get_agenda_fatos_consorcio). */
+function ehRealizada(status: string): boolean {
+  return status === 'completed' || status === 'contract_paid';
 }
 
 function statusRank(status: string): number {
@@ -74,9 +79,17 @@ function dedupComCap(participants: R1FunnelParticipant[]): R1FunnelParticipant[]
   const out: R1FunnelParticipant[] = [];
   porUnidade.forEach((arr) => {
     arr
-      .sort((a, b) => (a.scheduled_at || '').localeCompare(b.scheduled_at || ''))
-      .slice(0, 2)
-      .forEach((p) => out.push(p));
+      .sort((a, b) => {
+        // Realizadas primeiro; dentro de cada grupo, da mais antiga para a mais nova.
+        const ra = ehRealizada(a.status) ? 0 : 1;
+        const rb = ehRealizada(b.status) ? 0 : 1;
+        if (ra !== rb) return ra - rb;
+        return (a.scheduled_at || '').localeCompare(b.scheduled_at || '');
+      })
+      // Cap 2 por negócio, mas reunião realizada nunca é cortada.
+      .forEach((p, i) => {
+        if (i < 2 || ehRealizada(p.status)) out.push(p);
+      });
   });
   return out;
 }
