@@ -36,18 +36,17 @@ export function useUltrametaByBU() {
       const monthEnd = endOfMonth(now);
       const currentAnoMes = format(now, 'yyyy-MM');
 
-      // 1. Fetch first transaction IDs for deduplication
-      const { data: firstIdsData } = await getFirstTransactionIdsCached();
-      const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
-
-      // 2. Fetch all data in parallel (including team_monthly_goals)
+      // 1. Fetch everything in parallel. The first transaction IDs are only needed
+      //    to post-process the Incorporador result, not as input of any request.
       const [
+        firstIdsResult,
         incorporadorResult,
         consorcioResult,
-        leilaoResult,
         targetsResult,
         teamGoalsResult,
       ] = await Promise.all([
+        // First transaction IDs for deduplication (shared 5 min cache)
+        getFirstTransactionIdsCached(),
         // Incorporador: use RPC with monthly period
         supabase.rpc('get_hubla_transactions_by_bu', {
           p_bu: 'incorporador',
@@ -64,14 +63,6 @@ export function useUltrametaByBU() {
           .gte('data_contratacao', monthStart.toISOString().split('T')[0])
           .lte('data_contratacao', monthEnd.toISOString().split('T')[0])
           .not('valor_credito', 'is', null),
-
-        // Leilão: hubla_transactions with product_category = 'clube_arremate'
-        supabase
-          .from('hubla_transactions')
-          .select('net_value, product_price, gross_override')
-          .eq('product_category', 'clube_arremate')
-          .gte('sale_date', monthStart.toISOString())
-          .lte('sale_date', monthEnd.toISOString()),
 
         // Legacy targets from team_targets (fallback)
         supabase
@@ -91,6 +82,8 @@ export function useUltrametaByBU() {
           .eq('ano_mes', currentAnoMes),
       ]);
 
+      const firstIdSet = new Set((firstIdsResult.data || []).map((r: { id: string }) => r.id));
+
       // 3. Calculate Incorporador with deduplication
       const incorporadorValue = (incorporadorResult.data || []).reduce((sum: number, t: any) => {
         const isFirst = firstIdSet.has(t.id);
@@ -109,12 +102,6 @@ export function useUltrametaByBU() {
         (sum, row) => sum + (row.valor_credito || 0),
         0
       ) || 0;
-
-      // 5. Calculate Leilão
-      const leilaoValue = (leilaoResult.data || []).reduce((sum: number, row: any) => {
-        const value = row.gross_override ?? row.product_price ?? row.net_value ?? 0;
-        return sum + value;
-      }, 0);
 
       // Crédito placeholder (no data source yet)
       const creditoValue = 0;
@@ -160,11 +147,6 @@ export function useUltrametaByBU() {
           bu: 'credito',
           value: creditoValue,
           target: getTarget('credito', 'ultrameta_credito'),
-        },
-        {
-          bu: 'leilao',
-          value: leilaoValue,
-          target: getTarget('leilao', 'ultrameta_leilao'),
         },
       ];
     },
