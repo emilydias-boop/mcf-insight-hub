@@ -378,9 +378,10 @@ export function useRealizadas() {
 }
 
 // Fetch proposals pendentes/aceitas
-export function useProposals() {
+export function useProposals(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['consorcio-proposals'],
+    enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const data = await fetchAllPages<any>((from, to) =>

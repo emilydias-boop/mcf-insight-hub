@@ -19,7 +19,7 @@ export function CloserPendingDocsAlert() {
   const { user, allRoles } = useAuth();
   const isCloser = (allRoles as string[] | undefined)?.some(r => r === 'closer' || r === 'closer_sombra') ?? false;
 
-  const { data: proposals = [] } = useProposals();
+  const { data: proposals = [] } = useProposals({ enabled: isCloser });
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
