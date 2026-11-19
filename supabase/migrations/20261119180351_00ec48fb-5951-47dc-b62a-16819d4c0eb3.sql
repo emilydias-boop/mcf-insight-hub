@@ -1,0 +1,2 @@
+select public.pos_venda_registrar_cliente(h.customer_email, h.customer_phone, h.customer_name, 'A003', h.product_name, coalesce(h.product_price,0), h.sale_date, 'backfill_manual', h.id::text)
+from public.hubla_transactions h where h.id='825c4b51-3a1e-4b30-998f-782eba91ca1a';
