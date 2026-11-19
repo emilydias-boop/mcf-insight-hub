@@ -1,0 +1,1 @@
+update public.crm_deals set owner_id=(select email from public.profiles where id='e7b093fe-4407-4f98-b9dc-e9e85e373a48'), owner_profile_id='e7b093fe-4407-4f98-b9dc-e9e85e373a48' where id='1376e61e-d336-4bc2-a81b-5196c42b76fa';
