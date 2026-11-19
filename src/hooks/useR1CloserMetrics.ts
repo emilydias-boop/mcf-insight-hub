@@ -258,25 +258,6 @@ export function useR1CloserMetrics(
 
       if (bookedError) throw bookedError;
 
-      // Fetch profiles to map booked_by UUID to email
-      const bookedByIds = new Set<string>();
-      meetings?.forEach(meeting => {
-        meeting.meeting_slot_attendees?.forEach(att => {
-          if (att.booked_by) bookedByIds.add(att.booked_by);
-        });
-      });
-
-      const profiles = await batchedIn<{ id: string; email: string | null }>(
-        (chunk) => supabase.from('profiles').select('id, email').in('id', chunk),
-        Array.from(bookedByIds)
-      );
-
-      const profileEmailMap = new Map<string, string>();
-      profiles?.forEach(p => {
-        const email = p.email?.trim().toLowerCase();
-        if (email) profileEmailMap.set(p.id, email);
-      });
-
       // Fetch R2 meetings to count R2 agendadas per closer
       // R2 is attributed to the closer who did the R1 for the same deal
       const { data: r2Meetings, error: r2Error } = await supabase
@@ -368,63 +349,11 @@ export function useR1CloserMetrics(
         });
       });
 
-      // ========== CONTRACT PAID BY PAYMENT DATE ==========
-      // Buscar contratos pagos pela DATA DO PAGAMENTO (não da reunião)
-      // FONTE DA VERDADE: contract_paid_at IS NOT NULL (independente do status)
-      const { data: contractsByPaymentDate, error: contractsError } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          status,
-          contract_paid_at,
-          booked_by,
-          is_partner,
-          deal_id,
-          meeting_slot:meeting_slots!inner(
-            closer_id,
-            meeting_type,
-            scheduled_at
-          )
-        `)
-        .eq('meeting_slot.meeting_type', 'r1')
-        .eq('is_partner', false)
-        .not('contract_paid_at', 'is', null)
-        .gte('contract_paid_at', start)
-        .lte('contract_paid_at', end);
-
-      if (contractsError) throw contractsError;
-
-      // Também buscar contratos com status contract_paid mas SEM contract_paid_at (fallback para scheduled_at)
-      // Esses são contratos antigos que não têm timestamp de pagamento
-      const { data: contractsWithoutTimestamp } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          status,
-          contract_paid_at,
-          booked_by,
-          is_partner,
-          deal_id,
-          meeting_slot:meeting_slots!inner(
-            closer_id,
-            meeting_type,
-            scheduled_at
-          )
-        `)
-        .eq('status', 'contract_paid')
-        .eq('meeting_slot.meeting_type', 'r1')
-        .eq('is_partner', false)
-        .is('contract_paid_at', null)
-        .gte('meeting_slot.scheduled_at', start)
-        .lte('meeting_slot.scheduled_at', end);
-
       // ===== Aplicação do filtro de segmento ICP (só quando != 'all') =====
       if (segmentActive) {
         const ids = new Set<string>();
         meetings?.forEach(m => m.meeting_slot_attendees?.forEach(a => { if (a.deal_id) ids.add(a.deal_id); }));
         r2Meetings?.forEach(m => m.meeting_slot_attendees?.forEach((a: any) => { if (a.deal_id) ids.add(a.deal_id); }));
-        (contractsByPaymentDate as any[] | null)?.forEach(a => { if (a.deal_id) ids.add(a.deal_id); });
-        (contractsWithoutTimestamp as any[] | null)?.forEach(a => { if (a.deal_id) ids.add(a.deal_id); });
 
         const allowed = await allowedDealIds(Array.from(ids));
         const keep = (dealId: string | null | undefined) => !!dealId && allowed.has(dealId);
@@ -544,8 +473,6 @@ export function useR1CloserMetrics(
       // Outside detection only applies to 'incorporador' BU
       // For consorcio, the concept doesn't apply — skip entirely
       
-      const dealEmailMap = new Map<string, string>();
-      const emailContractDate = new Map<string, Date>();
       const outsideByCloser = new Map<string, number>();
 
       // Outside é detectado por e-mail (sem deal garantido) → não é segmentável hoje.
@@ -557,50 +484,6 @@ export function useR1CloserMetrics(
         const firstTransactionIds = new Set<string>(
           (firstIdsRows as any[] | null || []).map((r: any) => r.id as string)
         );
-
-        // --- Part A: dealEmailMap + emailContractDate for EXCLUSION logic ---
-        const dealIds = new Set<string>();
-        meetings?.forEach(meeting => {
-          meeting.meeting_slot_attendees?.forEach(att => {
-            if (att.deal_id) dealIds.add(att.deal_id);
-          });
-        });
-
-        const deals = await batchedIn<{ id: string; contact: { id: string; email: string | null } | null }>(
-          (chunk) => supabase.from('crm_deals').select('id, contact:crm_contacts(id, email)').in('id', chunk),
-          Array.from(dealIds)
-        );
-
-        deals?.forEach(deal => {
-          const contact = deal.contact as { id: string; email: string | null } | null;
-          const email = contact?.email?.trim().toLowerCase();
-          if (email) dealEmailMap.set(deal.id, email);
-        });
-
-        const attendeeEmails = [...new Set(Array.from(dealEmailMap.values()))];
-
-        // Fetch ALL contracts for these emails (no date filter) — needed for exclusion
-        const contracts = await batchedIn<{ customer_email: string | null; sale_date: string }>(
-          (chunk) => supabase
-            .from('hubla_transactions')
-            .select('customer_email, sale_date')
-            .in('customer_email', chunk)
-            .in('product_category', ['contrato', 'incorporador'])
-            .ilike('product_name', '%contrato%')
-            .eq('sale_status', 'completed')
-            .order('sale_date', { ascending: true }),
-          attendeeEmails.length > 0 ? attendeeEmails : []
-        );
-
-        contracts?.forEach(c => {
-          const email = c.customer_email?.trim().toLowerCase();
-          if (email) {
-            const date = new Date(c.sale_date);
-            if (!emailContractDate.has(email) || date < emailContractDate.get(email)!) {
-              emailContractDate.set(email, date);
-            }
-          }
-        });
 
         // --- Part B: Count outsides by SALE DATE in period ---
         const { data: outsidePeriodContracts } = await supabase

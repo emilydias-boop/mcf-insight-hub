@@ -32,9 +32,6 @@ import type { ConsorcioFatoRow } from "@/hooks/useConsorcioAgendaFatos";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
-import { useMeetingsSemStatus } from "@/hooks/useMeetingsSemStatus";
-
-import { useSdrOutsideMetrics } from "@/hooks/useSdrOutsideMetrics";
 import { useBUPipelineMap } from "@/hooks/useBUPipelineMap";
 import { useCRMOriginsByPipeline } from "@/hooks/useCRMOriginsByPipeline";
 
@@ -325,11 +322,6 @@ export default function ConsorcioPainelEquipe() {
 
   // Closer metrics filtered by BU consorcio
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end, BU_SQUAD, 'all', true);
-  
-  const { data: outsideData } = useSdrOutsideMetrics(start, end);
-
-  // Reuniões "sem status" (já passaram e não foram atualizadas) — só exibido na BU Consórcio
-  const { data: semStatusCount } = useMeetingsSemStatus(start, end, BU_SQUAD);
 
   const { data: propostasData } = useConsorcioPipelineMetricsBySdr(start, end);
   // Cotas Contratadas — única métrica de venda fechada do Consórcio.
@@ -439,8 +431,8 @@ export default function ConsorcioPainelEquipe() {
 
   const enrichedKPIs = useMemo(() => ({
     ...pipelineFilteredKPIs,
-    totalOutside: allowedOriginNames ? 0 : (outsideData?.totalOutside || 0),
-  }), [pipelineFilteredKPIs, outsideData, allowedOriginNames]);
+    totalOutside: 0,
+  }), [pipelineFilteredKPIs]);
 
   // Linha "Não atribuído" da aba SDRs: fatos com booked_by nulo. Continua
   // aparecendo também com funil selecionado (a mesma base é filtrada por origem).
@@ -599,7 +591,6 @@ export default function ConsorcioPainelEquipe() {
         isToday={datePreset === "today"}
         pendentesHoje={pendentesHojeConsorcio}
         bu="consorcio"
-        semStatus={semStatusCount}
         totalVendasRealizadas={producaoGerada?.total.vendasRealizadas || 0}
         pendentesBreakdown={computePendentesBreakdown(
           allowedOriginNames
