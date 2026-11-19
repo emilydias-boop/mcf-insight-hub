@@ -76,7 +76,11 @@ const Contatos = () => {
 
   const activeBU = useActiveBU();
   const { data: buOriginIds } = useBUOriginIds(activeBU);
-  const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize, buOriginIds && buOriginIds.length > 0 ? buOriginIds : undefined);
+  // Só busca a lista depois que os funis da BU ativa estiverem resolvidos (ou de imediato se não houver BU),
+  // para não disparar a mesma consulta duas vezes quando eles chegam.
+  const funisProntos = !activeBU || buOriginIds !== undefined;
+  const { data, isLoading } = useContactsEnriched(debouncedSearch, currentPage, pageSize, buOriginIds && buOriginIds.length > 0 ? buOriginIds : undefined, funisProntos);
+  const carregandoLista = isLoading || !funisProntos;
   const syncMutation = useSyncClintData();
   const duplicateMutation = useDuplicateToInsideSales();
   const bulkTransfer = useBulkTransfer();
@@ -287,7 +291,7 @@ const Contatos = () => {
       )}
 
       {/* Content */}
-      {isLoading ? (
+      {carregandoLista ? (
         <div className="flex flex-col items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
           <p className="text-lg font-semibold text-foreground">Carregando contatos...</p>

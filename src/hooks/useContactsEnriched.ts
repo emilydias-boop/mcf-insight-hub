@@ -167,11 +167,12 @@ const fetchContactsPage = async (page: number, pageSize: number, searchTerm?: st
   return { contacts: enriched, totalCount: count || 0 };
 };
 
-export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50, buOriginIds?: string[]) => {
+export const useContactsEnriched = (searchTerm?: string, page: number = 1, pageSize: number = 50, buOriginIds?: string[], enabled: boolean = true) => {
   return useQuery({
     queryKey: ['contacts-enriched', searchTerm || '', page, pageSize, buOriginIds || []],
     queryFn: () => fetchContactsPage(page, pageSize, searchTerm, buOriginIds),
     staleTime: 30000,
+    enabled,
   });
 };
 
