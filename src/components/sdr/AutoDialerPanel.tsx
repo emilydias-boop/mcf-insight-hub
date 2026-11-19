@@ -123,15 +123,19 @@ export function AutoDialerPanel({ open, onOpenChange }: Props) {
   // Mantemos useCRMDeals só para mostrar a CONTAGEM aproximada no botão
   // (limite do hook = 1000). O carregamento real da fila é paginado abaixo
   // e respeita o filtro "discado hoje".
-  const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals(
-    stageId
-      ? (restrictToSdrOrigins && pipelineId
-          ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 1000 }
-          : isCobrancaConsorcio && cobrancaOrigin?.id
-            ? { stageId, originId: cobrancaOrigin.id, limit: 1000 }
-            : { stageId, limit: 1000 })
-      : {}
-  );
+  // A contagem só aparece com o painel aberto e um estágio escolhido;
+  // fora disso a busca não roda (antes rodava sem filtro, até 5000 negócios).
+  const stageCountFilters = stageId
+    ? (restrictToSdrOrigins && pipelineId
+        ? { stageId, originId: pipelineId, ownerProfileId: user?.id, limit: 1000 }
+        : isCobrancaConsorcio && cobrancaOrigin?.id
+          ? { stageId, originId: cobrancaOrigin.id, limit: 1000 }
+          : { stageId, limit: 1000 })
+    : {};
+  const { data: stageDeals, isLoading: dealsLoading } = useCRMDeals({
+    ...stageCountFilters,
+    enabled: open && !!stageId,
+  });
 
   const [loadingQueue, setLoadingQueue] = useState(false);
 
