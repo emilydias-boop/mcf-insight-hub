@@ -12,14 +12,19 @@ import { AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProposals } from '@/hooks/useConsorcioPostMeeting';
+import { useMyBU } from '@/hooks/useMyBU';
 
 const REMINDER_INTERVAL_MS = 10 * 60 * 1000; // 10 minutos
 
 export function CloserPendingDocsAlert() {
   const { user, allRoles } = useAuth();
   const isCloser = (allRoles as string[] | undefined)?.some(r => r === 'closer' || r === 'closer_sombra') ?? false;
+  // Pré-carrega as propostas também para quem é da BU Consórcio (gestores/coordenadores),
+  // para a tela Venda Consórcio abrir com os dados prontos. O alerta continua só para closers.
+  const { data: myBUs = [] } = useMyBU();
+  const preCarregarPropostas = isCloser || myBUs.includes('consorcio');
 
-  const { data: proposals = [] } = useProposals({ enabled: isCloser });
+  const { data: proposals = [] } = useProposals({ enabled: preCarregarPropostas });
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
