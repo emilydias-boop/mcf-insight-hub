@@ -2,6 +2,7 @@ import { contratoReembolsoInfo } from '@/components/crm/RefundedBadge';
 import { HarveyOrigemCard } from '@/components/crm/pos-venda/HarveyOrigem';
 import { LeadUtmCard } from '@/components/crm/LeadUtmCard';
 import { JornadaClienteCard } from '@/components/crm/pos-venda/JornadaClienteCard';
+import { EncaminhamentoPosVendaCard } from '@/components/crm/pos-venda/EncaminhamentoPosVendaCard';
 import { PosVendaEntregaveisSection } from '@/components/crm/pos-venda/PosVendaEntregaveisSection';
 import { isPosVendaDeal, POS_VENDA_NOVOS_LICENCIADOS_STAGE_ID } from '@/lib/posVenda';
 import { Badge } from '@/components/ui/badge';
@@ -195,6 +196,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange, initialDeal, onS
                 </div>
 
                 <TabsContent value="resumo" className="mt-0 p-4 space-y-3">
+              {!isPosVendaDeal(deal) && <EncaminhamentoPosVendaCard dealId={deal.id} />}
               {/* ===== BRIEFING IA (só aparece se existir linha em deal_briefing_ia) ===== */}
               <BriefingLeadCard dealId={deal.id} />
               <ResumoAnamneseCard dealId={deal.id} contactId={deal.contact_id} />

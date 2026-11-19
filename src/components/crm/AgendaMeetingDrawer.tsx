@@ -1,3 +1,4 @@
+import { EncaminhamentoPosVendaCard } from '@/components/crm/pos-venda/EncaminhamentoPosVendaCard';
 import { RefundedBadge } from '@/components/crm/RefundedBadge';
 import { MeetingBriefingSection } from '@/components/crm/briefing/MeetingBriefingSection';
 import { useState, useEffect, useMemo } from 'react';
@@ -942,6 +943,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 Clique em um participante para ver suas informações e notas específicas
               </p>
             </div>
+
+            {(((selectedParticipant as any)?.dealId) || activeMeeting?.deal_id) && (
+              <EncaminhamentoPosVendaCard dealId={(selectedParticipant as any)?.dealId || activeMeeting?.deal_id} />
+            )}
 
             <MeetingBriefingSection
               participantes={participants.map((p, i) => ({ key: p.id || String(i), nome: p.name, dealId: p.dealId ?? null, contactId: p.contactId ?? null }))}
