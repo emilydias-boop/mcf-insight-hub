@@ -20,7 +20,6 @@ import { CreatePipelineWizard } from '@/components/crm/wizard/CreatePipelineWiza
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCallQualificationTrigger } from '@/hooks/useCallQualificationTrigger';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -70,8 +69,6 @@ const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
   useNewLeadNotifications();
   
-  // Hook que abre o modal global quando lead atende (via TwilioContext)
-  useCallQualificationTrigger();
   
   const { role, user, allRoles } = useAuth();
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
