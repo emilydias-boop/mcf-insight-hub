@@ -37,8 +37,8 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
   // Check auth status
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
+      const { data: { session } } = await supabase.auth.getSession();
+      setUserId(session?.user?.id || null);
     };
     checkAuth();
 

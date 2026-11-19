@@ -16,9 +16,10 @@ export interface PendingAction {
   ownerId: string | null;
 }
 
-export const usePendingNextActions = () => {
+export const usePendingNextActions = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['pending-next-actions'],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const { data: userData } = await supabase.auth.getUser();
       const userEmail = userData.user?.email;

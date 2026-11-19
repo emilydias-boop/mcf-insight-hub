@@ -10,7 +10,7 @@ const SNOOZE_MS = 2 * 60 * 1000; // 2 minutes
 
 export const OverdueAlertOverlay = () => {
   const { role } = useAuth();
-  const { data: actions = [] } = usePendingNextActions();
+  const { data: actions = [] } = usePendingNextActions({ enabled: role === 'sdr' });
   const overdueCount = actions.filter(a => a.isOverdue).length;
   const [isDismissed, setIsDismissed] = useState(false);
   const navigate = useNavigate();

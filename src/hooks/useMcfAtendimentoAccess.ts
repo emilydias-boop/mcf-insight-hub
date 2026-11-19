@@ -9,8 +9,8 @@ export function useMcfAtendimentoAccess() {
   const { data, isLoading } = useQuery({
     queryKey: ['mcf-atendimento-access', 'me'],
     queryFn: async () => {
-      const { data: session } = await supabase.auth.getUser();
-      const uid = session.user?.id;
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
       if (!uid) return false;
       const { data, error } = await supabase.rpc('has_mcf_atendimento_access', { _user_id: uid });
       if (error) throw error;
