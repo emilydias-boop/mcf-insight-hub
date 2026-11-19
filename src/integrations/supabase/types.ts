@@ -26809,6 +26809,10 @@ export type Database = {
         Args: { p_deal_id: string; p_destino: string }
         Returns: Json
       }
+      pos_venda_contexto_encaminhamento: {
+        Args: { p_deal_id: string }
+        Returns: Json
+      }
       pos_venda_encaminhar_bu:
         | { Args: { p_bu: string; p_deal_id: string }; Returns: string }
         | {
