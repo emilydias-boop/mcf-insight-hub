@@ -8,6 +8,8 @@ import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { BusinessUnit } from '@/hooks/useMyBU';
+import { format } from 'date-fns';
+import { notaEncaminhamentoConsorcio, PLACEHOLDER_JUSTIFICATIVA, type TrechoConsorcio } from '@/lib/posVendaConsorcioNota';
 
 // Encaminhamento do Pós-venda para outra BU: o banco (pos_venda_encaminhar_bu) acha ou cria o cartão
 // no funil de destino e registra etiqueta/linha do tempo; o agendamento usa a agenda R1 da própria BU de destino.
@@ -21,13 +23,19 @@ type BuDestino = typeof BUS_ENCAMINHAMENTO[number]['bu'];
 export function EncaminharBuDialog({ dealId, clienteNome, onClose, onConcluido }: {
   dealId: string; clienteNome?: string | null; onClose: () => void; onConcluido?: () => void;
 }) {
-  const [destino, setDestino] = useState<{ bu: BuDestino; basePath: string; dealDestinoId: string } | null>(null);
+  const [destino, setDestino] = useState<{ bu: BuDestino; basePath: string; dealDestinoId: string; notas: string } | null>(null);
 
   const encaminhar = useMutation({
     mutationFn: async (opcao: typeof BUS_ENCAMINHAMENTO[number]) => {
       const { data, error } = await (supabase.rpc as any)('pos_venda_encaminhar_bu', { p_deal_id: dealId, p_bu: opcao.bu });
       if (error) throw error;
-      return { bu: opcao.bu, basePath: opcao.basePath, dealDestinoId: data as string };
+      let notas = 'Cliente licenciado encaminhado pelo gerente de relacionamento (Pós-venda).';
+      if (opcao.bu === 'consorcio') {
+        const { data: tr, error: e2 } = await (supabase.rpc as any)('pos_venda_trechos_consorcio', { p_deal_id: dealId });
+        if (e2) console.warn('[trechos-consorcio]', e2);
+        notas = notaEncaminhamentoConsorcio((tr ?? []) as TrechoConsorcio[], (iso) => format(new Date(iso), 'dd/MM/yyyy'));
+      }
+      return { bu: opcao.bu, basePath: opcao.basePath, dealDestinoId: data as string, notas };
     },
     onSuccess: (d) => { setDestino(d); onConcluido?.(); },
     onError: (e: any) => toast.error(e.message ?? 'Não foi possível encaminhar o cliente'),
@@ -41,7 +49,8 @@ export function EncaminharBuDialog({ dealId, clienteNome, onClose, onConcluido }
           onOpenChange={(o) => { if (!o) { onConcluido?.(); onClose(); } }}
           prefilledDealId={destino.dealDestinoId}
           exclusiveSlots
-          prefilledNotes="Cliente licenciado encaminhado pelo gerente de relacionamento (Pós-venda)."
+          prefilledNotes={destino.notas}
+          notesPlaceholder={destino.bu === 'consorcio' ? PLACEHOLDER_JUSTIFICATIVA : undefined}
         />
       </BUProvider>
     );

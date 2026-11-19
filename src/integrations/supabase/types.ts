@@ -26865,6 +26865,13 @@ export type Database = {
         Returns: undefined
       }
       pos_venda_tem_acesso: { Args: never; Returns: boolean }
+      pos_venda_trechos_consorcio: {
+        Args: { p_deal_id: string }
+        Returns: {
+          reuniao_inicio: string
+          trecho: string
+        }[]
+      }
       posvenda_app_resumo: {
         Args: { p_fim: string; p_ini: string }
         Returns: Json

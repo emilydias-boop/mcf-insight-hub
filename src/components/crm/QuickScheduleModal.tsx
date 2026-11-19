@@ -63,6 +63,7 @@ interface QuickScheduleModalProps {
   preselectedDate?: Date;
   prefilledDealId?: string;
   prefilledNotes?: string;
+  notesPlaceholder?: string;
   ownerEmail?: string;
   /**
    * Quando true, ignora o filtro `ownerEmail` e busca leads de qualquer SDR
@@ -173,6 +174,7 @@ export function QuickScheduleModal({
   preselectedDate,
   prefilledDealId,
   prefilledNotes,
+  notesPlaceholder,
   ownerEmail,
   searchAllOwnersInBU = false,
   exclusiveSlots = false,
@@ -1506,9 +1508,9 @@ export function QuickScheduleModal({
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={weeklyLeadData
+              placeholder={notesPlaceholder ?? (weeklyLeadData
                 ? 'Ex: Cliente pediu para remarcar porque estava em viagem. Reagendar para a próxima semana.'
-                : 'Descreva o contexto do lead (perfil, interesse, próximos passos). Mínimo 20 caracteres.'}
+                : 'Descreva o contexto do lead (perfil, interesse, próximos passos). Mínimo 20 caracteres.')}
               rows={3}
               className={cn(!isNotesValid(notes) && 'border-destructive/50')}
             />

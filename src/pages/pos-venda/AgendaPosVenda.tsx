@@ -26,6 +26,7 @@ import { useSearchParams } from 'react-router-dom';
 import { syncConvitePosVenda } from '@/lib/posVendaConvite';
 import { useAuth } from '@/contexts/AuthContext';
 import { EncaminharBuDialog } from '@/components/pos-venda/EncaminharBuDialog';
+import { PALAVRAS_CONSORCIO } from '@/lib/posVendaConsorcioNota';
 import { NovaReuniaoPosVendaDialog, usePosVendaGerentes, usePosVendaDisponibilidade, useAgora } from '@/components/pos-venda/NovaReuniaoPosVendaDialog';
 
 // Agenda própria do Pós Venda — separada de closers/meeting_slots para não afetar métricas de outras BUs.
@@ -557,7 +558,7 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
     queryFn: async () => {
       const { data, error } = await db.rpc('pos_venda_gravacoes_da_reuniao', { p_reuniao_id: reuniao.id });
       if (error) throw error;
-      return (data ?? []) as { id: string; title: string | null; started_at: string | null; duration_minutes: number | null; summary: any }[];
+      return (data ?? []) as { id: string; title: string | null; started_at: string | null; duration_minutes: number | null; summary: any; transcript: any }[];
     },
   });
 
@@ -673,7 +674,7 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
                 <p className="text-xs text-muted-foreground">
                   {g.started_at ? format(new Date(g.started_at), 'dd/MM HH:mm') : ''}{g.duration_minutes ? ` · ${g.duration_minutes} min` : ''}
                 </p>
-                {resumo(g.summary) && <p className="text-xs whitespace-pre-line line-clamp-6">{resumo(g.summary)}</p>}
+                <GravacaoConteudo resumoTexto={resumo(g.summary)} transcript={g.transcript} />
               </div>
             ))}
           </div>
@@ -684,5 +685,31 @@ function ReuniaoDialog({ reuniao, onClose, onSalvo }: { reuniao: Reuniao; onClos
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function destacar(texto: string) {
+  return texto.split(PALAVRAS_CONSORCIO).map((p, i) => i % 2 === 1 ? <mark key={i} className="rounded bg-primary/25 px-0.5 text-foreground">{p}</mark> : p);
+}
+
+function GravacaoConteudo({ resumoTexto, transcript }: { resumoTexto: string | null; transcript: any }) {
+  const [busca, setBusca] = useState('');
+  const linhas = (Array.isArray(transcript) ? transcript : []) as { speaker?: string; timestamp?: string; transcript?: string }[];
+  const filtradas = busca.trim() ? linhas.filter((l) => (l.transcript ?? '').toLowerCase().includes(busca.trim().toLowerCase())) : linhas;
+  return (
+    <Tabs defaultValue="resumo" className="mt-1">
+      <TabsList className="h-8"><TabsTrigger value="resumo" className="text-xs">Resumo</TabsTrigger><TabsTrigger value="transcricao" className="text-xs">Transcrição ({linhas.length})</TabsTrigger></TabsList>
+      <TabsContent value="resumo">
+        {resumoTexto ? <p className="text-xs whitespace-pre-line max-h-64 overflow-y-auto">{destacar(resumoTexto)}</p> : <p className="text-xs text-muted-foreground">Resumo ainda não disponível.</p>}
+      </TabsContent>
+      <TabsContent value="transcricao" className="space-y-2">
+        <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar na transcrição..." className="h-8 text-xs" />
+        <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+          {filtradas.length === 0 ? <p className="text-xs text-muted-foreground">Sem transcrição.</p> : filtradas.map((l, i) => (
+            <p key={i} className="text-xs"><span className="font-medium text-muted-foreground">{l.timestamp ? format(new Date(l.timestamp), 'HH:mm:ss') : ''} {l.speaker ?? ''}:</span> {destacar(l.transcript ?? '')}</p>
+          ))}
+        </div>
+      </TabsContent>
+    </Tabs>
   );
 }
