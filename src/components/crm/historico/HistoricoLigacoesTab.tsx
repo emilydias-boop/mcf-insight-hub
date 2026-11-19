@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Phone, PhoneIncoming, PhoneOutgoing, Volume2, Search } from 'lucide-react';
 import { useMeuHistoricoCalls } from '@/hooks/useMeuHistoricoCalls';
+import { useDebounce } from '@/hooks/useDebounce';
 import { CallFollowUpPopover } from './CallFollowUpPopover';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -62,12 +63,13 @@ export function HistoricoLigacoesTab({ targetUserId }: Props) {
   const [days, setDays] = useState(30);
   const [followUp, setFollowUp] = useState<'all' | 'pendente' | 'retornar' | 'whatsapp' | 'agendado' | 'sem_interesse'>('all');
   const [search, setSearch] = useState('');
+  const searchAplicado = useDebounce(search, 300);
 
   const { data, isLoading } = useMeuHistoricoCalls({
     userId: targetUserId,
     days,
     followUp,
-    search,
+    search: searchAplicado,
   });
 
   const isOwner = user?.id === targetUserId;

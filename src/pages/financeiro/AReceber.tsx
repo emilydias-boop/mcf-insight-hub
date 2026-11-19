@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Wallet, AlertCircle, CheckCircle2, Clock, List, KanbanSquare, Scale, CheckCheck, Undo2, FilePlus2, Users } from 'lucide-react';
 import { useArTitulos, useFinanceiroUsers, useUpdateArTitulo, useBaixarTitulosLote } from '@/hooks/useAReceber';
 import { useCanManageAr } from '@/hooks/useArGestores';
+import { useDebounce } from '@/hooks/useDebounce';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -141,7 +142,7 @@ export default function AReceber() {
   const [filtrosGestao, setFiltrosGestao] = useState<FiltrosCobranca>(FILTROS_VAZIOS);
   const [aba, setAba] = useState('listagem');
   const [tvEntrada, setTvEntrada] = useState(true);
-  const search = filtrosGestao.busca;
+  const search = useDebounce(filtrosGestao.busca, 300);
   const product = filtrosGestao.produto;
   const cobrancaResp = filtrosGestao.cobrador;
   const gerenteFiltro = filtrosGestao.gerente;

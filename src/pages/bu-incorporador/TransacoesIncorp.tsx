@@ -39,6 +39,7 @@ import {
 
 import { TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
@@ -49,6 +50,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 export default function TransacoesIncorp() {
   // Filtros - inicia com o mês atual para evitar carregar toda a base
   const [searchTerm, setSearchTerm] = useState('');
+  const searchAplicado = useDebounce(searchTerm, 300);
   const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -72,7 +74,7 @@ export default function TransacoesIncorp() {
 
   // Query com filtros
   const filters: TransactionFilters = {
-    search: searchTerm || undefined,
+    search: searchAplicado || undefined,
     startDate,
     endDate,
     selectedProducts: selectedProducts.length > 0 ? selectedProducts : undefined,

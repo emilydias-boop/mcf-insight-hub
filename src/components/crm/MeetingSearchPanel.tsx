@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSearchPastMeetings, PastMeetingResult } from '@/hooks/useSearchPastMeetings';
+import { useDebounce } from '@/hooks/useDebounce';
 import { MeetingSlot } from '@/hooks/useAgendaData';
 
 interface MeetingSearchPanelProps {
@@ -18,7 +19,9 @@ interface MeetingSearchPanelProps {
 
 export function MeetingSearchPanel({ closerId, onSelectMeeting, isConsorcio = false }: MeetingSearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const { data: results = [], isLoading } = useSearchPastMeetings(searchQuery, closerId);
+  const termoBusca = useDebounce(searchQuery, 300);
+  const { data: results = [], isLoading } = useSearchPastMeetings(termoBusca, closerId);
+  const buscando = isLoading || searchQuery !== termoBusca;
 
   const handleOpenMeeting = (result: PastMeetingResult) => {
     // Convert to MeetingSlot format for the drawer
@@ -96,7 +99,7 @@ export function MeetingSearchPanel({ closerId, onSelectMeeting, isConsorcio = fa
 
         {searchQuery.length >= 2 && (
           <ScrollArea className="max-h-[280px]">
-            {isLoading ? (
+            {buscando ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
