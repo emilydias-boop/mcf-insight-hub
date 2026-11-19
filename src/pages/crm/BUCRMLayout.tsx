@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { PageFallback } from '@/components/layout/PageFallback';
 import { NavLink } from '@/components/NavLink';
 import { cn } from '@/lib/utils';
 import {
@@ -211,7 +213,9 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
 
         <div className="flex-1 overflow-auto">
           <div className="py-4 px-6 w-full max-w-[1920px] mx-auto">
-            <Outlet />
+            <Suspense fallback={<PageFallback />}>
+              <Outlet />
+            </Suspense>
           </div>
         </div>
       </div>

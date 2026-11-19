@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
+import { PageFallback } from '@/components/layout/PageFallback';
 import { NavLink } from '@/components/NavLink';
 import { LayoutDashboard, Users, Briefcase, Settings, CalendarDays, Inbox, ShieldAlert, Shield, BarChart3, Phone, ClipboardList, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -104,7 +106,9 @@ const CRM = () => {
 
         <div className="flex-1 overflow-auto">
           <div className="py-4 px-6 w-full max-w-[1920px] mx-auto">
-            <Outlet />
+            <Suspense fallback={<PageFallback />}>
+              <Outlet />
+            </Suspense>
           </div>
         </div>
       </div>

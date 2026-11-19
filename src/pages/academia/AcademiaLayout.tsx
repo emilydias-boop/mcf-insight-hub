@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { PageFallback } from "@/components/layout/PageFallback";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, GraduationCap, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -92,7 +93,9 @@ export default function AcademiaLayout() {
           </button>
         </div>
       </header>
-      <Outlet />
+      <Suspense fallback={<PageFallback />}>
+        <Outlet />
+      </Suspense>
     </div>
   );
 }

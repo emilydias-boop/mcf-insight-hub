@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
+import { PageFallback } from "./PageFallback";
 import { AppSidebar } from "./AppSidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { RealTimeAlerts } from "@/components/dashboard/RealTimeAlerts";
@@ -67,7 +69,9 @@ export function MainLayout() {
             </header>
             <PresencaAvisoBanner />
             <div className="flex-1 overflow-auto p-2 sm:p-4 md:p-5">
-              <Outlet />
+              <Suspense fallback={<PageFallback />}>
+                <Outlet />
+              </Suspense>
             </div>
           </SidebarInset>
           {podeDiscar && (
