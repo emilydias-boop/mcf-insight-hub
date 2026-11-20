@@ -59,6 +59,37 @@ async function batchedIn<T>(
   return allData;
 }
 
+/**
+ * Segmento ICP por deal_id, compartilhado entre as instâncias A/B/C deste hook
+ * (antes cada segmento consultava a mesma lista de deals separadamente).
+ * Validade de 30s = staleTime do hook, então o frescor não muda.
+ */
+const DEAL_SEGMENT_TTL_MS = 30000;
+const dealSegmentCache = new Map<string, { at: number; seg: Promise<string | null> }>();
+
+async function getDealSegments(ids: string[]): Promise<Map<string, string | null>> {
+  const now = Date.now();
+  for (const [id, entry] of dealSegmentCache) {
+    if (now - entry.at >= DEAL_SEGMENT_TTL_MS) dealSegmentCache.delete(id);
+  }
+  const unique = Array.from(new Set(ids));
+  const missing = unique.filter((id) => !dealSegmentCache.has(id));
+  if (missing.length > 0) {
+    const lookup = batchedIn<{ id: string; icp_segment: string | null }>(
+      (chunk) => (supabase.from('crm_deals') as any).select('id, icp_segment').in('id', chunk),
+      missing
+    ).then((rows) => new Map((rows || []).map((r) => [r.id, r.icp_segment ?? null] as const)));
+    missing.forEach((id) => {
+      dealSegmentCache.set(id, { at: now, seg: lookup.then((m) => m.get(id) ?? null) });
+    });
+    lookup.catch(() => missing.forEach((id) => dealSegmentCache.delete(id)));
+  }
+  const pairs = await Promise.all(
+    unique.map(async (id) => [id, await dealSegmentCache.get(id)!.seg] as const)
+  );
+  return new Map(pairs);
+}
+
 export interface R1CloserMetric {
   closer_id: string;
   closer_name: string;
@@ -128,11 +159,9 @@ export function useR1CloserMetrics(
       let segmentAllowedContracts: Set<string> | null = null;
       const allowedDealIds = async (ids: string[]): Promise<Set<string>> => {
         if (!segmentActive || ids.length === 0) return new Set(ids);
-        const rows = await batchedIn<{ id: string }>(
-          (chunk) => (supabase.from('crm_deals') as any).select('id').eq('icp_segment', segment).in('id', chunk),
-          ids
-        );
-        return new Set((rows || []).map((r) => r.id));
+        const segByDeal = await getDealSegments(ids);
+        // Mesma regra do antigo .eq('icp_segment', segment): igualdade exata.
+        return new Set(ids.filter((id) => segByDeal.get(id) === segment));
       };
 
       // Corrigir fuso horário BRT (UTC-3): somar 3h em ambos os extremos
