@@ -53,9 +53,12 @@ interface TeamMeetingsParams {
   originIdFilter?: string; // Filter by origin (for future use)
   squad?: string; // BU squad filter (default: 'incorporador')
   segment?: string; // Segmento ICP opcional ('A' | 'B'); 'all'/undefined = sem filtro
+  /** Quando true, pede as reuniões já com canceladas e remove as canceladas no
+   *  hook de meetings, em vez de fazer uma segunda RPC. Padrão: false. */
+  deriveMeetingsFromCancelled?: boolean;
 }
 
-export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad = 'incorporador', segment }: TeamMeetingsParams) {
+export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad = 'incorporador', segment, deriveMeetingsFromCancelled = false }: TeamMeetingsParams) {
   // Fetch SDRs that belonged to this squad at any point during the period (uses sdr_squad_history)
   const sdrsInPeriodQuery = useSdrsForSquadInPeriod(squad, startDate, endDate);
   // Also fetch current squad members to support "today" preset (allSdrsWithZeros, etc.)
@@ -67,7 +70,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter, squad 
 
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter, squad, segment);
-  const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter, buFilter: squad });
+  const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter, buFilter: squad, deriveFromCancelled: deriveMeetingsFromCancelled });
 
   // Build a metadata map keyed by lowercased email combining both sources.
   // Period-based list takes precedence (so historical SDRs are included with isExSquad flag).

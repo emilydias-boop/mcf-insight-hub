@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { MeetingV2 } from "./useSdrMetricsV2";
 
+const semCanceladas = (rows: MeetingV2[]): MeetingV2[] => rows.filter((m) => m.status_atual !== 'cancelled');
+
 interface AgendaMeetingRow {
   deal_id: string;
   deal_name: string;
@@ -40,6 +42,10 @@ interface UseSdrMeetingsFromAgendaParams {
   /** Quando true, usa o RPC alinhado ao KPI Agendamentos (mesma janela e
    *  dedup do painel "Reuniões da Equipe"). Padrão: false (comportamento legado). */
   alignedWithKpi?: boolean;
+  /** Quando true (e sem includeCancelled/alignedWithKpi), usa a mesma resposta
+   *  da chamada com canceladas e remove as canceladas aqui. Evita uma segunda RPC
+   *  pesada na tela que já pede as duas versões. Padrão: false. */
+  deriveFromCancelled?: boolean;
 }
 
 export function useSdrMeetingsFromAgenda({
@@ -49,7 +55,11 @@ export function useSdrMeetingsFromAgenda({
   buFilter,
   includeCancelled = false,
   alignedWithKpi = false,
+  deriveFromCancelled = false,
 }: UseSdrMeetingsFromAgendaParams) {
+  const derivar = deriveFromCancelled && !includeCancelled && !alignedWithKpi;
+  const buscarCanceladas = includeCancelled || derivar;
+
   return useQuery({
     queryKey: [
       "sdr-meetings-from-agenda",
@@ -57,7 +67,7 @@ export function useSdrMeetingsFromAgenda({
       endDate?.toISOString(),
       sdrEmailFilter,
       buFilter,
-      includeCancelled,
+      buscarCanceladas,
       alignedWithKpi,
     ],
     queryFn: async (): Promise<MeetingV2[]> => {
@@ -75,7 +85,7 @@ export function useSdrMeetingsFromAgenda({
         end_date: endStr,
         sdr_email_filter: sdrEmailFilter || null,
         bu_filter: buFilter || null,
-        include_cancelled: includeCancelled,
+        include_cancelled: buscarCanceladas,
       });
 
       if (error) {
@@ -142,5 +152,6 @@ export function useSdrMeetingsFromAgenda({
       });
     },
     enabled: !!startDate && !!endDate,
+    select: derivar ? semCanceladas : undefined,
   });
 }

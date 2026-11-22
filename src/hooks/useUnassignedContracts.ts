@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCaucoesEfetivas } from "@/lib/caucoesEfetivas";
 import { format } from "date-fns";
 
 export interface UnassignedContractItem {
@@ -57,17 +58,19 @@ export function useUnassignedContracts(
   endDate: Date,
   bu: string = 'incorporador',
 ) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ['unassigned-contracts', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu],
     queryFn: async (): Promise<UnassignedContracts> => {
 
       // Régua nova: cauções efetivas do período (data da transação + closer da R1).
-      const { data: caucoes, error } = await (supabase as any).rpc('caucoes_efetivas', {
-        p_from: format(startDate, 'yyyy-MM-dd'),
-        p_to: format(endDate, 'yyyy-MM-dd'),
-        p_bu: bu,
-      });
-      if (error) throw error;
+      const caucoes = await fetchCaucoesEfetivas(
+        queryClient,
+        format(startDate, 'yyyy-MM-dd'),
+        format(endDate, 'yyyy-MM-dd'),
+        bu,
+      );
 
       const rows = ((caucoes as any[]) || []);
       // Segmento C também é reconhecido: sem isso, um contrato não atribuído de

@@ -184,6 +184,7 @@ export default function ReunioesEquipe() {
     startDate: start,
     endDate: end,
     sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
+    deriveMeetingsFromCancelled: true,
   });
 
   // Fetch all SDRs for meta_diaria (fallback)
@@ -340,8 +341,11 @@ export default function ReunioesEquipe() {
     start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'B',
   );
   // Segmento C também é exibido nos cards (decisão do dono: total = A+B+C+Sem ICP).
+  // Com "Todos os SDRs" o card usa o eixo de closers; o C por SDR só é usado
+  // com um SDR selecionado (ou se o cálculo de closers falhar).
   const { data: sdrMetricsC } = useSdrMetricsFromAgenda(
     start, end, sdrFilter !== "all" ? sdrFilter : undefined, 'incorporador', 'C',
+    sdrFilter !== "all" || !!closerError,
   );
 
   // Breakdown por closer (R1 recebida / realizada / no-shows / contratos)

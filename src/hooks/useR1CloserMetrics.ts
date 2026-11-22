@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getFirstTransactionIdsCached } from '@/lib/firstTransactionIds';
+import { fetchCaucoesEfetivas } from '@/lib/caucoesEfetivas';
 import { startOfDay, endOfDay, format, subHours, addHours } from "date-fns";
 
 /**
@@ -151,6 +152,8 @@ export function useR1CloserMetrics(
    *  reuniões que antes eram descartadas em silêncio. */
   includeUnassigned = false,
 ) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: ['r1-closer-metrics', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), bu, segment, includeUnassigned],
     queryFn: async (): Promise<R1CloserMetric[]> => {
@@ -449,12 +452,12 @@ export function useR1CloserMetrics(
       //  - data = data da transação A000/Contrato real (fallback contract_paid_at manual);
       //  - closer = closer da última R1 não cancelada do negócio;
       //  - 1 caução por negócio (já deduplicado no banco).
-      const { data: caucoesRows, error: caucoesError } = await (supabase as any).rpc('caucoes_efetivas', {
-        p_from: format(startDate, 'yyyy-MM-dd'),
-        p_to: format(endDate, 'yyyy-MM-dd'),
-        p_bu: bu,
-      });
-      if (caucoesError) throw caucoesError;
+      const caucoesRows = await fetchCaucoesEfetivas(
+        queryClient,
+        format(startDate, 'yyyy-MM-dd'),
+        format(endDate, 'yyyy-MM-dd'),
+        bu,
+      );
 
       const contractsByCloser = new Map<string, number>();
       // Painel Comercial = LÍQUIDO: caucoes_efetivas passou a devolver também as
