@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { MANUAL_CONDUTA_BLOCOS } from "@/lib/manualConduta";
 import { abrirDocumento, db, DocumentoInterno } from "@/lib/documentosInternos";
 
 /** Janela fixa: só some depois do aceite registrado de cada documento obrigatório. */
@@ -55,8 +56,16 @@ export function AceiteDocumentosObrigatorios() {
             Leitura obrigatória. Abra o documento, leia com atenção e confirme abaixo para continuar usando o sistema.
           </DialogDescription>
         </DialogHeader>
-        {doc.arquivo_url && (
-          <iframe src={doc.arquivo_url} title={doc.titulo} className="h-[50vh] w-full rounded-md border bg-background" />
+        {doc.titulo === "Manual de Conduta MCF Capital" && (
+          <div className="h-[50vh] overflow-y-auto rounded-md border bg-muted/30 p-4 space-y-3 text-sm leading-relaxed">
+            {MANUAL_CONDUTA_BLOCOS.map(([tipo, texto], i) =>
+              tipo === "h" ? (
+                <h3 key={i} className="pt-2 font-semibold text-foreground">{texto}</h3>
+              ) : (
+                <p key={i} className="text-muted-foreground">{texto}</p>
+              ),
+            )}
+          </div>
         )}
         <div>
           <Button variant="outline" onClick={() => abrirDocumento(doc)} className="w-full justify-start">
