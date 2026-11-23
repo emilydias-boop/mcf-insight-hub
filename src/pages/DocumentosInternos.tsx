@@ -10,6 +10,7 @@ import { FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { MANUAL_CONDUTA_BLOCOS } from "@/lib/manualConduta";
 import { abrirDocumento, db, DocumentoInterno, fmtSP } from "@/lib/documentosInternos";
 
 export default function DocumentosInternos() {
@@ -31,6 +32,7 @@ export default function DocumentosInternos() {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [exige, setExige] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [lendo, setLendo] = useState<string | null>(null);
 
   const publicar = async () => {
     if (!titulo.trim() || !arquivo) return toast.error("Informe título e arquivo.");
@@ -91,8 +93,22 @@ export default function DocumentosInternos() {
                   <p className="text-xs text-muted-foreground">Versão {d.versao} · publicado em {fmtSP(d.created_at)}</p>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => abrirDocumento(d)}>Abrir</Button>
+              <div className="flex gap-2">
+                {d.titulo === "Manual de Conduta MCF Capital" && (
+                  <Button variant="secondary" onClick={() => setLendo(lendo === d.id ? null : d.id)}>
+                    {lendo === d.id ? "Fechar leitura" : "Ler aqui"}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => abrirDocumento(d)}>Abrir PDF</Button>
+              </div>
             </CardContent>
+            {lendo === d.id && (
+              <div className="mx-4 mb-4 max-h-[60vh] overflow-y-auto rounded-md border bg-muted/30 p-4 space-y-3 text-sm leading-relaxed">
+                {MANUAL_CONDUTA_BLOCOS.map(([tipo, texto], i) =>
+                  tipo === "h" ? <h3 key={i} className="pt-2 font-semibold">{texto}</h3> : <p key={i} className="text-muted-foreground">{texto}</p>,
+                )}
+              </div>
+            )}
           </Card>
         ))}
       </div>

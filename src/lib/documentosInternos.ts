@@ -22,8 +22,11 @@ export async function abrirDocumento(d: Pick<DocumentoInterno, "arquivo_url" | "
     return;
   }
   if (d.arquivo_path) {
+    // Abre a aba já no clique: o navegador bloqueia abas abertas depois de uma espera.
+    const aba = window.open("", "_blank");
     const { data } = await supabase.storage.from("documentos-internos").createSignedUrl(d.arquivo_path, 600);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener");
+    if (data?.signedUrl && aba) aba.location.href = data.signedUrl;
+    else aba?.close();
   }
 }
 
