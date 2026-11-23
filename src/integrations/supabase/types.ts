@@ -3037,6 +3037,71 @@ export type Database = {
         }
         Relationships: []
       }
+      avisos_gerais: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          enviado_por: string
+          id: string
+          mensagem: string
+          nivel: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          enviado_por?: string
+          id?: string
+          mensagem: string
+          nivel?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          enviado_por?: string
+          id?: string
+          mensagem?: string
+          nivel?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      avisos_gerais_ciencias: {
+        Row: {
+          aviso_id: string
+          ciente_em: string
+          id: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          aviso_id: string
+          ciente_em?: string
+          id?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Update: {
+          aviso_id?: string
+          ciente_em?: string
+          id?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "avisos_gerais_ciencias_aviso_id_fkey"
+            columns: ["aviso_id"]
+            isOneToOne: false
+            referencedRelation: "avisos_gerais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backfill_reembolso_contrato_fila: {
         Row: {
           deal_id: string
@@ -11294,6 +11359,95 @@ export type Database = {
             columns: ["responsavel_employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos_internos: {
+        Row: {
+          arquivo_path: string | null
+          arquivo_url: string | null
+          ativo: boolean
+          created_at: string
+          descricao: string | null
+          exige_aceite: boolean
+          id: string
+          publicado_por: string | null
+          texto_aceite: string | null
+          titulo: string
+          updated_at: string
+          versao: number
+        }
+        Insert: {
+          arquivo_path?: string | null
+          arquivo_url?: string | null
+          ativo?: boolean
+          created_at?: string
+          descricao?: string | null
+          exige_aceite?: boolean
+          id?: string
+          publicado_por?: string | null
+          texto_aceite?: string | null
+          titulo: string
+          updated_at?: string
+          versao?: number
+        }
+        Update: {
+          arquivo_path?: string | null
+          arquivo_url?: string | null
+          ativo?: boolean
+          created_at?: string
+          descricao?: string | null
+          exige_aceite?: boolean
+          id?: string
+          publicado_por?: string | null
+          texto_aceite?: string | null
+          titulo?: string
+          updated_at?: string
+          versao?: number
+        }
+        Relationships: []
+      }
+      documentos_internos_aceites: {
+        Row: {
+          aceito_em: string
+          documento_id: string
+          employee_id: string | null
+          id: string
+          texto_confirmado: string
+          user_agent: string | null
+          user_email: string | null
+          user_id: string
+          versao: number
+        }
+        Insert: {
+          aceito_em?: string
+          documento_id: string
+          employee_id?: string | null
+          id?: string
+          texto_confirmado: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id: string
+          versao: number
+        }
+        Update: {
+          aceito_em?: string
+          documento_id?: string
+          employee_id?: string | null
+          id?: string
+          texto_confirmado?: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_internos_aceites_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos_internos"
             referencedColumns: ["id"]
           },
         ]
@@ -24650,6 +24804,29 @@ export type Database = {
         }
         Returns: Json
       }
+      documentos_pendentes_aceite: {
+        Args: never
+        Returns: {
+          arquivo_path: string | null
+          arquivo_url: string | null
+          ativo: boolean
+          created_at: string
+          descricao: string | null
+          exige_aceite: boolean
+          id: string
+          publicado_por: string | null
+          texto_aceite: string | null
+          titulo: string
+          updated_at: string
+          versao: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "documentos_internos"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       dono_esta_ativo: { Args: { p_email: string }; Returns: boolean }
       donos_das_vendas: { Args: { p_ids: string[] }; Returns: Json }
       e_produto_parceria: { Args: { p: string }; Returns: boolean }
@@ -26985,6 +27162,10 @@ export type Database = {
         Returns: undefined
       }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
+      registrar_aceite_documento: {
+        Args: { _documento_id: string; _user_agent: string }
+        Returns: undefined
+      }
       registrar_contato: {
         Args: {
           p_deal_id: string
