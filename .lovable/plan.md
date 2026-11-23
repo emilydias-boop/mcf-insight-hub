@@ -16,3 +16,13 @@
 - RPC `documentos_pendentes_aceite()` alimenta o aviso; componente montado no layout principal, uma consulta por sessão.
 - Página `/documentos-internos`, item no AppSidebar sem requiredRoles; aba nova em EmployeeDrawer/ColaboradorProfile.
 - Registro da decisão de arquitetura no AGENTS.md.
+
+## Aviso em tempo real (tipo "net send")
+- **Quem envia**: somente admins, por uma tela nova "Enviar aviso" (menu Admin). Campos: título, mensagem e nível (informativo/importante/urgente).
+- **Quem recebe**: todos os usuários logados recebem na hora, sem recarregar a página; quem estiver fora vê ao entrar.
+- **Exibição**: janela fixa por cima de tudo, que não fecha sem marcar **"Li a mensagem e estou ciente deste aviso."** e clicar Confirmar. Vários avisos aparecem em fila.
+- **Registro**: cada ciência fica gravada (usuário, data/hora). O admin vê por aviso quem já leu e quem falta, e pode encerrar um aviso.
+
+### Detalhes técnicos
+- Tabelas `avisos_gerais` (titulo, mensagem, nivel, enviado_por, ativo) e `avisos_gerais_ciencias` (aviso_id, user_id, ciente_em, user_agent; UNIQUE, imutável). Insert em avisos só via has_role admin (RLS); ciência só do próprio usuário.
+- Realtime habilitado em `avisos_gerais`; assinatura única em useEffect no layout principal, com limpeza de canal.
