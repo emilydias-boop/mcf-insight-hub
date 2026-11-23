@@ -96,7 +96,9 @@ export function AvisosGeraisOverlay() {
           <Checkbox checked={marcado} onCheckedChange={(v) => setMarcado(v === true)} className="mt-0.5" />
           <span className="text-sm font-medium">{TEXTO_CIENCIA}</span>
         </label>
-        <Button disabled={!marcado || salvando} onClick={confirmar}>Confirmar</Button>
+        <div>
+          <Button disabled={!marcado || salvando} onClick={confirmar} className="w-full">Confirmar</Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -44,7 +44,7 @@ export function AceiteDocumentosObrigatorios() {
   return (
     <Dialog open>
       <DialogContent
-        className="max-w-lg [&>button]:hidden"
+        className="max-w-3xl max-h-[95vh] overflow-y-auto [&>button]:hidden"
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
@@ -55,16 +55,23 @@ export function AceiteDocumentosObrigatorios() {
             Leitura obrigatória. Abra o documento, leia com atenção e confirme abaixo para continuar usando o sistema.
           </DialogDescription>
         </DialogHeader>
-        <Button variant="outline" onClick={() => abrirDocumento(doc)} className="justify-start">
-          <FileText className="mr-2 h-4 w-4" /> Abrir {doc.titulo}
-        </Button>
+        {doc.arquivo_url && (
+          <iframe src={doc.arquivo_url} title={doc.titulo} className="h-[50vh] w-full rounded-md border bg-background" />
+        )}
+        <div>
+          <Button variant="outline" onClick={() => abrirDocumento(doc)} className="w-full justify-start">
+            <FileText className="mr-2 h-4 w-4" /> Abrir {doc.titulo} em nova aba
+          </Button>
+        </div>
         <label className="flex items-start gap-3 rounded-md border p-3 cursor-pointer">
           <Checkbox checked={marcado} onCheckedChange={(v) => setMarcado(v === true)} className="mt-0.5" />
           <span className="text-sm font-medium">{texto}</span>
         </label>
-        <Button disabled={!marcado || salvando} onClick={confirmar}>
-          {salvando ? "Registrando..." : "Confirmar"}
-        </Button>
+        <div>
+          <Button disabled={!marcado || salvando} onClick={confirmar} className="w-full">
+            {salvando ? "Registrando..." : "Confirmar"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
