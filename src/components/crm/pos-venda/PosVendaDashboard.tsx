@@ -8,7 +8,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getPeriodRange, PeriodType } from '@/components/crm/FunilDashboard';
 import { usePosVendaOverview, PosVendaMetrics } from '@/hooks/usePosVendaOverview';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
+import { Calendar as DayCalendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PainelComercialPosVendaSection } from './PainelComercialPosVendaSection';
 
 const HINTS: Record<keyof PosVendaMetrics, string> = {
@@ -63,9 +67,16 @@ const COLS: { k: keyof PosVendaMetrics; label: string }[] = [
 ];
 
 export function PosVendaDashboard() {
-  const [period, setPeriod] = useState<PeriodType>('week');
+  const [period, setPeriod] = useState<PeriodType | 'custom'>('week');
+  const [range, setRange] = useState<DateRange | undefined>();
   const [porGerente, setPorGerente] = useState(false);
-  const { start, end, label } = useMemo(() => getPeriodRange(period), [period]);
+  const { start, end, label } = useMemo(() => {
+    if (period === 'custom' && range?.from) {
+      const s = startOfDay(range.from); const e = endOfDay(range.to ?? range.from);
+      return { start: s, end: e, label: `${format(s, 'dd/MM/yyyy')} - ${format(e, 'dd/MM/yyyy')}` };
+    }
+    return getPeriodRange(period === 'custom' ? 'week' : period);
+  }, [period, range]);
   const { data, isLoading } = usePosVendaOverview(start, end);
   const t = data?.total;
 
@@ -89,6 +100,18 @@ export function PosVendaDashboard() {
                   {p === 'today' ? 'Hoje' : p === 'week' ? 'Semana' : 'Mês'}
                 </button>
               ))}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors inline-flex items-center gap-1 ${period === 'custom' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                    <Calendar className="h-3.5 w-3.5" /> Personalizado
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <DayCalendar mode="range" numberOfMonths={2} locale={ptBR} selected={range}
+                    onSelect={(r) => { setRange(r); if (r?.from) setPeriod('custom'); }}
+                    initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </div>
