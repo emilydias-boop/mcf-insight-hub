@@ -17,6 +17,7 @@ import EmployeePermissionsTab from './tabs/EmployeePermissionsTab';
 import EmployeeExamsTab from './tabs/EmployeeExamsTab';
 import EmployeeTimeTab from './tabs/EmployeeTimeTab';
 import EmployeeComplianceTab from './tabs/EmployeeComplianceTab';
+import EmployeeAceitesTab from './tabs/EmployeeAceitesTab';
 
 interface EmployeeDrawerProps {
   employee: Employee | null;
@@ -136,6 +137,10 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
               <Shield className="h-3 w-3" />
               <span className="hidden sm:inline">Perm.</span>
             </TabsTrigger>
+            <TabsTrigger value="aceites" className="flex items-center gap-1">
+              <FileText className="h-3 w-3" />
+              <span className="hidden sm:inline">Aceites</span>
+            </TabsTrigger>
             <TabsTrigger value="avaliacoes" className="flex items-center gap-1">
               <ClipboardList className="h-3 w-3" />
               <span className="hidden sm:inline">Aval.</span>
@@ -180,6 +185,10 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
 
           <TabsContent value="permissoes" className="mt-4">
             <EmployeePermissionsTab employee={employee} />
+          </TabsContent>
+
+          <TabsContent value="aceites" className="mt-4">
+            <EmployeeAceitesTab employee={employee} />
           </TabsContent>
 
           <TabsContent value="avaliacoes" className="mt-4">

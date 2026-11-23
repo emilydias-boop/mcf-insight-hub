@@ -139,6 +139,8 @@ const ExamDetail = lazy(() => import("./pages/rh/ExamDetail"));
 const FinanceiroAReceber = lazy(() => import("./pages/financeiro/AReceber"));
 const FinanceiroAReceberDetalhe = lazy(() => import("./pages/financeiro/AReceberDetalhe"));
 const MeuRH = lazy(() => import("./pages/MeuRH"));
+const DocumentosInternos = lazy(() => import("./pages/DocumentosInternos"));
+const EnviarAviso = lazy(() => import("./pages/admin/EnviarAviso"));
 const PresencaDoDia = lazy(() => import("./pages/PresencaDoDia"));
 const MinhasReunioes = lazy(() => import("./pages/sdr/MinhasReunioes"));
 const ReunioesEquipe = lazy(() => import("./pages/crm/ReunioesEquipe"));
@@ -418,6 +420,8 @@ const App = () => (
               <Route path="financeiro/a-receber/:id" element={<ArAccessGuard><FinanceiroAReceberDetalhe /></ArAccessGuard>} />
               
               <Route path="meu-rh" element={<MeuRH />} />
+              <Route path="documentos-internos" element={<DocumentosInternos />} />
+              <Route path="admin/enviar-aviso" element={<RoleGuard allowedRoles={['admin']}><EnviarAviso /></RoleGuard>} />
               <Route path="presenca-do-dia" element={<PresencaDoDia />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />
               <Route path="patrimonio/meus-equipamentos" element={<MyEquipmentPage />} />

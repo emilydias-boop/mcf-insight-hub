@@ -409,6 +409,7 @@ export const menuItems: MenuItem[] = [
       { title: "Usuários", url: "/usuarios", requiredRoles: ["admin"] },
       { title: "Closers", url: "/crm/configurar-closers", requiredRoles: ["admin"] },
       { title: "Automações", url: "/admin/automacoes", requiredRoles: ["admin"] },
+      { title: "Enviar aviso", url: "/admin/enviar-aviso", requiredRoles: ["admin"] },
       { title: "Cargos", url: "/admin/roles", requiredRoles: ["admin"] },
       { title: "Permissões", url: "/admin/permissoes", requiredRoles: ["admin"] },
       { title: "Produtos", url: "/admin/produtos", requiredRoles: ["admin"] },
@@ -437,6 +438,7 @@ interface PersonalMenuItem {
 
 const personalMenuItems: PersonalMenuItem[] = [
   { title: "Meu RH", url: "/meu-rh", icon: UserCircle },
+  { title: "Documentos Internos", url: "/documentos-internos", icon: FolderOpen },
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt },
   { title: "Meus Equipamentos", url: "/patrimonio/meus-equipamentos", icon: Laptop },

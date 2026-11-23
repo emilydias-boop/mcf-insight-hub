@@ -9,6 +9,8 @@ import { QuickDialerLauncher } from "@/components/crm/QuickDialerLauncher";
 import { SonaxWebphoneWidget } from "@/components/crm/SonaxWebphoneWidget";
 import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
 import { OverdueAlertOverlay } from "@/components/sdr/OverdueAlertOverlay";
+import { AceiteDocumentosObrigatorios } from "@/components/avisos/AceiteDocumentosObrigatorios";
+import { AvisosGeraisOverlay } from "@/components/avisos/AvisosGeraisOverlay";
 import { CloserPendingDocsAlert } from "@/components/closer/CloserPendingDocsAlert";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { AutoDialerProvider } from "@/contexts/AutoDialerContext";
@@ -85,6 +87,8 @@ export function MainLayout() {
           )}
           <SonaxWebphoneWidget />
           <OverdueAlertOverlay />
+          <AceiteDocumentosObrigatorios />
+          <AvisosGeraisOverlay />
           <CloserPendingDocsAlert />
           <GlobalQualificationModal />
         </div>
