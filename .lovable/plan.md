@@ -13,3 +13,8 @@
 
 ## Detalhe técnico
 Usar o mesmo caminho do cadastro automático (pos_venda_registrar_cliente) e conferir depois que o cartão aparece e que a Jornada encontra o CPF.
+
+## Etiqueta "Renovação de Parceria"
+5. Colocar a etiqueta "Renovação de Parceria" no cartão do Jonnathan. A compra dele está registrada como **A009 - Renovação Parceiro MCF**, não como A006.
+6. Daqui para frente, todo cartão do Pós-venda de quem compra um produto de renovação de parceria (A006 e A009) recebe essa etiqueta automaticamente, tanto em cartão novo quanto em cartão que já existe.
+7. Aplicar a etiqueta também nos cartões do Pós-venda que já têm compra de renovação.
