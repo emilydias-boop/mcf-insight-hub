@@ -13306,6 +13306,125 @@ export type Database = {
           },
         ]
       }
+      gov_assinatura_etapas: {
+        Row: {
+          comentario: string | null
+          created_at: string
+          decidido_cargo: string | null
+          decidido_em: string | null
+          decidido_nome: string | null
+          decidido_por: string | null
+          decidido_setor: string | null
+          doc_id: string
+          doc_tipo: string
+          employee_id: string | null
+          hash: string | null
+          id: string
+          ip: string | null
+          metodo: string | null
+          ordem: number
+          papel: string
+          prazo: string | null
+          role: Database["public"]["Enums"]["app_role"] | null
+          status: string
+          user_agent: string | null
+          user_id: string | null
+          versao_id: string
+        }
+        Insert: {
+          comentario?: string | null
+          created_at?: string
+          decidido_cargo?: string | null
+          decidido_em?: string | null
+          decidido_nome?: string | null
+          decidido_por?: string | null
+          decidido_setor?: string | null
+          doc_id: string
+          doc_tipo: string
+          employee_id?: string | null
+          hash?: string | null
+          id?: string
+          ip?: string | null
+          metodo?: string | null
+          ordem: number
+          papel: string
+          prazo?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          status?: string
+          user_agent?: string | null
+          user_id?: string | null
+          versao_id: string
+        }
+        Update: {
+          comentario?: string | null
+          created_at?: string
+          decidido_cargo?: string | null
+          decidido_em?: string | null
+          decidido_nome?: string | null
+          decidido_por?: string | null
+          decidido_setor?: string | null
+          doc_id?: string
+          doc_tipo?: string
+          employee_id?: string | null
+          hash?: string | null
+          id?: string
+          ip?: string | null
+          metodo?: string | null
+          ordem?: number
+          papel?: string
+          prazo?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          status?: string
+          user_agent?: string | null
+          user_id?: string | null
+          versao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gov_assinatura_etapas_versao_id_fkey"
+            columns: ["versao_id"]
+            isOneToOne: false
+            referencedRelation: "gov_assinatura_versoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gov_assinatura_versoes: {
+        Row: {
+          created_at: string
+          doc_id: string
+          doc_tipo: string
+          encerrada_em: string | null
+          hash: string
+          id: string
+          snapshot: Json
+          status: string
+          versao: number
+        }
+        Insert: {
+          created_at?: string
+          doc_id: string
+          doc_tipo: string
+          encerrada_em?: string | null
+          hash: string
+          id?: string
+          snapshot: Json
+          status?: string
+          versao: number
+        }
+        Update: {
+          created_at?: string
+          doc_id?: string
+          doc_tipo?: string
+          encerrada_em?: string | null
+          hash?: string
+          id?: string
+          snapshot?: Json
+          status?: string
+          versao?: number
+        }
+        Relationships: []
+      }
       gov_desligamentos: {
         Row: {
           created_at: string
@@ -25731,6 +25850,22 @@ export type Database = {
           total_parcelas: number
         }[]
       }
+      gov_assinatura_decidir_servico: {
+        Args: {
+          p_comentario: string
+          p_decisao: string
+          p_etapa: string
+          p_ip: string
+          p_metodo: string
+          p_ua: string
+          p_uid: string
+        }
+        Returns: Json
+      }
+      gov_assinatura_trilha: {
+        Args: { p_id: string; p_tipo: string }
+        Returns: Json
+      }
       gov_cadeia_hierarquica: {
         Args: { _employee_id: string }
         Returns: {
@@ -25809,6 +25944,7 @@ export type Database = {
       }
       gov_is_rh_admin: { Args: { _uid: string }; Returns: boolean }
       gov_meu_employee: { Args: never; Returns: string }
+      gov_minhas_aprovacoes: { Args: never; Returns: Json }
       gov_ocupante_cargo: { Args: { _cargo_id: string }; Returns: string }
       gov_requisicao_opcoes: { Args: never; Returns: Json }
       gov_responsavel_setor: {
