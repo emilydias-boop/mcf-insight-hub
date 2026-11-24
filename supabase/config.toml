@@ -322,3 +322,6 @@ verify_jwt = false
 # Acesso validado na função por admin ou ticket interno de uso único.
 [functions.auditoria-diaria-email]
 verify_jwt = false
+
+[functions.gov-assinar]
+verify_jwt = false

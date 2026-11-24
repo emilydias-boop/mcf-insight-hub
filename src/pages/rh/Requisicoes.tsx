@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Save, Send, Loader2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+import { AssinaturaTrilha } from '@/components/governanca/AssinaturaTrilha';
 import { STATUS_REQUISICAO, exigeJustificativa, type RequisicaoStatus } from '@/lib/requisicaoContratacao';
 
 type Req = {
@@ -105,7 +106,8 @@ export default function Requisicoes() {
     <Sheet open={!!edit} onOpenChange={o => { if (!o && !busy) setEdit(null); }}><SheetContent className="w-full overflow-y-auto sm:max-w-[900px]">
       <SheetHeader><SheetTitle>{edit?.id ? edit.titulo || 'Requisição' : 'Nova requisição de contratação'}</SheetTitle><SheetDescription>{edit ? STATUS_REQUISICAO[edit.status] : ''}</SheetDescription></SheetHeader>
       {edit && <div className="space-y-6 py-6">
-        {edit.status === 'em_aprovacao' && <Alert><AlertDescription>A requisição está congelada. As assinaturas e decisões de aprovação serão habilitadas na Fase 5.</AlertDescription></Alert>}
+        {edit.status === 'em_aprovacao' && <Alert><AlertDescription>A requisição está congelada enquanto aguarda as assinaturas abaixo.</AlertDescription></Alert>}
+        {edit.id && edit.status !== 'rascunho' && <AssinaturaTrilha tipo="requisicao" id={edit.id} onDecidido={() => { setEdit(null); void lista.refetch(); }} />}
         <fieldset disabled={!editable || busy} className="space-y-6">
           <section className="space-y-4"><h2 className="font-semibold">Vaga e estrutura</h2><div className="grid gap-4 sm:grid-cols-2">
             {texto('titulo', 'Título da vaga')}{texto('centro_custo', 'Centro de custo')}

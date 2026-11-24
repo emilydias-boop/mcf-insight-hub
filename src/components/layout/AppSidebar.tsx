@@ -1,6 +1,8 @@
 import { usePresencaConfig } from '@/hooks/usePresencaDia';
 import mcfLogo from "@/assets/Group_1321316528.png.asset.json";
 import { useState } from "react";
+import { FileSignature } from "lucide-react";
+import { useMinhasAprovacoes } from "@/hooks/useMinhasAprovacoes";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -438,6 +440,7 @@ interface PersonalMenuItem {
 
 const personalMenuItems: PersonalMenuItem[] = [
   { title: "Meu RH", url: "/meu-rh", icon: UserCircle },
+  { title: "Minhas aprovações", url: "/aprovacoes", icon: FileSignature },
   { title: "Documentos Internos", url: "/documentos-internos", icon: FolderOpen },
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt },
@@ -672,6 +675,8 @@ export function AppSidebar() {
   const { data: presencaConfigs } = usePresencaConfig();
 
   // Filtragem de itens pessoais
+  const minhasAprovacoes = useMinhasAprovacoes();
+  const qtdAprovacoes = minhasAprovacoes.data?.length ?? 0;
   const filteredPersonalItems = personalMenuItems.filter((item) => {
     if (item.presencaLider) return !!presencaConfigs?.length;
     if (!item.requiredRoles) return true;
@@ -959,6 +964,7 @@ export function AppSidebar() {
               >
                 <item.icon className="mr-2 h-4 w-4" />
                 <span>{item.title}</span>
+                {item.url === "/aprovacoes" && qtdAprovacoes > 0 && <Badge variant="destructive" className="ml-auto h-5 px-1.5">{qtdAprovacoes}</Badge>}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />

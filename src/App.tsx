@@ -129,6 +129,8 @@ const RHColaboradores = lazy(() => import("./pages/rh/Colaboradores"));
 const ColaboradorProfile = lazy(() => import("./pages/rh/ColaboradorProfile"));
 const ConfiguracoesRH = lazy(() => import("./pages/rh/Configuracoes"));
 const RequisicoesRH = lazy(() => import("./pages/rh/Requisicoes"));
+const MinhasAprovacoes = lazy(() => import("./pages/governanca/MinhasAprovacoes"));
+const VerificacaoAssinatura = lazy(() => import("./pages/governanca/VerificacaoAssinatura"));
 const DesligamentosRH = lazy(() => import("./pages/rh/Desligamentos"));
 const EstruturaOrganizacional = lazy(() => import("./pages/rh/EstruturaOrganizacional"));
 const ProvaEquipe = lazy(() => import("./pages/rh/ProvaEquipe"));
@@ -421,6 +423,8 @@ const App = () => (
               
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="documentos-internos" element={<DocumentosInternos />} />
+              <Route path="aprovacoes" element={<MinhasAprovacoes />} />
+              <Route path="governanca/verificacao/:tipo/:id" element={<VerificacaoAssinatura />} />
               <Route path="admin/enviar-aviso" element={<RoleGuard allowedRoles={['admin']}><EnviarAviso /></RoleGuard>} />
               <Route path="presenca-do-dia" element={<PresencaDoDia />} />
               <Route path="patrimonio" element={<ResourceGuard resource="patrimonio"><PatrimonioIndex /></ResourceGuard>} />

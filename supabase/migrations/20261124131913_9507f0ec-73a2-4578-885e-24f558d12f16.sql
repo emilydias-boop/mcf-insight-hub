@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.gov_assin_tg_requisicao(), public.gov_assin_tg_desligamento() FROM PUBLIC, anon, authenticated;
+CREATE INDEX IF NOT EXISTS gov_assinatura_etapas_versao_idx ON public.gov_assinatura_etapas(versao_id);
