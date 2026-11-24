@@ -17,6 +17,16 @@ import { toast } from 'sonner';
 import { AssinaturaTrilha } from '@/components/governanca/AssinaturaTrilha';
 import { STATUS_REQUISICAO, exigeJustificativa, type RequisicaoStatus } from '@/lib/requisicaoContratacao';
 
+const camposFaltando = (r: Req): [string, string][] => ([
+  ['titulo', 'Título da vaga', !r.titulo?.trim()], ['centro_custo', 'Centro de custo', !r.centro_custo?.trim()],
+  ['setor', 'Setor da vaga', !r.departamento_id], ['cargo', 'Cargo', !r.cargo_catalogo_id],
+  ['missao', 'Missão', !r.missao?.trim()], ['responsabilidades', 'Responsabilidades', !r.responsabilidades?.trim()],
+  ['requisitos_obrigatorios', 'Requisitos obrigatórios', !r.requisitos_obrigatorios?.trim()], ['competencias', 'Competências', !r.competencias?.trim()],
+  ['indicadores', 'Indicadores', !r.indicadores?.trim()], ['local', 'Local', !r.local?.trim()],
+  ['inicio', 'Data desejada de início', !r.data_inicio],
+  ['substituido', 'Colaborador substituído', r.tipo === 'substituicao' && !r.substituido_employee_id],
+] as [string, string, boolean][]).filter(x => x[2]).map(x => [x[0], x[1]]);
+
 type Req = {
   id?: string; solicitante_user_id?: string; titulo: string; departamento_id: string | null; cargo_catalogo_id: string | null;
   centro_custo: string; tipo: string; substituido_employee_id: string | null; quantidade: number;
@@ -67,9 +77,16 @@ export default function Requisicoes() {
   const cargo = base.data?.cargos.find(c => c.id === edit?.cargo_catalogo_id);
   const alcada = base.data?.alcadas.some(a => a.exige_justificativa && (a.cond_aumento_quadro === null || a.cond_aumento_quadro === (edit?.tipo === 'aumento_quadro')) && (a.cond_salario_acima === null || (edit?.salario_base ?? 0) > a.cond_salario_acima) && (a.cond_departamento_id === null || a.cond_departamento_id === edit?.departamento_id)) ?? false;
   const obrigatoria = edit ? exigeJustificativa(edit.tipo, edit.salario_base, cargo?.faixa_salarial_min ?? null, cargo?.faixa_salarial_max ?? null, alcada) : false;
-  const patch = (p: Partial<Req>) => setEdit(r => r ? { ...r, ...p } : r);
+  const patch = (p: Partial<Req>) => { setFaltando(f => f.length ? f.filter(k => !(k in p)) : f); setEdit(r => r ? { ...r, ...p } : r); };
+  const [faltando, setFaltando] = useState<string[]>([]);
+  const [dataInvalida, setDataInvalida] = useState(false);
   const salvar = async (status?: RequisicaoStatus) => {
     if (!edit || busy) return;
+    if (status === 'em_aprovacao') {
+      const falta = camposFaltando(edit);
+      setFaltando(falta.map(f => f[0]));
+      if (falta.length) { toast.error(`Falta preencher: ${falta.map(f => f[1]).join(', ')}`); document.getElementById(falta[0][0])?.focus(); return; }
+    }
     if (status === 'em_aprovacao' && obrigatoria && !edit.justificativa.trim()) { toast.error('Justificativa obrigatória'); return; }
     if (status === 'cancelada' && !window.confirm('Cancelar esta requisição?')) return;
     setBusy(true);
@@ -92,7 +109,7 @@ export default function Requisicoes() {
     } catch (e) { toast.error((e as { message?: string }).message || 'Não foi possível salvar'); }
     finally { setBusy(false); await qc.invalidateQueries({ queryKey: ['gov-requisicoes'] }); }
   };
-  const texto = (key: keyof Req, label: string, area = false) => <div className="space-y-2" key={key}><Label htmlFor={key}>{label}</Label>{area ? <Textarea id={key} rows={4} value={String(edit?.[key] ?? '')} disabled={!editable || busy} onChange={e => patch({ [key]: e.target.value })} /> : <Input id={key} value={String(edit?.[key] ?? '')} disabled={!editable || busy} onChange={e => patch({ [key]: e.target.value })} />}</div>;
+  const texto = (key: keyof Req, label: string, area = false) => <div className="space-y-2" key={key}><Label htmlFor={key}>{label}</Label>{area ? <Textarea id={key} rows={4} aria-invalid={faltando.includes(key)} className={faltando.includes(key) ? 'border-destructive' : undefined} value={String(edit?.[key] ?? '')} disabled={!editable || busy} onChange={e => patch({ [key]: e.target.value })} /> : <Input id={key} aria-invalid={faltando.includes(key)} className={faltando.includes(key) ? 'border-destructive' : undefined} value={String(edit?.[key] ?? '')} disabled={!editable || busy} onChange={e => patch({ [key]: e.target.value })} />}</div>;
   const options = (items: string[]) => items.map(s => ({ id: s, nome: s }));
   const rows = (lista.data ?? []).filter(r => (filtros.status === 'todos' || r.status === filtros.status) && (filtros.setor === 'todos' || r.departamento_id === filtros.setor) && (filtros.regime === 'todos' || r.regime === filtros.regime) && r.titulo.toLowerCase().includes(filtros.busca.toLowerCase()));
   return <div className="space-y-6 p-4 sm:p-6">
@@ -123,7 +140,7 @@ export default function Requisicoes() {
             <div className="space-y-2"><Label htmlFor="salario">{edit.regime === 'PJ' ? 'Valor mensal (R$)' : 'Salário base (R$)'}</Label><Input id="salario" type="number" min={0} step="0.01" value={edit.salario_base} onChange={e => patch({ salario_base: Number(e.target.value) })} />{cargo && <p className="text-xs text-muted-foreground">Faixa de referência: {cargo.faixa_salarial_min === null ? 'Sem mínimo' : moeda(cargo.faixa_salarial_min)} — {cargo.faixa_salarial_max === null ? 'Sem máximo' : moeda(cargo.faixa_salarial_max)}</p>}</div>
             {texto('variavel', 'Variável / comissão')}{texto('beneficios', 'Benefícios', true)}
             <Escolha label="Modelo de trabalho" value={edit.modelo_trabalho} options={[{ id: 'presencial', nome: 'Presencial' }, { id: 'hibrido', nome: 'Híbrido' }, { id: 'remoto', nome: 'Remoto' }]} onChange={s => patch({ modelo_trabalho: s ?? 'presencial' })} disabled={!editable || busy} />
-            {texto('local', 'Local')}<div className="space-y-2"><Label htmlFor="inicio">Data desejada de início</Label><Input id="inicio" type="date" value={edit.data_inicio ?? ''} onChange={e => patch({ data_inicio: e.target.value || null })} /></div>
+            {texto('local', 'Local')}<div className="space-y-2"><Label htmlFor="inicio">Data desejada de início</Label><Input id="inicio" type="date" aria-invalid={faltando.includes('inicio') || dataInvalida} className={faltando.includes('inicio') || dataInvalida ? 'border-destructive' : undefined} value={edit.data_inicio ?? ''} onChange={e => { setDataInvalida(e.target.validity.badInput); patch({ data_inicio: e.target.value || null }); }} onBlur={e => setDataInvalida(e.target.validity.badInput)} />{dataInvalida && <p className="text-xs text-destructive">Data incompleta ou inválida — informe dia, mês e ano.</p>}</div>
           </div>{texto('justificativa', `Justificativa da necessidade${obrigatoria ? ' (obrigatória)' : ' (opcional)'}`, true)}</section>
         </fieldset>
         {!!edit.atores_previstos?.length && <section className="space-y-2 border-t pt-5"><h2 className="font-semibold">Atores previstos da contratação</h2>{Object.values(edit.atores_previstos.reduce<Record<string, { papeis: string[]; a: { papel: string; employee_id?: string; role?: string } }>>((acc, a, i) => { const k = a.employee_id || (a.role ? 'r:' + a.role : 'i:' + i); acc[k] ??= { papeis: [], a }; a.papel.split(' · ').forEach(x => { if (!acc[k].papeis.includes(x)) acc[k].papeis.push(x); }); return acc; }, {})).map(({ papeis, a }, i) => <p key={i} className="text-sm">{papeis.join(' · ')} — {base.data?.pessoas.find(p => p.id === a.employee_id)?.nome || (a.role === 'rh' ? 'RH' : a.role || 'Conforme hierarquia')}</p>)}</section>}
