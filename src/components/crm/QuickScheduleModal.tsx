@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { DayContentProps } from 'react-day-picker';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays, StickyNote, CheckCircle2 } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag, Phone, Mail, X, Check, CalendarDays, StickyNote, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -33,7 +32,6 @@ import {
   useSearchDealsForSchedule, 
   useCreateMeeting,
   useCheckSlotAvailability,
-  useSendMeetingNotification,
   useSearchWeeklyMeetingLeads,
   useAvailableSlotsCountByDate,
   useClosersWithAvailability,
@@ -318,7 +316,6 @@ export function QuickScheduleModal({
     }
   }, [prefilledDealData, open]);
   const [alreadyBuilds, setAlreadyBuilds] = useState<boolean | null>(null);
-  const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
   
   // State for retroactive booking date
   const [customBookedAt, setCustomBookedAt] = useState<Date | undefined>(undefined);
@@ -343,7 +340,6 @@ export function QuickScheduleModal({
   );
   const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU, open);
   const createMeeting = useCreateMeeting();
-  const sendNotification = useSendMeetingNotification();
 
   // Detect lead type from selected deal
   // Segmento ICP do negócio selecionado (fonte única da classificação)
@@ -546,7 +542,7 @@ export function QuickScheduleModal({
       scheduledAt,
       notes: finalNotes,
       leadType: detectedLeadType ?? undefined,
-      sendNotification: autoSendWhatsApp,
+      sendNotification: false,
       sdrEmail: selectedSdr || undefined,
       alreadyBuilds,
       parentAttendeeId,
@@ -554,10 +550,6 @@ export function QuickScheduleModal({
       ...(exclusiveSlots && duracaoSelecionada ? { durationMinutes: duracaoSelecionada } : {}),
     }, {
       onSuccess: (data) => {
-        // Send WhatsApp notification if enabled
-        if (autoSendWhatsApp && data?.id) {
-          sendNotification.mutate({ meetingSlotId: data.id });
-        }
         // Feedback contextual sobre contagem na meta para reagendamentos
         // após R1 já realizada
         if (selectedDeal?.leadState === 'completed' && selectedDeal?.warningMessage) {
@@ -613,7 +605,6 @@ export function QuickScheduleModal({
     setSelectedDate(undefined);
     setSelectedTime('09:00');
     setNotes('');
-    setAutoSendWhatsApp(true);
     setWeeklyLeadData(null);
     setAlreadyBuilds(null);
     setCustomBookedAt(undefined);
@@ -1617,19 +1608,6 @@ export function QuickScheduleModal({
               </div>
             </div>
           )}
-
-          {/* Auto-send WhatsApp Toggle - hidden for now
-          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Send className="h-4 w-4 text-green-600" />
-              <span className="text-sm font-medium">Enviar link via WhatsApp</span>
-            </div>
-            <Switch 
-              checked={autoSendWhatsApp} 
-              onCheckedChange={setAutoSendWhatsApp} 
-            />
-          </div>
-          */}
 
         </div>
 
