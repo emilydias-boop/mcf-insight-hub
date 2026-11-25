@@ -11471,16 +11471,19 @@ export type Database = {
           erro: string | null
           fonte: string
           id: string
+          lead_criado_antes: string | null
           preheader: string | null
           preparado_em: string | null
           preparado_por: string | null
           publico: Json
+          publico_crm_todo: boolean
           referencia_id: string | null
           remetente_nome: string
           status: string
           tema: Json
           texto_whatsapp: string
           titulo: string
+          whatsapp_fixo: string | null
         }
         Insert: {
           agendado_em?: string | null
@@ -11500,16 +11503,19 @@ export type Database = {
           erro?: string | null
           fonte?: string
           id?: string
+          lead_criado_antes?: string | null
           preheader?: string | null
           preparado_em?: string | null
           preparado_por?: string | null
           publico?: Json
+          publico_crm_todo?: boolean
           referencia_id?: string | null
           remetente_nome?: string
           status?: string
           tema?: Json
           texto_whatsapp: string
           titulo: string
+          whatsapp_fixo?: string | null
         }
         Update: {
           agendado_em?: string | null
@@ -11529,16 +11535,19 @@ export type Database = {
           erro?: string | null
           fonte?: string
           id?: string
+          lead_criado_antes?: string | null
           preheader?: string | null
           preparado_em?: string | null
           preparado_por?: string | null
           publico?: Json
+          publico_crm_todo?: boolean
           referencia_id?: string | null
           remetente_nome?: string
           status?: string
           tema?: Json
           texto_whatsapp?: string
           titulo?: string
+          whatsapp_fixo?: string | null
         }
         Relationships: []
       }
@@ -24957,6 +24966,10 @@ export type Database = {
         Returns: Json
       }
       email_events_purge_payload: { Args: never; Returns: number }
+      email_publico_crm_json: {
+        Args: { p_criado_antes: string }
+        Returns: Json
+      }
       email_publico_incorporador: {
         Args: { p_dias?: number; p_dias_min?: number; p_estagios?: string[] }
         Returns: {
@@ -24973,6 +24986,15 @@ export type Database = {
       }
       email_publico_incorporador_json: {
         Args: { p_dias?: number; p_dias_min?: number; p_estagios?: string[] }
+        Returns: Json
+      }
+      email_publico_incorporador_json_v2: {
+        Args: {
+          p_criado_antes: string
+          p_dias: number
+          p_dias_min: number
+          p_estagios: string[]
+        }
         Returns: Json
       }
       embracon_indices_class: {
