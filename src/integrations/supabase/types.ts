@@ -3882,6 +3882,24 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_pos_venda_backlog_20261126: {
+        Row: {
+          created_at: string
+          deal_id: string
+          stage_id_anterior: string
+        }
+        Insert: {
+          created_at?: string
+          deal_id: string
+          stage_id_anterior: string
+        }
+        Update: {
+          created_at?: string
+          deal_id?: string
+          stage_id_anterior?: string
+        }
+        Relationships: []
+      }
       backup_r2_andre_20261015: {
         Row: {
           dados: Json | null
