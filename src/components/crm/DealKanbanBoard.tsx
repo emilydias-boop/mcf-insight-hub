@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
+import { POS_VENDA_ORIGIN_ID } from '@/lib/posVenda';
+import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
@@ -109,8 +111,13 @@ export const DealKanbanBoard = ({
   // stage_permissions is the sole source of truth for visibility
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
-    return activeStages.filter((s: any) => canViewStage(s.id));
-  }, [stages, canViewStage]);
+    const permitted = activeStages.filter((s: any) => canViewStage(s.id));
+    // Pós-venda: a etapa "Perdido" só aparece com o filtro de status "Perdidos"
+    if (originId === POS_VENDA_ORIGIN_ID && !showLostDeals) {
+      return permitted.filter((s: any) => getDealStatusFromStage(s.stage_name) !== 'lost');
+    }
+    return permitted;
+  }, [stages, canViewStage, originId, showLostDeals]);
 
   const queryClient = useQueryClient();
   const colunasServidor = useMemo(
