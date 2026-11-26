@@ -13977,6 +13977,339 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_auto_chamadas: {
+        Row: {
+          em: string
+          id: number
+          ig_user_id: string
+        }
+        Insert: {
+          em?: string
+          id?: never
+          ig_user_id: string
+        }
+        Update: {
+          em?: string
+          id?: never
+          ig_user_id?: string
+        }
+        Relationships: []
+      }
+      ig_auto_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          atualizado_por: string | null
+          freado_em: string | null
+          freado_motivo: string | null
+          id: boolean
+          teto_hora: number
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          freado_em?: string | null
+          freado_motivo?: string | null
+          id?: boolean
+          teto_hora?: number
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          atualizado_por?: string | null
+          freado_em?: string | null
+          freado_motivo?: string | null
+          id?: boolean
+          teto_hora?: number
+        }
+        Relationships: []
+      }
+      ig_auto_contatos: {
+        Row: {
+          atualizado_em: string
+          autor_id: string
+          ig_user_id: string
+          igsid: string | null
+          janela_ate: string | null
+          optout_em: string | null
+          primeira_interacao_em: string
+          tags: string[]
+          ultimo_optin_em: string | null
+          username: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          autor_id: string
+          ig_user_id: string
+          igsid?: string | null
+          janela_ate?: string | null
+          optout_em?: string | null
+          primeira_interacao_em?: string
+          tags?: string[]
+          ultimo_optin_em?: string | null
+          username?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          autor_id?: string
+          ig_user_id?: string
+          igsid?: string | null
+          janela_ate?: string | null
+          optout_em?: string | null
+          primeira_interacao_em?: string
+          tags?: string[]
+          ultimo_optin_em?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_auto_contatos_ig_user_id_fkey"
+            columns: ["ig_user_id"]
+            isOneToOne: false
+            referencedRelation: "ig_contas"
+            referencedColumns: ["ig_user_id"]
+          },
+        ]
+      }
+      ig_auto_disparos: {
+        Row: {
+          atualizado_em: string
+          autor_id: string
+          autor_username: string | null
+          comentado_em: string
+          comment_id: string
+          criado_em: string
+          dm1_em: string | null
+          dm1_formato_usado: string | null
+          dm1_lida_em: string | null
+          dm1_mid: string | null
+          dm2_em: string | null
+          dm2_lida_em: string | null
+          dm2_mid: string | null
+          dm2_reservado_em: string | null
+          erro_codigo: number | null
+          erro_msg: string | null
+          id: string
+          ig_user_id: string
+          igsid: string | null
+          media_id: string
+          motivo: string | null
+          optin_em: string | null
+          optin_mid: string | null
+          proxima_tentativa_em: string | null
+          regra_id: string
+          resposta_publica_em: string | null
+          resposta_publica_erro: string | null
+          resposta_publica_id: string | null
+          status: string
+          tentativas: number
+          tentativas_dm2: number
+          texto_comentario: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          autor_id: string
+          autor_username?: string | null
+          comentado_em?: string
+          comment_id: string
+          criado_em?: string
+          dm1_em?: string | null
+          dm1_formato_usado?: string | null
+          dm1_lida_em?: string | null
+          dm1_mid?: string | null
+          dm2_em?: string | null
+          dm2_lida_em?: string | null
+          dm2_mid?: string | null
+          dm2_reservado_em?: string | null
+          erro_codigo?: number | null
+          erro_msg?: string | null
+          id?: string
+          ig_user_id: string
+          igsid?: string | null
+          media_id: string
+          motivo?: string | null
+          optin_em?: string | null
+          optin_mid?: string | null
+          proxima_tentativa_em?: string | null
+          regra_id: string
+          resposta_publica_em?: string | null
+          resposta_publica_erro?: string | null
+          resposta_publica_id?: string | null
+          status: string
+          tentativas?: number
+          tentativas_dm2?: number
+          texto_comentario?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          autor_id?: string
+          autor_username?: string | null
+          comentado_em?: string
+          comment_id?: string
+          criado_em?: string
+          dm1_em?: string | null
+          dm1_formato_usado?: string | null
+          dm1_lida_em?: string | null
+          dm1_mid?: string | null
+          dm2_em?: string | null
+          dm2_lida_em?: string | null
+          dm2_mid?: string | null
+          dm2_reservado_em?: string | null
+          erro_codigo?: number | null
+          erro_msg?: string | null
+          id?: string
+          ig_user_id?: string
+          igsid?: string | null
+          media_id?: string
+          motivo?: string | null
+          optin_em?: string | null
+          optin_mid?: string | null
+          proxima_tentativa_em?: string | null
+          regra_id?: string
+          resposta_publica_em?: string | null
+          resposta_publica_erro?: string | null
+          resposta_publica_id?: string | null
+          status?: string
+          tentativas?: number
+          tentativas_dm2?: number
+          texto_comentario?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_auto_disparos_ig_user_id_fkey"
+            columns: ["ig_user_id"]
+            isOneToOne: false
+            referencedRelation: "ig_contas"
+            referencedColumns: ["ig_user_id"]
+          },
+          {
+            foreignKeyName: "ig_auto_disparos_regra_id_fkey"
+            columns: ["regra_id"]
+            isOneToOne: false
+            referencedRelation: "ig_auto_regras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_auto_eventos: {
+        Row: {
+          criado_em: string
+          detalhes: Json
+          disparo_id: string | null
+          id: number
+          ig_user_id: string | null
+          tipo: string
+        }
+        Insert: {
+          criado_em?: string
+          detalhes?: Json
+          disparo_id?: string | null
+          id?: never
+          ig_user_id?: string | null
+          tipo: string
+        }
+        Update: {
+          criado_em?: string
+          detalhes?: Json
+          disparo_id?: string | null
+          id?: never
+          ig_user_id?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_auto_eventos_disparo_id_fkey"
+            columns: ["disparo_id"]
+            isOneToOne: false
+            referencedRelation: "ig_auto_disparos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_auto_regras: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          criado_por: string | null
+          dm1_botao: string | null
+          dm1_formato: string
+          dm1_texto: string
+          dm1_texto_plano_b: string | null
+          dm2_botao: string | null
+          dm2_texto: string
+          dm2_url: string
+          fim_em: string | null
+          id: string
+          ig_user_id: string
+          inicio_em: string | null
+          media_id: string | null
+          nome: string
+          palavras_excluir: string[]
+          palavras_incluir: string[]
+          respostas_publicas: string[]
+          so_comentario_raiz: boolean
+          tag: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          criado_por?: string | null
+          dm1_botao?: string | null
+          dm1_formato?: string
+          dm1_texto: string
+          dm1_texto_plano_b?: string | null
+          dm2_botao?: string | null
+          dm2_texto: string
+          dm2_url: string
+          fim_em?: string | null
+          id?: string
+          ig_user_id: string
+          inicio_em?: string | null
+          media_id?: string | null
+          nome: string
+          palavras_excluir?: string[]
+          palavras_incluir?: string[]
+          respostas_publicas?: string[]
+          so_comentario_raiz?: boolean
+          tag?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          criado_por?: string | null
+          dm1_botao?: string | null
+          dm1_formato?: string
+          dm1_texto?: string
+          dm1_texto_plano_b?: string | null
+          dm2_botao?: string | null
+          dm2_texto?: string
+          dm2_url?: string
+          fim_em?: string | null
+          id?: string
+          ig_user_id?: string
+          inicio_em?: string | null
+          media_id?: string | null
+          nome?: string
+          palavras_excluir?: string[]
+          palavras_incluir?: string[]
+          respostas_publicas?: string[]
+          so_comentario_raiz?: boolean
+          tag?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_auto_regras_ig_user_id_fkey"
+            columns: ["ig_user_id"]
+            isOneToOne: false
+            referencedRelation: "ig_contas"
+            referencedColumns: ["ig_user_id"]
+          },
+        ]
+      }
       ig_conta_dia: {
         Row: {
           alcance: number | null
@@ -26027,6 +26360,60 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      ig_auto_desligar: { Args: never; Returns: undefined }
+      ig_auto_frear: { Args: { p_motivo: string }; Returns: undefined }
+      ig_auto_ligar: { Args: never; Returns: undefined }
+      ig_auto_optin: {
+        Args: { p_disparo_id: string; p_ig_user_id: string; p_igsid: string }
+        Returns: {
+          out_motivo: string
+          out_ok: boolean
+        }[]
+      }
+      ig_auto_optin_por_mensagem: {
+        Args: { p_ig_user_id: string; p_igsid: string; p_mid?: string }
+        Returns: {
+          out_id: string
+        }[]
+      }
+      ig_auto_optout: {
+        Args: { p_ig_user_id: string; p_igsid: string }
+        Returns: undefined
+      }
+      ig_auto_pode: { Args: { p_user: string }; Returns: boolean }
+      ig_auto_registrar_chamada: {
+        Args: { p_ig_user_id: string }
+        Returns: undefined
+      }
+      ig_auto_reservar: {
+        Args: {
+          p_autor_id: string
+          p_autor_username: string
+          p_comentado_em: string
+          p_comment_id: string
+          p_ig_user_id: string
+          p_media_id: string
+          p_regra_id: string
+          p_texto: string
+        }
+        Returns: {
+          out_id: string
+          out_motivo: string
+          out_resultado: string
+        }[]
+      }
+      ig_auto_retomar: {
+        Args: { p_ig_user_id: string; p_limite: number }
+        Returns: {
+          out_id: string
+        }[]
+      }
+      ig_auto_retomar_dm2: {
+        Args: { p_limite: number }
+        Returns: {
+          out_id: string
+        }[]
       }
       ig_fila_antigas: {
         Args: {
