@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, ImageOff, Play } from "lucide-react";
-import { useFunilAnuncios, useAdPreview, useAdVideo, formatBRL, formatInt, type AdPreviewFormato, type AdVideoInfo, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque, type ModeloOrigem } from "@/hooks/useMarketingFunil";
+import { useFunilAnuncios, useAdPreview, useAdVideo, formatBRL, formatInt, type AdPreviewFormato, type AdVideoInfo, type FunilAnuncioRow, type Nivel, type ModeloData, type ModeloToque, type ModeloOrigem, type EtapaLead } from "@/hooks/useMarketingFunil";
+import { LeadsDrilldownDialog } from "@/components/marketing/LeadsDrilldownDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +48,8 @@ const metricText = (value: number | null, kind: MetricFormat): string => {
   return `${decimal(value)}${kind === "percent" ? "%" : "x"}`;
 };
 const smallSample = (row: FunilAnuncioRow) => row.investimento < 5000 || row.entradas < 20;
+// Colunas que abrem a lista de pessoas (mkt_funil_criativos_leads).
+const DRILL: Partial<Record<NumericKey, EtapaLead>> = { entradas: "entradas", r1_realizadas: "r1_realizadas", contratos: "contratos", parcerias: "parcerias" };
 // Linhas fora dos anúncios vindas da mkt_funil_criativos_v3: não têm investimento, custo nem ROAS.
 const foraDeAnuncio = (row: FunilAnuncioRow) => row.nivel_id === "anuncio_sem_id" || row.nivel_id === "antes_do_clique" || row.nivel_id.startsWith("sem_anuncio:");
 const semClique = (row: FunilAnuncioRow) => row.nivel_id === "antes_do_clique" || row.nivel_id.startsWith("sem_anuncio:");
@@ -126,7 +129,7 @@ function Thumbnail({ src }: { src: string | null }) {
   </div>;
 }
 
-function Metrics({ row, total = false, roasGeral = false, custoMedio = false }: { row: FunilAnuncioRow; total?: boolean; roasGeral?: boolean; custoMedio?: boolean }) {
+function Metrics({ row, total = false, roasGeral = false, custoMedio = false, onDrill }: { row: FunilAnuncioRow; total?: boolean; roasGeral?: boolean; custoMedio?: boolean; onDrill?: (etapa: EtapaLead) => void }) {
   return <>{columns.map(column => {
     const value = row[column.key];
     const uncertain = !total && !foraDeAnuncio(row) && smallSample(row) && (column.cost || column.format === "roas");
@@ -137,7 +140,11 @@ function Metrics({ row, total = false, roasGeral = false, custoMedio = false }: 
       <Hint text="Custo médio da BU: gasto na Meta (com divulgação) ÷ tudo o que entrou no período, inclusive orgânico. Não é o custo do anúncio: para isso, veja o Subtotal anúncios.">{metricText(value, column.format)}</Hint>
     </TableCell>;
     const color = uncertain ? "text-muted-foreground" : column.format === "roas" ? roasColor(value) : value === null ? "text-muted-foreground" : "";
-    const text = <span className={color}>{metricText(value, column.format)}</span>;
+    const etapa = DRILL[column.key];
+    const text = onDrill && etapa && value !== null && value > 0
+      ? <button type="button" onClick={() => onDrill(etapa)} aria-label={`Ver pessoas: ${column.label} de ${row.nome}`}
+          className={`${color} cursor-pointer underline decoration-dotted underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}>{metricText(value, column.format)}</button>
+      : <span className={color}>{metricText(value, column.format)}</span>;
     return <TableCell key={column.key} className={numericCell}>
       {uncertain ? <Hint text="Amostra pequena — ainda não dá para concluir">{text}</Hint> : text}
     </TableCell>;
@@ -189,6 +196,7 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
   const [limit, setLimit] = useState(30);
   const { data, isLoading, error } = useFunilAnuncios({ from, to, nivel, data: modeloData, toque, origem });
   const [previewRow, setPreviewRow] = useState<FunilAnuncioRow | null>(null);
+  const [drill, setDrill] = useState<{ row: FunilAnuncioRow; etapa: EtapaLead } | null>(null);
   useEffect(() => setLimit(30), [from, to, nivel, search, sort, origem]);
   const filtered = useMemo(() => {
     const needle = normalize(search.trim());
@@ -238,7 +246,7 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
         <CardTitle className="text-[18px] tracking-normal">Anúncios e criativos</CardTitle>
         <CardDescription className="text-[12px] leading-[1.6]">{modeloData === "venda"
           ? `Cada venda conta no dia em que aconteceu e é creditada ao ${toque === "primeiro" ? "1º anúncio que a pessoa clicou" : "último anúncio antes da compra"}. Por isso um criativo pausado ainda pode ter parceria hoje.`
-          : `Vendas das pessoas que clicaram pela 1ª vez no período, creditadas ao ${toque === "primeiro" ? "1º" : "último"} anúncio. Bom para medir o retorno do que foi gasto no período.`}{origem === "todas" && " BU inteira: no fim da lista ficam as linhas fora dos anúncios (sem clique em anúncio e antes do 1º clique), sem investimento, custo nem ROAS. O Subtotal anúncios é o retorno dos anúncios. O Subtotal sem anúncio soma as linhas sem clique em anúncio e antes do 1º clique (orgânico e sem rastro); o \"Anúncio Meta não identificado\" fica no Subtotal anúncios. O TOTAL BU soma tudo: os custos dele são médios da BU (gasto na Meta, com divulgação, ÷ tudo o que entrou, inclusive orgânico) e o ROAS dele é o ROAS geral da BU (líquido ÷ todo o gasto na Meta, com divulgação). O TOTAL bate com o Funil quando o Funil mostra uma linha só, por exemplo Mês passado com agrupamento Mês. Com vários meses, o Funil conta de novo quem aparece em mais de um mês."}{extras.some(row => row.nivel_id === "anuncio_sem_id") && " \"Anúncio Meta não identificado\" junta as conversões de anúncio em que a Meta não informou qual anúncio foi."}</CardDescription>
+          : `Vendas das pessoas que clicaram pela 1ª vez no período, creditadas ao ${toque === "primeiro" ? "1º" : "último"} anúncio. Bom para medir o retorno do que foi gasto no período.`}{origem === "todas" && " BU inteira: no fim da lista ficam as linhas fora dos anúncios (sem clique em anúncio e antes do 1º clique), sem investimento, custo nem ROAS. O Subtotal anúncios é o retorno dos anúncios. O Subtotal sem anúncio soma as linhas sem clique em anúncio e antes do 1º clique (orgânico e sem rastro); o \"Anúncio Meta não identificado\" fica no Subtotal anúncios. O TOTAL BU soma tudo: os custos dele são médios da BU (gasto na Meta, com divulgação, ÷ tudo o que entrou, inclusive orgânico) e o ROAS dele é o ROAS geral da BU (líquido ÷ todo o gasto na Meta, com divulgação). O TOTAL bate com o Funil quando o Funil mostra uma linha só, por exemplo Mês passado com agrupamento Mês. Com vários meses, o Funil conta de novo quem aparece em mais de um mês."}{extras.some(row => row.nivel_id === "anuncio_sem_id") && " \"Anúncio Meta não identificado\" junta as conversões de anúncio em que a Meta não informou qual anúncio foi."}{" Clique nos números de Entradas, R1 realizadas, Contratos e Parcerias para ver quem são as pessoas, quem vendeu, o que compraram e de onde vieram."}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-[20px] p-[20px] pt-0">
         <div className="flex flex-wrap items-center gap-[12px]">
@@ -302,7 +310,7 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
                         {statusText(row.status)}
                       </span>
                     </TableCell>
-                    <Metrics row={row} />
+                    <Metrics row={row} onDrill={etapa => setDrill({ row, etapa })} />
                   </TableRow>)}
                   {extras.length > 0 && <TableRow><TableCell colSpan={columns.length + 2 + (hasThumbnails ? 1 : 0)} className="bg-muted/40 px-[12px] py-[8px] text-[11px] text-muted-foreground">{origem === "todas" ? "Fora dos anúncios" : "Sem anúncio identificado"}: sem investimento, custo nem ROAS</TableCell></TableRow>}
                   {extras.map(row => <TableRow key={`extra-${row.nivel_id}`}>
@@ -312,7 +320,7 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
                       <Badge variant="outline" className="mt-[4px] px-[6px] py-[2px] text-[10px] font-normal">{rotuloExtra(row)}</Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap px-[12px] py-[12px] text-muted-foreground">—</TableCell>
-                    <Metrics row={row} />
+                    <Metrics row={row} onDrill={etapa => setDrill({ row, etapa })} />
                   </TableRow>)}
                 </TableBody>
                 <TableFooter>{origem === "todas" ? <>
@@ -343,5 +351,6 @@ export function CriativosTable({ from, to, data: modeloData, toque, origem }: Cr
       </CardContent>
     </Card>
     <AdPreviewDialog row={previewRow} onClose={() => setPreviewRow(null)} />
+    <LeadsDrilldownDialog alvo={drill} onClose={() => setDrill(null)} from={from} to={to} nivel={nivel} data={modeloData} toque={toque} origem={origem} />
   </TooltipProvider>;
 }

@@ -403,3 +403,112 @@ export const useAdVideo = (adId: string | null) =>
       return data as AdVideoInfo;
     },
   });
+
+export type EtapaLead = 'entradas' | 'r1_realizadas' | 'contratos' | 'parcerias';
+
+export interface FunilLeadCompra {
+  data: string;
+  tipo: string;
+  produto: string | null;
+  plataforma: string | null;
+  liquido: number;
+  bruto: number | null;
+  parcela: number | null;
+  parcelas: number | null;
+}
+
+export interface FunilLeadRow {
+  person: string;
+  nome: string | null;
+  email: string | null;
+  telefone: string | null;
+  entrou_crm_em: string | null;
+  primeiro_toque_em: string | null;
+  canal: string;
+  origem_crm: string | null;
+  origem_detalhe: string | null;
+  anuncio: string | null;
+  etapa_em: string | null;
+  sdr: string | null;
+  closer_r1: string | null;
+  r1_em: string | null;
+  closer_r2: string | null;
+  r2_em: string | null;
+  vendedor: string | null;
+  liquido_periodo: number;
+  compras: FunilLeadCompra[];
+}
+
+const mapLead = (r: any): FunilLeadRow => ({
+  person: r.person,
+  nome: r.nome ?? null,
+  email: r.email ?? null,
+  telefone: r.telefone ?? null,
+  entrou_crm_em: r.entrou_crm_em ?? null,
+  primeiro_toque_em: r.primeiro_toque_em ?? null,
+  canal: r.canal ?? 'sem_toque',
+  origem_crm: r.origem_crm ?? null,
+  origem_detalhe: r.origem_detalhe ?? null,
+  anuncio: r.anuncio ?? null,
+  etapa_em: r.etapa_em ?? null,
+  sdr: r.sdr ?? null,
+  closer_r1: r.closer_r1 ?? null,
+  r1_em: r.r1_em ?? null,
+  closer_r2: r.closer_r2 ?? null,
+  r2_em: r.r2_em ?? null,
+  vendedor: r.vendedor ?? null,
+  liquido_periodo: toNum(r.liquido_periodo),
+  compras: (Array.isArray(r.compras) ? r.compras : []).map((c: any) => ({
+    data: c.data,
+    tipo: c.tipo,
+    produto: c.produto ?? null,
+    plataforma: c.plataforma ?? null,
+    liquido: toNum(c.liquido),
+    bruto: toNumOrNull(c.bruto),
+    parcela: toNumOrNull(c.parcela),
+    parcelas: toNumOrNull(c.parcelas),
+  })),
+});
+
+/** Pessoas por trás de um número da aba Anúncios e criativos (mesma contagem da mkt_funil_criativos_v3). */
+export const useFunilLeads = ({
+  from,
+  to,
+  nivel,
+  data,
+  toque,
+  origem,
+  nivelId,
+  etapa,
+}: {
+  from: string | null;
+  to: string | null;
+  nivel: Nivel;
+  data: ModeloData;
+  toque: ModeloToque;
+  origem: ModeloOrigem;
+  nivelId: string | null;
+  etapa: EtapaLead | null;
+}) =>
+  useQuery<FunilLeadRow[]>({
+    queryKey: ['mkt-funil-leads', from, to, nivel, data, toque, origem, nivelId, etapa],
+    staleTime: 5 * 60 * 1000,
+    enabled: !!from && !!to && !!nivelId && !!etapa,
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase.rpc as any)('mkt_funil_criativos_leads', {
+        p_from: from,
+        p_to: to,
+        p_nivel: nivel,
+        p_data: data,
+        p_toque: toque,
+        p_origem: origem,
+        p_nivel_id: nivelId,
+        p_etapa: etapa,
+      });
+      if (error) {
+        if (error.code === '42501') throw new Error(PERM_ERROR);
+        throw error;
+      }
+      return (rows ?? []).map(mapLead);
+    },
+  });
