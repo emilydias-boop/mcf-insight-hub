@@ -27111,6 +27111,39 @@ export type Database = {
           video_3s: number
         }[]
       }
+      mkt_funil_criativos_leads: {
+        Args: {
+          p_data: string
+          p_etapa: string
+          p_from: string
+          p_nivel: string
+          p_nivel_id: string
+          p_origem: string
+          p_to: string
+          p_toque: string
+        }
+        Returns: {
+          anuncio: string
+          canal: string
+          closer_r1: string
+          closer_r2: string
+          compras: Json
+          email: string
+          entrou_crm_em: string
+          etapa_em: string
+          liquido_periodo: number
+          nome: string
+          origem_crm: string
+          origem_detalhe: string
+          person: string
+          primeiro_toque_em: string
+          r1_em: string
+          r2_em: string
+          sdr: string
+          telefone: string
+          vendedor: string
+        }[]
+      }
       mkt_funil_criativos_v2: {
         Args: {
           p_data?: string
