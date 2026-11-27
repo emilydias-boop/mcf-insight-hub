@@ -134,6 +134,7 @@ const VerificacaoAssinatura = lazy(() => import("./pages/governanca/VerificacaoA
 const DesligamentosRH = lazy(() => import("./pages/rh/Desligamentos"));
 const EstruturaOrganizacional = lazy(() => import("./pages/rh/EstruturaOrganizacional"));
 const ProvaEquipe = lazy(() => import("./pages/rh/ProvaEquipe"));
+const TriagemCandidatos = lazy(() => import("./pages/rh/TriagemCandidatos"));
 const ExamDetail = lazy(() => import("./pages/rh/ExamDetail"));
 // [REMOVIDO 2026-06-24] Seção Financeiro desativada — preservado para rollback.
 // const Financeiro = lazy(() => import("./pages/Financeiro"));
@@ -409,6 +410,7 @@ const App = () => (
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
               <Route path="rh/colaboradores/:id" element={<ResourceGuard resource={"rh" as any}><ColaboradorProfile /></ResourceGuard>} />
               <Route path="rh/prova-equipe" element={<RoleGuard allowedRoles={['admin', 'rh']}><ProvaEquipe /></RoleGuard>} />
+              <Route path="rh/triagem" element={<RoleGuard allowedRoles={['admin', 'rh']}><TriagemCandidatos /></RoleGuard>} />
               <Route path="rh/prova-equipe/:id" element={<RoleGuard allowedRoles={['admin', 'rh']}><ExamDetail /></RoleGuard>} />
               <Route path="rh/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'rh', 'coordenador']}><ConfiguracoesRH /></RoleGuard>} />
               <Route path="rh/estrutura" element={<EstruturaOrganizacional />} />

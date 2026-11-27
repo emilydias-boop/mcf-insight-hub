@@ -318,6 +318,7 @@ export const menuItems: MenuItem[] = [
       { title: "Requisições de contratação", url: "/rh/requisicoes" },
       { title: "Desligamentos", url: "/rh/desligamentos" },
       { title: "Prova Equipe", url: "/rh/prova-equipe" },
+      { title: "Triagem de candidatos", url: "/rh/triagem" },
       { title: "Configurações", url: "/rh/configuracoes" },
     ],
   },
