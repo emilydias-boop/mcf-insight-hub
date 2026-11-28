@@ -13,7 +13,8 @@ import {
 import { calcularComissao, calcularComissaoTotal } from '@/lib/commissionCalculator';
 import { getProdutoComissaoContext } from '@/lib/produtoComissaoLookup';
 import { calcularDataVencimento, calcularProximoDiaUtil } from '@/lib/businessDays';
-import { gerarCronogramaSeFaltando } from '@/lib/consorcioCronograma';
+import { gerarCronogramaSeFaltando, montarParcelasCota } from '@/lib/consorcioCronograma';
+import { dadosConfirmacaoManual } from '@/lib/consorcioPagamentoGrade';
 import { toast } from 'sonner';
 import { fetchAllPages } from '@/lib/supabasePaginacao';
 
@@ -375,22 +376,9 @@ export function useCreateConsorcioCard() {
       // Para contratação: usa data_contratacao (1ª parcela paga no ato).
       const isReserva = input.tipo_registro === 'reserva';
       const dataBaseStr = isReserva
-        ? (input.data_reserva || input.data_contratacao!)
-        : (input.data_contratacao || input.data_reserva!);
-      const [year, month, day] = dataBaseStr.split('-').map(Number);
-      const dataContratacao = new Date(year, month - 1, day);
-      
-      // Determine offset for 2nd installment based on inicio_segunda_parcela
-      const inicioSegunda = input.inicio_segunda_parcela || 'automatico';
-      let offsetSegundaParcela: number;
-      if (inicioSegunda === 'proximo_mes') {
-        offsetSegundaParcela = 1;
-      } else if (inicioSegunda === 'pular_mes') {
-        offsetSegundaParcela = 2;
-      } else {
-        // automatico: if contract day > 16, skip 1 month
-        offsetSegundaParcela = dataContratacao.getDate() > 16 ? 2 : 1;
-      }
+        ? (input.data_reserva || input.data_contratacao)
+        : (input.data_contratacao || input.data_reserva);
+      if (!dataBaseStr) throw new Error('Data base da cota ausente');
       
       // Cadastro retroativo: limite de até onde marcar parcelas do cliente como pagas
       const hojeData = new Date();
@@ -405,74 +393,37 @@ export function useCreateConsorcioCard() {
         }
       }
       
-      const installments: Omit<ConsorcioInstallment, 'id' | 'created_at' | 'updated_at'>[] = [];
+      const installments = input.dia_vencimento ? await montarParcelasCota({
+        cardId: card.id, baseDate: dataBaseStr, diaVencimento: input.dia_vencimento,
+        prazoMeses: input.prazo_meses, valorCredito: input.valor_credito,
+        tipoProduto: input.tipo_produto, tipoContrato: input.tipo_contrato,
+        parcelasEmpresa: input.parcelas_pagas_empresa, parcelasNumeros: input.parcelas_mcf_numeros,
+        inicioSegundaParcela: input.inicio_segunda_parcela,
+        condicaoPagamento: input.condicao_pagamento, incluiSeguro: input.inclui_seguro_vida,
+        objetivo: input.objetivo, isReserva,
+      }) : [];
       let parcelasClientePagasMarcadas = 0;
       const parcelasClienteAlvo = parcelas_pagas_cliente || 0;
 
-      // Lookup produto cadastrado para usar cronograma de comissão customizado
-      const ctxComissao = await getProdutoComissaoContext(input.valor_credito, input.tipo_produto);
-
-      // Sem dia de vencimento ("A definir" até a Embracon responder) não há data
-      // confiável: o cronograma é gerado depois, por gerarCronogramaSeFaltando().
-      for (let i = 1; input.dia_vencimento && i <= input.prazo_meses; i++) {
-        let dataVencimento: Date;
-        if (i === 1) {
-          // Parcela 1 = data de contratação (já paga no ato)
-          dataVencimento = dataContratacao;
-        } else {
-          // Parcela N: base month = contratação month + offset + (i-2)
-          const monthOffset = offsetSegundaParcela + (i - 2);
-          const mesAlvo = dataContratacao.getMonth() + monthOffset;
-          const anoAlvo = dataContratacao.getFullYear() + Math.floor(mesAlvo / 12);
-          const mesNormalizado = ((mesAlvo % 12) + 12) % 12;
-          const ultimoDia = new Date(anoAlvo, mesNormalizado + 1, 0).getDate();
-          const diaAjustado = Math.min(Number(input.dia_vencimento), ultimoDia);
-          dataVencimento = calcularProximoDiaUtil(new Date(anoAlvo, mesNormalizado, diaAjustado));
-        }
-        const valorComissao = calcularComissao(input.valor_credito, input.tipo_produto, i, ctxComissao);
-        
-        // Determine if this installment is paid by client or company
-        let tipo: 'cliente' | 'empresa';
-        if (input.tipo_contrato === 'intercalado') {
-          // Intercalado PAR: empresa paga as primeiras N parcelas PARES (2, 4, 6, 8...)
-          const ehPar = i % 2 === 0;
-          const qualParcelaParEhEssa = i / 2; // 2→1, 4→2, 6→3, 8→4...
-          tipo = (ehPar && qualParcelaParEhEssa <= input.parcelas_pagas_empresa) ? 'empresa' : 'cliente';
-        } else if (input.tipo_contrato === 'intercalado_impar') {
-          // Intercalado ÍMPAR: empresa paga as primeiras N parcelas ÍMPARES (1, 3, 5, 7...)
-          const ehImpar = i % 2 === 1;
-          const qualParcelaImparEhEssa = Math.ceil(i / 2); // 1→1, 3→2, 5→3, 7→4...
-          tipo = (ehImpar && qualParcelaImparEhEssa <= input.parcelas_pagas_empresa) ? 'empresa' : 'cliente';
-        } else {
-          // Normal: empresa paga as primeiras N parcelas sequenciais
-          tipo = i <= input.parcelas_pagas_empresa ? 'empresa' : 'cliente';
-        }
-
+      for (const parcela of installments) {
+        const dataVencimento = new Date(`${parcela.data_vencimento}T00:00:00`);
         // Cadastro retroativo: marcar primeiras N parcelas do cliente como pagas
         // (apenas as cujo vencimento já passou e respeitando data do último pagamento)
         let status: 'pago' | 'pendente' = 'pendente';
         let dataPagamento: string | undefined;
         if (
-          tipo === 'cliente' &&
+          parcela.tipo === 'cliente' &&
           parcelasClientePagasMarcadas < parcelasClienteAlvo &&
           limitePagamentoCliente &&
           dataVencimento <= limitePagamentoCliente
         ) {
           status = 'pago';
-          dataPagamento = dataVencimento.toISOString().split('T')[0];
+          dataPagamento = parcela.data_vencimento;
           parcelasClientePagasMarcadas++;
         }
 
-        installments.push({
-          card_id: card.id,
-          numero_parcela: i,
-          tipo,
-          valor_parcela: input.valor_credito / input.prazo_meses, // Simplified calculation
-          valor_comissao: valorComissao,
-          data_vencimento: dataVencimento.toISOString().split('T')[0],
-          status: isReserva ? 'previsto' : status,
-          ...(dataPagamento ? { data_pagamento: dataPagamento } : {}),
-        } as any);
+        parcela.status = isReserva ? 'previsto' : status;
+        if (dataPagamento) parcela.data_pagamento = dataPagamento;
       }
 
       // Inserir parcelas em lotes pequenos para evitar erro
@@ -747,12 +698,12 @@ export function usePayInstallment() {
 
   return useMutation({
     mutationFn: async ({ installmentId, dataPagamento }: { installmentId: string; dataPagamento: string }) => {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.user) throw new Error('Faça login para confirmar o pagamento');
       const { error } = await supabase
         .from('consortium_installments')
-        .update({
-          status: 'pago',
-          data_pagamento: dataPagamento,
-        })
+        .update(dadosConfirmacaoManual(dataPagamento, session.user.id, new Date().toISOString()))
         .eq('id', installmentId);
 
       if (error) throw error;
@@ -784,6 +735,11 @@ export function usePayInstallment() {
       queryClient.invalidateQueries({ queryKey: ['consortium-card-details'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['consortium-summary'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['consorcio-pagamentos-all'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-card-global-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-resumo-cotas'] });
+      queryClient.invalidateQueries({ queryKey: ['consorcio-parcelas-cota'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-installments'] });
+      queryClient.invalidateQueries({ queryKey: ['card-installments-detail'] });
     },
   });
 }

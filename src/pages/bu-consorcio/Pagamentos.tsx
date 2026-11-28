@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, User, Building2, Gauge } from 'lucide-react';
 import { IndicesClassTab } from '@/components/consorcio/pagamentos/class/IndicesClassTab';
+import { PorCotaTab } from '@/components/consorcio/pagamentos/PorCotaTab';
 
 // 12 meses futuros + mês atual + 11 anteriores (futuro/mais recente primeiro)
 const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => {
@@ -79,6 +80,7 @@ export default function ConsorcioPagamentosPage() {
 
       <Tabs defaultValue="cliente" className="w-full">
         <TabsList className="mb-4">
+          <TabsTrigger value="cota" className="gap-1.5">Por cota</TabsTrigger>
           <TabsTrigger value="cliente" className="gap-1.5">
             <User className="h-4 w-4" />
             Cliente
@@ -92,6 +94,9 @@ export default function ConsorcioPagamentosPage() {
             Índices Class
           </TabsTrigger>
         </TabsList>
+        <TabsContent value="cota">
+          <PorCotaTab />
+        </TabsContent>
         <TabsContent value="cliente">
           <ConsorcioPagamentosTab selectedMonth={monthRange} tipoFilter="cliente" />
         </TabsContent>

@@ -170,35 +170,19 @@ export function useConsorcioPagamentos(
     queryFn: async () => {
       if (cardIds.length === 0) return new Map<string, CardGlobalStats>();
       
-      const allRows: any[] = [];
-      // Batch card_ids in groups to avoid query size limits
-      const batchSize = 50;
+      const statsMap = new Map<string, CardGlobalStats>();
+      // Uma linha por cota no banco; nunca transfere seu cronograma completo.
+      const batchSize = 200;
       for (let i = 0; i < cardIds.length; i += batchSize) {
         const batch = cardIds.slice(i, i + batchSize);
-        const { data, error } = await supabase
-          .from('consortium_installments')
-          .select('card_id, status, data_pagamento, data_vencimento')
-          .in('card_id', batch);
+        const { data, error } = await supabase.rpc('consorcio_situacao_cotas', { p_card_ids: batch });
         if (error) throw error;
-        if (data) allRows.push(...data);
-      }
-
-      const hoje = new Date().toISOString().split('T')[0];
-      const statsMap = new Map<string, CardGlobalStats>();
-      for (const row of allRows) {
-        let s = statsMap.get(row.card_id);
-        if (!s) { s = { totalParcelas: 0, parcelasPagas: 0, temAtraso: false }; statsMap.set(row.card_id, s); }
-        s.totalParcelas++;
-        if (row.status === 'pago' || row.data_pagamento) s.parcelasPagas++;
-        // Parcela 'previsto' = cota ainda em RESERVA (Embracon não confirmou).
-        // Não gera inadimplência: não há cobrança antes da confirmação.
-        if (
-          row.status !== 'pago' &&
-          row.status !== 'previsto' &&
-          !row.data_pagamento &&
-          row.data_vencimento < hoje
-        ) {
-          s.temAtraso = true;
+        for (const row of data || []) {
+          statsMap.set(row.card_id, {
+            totalParcelas: Number(row.total_parcelas),
+            parcelasPagas: Number(row.parcelas_pagas),
+            temAtraso: row.tem_atraso,
+          });
         }
       }
       return statsMap;

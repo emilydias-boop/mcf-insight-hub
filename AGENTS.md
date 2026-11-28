@@ -1,4 +1,5 @@
 # Architecture rules
+- Consórcio schedule, Embracon valuation and commission logic live in supabase/functions/_shared with stable src facades, so browser and webhook use one generator without importing browser code into Edge Functions. Payments summaries use RLS-preserving invoker RPCs; the quota grid fetches only a numbered block and reuses usePayInstallment/ConfirmPaymentDateDialog.
 
 - Incorporador daily commercial audit uses the three auditoria_* read models with São Paulo business-day rules; auditoria-diaria-email is reachable only by an admin or a single-use database-issued cron ticket, and Brevo sends are deduplicated per data_ref.
 

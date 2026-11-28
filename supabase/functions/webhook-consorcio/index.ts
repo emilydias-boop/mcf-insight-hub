@@ -8,6 +8,7 @@
  * Toda tentativa rejeitada é auditada em `bu_webhook_logs`.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { montarParcelasCota } from '../_shared/consorcioCronograma.ts';
 
 /**
  * Origens permitidas por CORS. Integração máquina-a-máquina NÃO usa CORS,
@@ -92,6 +93,8 @@ interface ConsorcioPayload {
   tipo_produto?: TipoProduto;
   tipo_contrato?: TipoContrato;
   parcelas_pagas_empresa?: number;
+  parcelas_mcf_numeros?: number[];
+  objetivo?: string;
 
   // Datas e tipo de registro
   tipo_registro?: TipoRegistro;       // 'reserva' | 'contratacao'
@@ -131,27 +134,6 @@ interface ConsorcioPayload {
 
 // ============ Helpers ============
 
-const FERIADOS_FIXOS = ['01-01','04-21','05-01','09-07','10-12','11-02','11-15','12-25'];
-
-function isWeekend(d: Date) {
-  const day = d.getDay();
-  return day === 0 || day === 6;
-}
-function fmtMMDD(d: Date) {
-  return `${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-function isFeriado(d: Date) {
-  return FERIADOS_FIXOS.includes(fmtMMDD(d));
-}
-function proximoDiaUtil(d: Date): Date {
-  const r = new Date(d);
-  while (isWeekend(r) || isFeriado(r)) r.setDate(r.getDate() + 1);
-  return r;
-}
-function toISODate(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
 function parseBrazilianDate(dateStr?: string | null): string | null {
   if (!dateStr) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
@@ -168,23 +150,6 @@ function parseMonetaryValue(value: any): number {
   if (!value) return 0;
   const str = String(value).replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
   return parseFloat(str) || 0;
-}
-
-function calcularComissao(valorCredito: number, tipoProduto: TipoProduto, numeroParcela: number): number {
-  // Tabela oficial — espelho de src/lib/commissionCalculator.ts
-  let percentual = 0;
-  if (tipoProduto === 'select') {
-    const tabela: Record<number, number> = {
-      1: 1.20, 2: 1.12, 3: 1.12, 4: 0.62,
-      5: 0.11, 6: 0.11, 7: 0.11, 8: 1.11,
-    };
-    percentual = tabela[numeroParcela] || 0;
-  } else if (tipoProduto === 'parcelinha') {
-    if (numeroParcela === 1) percentual = 0.53;
-    else if (numeroParcela >= 2 && numeroParcela <= 4) percentual = 0.43;
-    else if (numeroParcela >= 5 && numeroParcela <= 12) percentual = 0.33;
-  }
-  return (valorCredito * percentual) / 100;
 }
 
 Deno.serve(async (req) => {
@@ -300,11 +265,17 @@ Deno.serve(async (req) => {
         console.warn('[webhook-consorcio] origem fora do catálogo, usando "outros":', origemBruta);
       }
     }
-    const prazoMeses = payload.prazo_meses || 180;
+    const prazoMeses = payload.prazo_meses || 240;
     const tipoProduto: TipoProduto = payload.tipo_produto || 'select';
     const tipoContrato: TipoContrato = payload.tipo_contrato || 'normal';
     const parcelasPagasEmpresa = payload.parcelas_pagas_empresa || 0;
-    const diaVencimento = payload.dia_vencimento || 10;
+    const diaVencimento = payload.dia_vencimento || null;
+    if (!Number.isInteger(prazoMeses) || prazoMeses <= 0 || (diaVencimento !== null && (!Number.isInteger(diaVencimento) || diaVencimento < 1 || diaVencimento > 31))) {
+      return json({ success: false, error: 'Prazo e dia de vencimento inválidos' }, 400);
+    }
+    if (payload.parcelas_mcf_numeros !== undefined && (!Array.isArray(payload.parcelas_mcf_numeros) || payload.parcelas_mcf_numeros.some(n => !Number.isInteger(n) || n < 1 || n > prazoMeses))) {
+      return json({ success: false, error: 'Números das parcelas MCF inválidos' }, 400);
+    }
 
     const cardData: Record<string, any> = {
       grupo: payload.grupo,
@@ -314,6 +285,7 @@ Deno.serve(async (req) => {
       tipo_produto: tipoProduto,
       tipo_contrato: tipoContrato,
       parcelas_pagas_empresa: parcelasPagasEmpresa,
+      parcelas_mcf_numeros: payload.parcelas_mcf_numeros,
       tipo_registro: tipoRegistro,
       data_reserva: dataReserva,
       data_contratacao: dataContratacao,
@@ -359,65 +331,23 @@ Deno.serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ===== Geração de parcelas (espelho de useCreateConsorcioCard) =====
+    // Mesmo cronograma da tela, sem cópia de cálculos; sem dia, aguarda a Embracon.
     const isReserva = tipoRegistro === 'reserva';
-    const dataBaseStr = isReserva ? (dataReserva || dataContratacao!) : (dataContratacao || dataReserva!);
-    const [by, bm, bd] = dataBaseStr.split('-').map(Number);
-    const dataBase = new Date(by, bm - 1, bd);
-
-    const inicioSegunda = payload.inicio_segunda_parcela || 'automatico';
-    let offsetSegunda: number;
-    if (inicioSegunda === 'proximo_mes') offsetSegunda = 1;
-    else if (inicioSegunda === 'pular_mes') offsetSegunda = 2;
-    else offsetSegunda = dataBase.getDate() > 16 ? 2 : 1;
-
-    const installments: Record<string, any>[] = [];
-    for (let i = 1; i <= prazoMeses; i++) {
-      let dataVenc: Date;
-      if (i === 1) {
-        dataVenc = dataBase;
-      } else {
-        const monthOffset = offsetSegunda + (i - 2);
-        const mesAlvo = dataBase.getMonth() + monthOffset;
-        const anoAlvo = dataBase.getFullYear() + Math.floor(mesAlvo / 12);
-        const mesNorm = ((mesAlvo % 12) + 12) % 12;
-        const ultimoDia = new Date(anoAlvo, mesNorm + 1, 0).getDate();
-        const diaAj = Math.min(diaVencimento, ultimoDia);
-        dataVenc = proximoDiaUtil(new Date(anoAlvo, mesNorm, diaAj));
-      }
-      const valorComissao = calcularComissao(valorCredito, tipoProduto, i);
-
-      let tipo: 'cliente' | 'empresa';
-      if (tipoContrato === 'intercalado') {
-        const ehPar = i % 2 === 0;
-        tipo = (ehPar && (i / 2) <= parcelasPagasEmpresa) ? 'empresa' : 'cliente';
-      } else if (tipoContrato === 'intercalado_impar') {
-        const ehImpar = i % 2 === 1;
-        tipo = (ehImpar && Math.ceil(i / 2) <= parcelasPagasEmpresa) ? 'empresa' : 'cliente';
-      } else {
-        tipo = i <= parcelasPagasEmpresa ? 'empresa' : 'cliente';
-      }
-
-      installments.push({
-        card_id: card.id,
-        numero_parcela: i,
-        tipo,
-        valor_parcela: valorCredito / prazoMeses,
-        valor_comissao: valorComissao,
-        data_vencimento: toISODate(dataVenc),
-        status: isReserva ? 'previsto' : 'pendente',
+    const dataBaseStr = isReserva ? (dataReserva || dataContratacao) : (dataContratacao || dataReserva);
+    if (!dataBaseStr) throw new Error('Data base da cota ausente');
+    const installments = diaVencimento ? await montarParcelasCota({
+      cardId: card.id, baseDate: dataBaseStr, diaVencimento, prazoMeses,
+      valorCredito, tipoProduto, tipoContrato, parcelasEmpresa: parcelasPagasEmpresa,
+      parcelasNumeros: payload.parcelas_mcf_numeros, inicioSegundaParcela: payload.inicio_segunda_parcela,
+      condicaoPagamento: payload.condicao_pagamento, objetivo: payload.objetivo,
+      incluiSeguro: payload.inclui_seguro_vida, isReserva,
+    }, supabase) : [];
+    if (installments.length) {
+      const { error: instErr } = await supabase.rpc('consorcio_gerar_parcelas', {
+        p_card_id: card.id,
+        p_parcelas: installments.map(({ card_id, ...parcela }) => parcela),
       });
-    }
-
-    const CHUNK_SIZE = 8;
-    for (let i = 0; i < installments.length; i += CHUNK_SIZE) {
-      const chunk = installments.slice(i, i + CHUNK_SIZE);
-      const { error: instErr } = await supabase.from('consortium_installments').insert(chunk);
-      if (instErr) {
-        console.error('Erro ao inserir parcelas:', instErr);
-        // não falha a request: card já criado
-        break;
-      }
+      if (instErr) throw instErr;
     }
 
     if (logEntry?.id) {

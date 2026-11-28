@@ -8814,16 +8814,22 @@ export type Database = {
           cobranca_status: string | null
           cobranca_status_updated_at: string | null
           cobranca_status_updated_by: string | null
+          conferido_embracon_em: string | null
+          conferido_embracon_ref: string | null
           created_at: string
           data_pagamento: string | null
           data_vencimento: string
           id: string
           numero_parcela: number
           observacao: string | null
+          pagamento_confirmado_em: string | null
+          pagamento_confirmado_por: string | null
+          pagamento_fonte: string | null
           status: string
           tipo: string
           updated_at: string
           valor_comissao: number
+          valor_estimado: boolean | null
           valor_parcela: number
         }
         Insert: {
@@ -8831,16 +8837,22 @@ export type Database = {
           cobranca_status?: string | null
           cobranca_status_updated_at?: string | null
           cobranca_status_updated_by?: string | null
+          conferido_embracon_em?: string | null
+          conferido_embracon_ref?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento: string
           id?: string
           numero_parcela: number
           observacao?: string | null
+          pagamento_confirmado_em?: string | null
+          pagamento_confirmado_por?: string | null
+          pagamento_fonte?: string | null
           status?: string
           tipo: string
           updated_at?: string
           valor_comissao?: number
+          valor_estimado?: boolean | null
           valor_parcela: number
         }
         Update: {
@@ -8848,16 +8860,22 @@ export type Database = {
           cobranca_status?: string | null
           cobranca_status_updated_at?: string | null
           cobranca_status_updated_by?: string | null
+          conferido_embracon_em?: string | null
+          conferido_embracon_ref?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento?: string
           id?: string
           numero_parcela?: number
           observacao?: string | null
+          pagamento_confirmado_em?: string | null
+          pagamento_confirmado_por?: string | null
+          pagamento_fonte?: string | null
           status?: string
           tipo?: string
           updated_at?: string
           valor_comissao?: number
+          valor_estimado?: boolean | null
           valor_parcela?: number
         }
         Relationships: [
@@ -25195,6 +25213,28 @@ export type Database = {
         Returns: number
       }
       consorcio_name_key: { Args: { p_name: string }; Returns: string }
+      consorcio_parcelas_cota: {
+        Args: { p_ate?: number; p_card_id: string; p_de?: number }
+        Returns: {
+          card_id: string
+          conferido_embracon_em: string
+          conferido_embracon_ref: string
+          data_pagamento: string
+          data_vencimento: string
+          id: string
+          numero_parcela: number
+          observacao: string
+          pagamento_confirmado_em: string
+          pagamento_confirmado_nome: string
+          pagamento_confirmado_por: string
+          pagamento_fonte: string
+          status: string
+          tipo: string
+          valor_comissao: number
+          valor_estimado: boolean
+          valor_parcela: number
+        }[]
+      }
       consorcio_periodo_mes: { Args: { p: string }; Returns: string }
       consorcio_pessoa_nome_key: { Args: { p_name: string }; Returns: string }
       consorcio_producao_gerada: {
@@ -25202,6 +25242,38 @@ export type Database = {
         Returns: Json
       }
       consorcio_relatorio_cota: { Args: { p_card_id: string }; Returns: Json }
+      consorcio_resumo_cotas: {
+        Args: {
+          p_busca?: string
+          p_grupo?: string
+          p_limit?: number
+          p_offset?: number
+          p_quem_paga?: string
+          p_responsavel?: string
+          p_so_atraso?: boolean
+          p_status?: string
+        }
+        Returns: {
+          bloco_atual: number
+          card_id: string
+          cliente: string
+          cota: string
+          grupo: string
+          mcf_aberto: number
+          parcelas_geradas: number
+          prazo: number
+          proxima_numero: number
+          proxima_quem_paga: string
+          proxima_valor: number
+          proxima_vencimento: string
+          responsavel: string
+          status_cota: string
+          total: number
+          ultima_paga: number
+          vencidas_qtd: number
+          vencidas_valor: number
+        }[]
+      }
       consorcio_reversao_status: {
         Args: { p_registro_ids: string[] }
         Returns: {
@@ -25224,6 +25296,15 @@ export type Database = {
       consorcio_sincronizar_stage_cota: {
         Args: { _deal_id: string }
         Returns: string
+      }
+      consorcio_situacao_cotas: {
+        Args: { p_card_ids: string[] }
+        Returns: {
+          card_id: string
+          parcelas_pagas: number
+          tem_atraso: boolean
+          total_parcelas: number
+        }[]
       }
       consorcio_vendas_realizadas: {
         Args: { p_bu?: string; p_fim: string; p_ini: string }

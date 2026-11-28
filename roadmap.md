@@ -1,4 +1,5 @@
 # Roadmap
+- [x] Grimaldo — Pagamentos Consórcio: três migrations somente de estrutura/funções, cronograma integral compartilhado e confirmação manual, aba Por cota 50/blocos 12, situação no banco; 0 duplicatas, 2.111 cartas/428.036 parcelas e campos novos vazios. Testes em memória e UI isolada passaram; sessão real indisponível, baixa real e webhook não invocados; sem publicar.
 - [x] Auditoria comercial diária Incorporador: funções SQL, feriados/destinatários/envios, edge de e-mail, cron 07h SP, dry_run e teste somente para Thobson (Brevo aceito).
 - [x] Grimaldo: criadas somente app_pascoa/app_dias_uteis/painel_app_metas com SQL do anexo (arquivo gerado omite apenas quebra de linha final); privilégios painel anon=false/authenticated=true; sem publicar.
 - [ ] Grimaldo Painel: testes READ ONLY com perfil e JSON mês/semana/hoje bloqueados por 42501 ao SET LOCAL ROLE authenticated; consulta dias úteis também negada. Requer conexão autorizada a assumir authenticated; não contornar nem alterar permissões.
